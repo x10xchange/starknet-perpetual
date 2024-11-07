@@ -1,5 +1,6 @@
 #[starknet::contract]
 pub mod Core {
+    use contracts_commons::types::time::TimeStamp;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
@@ -7,7 +8,7 @@ pub mod Core {
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::{AssetId, CollateralNode, SyntheticNode};
     use perpetuals::core::types::{FundingIndex, RiskFactor, Signature};
-    use perpetuals::core::types::{PositionId, PositionData};
+    use perpetuals::core::types::{Nonce, PositionId, PositionData};
     use perpetuals::errors::{ErrorTrait, AssertErrorImpl, OptionErrorImpl};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::ContractAddress;
@@ -83,7 +84,17 @@ pub mod Core {
         fn liquidate(self: @ContractState) {}
         fn trade(self: @ContractState) {}
         fn transfer(self: @ContractState) {}
-        fn withdraw(self: @ContractState) {}
+        fn withdraw(
+            ref self: ContractState,
+            position_id: felt252,
+            collateral_id: AssetId,
+            recipient: ContractAddress,
+            nonce: Nonce,
+            expiry: TimeStamp,
+            amount: u128,
+            salt: felt252,
+            signature: Signature,
+        ) {}
 
         // Funding
         fn funding_tick(self: @ContractState) {}

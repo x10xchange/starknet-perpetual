@@ -1,3 +1,7 @@
+use contracts_commons::types::time::TimeStamp;
+use perpetuals::core::types::{AssetId, Nonce, Signature};
+use starknet::ContractAddress;
+
 #[starknet::interface]
 pub trait ICore<TContractState> {
     // Flows
@@ -6,7 +10,17 @@ pub trait ICore<TContractState> {
     fn liquidate(self: @TContractState);
     fn trade(self: @TContractState);
     fn transfer(self: @TContractState);
-    fn withdraw(self: @TContractState);
+    fn withdraw(
+        ref self: TContractState,
+        position_id: felt252,
+        collateral_id: AssetId,
+        recipient: ContractAddress,
+        nonce: Nonce,
+        expiry: TimeStamp,
+        amount: u128,
+        salt: felt252,
+        signature: Signature,
+    );
 
     // Funding
     fn funding_tick(self: @TContractState);
