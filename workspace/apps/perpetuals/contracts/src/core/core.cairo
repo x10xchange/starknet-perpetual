@@ -51,7 +51,6 @@ pub mod Core {
         version: u8,
         // Iterateble map of collateral asset.
         collaterals_assets: Map<ContractAddress, CollateralNode>,
-        // For X10 we should have another Map<AssetId, SyntheticNode> for PnL.
         owner: ContractAddress,
         // Iterateble map of synthetic asset.
         synthetics_assets: Map<AssetId, SyntheticNode>
@@ -130,11 +129,9 @@ pub mod Core {
             let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
                 .is_valid_signature(hash, signature);
             // Check either 'VALID' or true for backwards compatibility.
-            let is_valid_signature = is_valid_signature_felt == starknet::VALIDATED
+            let signature_valid = is_valid_signature_felt == starknet::VALIDATED
                 || is_valid_signature_felt == 1;
-            AssertCoreErrorImpl::assert_with_error(
-                is_valid_signature, CoreErrors::INVALID_SIGNATURE
-            );
+            AssertCoreErrorImpl::assert_with_error(signature_valid, CoreErrors::INVALID_SIGNATURE);
         }
 
         fn _validate_arithmetic_overflow(self: @ContractState) -> bool {
