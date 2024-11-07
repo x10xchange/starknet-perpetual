@@ -24,7 +24,6 @@ pub mod Core {
         assets: Map<AssetId, Asset>,
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, Option<u64>>,
-        // For X10 it would be a Vec of erc20 dispatchers
         erc20_dispatcher: IERC20Dispatcher,
         positions: Map<PositionId, Position>,
         #[substorage(v0)]

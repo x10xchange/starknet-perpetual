@@ -38,8 +38,7 @@ pub struct Order {
     pub quote_type: AssetId,
     pub amount_base: Balance,
     pub amount_quote: Balance,
-    // for X10 we can choose how to pay the fee
-    // fee_token_type: AssetId,
+    pub fee_token_type: AssetId,
     pub fee: Fee,
     pub expiration: TimeStamp,
     pub nonce: Nonce,
