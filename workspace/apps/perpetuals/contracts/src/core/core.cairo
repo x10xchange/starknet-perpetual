@@ -6,8 +6,8 @@ pub mod Core {
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::{AssetId, CollateralNode, SyntheticNode};
-    use perpetuals::core::types::{FundingIndex, RiskFactor, Signature};
+    use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
+    use perpetuals::core::types::{CollateralNode, SyntheticNode, Signature};
     use perpetuals::core::types::{Nonce, PositionId, PositionData};
     use perpetuals::errors::{ErrorTrait, AssertErrorImpl, OptionErrorImpl};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
@@ -21,35 +21,23 @@ pub mod Core {
 
     #[storage]
     struct Storage {
-        assets: Map<AssetId, Asset>,
+        assets: Map<AssetId, Option<Asset>>,
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, Option<u64>>,
         erc20_dispatcher: IERC20Dispatcher,
         positions: Map<PositionId, Position>,
+        // Valid oracles for each Asset
+        oracles: Map<AssetId, Vec<ContractAddress>>,
         #[substorage(v0)]
         nonces: NoncesComponent::Storage,
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher
     }
 
     #[starknet::storage_node]
-    pub struct Asset {
-        version: u8,
-        id: AssetId,
-        name: felt252,
-        decimals: u8,
-        oracle_price: u64,
-        risk_factor: RiskFactor,
-        quorum: u8,
-        oracles: Vec<ContractAddress>,
-        last_funding_index: FundingIndex,
-        is_active: bool
-    }
-
-    #[starknet::storage_node]
     struct Position {
         version: u8,
         // Iterateble map of collateral asset.
-        collaterals_assets: Map<ContractAddress, CollateralNode>,
+        collaterals_assets: Map<AssetId, CollateralNode>,
         owner: ContractAddress,
         // Iterateble map of synthetic asset.
         synthetics_assets: Map<AssetId, SyntheticNode>
@@ -117,9 +105,12 @@ pub mod Core {
             // TODO: Implement
             true
         }
-        fn _validate_assets(self: @ContractState) -> bool {
-            // TODO: Implement
-            true
+        fn _validate_assets(self: @ContractState, asset_ids: Array<AssetId>) {
+            for id in asset_ids {
+                AssertCoreErrorImpl::assert_with_error(
+                    self.get_asset(id).is_active(), CoreErrors::ASSET_NOT_ACTIVE
+                );
+            };
         }
 
         fn _validate_signature(
@@ -153,13 +144,24 @@ pub mod Core {
                 asset_entries: array![].span()
             }
         }
+
+        fn get_asset(self: @ContractState, id: AssetId) -> Asset {
+            self.assets.read(id).expect_with_error(CoreErrors::ASSET_NOT_EXISTS)
+        }
+
+        fn _is_asset_exist(self: @ContractState, id: AssetId) -> bool {
+            self.assets.read(id).is_some()
+        }
     }
 
     #[derive(Drop)]
     pub enum CoreErrors {
         ALREADY_FULFILLED,
+        ASSET_NOT_ACTIVE,
+        ASSET_NOT_EXISTS,
         INVALID_SIGNATURE
     }
+
     pub impl AssertCoreErrorImpl = AssertErrorImpl<CoreErrors>;
     pub impl OptionCoreErrorTrait<T> = OptionErrorImpl<T, CoreErrors>;
 
@@ -167,6 +169,8 @@ pub mod Core {
         fn message(self: CoreErrors) -> ByteArray {
             match self {
                 CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
+                CoreErrors::ASSET_NOT_ACTIVE => "Asset is not active",
+                CoreErrors::ASSET_NOT_EXISTS => "Asset does not exist",
                 CoreErrors::INVALID_SIGNATURE => "Invalid signature"
             }
         }

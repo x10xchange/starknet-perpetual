@@ -1,5 +1,6 @@
 use contracts_commons::types::time::TimeStamp;
-use perpetuals::core::types::{AssetId, Nonce, Signature};
+use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::{Nonce, Signature};
 use starknet::ContractAddress;
 
 #[starknet::interface]

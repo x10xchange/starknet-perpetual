@@ -1,12 +1,9 @@
+pub mod asset;
+
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::TimeStamp;
+use perpetuals::core::types::asset::AssetId;
 use starknet::ContractAddress;
-
-
-#[derive(Drop, Serde, Hash, starknet::Store)]
-pub struct AssetId {
-    pub value: felt252
-}
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct Balance {
@@ -26,6 +23,7 @@ pub struct Fee {
     pub value: u64,
 }
 
+#[derive(Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
     pub value: i64
 }

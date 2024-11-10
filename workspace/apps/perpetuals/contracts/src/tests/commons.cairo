@@ -5,6 +5,7 @@ use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
 
 pub(crate) mod constants {
+    use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
 
     pub fn VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS() -> ContractAddress {
@@ -12,6 +13,9 @@ pub(crate) mod constants {
     }
     pub fn TOKEN_ADDRESS() -> ContractAddress {
         contract_address_const::<'TOKEN_ADDRESS'>()
+    }
+    pub fn ASSET_ID() -> AssetId {
+        AssetId { value: 'asset_id' }
     }
 }
 
