@@ -122,7 +122,7 @@ pub mod Core {
             true
         }
 
-        fn _assert_valid_signature(
+        fn _validate_signature(
             self: @ContractState, owner: ContractAddress, hash: felt252, signature: Signature
         ) {
             let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
@@ -138,8 +138,10 @@ pub mod Core {
             true
         }
 
-        fn _is_already_fulfilled(self: @ContractState, hash: felt252) -> bool {
-            self.fulfillment.read(hash).is_some()
+        fn _validate_fulfillment(self: @ContractState, hash: felt252) {
+            AssertCoreErrorImpl::assert_with_error(
+                self.fulfillment.read(hash).is_none(), CoreErrors::ALREADY_FULFILLED
+            );
         }
 
         fn _get_position(self: @ContractState, position_id: PositionId) -> PositionData {
@@ -155,6 +157,7 @@ pub mod Core {
 
     #[derive(Drop)]
     pub enum CoreErrors {
+        ALREADY_FULFILLED,
         INVALID_SIGNATURE
     }
     pub impl AssertCoreErrorImpl = AssertErrorImpl<CoreErrors>;
@@ -163,6 +166,7 @@ pub mod Core {
     pub impl CoreErrorsImpl of ErrorTrait<CoreErrors> {
         fn message(self: CoreErrors) -> ByteArray {
             match self {
+                CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
                 CoreErrors::INVALID_SIGNATURE => "Invalid signature"
             }
         }
