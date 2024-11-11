@@ -37,10 +37,10 @@ pub mod Core {
     struct Position {
         version: u8,
         // Iterateble map of collateral asset.
-        collaterals_assets: Map<AssetId, CollateralNode>,
+        collateral_assets: Map<AssetId, CollateralNode>,
         owner: ContractAddress,
         // Iterateble map of synthetic asset.
-        synthetics_assets: Map<AssetId, SyntheticNode>
+        synthetic_assets: Map<AssetId, SyntheticNode>
     }
 
     #[event]
