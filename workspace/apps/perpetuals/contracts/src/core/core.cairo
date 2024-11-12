@@ -7,8 +7,8 @@ pub mod Core {
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
-    use perpetuals::core::types::{CollateralNode, SyntheticNode, Signature};
-    use perpetuals::core::types::{Nonce, PositionId, PositionData};
+    use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
+    use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::errors::{ErrorTrait, AssertErrorImpl, OptionErrorImpl};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::ContractAddress;
@@ -25,7 +25,8 @@ pub mod Core {
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, Option<u64>>,
         erc20_dispatcher: IERC20Dispatcher,
-        positions: Map<PositionId, Position>,
+        // position_id to Position
+        positions: Map<felt252, Position>,
         // Valid oracles for each Asset
         oracles: Map<AssetId, Vec<ContractAddress>>,
         #[substorage(v0)]
@@ -75,11 +76,11 @@ pub mod Core {
             position_id: felt252,
             collateral_id: AssetId,
             recipient: ContractAddress,
-            nonce: Nonce,
+            nonce: felt252,
             expiry: TimeStamp,
             amount: u128,
             salt: felt252,
-            signature: Signature,
+            signature: Signature
         ) {}
 
         // Funding
@@ -135,7 +136,7 @@ pub mod Core {
             );
         }
 
-        fn _get_position(self: @ContractState, position_id: PositionId) -> PositionData {
+        fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
             // TODO: Implement the 'asset_entries' field.
             PositionData {

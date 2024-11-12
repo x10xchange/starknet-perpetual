@@ -25,7 +25,7 @@ pub impl AssetImpl of AssetTrait {
     }
 }
 
-#[derive(Drop, Copy, Serde, Hash, starknet::Store)]
+#[derive(Drop, Copy, PartialEq, Serde, Hash, starknet::Store)]
 pub struct AssetId {
     pub value: felt252
 }

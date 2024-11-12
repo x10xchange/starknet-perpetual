@@ -1,6 +1,6 @@
 use contracts_commons::types::time::TimeStamp;
+use perpetuals::core::types::Signature;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::{Nonce, Signature};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -16,7 +16,7 @@ pub trait ICore<TContractState> {
         position_id: felt252,
         collateral_id: AssetId,
         recipient: ContractAddress,
-        nonce: Nonce,
+        nonce: felt252,
         expiry: TimeStamp,
         amount: u128,
         salt: felt252,
