@@ -1,29 +1,25 @@
 use core::panics::panic_with_byte_array;
 
-pub trait ErrorTrait<TError> {
-    fn panic(self: TError) -> core::never {
-        panic_with_byte_array(@Self::message(self))
-    }
-    fn message(self: TError) -> ByteArray;
+pub trait ErrorTrait<E> {
+    fn message(self: E) -> ByteArray;
 }
 
-#[generate_trait]
-pub impl AssertErrorImpl<TError, +ErrorTrait<TError>, +Drop<TError>> of AssertErrorTrait<TError> {
-    fn assert_with_error(condition: bool, error: TError) {
-        if !condition {
-            error.panic()
-        }
+pub fn panic_with_error<E, +ErrorTrait<E>, +Drop<E>>(err: E) -> core::never {
+    panic_with_byte_array(@err.message())
+}
+
+pub fn assert_with_error<E, +ErrorTrait<E>, +Drop<E>>(condition: bool, err: E) {
+    if !condition {
+        panic_with_error(err)
     }
 }
 
 #[generate_trait]
-pub impl OptionErrorImpl<
-    T, TError, +ErrorTrait<TError>, +Drop<TError>
-> of OptionErrorTrait<T, TError> {
-    fn expect_with_error(self: Option<T>, err: TError) -> T {
+pub impl OptionErrorImpl<T, E, +ErrorTrait<E>, +Drop<E>> of OptionErrorTrait<T, E> {
+    fn unwrap_with_error(self: Option<T>, err: E) -> T {
         match self {
             Option::Some(x) => x,
-            Option::None => err.panic()
+            Option::None => panic_with_error(err)
         }
     }
 }

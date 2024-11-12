@@ -9,7 +9,7 @@ pub mod Core {
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
     use perpetuals::core::types::{PositionData, Signature};
-    use perpetuals::errors::{ErrorTrait, AssertErrorImpl, OptionErrorImpl};
+    use perpetuals::errors::{ErrorTrait, assert_with_error, OptionErrorImpl};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::ContractAddress;
     use starknet::storage::{Map, Vec, StoragePathEntry};
@@ -108,9 +108,7 @@ pub mod Core {
         }
         fn _validate_assets(self: @ContractState, asset_ids: Array<AssetId>) {
             for id in asset_ids {
-                AssertCoreErrorImpl::assert_with_error(
-                    self.get_asset(id).is_active(), CoreErrors::ASSET_NOT_ACTIVE
-                );
+                assert_with_error(self._get_asset(id).is_active(), CoreErrors::ASSET_NOT_ACTIVE);
             };
         }
 
@@ -122,7 +120,7 @@ pub mod Core {
             // Check either 'VALID' or true for backwards compatibility.
             let signature_valid = is_valid_signature_felt == starknet::VALIDATED
                 || is_valid_signature_felt == 1;
-            AssertCoreErrorImpl::assert_with_error(signature_valid, CoreErrors::INVALID_SIGNATURE);
+            assert_with_error(signature_valid, CoreErrors::INVALID_SIGNATURE);
         }
 
         fn _validate_arithmetic_overflow(self: @ContractState) -> bool {
@@ -131,9 +129,7 @@ pub mod Core {
         }
 
         fn _validate_fulfillment(self: @ContractState, hash: felt252) {
-            AssertCoreErrorImpl::assert_with_error(
-                self.fulfillment.read(hash).is_none(), CoreErrors::ALREADY_FULFILLED
-            );
+            assert_with_error(self.fulfillment.read(hash).is_none(), CoreErrors::ALREADY_FULFILLED);
         }
 
         fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
@@ -146,8 +142,8 @@ pub mod Core {
             }
         }
 
-        fn get_asset(self: @ContractState, id: AssetId) -> Asset {
-            self.assets.read(id).expect_with_error(CoreErrors::ASSET_NOT_EXISTS)
+        fn _get_asset(self: @ContractState, id: AssetId) -> Asset {
+            self.assets.read(id).unwrap_with_error(CoreErrors::ASSET_NOT_EXISTS)
         }
 
         fn _is_asset_exist(self: @ContractState, id: AssetId) -> bool {
@@ -162,9 +158,6 @@ pub mod Core {
         ASSET_NOT_EXISTS,
         INVALID_SIGNATURE
     }
-
-    pub impl AssertCoreErrorImpl = AssertErrorImpl<CoreErrors>;
-    pub impl OptionCoreErrorTrait<T> = OptionErrorImpl<T, CoreErrors>;
 
     pub impl CoreErrorsImpl of ErrorTrait<CoreErrors> {
         fn message(self: CoreErrors) -> ByteArray {
