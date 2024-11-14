@@ -18,5 +18,5 @@ pub struct Order {
 }
 
 pub enum OrderType {
-    Limit: u8,
+    Limit
 }
