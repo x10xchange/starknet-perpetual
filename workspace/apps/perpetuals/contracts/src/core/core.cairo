@@ -146,6 +146,20 @@ pub mod Core {
             self.assets.read(id).unwrap_with_error(CoreErrors::ASSET_NOT_EXISTS)
         }
 
+        fn _get_collateral(self: @ContractState, id: AssetId) -> Asset {
+            let asset = self.assets.read(id).unwrap_with_error(CoreErrors::COLLATERAL_NOT_EXISTS);
+            assert_with_error(!asset.is_synthetic(), CoreErrors::NOT_COLLATERAL);
+            assert_with_error(asset.is_active(), CoreErrors::COLLATERAL_NOT_ACTIVE);
+            asset
+        }
+
+        fn _get_synthetic(self: @ContractState, id: AssetId) -> Asset {
+            let asset = self.assets.read(id).unwrap_with_error(CoreErrors::SYNTHETIC_NOT_EXISTS);
+            assert_with_error(asset.is_synthetic(), CoreErrors::NOT_SYNTHETIC);
+            assert_with_error(asset.is_active(), CoreErrors::SYNTHETIC_NOT_ACTIVE);
+            asset
+        }
+
         fn _is_asset_exist(self: @ContractState, id: AssetId) -> bool {
             self.assets.read(id).is_some()
         }
@@ -156,7 +170,13 @@ pub mod Core {
         ALREADY_FULFILLED,
         ASSET_NOT_ACTIVE,
         ASSET_NOT_EXISTS,
-        INVALID_SIGNATURE
+        INVALID_SIGNATURE,
+        COLLATERAL_NOT_EXISTS,
+        NOT_COLLATERAL,
+        COLLATERAL_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS,
+        NOT_SYNTHETIC,
+        SYNTHETIC_NOT_ACTIVE,
     }
 
     pub impl CoreErrorsImpl of ErrorTrait<CoreErrors> {
@@ -165,7 +185,13 @@ pub mod Core {
                 CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
                 CoreErrors::ASSET_NOT_ACTIVE => "Asset is not active",
                 CoreErrors::ASSET_NOT_EXISTS => "Asset does not exist",
-                CoreErrors::INVALID_SIGNATURE => "Invalid signature"
+                CoreErrors::INVALID_SIGNATURE => "Invalid signature",
+                CoreErrors::COLLATERAL_NOT_EXISTS => "Collateral does not exist",
+                CoreErrors::NOT_COLLATERAL => "Asset is not a collateral",
+                CoreErrors::COLLATERAL_NOT_ACTIVE => "Collateral is not active",
+                CoreErrors::SYNTHETIC_NOT_EXISTS => "Synthetic does not exist",
+                CoreErrors::NOT_SYNTHETIC => "Asset is not a synthetic",
+                CoreErrors::SYNTHETIC_NOT_ACTIVE => "Synthetic is not active",
             }
         }
     }
