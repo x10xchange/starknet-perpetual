@@ -1,7 +1,12 @@
 #[starknet::contract]
 pub mod Core {
+    use contracts_commons::components::pausable::PausableComponent;
+    use contracts_commons::components::replaceability::ReplaceabilityComponent;
+    use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::types::time::TimeStamp;
     use core::starknet::storage::StoragePointerWriteAccess;
+    use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
@@ -14,13 +19,40 @@ pub mod Core {
     use starknet::ContractAddress;
     use starknet::storage::{Map, Vec, StoragePathEntry};
 
+    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NoncesComponent, storage: nonces, event: NoncesEvent);
+    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
+    component!(path: RolesComponent, storage: roles, event: RolesEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
     impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
     impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
 
+    #[abi(embed_v0)]
+    impl ReplaceabilityImpl =
+        ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
+
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        nonces: NoncesComponent::Storage,
+        #[substorage(v0)]
+        pausable: PausableComponent::Storage,
+        #[substorage(v0)]
+        replaceability: ReplaceabilityComponent::Storage,
+        #[substorage(v0)]
+        roles: RolesComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
         assets: Map<AssetId, Option<Asset>>,
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, Option<u64>>,
@@ -29,8 +61,6 @@ pub mod Core {
         positions: Map<felt252, Position>,
         // Valid oracles for each Asset
         oracles: Map<AssetId, Vec<ContractAddress>>,
-        #[substorage(v0)]
-        nonces: NoncesComponent::Storage,
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher
     }
 
@@ -55,7 +85,17 @@ pub mod Core {
     #[derive(Drop, starknet::Event)]
     pub enum Event {
         #[flat]
-        NoncesEvent: NoncesComponent::Event
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        NoncesEvent: NoncesComponent::Event,
+        #[flat]
+        PausableEvent: PausableComponent::Event,
+        #[flat]
+        ReplaceabilityEvent: ReplaceabilityComponent::Event,
+        #[flat]
+        RolesEvent: RolesComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event
     }
 
     #[constructor]
