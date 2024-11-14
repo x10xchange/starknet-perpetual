@@ -101,6 +101,8 @@ pub mod Core {
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
         fn _apply_funding(self: @ContractState) {}
         fn _get_asset_price(self: @ContractState) {}
+        fn _pre_update(self: @ContractState) {}
+        fn _post_update(self: @ContractState) {}
 
         fn _validate_amounts(self: @ContractState) -> bool {
             // TODO: Implement
