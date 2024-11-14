@@ -34,14 +34,21 @@ pub mod Core {
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher
     }
 
+    #[derive(Drop, Copy, Serde, starknet::Store)]
+    enum PositionType {
+        Regular
+    }
+
     #[starknet::storage_node]
     struct Position {
         version: u8,
         // Iterateble map of collateral asset.
         collateral_assets: Map<AssetId, CollateralNode>,
         owner: ContractAddress,
+        public_key: felt252,
         // Iterateble map of synthetic asset.
-        synthetic_assets: Map<AssetId, SyntheticNode>
+        synthetic_assets: Map<AssetId, SyntheticNode>,
+        position_type: PositionType
     }
 
     #[event]
