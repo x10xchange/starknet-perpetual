@@ -9,6 +9,7 @@ pub mod Core {
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
+    use openzeppelin_account::utils::is_valid_stark_signature;
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
@@ -161,7 +162,16 @@ pub mod Core {
             };
         }
 
-        fn _validate_signature(
+        fn _validate_stark_signature(
+            self: @ContractState, public_key: felt252, hash: felt252, signature: Signature
+        ) {
+            assert_with_error(
+                is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
+                CoreErrors::INVALID_STARK_SIGNATURE
+            );
+        }
+
+        fn _validate_owner_signature(
             self: @ContractState, owner: ContractAddress, hash: felt252, signature: Signature
         ) {
             let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
@@ -169,7 +179,7 @@ pub mod Core {
             // Check either 'VALID' or true for backwards compatibility.
             let signature_valid = is_valid_signature_felt == starknet::VALIDATED
                 || is_valid_signature_felt == 1;
-            assert_with_error(signature_valid, CoreErrors::INVALID_SIGNATURE);
+            assert_with_error(signature_valid, CoreErrors::INVALID_OWNER_SIGNATURE);
         }
 
         fn _validate_arithmetic_overflow(self: @ContractState) -> bool {
@@ -219,7 +229,8 @@ pub mod Core {
         ALREADY_FULFILLED,
         ASSET_NOT_ACTIVE,
         ASSET_NOT_EXISTS,
-        INVALID_SIGNATURE,
+        INVALID_OWNER_SIGNATURE,
+        INVALID_STARK_SIGNATURE,
         COLLATERAL_NOT_EXISTS,
         NOT_COLLATERAL,
         COLLATERAL_NOT_ACTIVE,
@@ -234,7 +245,8 @@ pub mod Core {
                 CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
                 CoreErrors::ASSET_NOT_ACTIVE => "Asset is not active",
                 CoreErrors::ASSET_NOT_EXISTS => "Asset does not exist",
-                CoreErrors::INVALID_SIGNATURE => "Invalid signature",
+                CoreErrors::INVALID_OWNER_SIGNATURE => "Invalid account owner is_valid_signature",
+                CoreErrors::INVALID_STARK_SIGNATURE => "Invalid public key stark signature",
                 CoreErrors::COLLATERAL_NOT_EXISTS => "Collateral does not exist",
                 CoreErrors::NOT_COLLATERAL => "Asset is not a collateral",
                 CoreErrors::COLLATERAL_NOT_ACTIVE => "Collateral is not active",
