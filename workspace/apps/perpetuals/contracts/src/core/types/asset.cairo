@@ -1,4 +1,4 @@
-use perpetuals::core::types::RiskFactor;
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use perpetuals::core::types::funding_index::FundingIndex;
 use starknet::{ContractAddress, contract_address_const};
 
@@ -19,7 +19,7 @@ pub struct Asset {
     pub name: felt252,
     pub oracle_price: u64,
     pub quorum: u8,
-    pub risk_factor: RiskFactor
+    pub risk_factor: FixedTwoDecimal
 }
 
 #[generate_trait]

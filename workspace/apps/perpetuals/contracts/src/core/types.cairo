@@ -13,8 +13,6 @@ pub struct Fee {
     pub value: u64,
 }
 
-pub type RiskFactor = FixedTwoDecimal;
-
 pub type Signature = Array<felt252>;
 
 #[derive(Drop, Serde)]
@@ -29,5 +27,5 @@ pub struct AssetEntry {
     pub id: AssetId,
     pub value: Balance,
     pub price: u64,
-    pub risk_factor: RiskFactor
+    pub risk_factor: FixedTwoDecimal
 }
