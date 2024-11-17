@@ -1,18 +1,24 @@
 use perpetuals::core::types::{FundingIndex, RiskFactor};
 use starknet::{ContractAddress, contract_address_const};
 
-#[derive(Drop, starknet::Store, Serde)]
+pub const VERSION: u8 = 0;
+
+pub fn SYNTHETIC_ADDRESS() -> ContractAddress {
+    contract_address_const::<'synthetic'>()
+}
+
+#[derive(Drop, Copy, starknet::Store, Serde)]
 pub struct Asset {
-    version: u8,
-    id: AssetId,
-    address: ContractAddress,
-    decimals: u8,
-    is_active: bool,
-    last_funding_index: FundingIndex,
-    name: felt252,
-    oracle_price: u64,
-    quorum: u8,
-    risk_factor: RiskFactor
+    pub version: u8,
+    pub id: AssetId,
+    pub address: ContractAddress,
+    pub decimals: u8,
+    pub is_active: bool,
+    pub last_funding_index: FundingIndex,
+    pub name: felt252,
+    pub oracle_price: u64,
+    pub quorum: u8,
+    pub risk_factor: RiskFactor
 }
 
 #[generate_trait]
@@ -21,7 +27,7 @@ pub impl AssetImpl of AssetTrait {
         *self.is_active
     }
     fn is_synthetic(self: @Asset) -> bool {
-        *self.address == contract_address_const::<'synthetic'>()
+        *self.address == SYNTHETIC_ADDRESS()
     }
 }
 

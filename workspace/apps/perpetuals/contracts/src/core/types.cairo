@@ -12,7 +12,7 @@ pub struct Fee {
     pub value: u64,
 }
 
-#[derive(Drop, starknet::Store, Serde)]
+#[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
     pub value: i64
 }
