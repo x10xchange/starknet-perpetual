@@ -1,4 +1,5 @@
-use perpetuals::core::types::{FundingIndex, RiskFactor};
+use perpetuals::core::types::RiskFactor;
+use perpetuals::core::types::funding_index::FundingIndex;
 use starknet::{ContractAddress, contract_address_const};
 
 pub const VERSION: u8 = 0;

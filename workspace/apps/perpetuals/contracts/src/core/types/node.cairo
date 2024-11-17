@@ -1,6 +1,6 @@
-use perpetuals::core::types::FundingIndex;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::funding_index::FundingIndex;
 
 pub const MARKER_ASSET_ID: AssetId = AssetId { value: 'marker' };
 

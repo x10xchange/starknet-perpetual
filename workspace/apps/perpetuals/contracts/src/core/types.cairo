@@ -1,5 +1,6 @@
 pub mod asset;
 pub mod balance;
+pub mod funding_index;
 pub mod node;
 pub mod order;
 
@@ -10,11 +11,6 @@ use starknet::ContractAddress;
 
 pub struct Fee {
     pub value: u64,
-}
-
-#[derive(Copy, Drop, starknet::Store, Serde)]
-pub struct FundingIndex {
-    pub value: i64
 }
 
 pub type RiskFactor = FixedTwoDecimal;
