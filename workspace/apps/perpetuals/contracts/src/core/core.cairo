@@ -7,7 +7,6 @@ pub mod Core {
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
     use openzeppelin_account::utils::is_valid_stark_signature;
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
@@ -57,7 +56,6 @@ pub mod Core {
         assets: Map<AssetId, Option<Asset>>,
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, Option<u64>>,
-        erc20_dispatcher: IERC20Dispatcher,
         // position_id to Position
         positions: Map<felt252, Position>,
         // Valid oracles for each Asset
@@ -100,12 +98,7 @@ pub mod Core {
     }
 
     #[constructor]
-    pub fn constructor(
-        ref self: ContractState,
-        token_address: ContractAddress,
-        value_risk_calculator: ContractAddress
-    ) {
-        self.erc20_dispatcher.write(IERC20Dispatcher { contract_address: token_address });
+    pub fn constructor(ref self: ContractState, value_risk_calculator: ContractAddress) {
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });

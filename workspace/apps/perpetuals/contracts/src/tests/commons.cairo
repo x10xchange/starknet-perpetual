@@ -35,9 +35,8 @@ pub struct CoreState {
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: CoreConfig, token: TokenState) -> CoreState {
+    fn deploy(self: CoreConfig) -> CoreState {
         let mut calldata = array![];
-        token.address.serialize(ref calldata);
         self.tv_tr_calculator.serialize(ref calldata);
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
@@ -109,7 +108,7 @@ pub impl SystemImpl of SystemTrait {
     fn deploy(self: SystemConfig) -> SystemState {
         let token = self.token.deploy();
         let tv_tr_calculator = self.tv_tr_calculator.deploy();
-        let core = self.core.deploy(:token);
+        let core = self.core.deploy();
         SystemState { token, core, tv_tr_calculator }
     }
 }
