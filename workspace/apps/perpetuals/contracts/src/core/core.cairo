@@ -55,7 +55,7 @@ pub mod Core {
         src5: SRC5Component::Storage,
         assets: Map<AssetId, Option<Asset>>,
         // TODO: consider changing the map value to bool if possible
-        fulfillment: Map<felt252, Option<u64>>,
+        fulfillment: Map<felt252, u64>,
         // position_id to Position
         positions: Map<felt252, Position>,
         // Valid oracles for each Asset
@@ -178,10 +178,6 @@ pub mod Core {
         fn _validate_arithmetic_overflow(self: @ContractState) -> bool {
             // TODO: Implement
             true
-        }
-
-        fn _validate_fulfillment(self: @ContractState, hash: felt252) {
-            assert_with_error(self.fulfillment.read(hash).is_none(), CoreErrors::ALREADY_FULFILLED);
         }
 
         fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
