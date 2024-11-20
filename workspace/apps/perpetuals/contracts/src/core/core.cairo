@@ -10,6 +10,7 @@ pub mod Core {
     use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
     use openzeppelin_account::utils::is_valid_stark_signature;
     use openzeppelin_utils::cryptography::nonces::NoncesComponent;
+    use openzeppelin_utils::snip12::SNIP12Metadata;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
@@ -28,6 +29,19 @@ pub mod Core {
 
     impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
     impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
+
+    const NAME: felt252 = 'Perpetuals';
+    const VERSION: felt252 = 'v0';
+
+    /// Required for hash computation.
+    impl SNIP12MetadataImpl of SNIP12Metadata {
+        fn name() -> felt252 {
+            NAME
+        }
+        fn version() -> felt252 {
+            VERSION
+        }
+    }
 
     #[abi(embed_v0)]
     impl ReplaceabilityImpl =
