@@ -4,6 +4,7 @@ pub mod Core {
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::types::time::TimeStamp;
+    use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
@@ -194,8 +195,10 @@ pub mod Core {
             true
         }
 
+
         fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
+            assert_with_error(position.owner.read().is_non_zero(), CoreErrors::INVALID_POSITION);
             // TODO: Implement the 'asset_entries' field.
             PositionData {
                 version: position.version.read(),
@@ -233,6 +236,7 @@ pub mod Core {
         ASSET_NOT_ACTIVE,
         ASSET_NOT_EXISTS,
         INVALID_OWNER_SIGNATURE,
+        INVALID_POSITION,
         INVALID_STARK_SIGNATURE,
         COLLATERAL_NOT_EXISTS,
         NOT_COLLATERAL,
@@ -249,6 +253,7 @@ pub mod Core {
                 CoreErrors::ASSET_NOT_ACTIVE => "Asset is not active",
                 CoreErrors::ASSET_NOT_EXISTS => "Asset does not exist",
                 CoreErrors::INVALID_OWNER_SIGNATURE => "Invalid account owner is_valid_signature",
+                CoreErrors::INVALID_POSITION => "Invalid position",
                 CoreErrors::INVALID_STARK_SIGNATURE => "Invalid public key stark signature",
                 CoreErrors::COLLATERAL_NOT_EXISTS => "Collateral does not exist",
                 CoreErrors::NOT_COLLATERAL => "Asset is not a collateral",
