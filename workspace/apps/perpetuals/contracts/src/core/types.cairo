@@ -29,3 +29,5 @@ pub struct AssetEntry {
     pub price: u64,
     pub risk_factor: FixedTwoDecimal
 }
+
+pub type PositionDiff = Span<AssetEntry>;
