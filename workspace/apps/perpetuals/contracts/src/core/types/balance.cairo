@@ -46,6 +46,12 @@ pub impl U64IntoBalance of Into<u64, Balance> {
     }
 }
 
+pub impl U128TryIntoBalance of TryInto<u128, Balance> {
+    fn try_into(self: u128) -> Option<Balance> {
+        Option::Some(Balance { value: self.try_into()? })
+    }
+}
+
 pub impl BalanceZeroImpl of Zero<Balance> {
     fn zero() -> Balance {
         Balance { value: 0 }
@@ -69,6 +75,7 @@ pub impl BalanceImpl of BalanceTrait {
 
 #[cfg(test)]
 mod tests {
+    use core::num::traits::Bounded;
     use core::num::traits::Zero;
     use super::{Balance, BalanceTrait};
 
@@ -121,6 +128,18 @@ mod tests {
     fn test_into() {
         let balance: Balance = 10_u64.into();
         assert!(balance.value == 10, "into failed");
+    }
+
+    #[test]
+    fn test_try_into() {
+        let balance: Balance = 10_u128.try_into().unwrap();
+        assert!(balance.value == 10, "into failed");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_try_into_big_number() {
+        let _: Balance = Bounded::<u128>::MAX.try_into().unwrap();
     }
 
     #[test]
