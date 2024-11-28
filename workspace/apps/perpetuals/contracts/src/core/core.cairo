@@ -3,7 +3,7 @@ pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::types::time::TimeStamp;
+    use contracts_commons::types::time::Timestamp;
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -133,7 +133,7 @@ pub mod Core {
             collateral_id: AssetId,
             recipient: ContractAddress,
             nonce: felt252,
-            expiry: TimeStamp,
+            expiry: Timestamp,
             amount: u128,
             salt: felt252,
             signature: Signature
