@@ -3,7 +3,8 @@ pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::types::time::Timestamp;
+    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
+    use contracts_commons::types::time::{TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -68,6 +69,12 @@ pub mod Core {
         roles: RolesComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
+        // Configurations
+        funding_validation_interval: TimeDelta,
+        max_funding_rate: FixedTwoDecimal,
+        // Validations
+        // Updates every funding tick.
+        last_funding_tick: Timestamp,
         assets: Map<AssetId, Option<Asset>>,
         // TODO: consider changing the map value to bool if possible
         fulfillment: Map<felt252, u64>,
