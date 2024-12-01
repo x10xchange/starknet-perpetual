@@ -2,7 +2,7 @@ use core::num::traits::Zero;
 
 #[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct Balance {
-    pub value: i128
+    pub value: i128,
 }
 
 impl BalanceAdd of Add<Balance> {
@@ -43,6 +43,18 @@ pub impl BalanceSubU64Assign of core::ops::SubAssign<Balance, u64> {
 pub impl U64IntoBalance of Into<u64, Balance> {
     fn into(self: u64) -> Balance {
         Balance { value: self.into() }
+    }
+}
+
+pub impl I128IntoBalance of Into<i128, Balance> {
+    fn into(self: i128) -> Balance {
+        Balance { value: self }
+    }
+}
+
+pub impl BalanceIntoI128 of Into<Balance, i128> {
+    fn into(self: Balance) -> i128 {
+        self.value
     }
 }
 
@@ -125,9 +137,21 @@ mod tests {
     }
 
     #[test]
-    fn test_into() {
+    fn test_u64_into_balance() {
         let balance: Balance = 10_u64.into();
         assert!(balance.value == 10, "into failed");
+    }
+
+    #[test]
+    fn test_i128_into_balance() {
+        let balance: Balance = 10_i128.into();
+        assert!(balance.value == 10, "into failed");
+    }
+
+    #[test]
+    fn test_balance_into_i128() {
+        let balance: Balance = Balance { value: 10 };
+        assert!(balance.into() == 10_i128, "into failed");
     }
 
     #[test]
