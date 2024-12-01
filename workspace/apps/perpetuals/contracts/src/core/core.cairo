@@ -160,10 +160,6 @@ pub mod Core {
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
 
-        fn _validate_amounts(self: @ContractState) -> bool {
-            // TODO: Implement
-            true
-        }
         fn _validate_assets(self: @ContractState, asset_ids: Array<AssetId>) {
             for id in asset_ids {
                 assert_with_error(self._get_asset(id).is_active(), CoreErrors::ASSET_NOT_ACTIVE);
@@ -189,12 +185,6 @@ pub mod Core {
                 || is_valid_signature_felt == 1;
             assert_with_error(signature_valid, CoreErrors::INVALID_OWNER_SIGNATURE);
         }
-
-        fn _validate_arithmetic_overflow(self: @ContractState) -> bool {
-            // TODO: Implement
-            true
-        }
-
 
         fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
