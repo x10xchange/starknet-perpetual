@@ -76,8 +76,7 @@ pub mod Core {
         // Updates every funding tick.
         last_funding_tick: Timestamp,
         assets: Map<AssetId, Option<Asset>>,
-        // TODO: consider changing the map value to bool if possible
-        fulfillment: Map<felt252, u64>,
+        fulfillment: Map<felt252, i128>,
         // position_id to Position
         positions: Map<felt252, Position>,
         // Valid oracles for each Asset
