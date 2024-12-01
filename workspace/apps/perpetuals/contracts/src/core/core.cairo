@@ -16,7 +16,7 @@ pub mod Core {
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
     use perpetuals::core::types::{PositionData, Signature};
-    use perpetuals::errors::{ErrorTrait, assert_with_error, OptionErrorImpl};
+    use perpetuals::errors::{ErrorTrait, assert_with_error, OptionErrorTrait};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::ContractAddress;
     use starknet::storage::{Map, Vec, StoragePathEntry};
