@@ -78,11 +78,6 @@ pub mod Core {
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher
     }
 
-    #[derive(Drop, Copy, Serde, starknet::Store)]
-    enum PositionType {
-        Regular
-    }
-
     #[starknet::storage_node]
     struct Position {
         version: u8,
@@ -91,8 +86,7 @@ pub mod Core {
         owner: ContractAddress,
         public_key: felt252,
         // Iterateble map of synthetic asset.
-        synthetic_assets: Map<AssetId, SyntheticNode>,
-        position_type: PositionType
+        synthetic_assets: Map<AssetId, SyntheticNode>
     }
 
     #[event]
