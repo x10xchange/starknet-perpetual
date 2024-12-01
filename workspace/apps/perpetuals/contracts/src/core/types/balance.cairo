@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected: 'Option::unwrap failed.')]
     fn test_try_into_big_number() {
         let _: Balance = Bounded::<u128>::MAX.try_into().unwrap();
     }
