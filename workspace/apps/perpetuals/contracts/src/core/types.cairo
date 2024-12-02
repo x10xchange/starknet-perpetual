@@ -30,4 +30,13 @@ pub struct AssetEntry {
     pub risk_factor: FixedTwoDecimal
 }
 
-pub type PositionDiff = Span<AssetEntry>;
+#[derive(Drop, Serde)]
+pub struct AssetDiffEntry {
+    pub id: AssetId,
+    pub before: Balance,
+    pub after: Balance,
+    pub price: u64,
+    pub risk_factor: FixedTwoDecimal
+}
+
+pub type PositionDiff = Span<AssetDiffEntry>;

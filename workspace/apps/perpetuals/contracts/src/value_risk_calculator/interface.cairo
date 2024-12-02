@@ -15,7 +15,7 @@ pub struct PositionTVTRChange {
 
 #[starknet::interface]
 pub trait IValueRiskCalculator<TContractState> {
-    fn calculate_position_tvtr(
-        self: @TContractState, Position: PositionData, Position_diff: PositionDiff,
+    fn calculate_position_tvtr_change(
+        self: @TContractState, position: PositionData, position_diff: PositionDiff,
     ) -> PositionTVTRChange;
 }
