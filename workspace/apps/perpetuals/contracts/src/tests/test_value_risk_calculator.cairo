@@ -32,23 +32,16 @@ fn test_constructor() {
 #[test]
 fn test_calculate_position_tvtr_change_basic_case() {
     let mut state = INITIALIZED_CONTRACT_STATE();
+    state.set_risk_factor_for_asset(ASSET_ID(), RISK_FACTOR());
 
     // Create a position with a single asset entry.
-    let asset_entry = AssetEntry {
-        id: ASSET_ID(), balance: Balance { value: 60 }, price: PRICE, risk_factor: RISK_FACTOR(),
-    };
+    let asset_entry = AssetEntry { id: ASSET_ID(), balance: Balance { value: 60 }, price: PRICE };
     let mut asset_entries = array![asset_entry];
-    let position_data = PositionData {
-        version: 0, owner: test_address(), asset_entries: asset_entries.span(),
-    };
+    let position_data = PositionData { version: 0, asset_entries: asset_entries.span() };
 
     // Create a position diff with a single asset diff entry.
     let asset_diff_entry = AssetDiffEntry {
-        id: ASSET_ID(),
-        before: Balance { value: 60 },
-        after: Balance { value: 80 },
-        price: PRICE,
-        risk_factor: RISK_FACTOR(),
+        id: ASSET_ID(), before: Balance { value: 60 }, after: Balance { value: 80 }, price: PRICE,
     };
     let position_diff = array![asset_diff_entry].span();
 

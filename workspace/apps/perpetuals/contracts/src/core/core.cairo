@@ -195,11 +195,7 @@ pub mod Core {
             let position = self.positions.entry(position_id);
             assert_with_error(position.owner.read().is_non_zero(), CoreErrors::INVALID_POSITION);
             // TODO: Implement the 'asset_entries' field.
-            PositionData {
-                version: position.version.read(),
-                owner: position.owner.read(),
-                asset_entries: array![].span(),
-            }
+            PositionData { version: position.version.read(), asset_entries: array![].span() }
         }
 
         fn _get_asset(self: @ContractState, id: AssetId) -> Asset {

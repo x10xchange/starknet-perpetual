@@ -1,13 +1,18 @@
 #[starknet::contract]
 pub mod ValueRiskCalculator {
     use contracts_commons::math::Abs;
-    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
+    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimalTrait, FixedTwoDecimal};
+    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::{PositionData, PositionDiff};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculator;
     use perpetuals::value_risk_calculator::interface::{PositionTVTR, PositionTVTRChange};
+    use starknet::storage::Map;
+
 
     #[storage]
-    struct Storage {}
+    struct Storage {
+        risk_factors: Map<AssetId, FixedTwoDecimal>,
+    }
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -16,8 +21,14 @@ pub mod ValueRiskCalculator {
     #[constructor]
     pub fn constructor(ref self: ContractState) {}
 
+
     #[abi(embed_v0)]
     pub impl ValueRiskCalculatorImpl of IValueRiskCalculator<ContractState> {
+        fn set_risk_factor_for_asset(
+            ref self: ContractState, asset_id: AssetId, risk_factor: FixedTwoDecimal,
+        ) {
+            self.risk_factors.write(asset_id, risk_factor);
+        }
         fn calculate_position_tvtr_change(
             self: @ContractState, position: PositionData, position_diff: PositionDiff,
         ) -> PositionTVTRChange {
@@ -28,8 +39,8 @@ pub mod ValueRiskCalculator {
             for asset_entry in asset_entries {
                 let balance = *asset_entry.balance.value;
                 let price = *asset_entry.price;
-                let risk_factor = *asset_entry.risk_factor;
-
+                let asset_id = *asset_entry.id;
+                let risk_factor = self.risk_factors.read(asset_id);
                 let asset_value = balance * price.into();
 
                 // Update the total value and total risk.
@@ -41,7 +52,8 @@ pub mod ValueRiskCalculator {
             let mut total_value_after = total_value_before;
             let mut total_risk_after: i128 = total_risk_before.try_into().unwrap();
             for asset_diff_entry in position_diff {
-                let risk_factor = *asset_diff_entry.risk_factor;
+                let asset_id = *asset_diff_entry.id;
+                let risk_factor = self.risk_factors.read(asset_id);
                 let price = *asset_diff_entry.price;
                 let balance_before = *asset_diff_entry.before.value;
                 let balance_after = *asset_diff_entry.after.value;

@@ -1,3 +1,5 @@
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::{PositionData, PositionDiff};
 
 
@@ -18,4 +20,8 @@ pub trait IValueRiskCalculator<TContractState> {
     fn calculate_position_tvtr_change(
         self: @TContractState, position: PositionData, position_diff: PositionDiff,
     ) -> PositionTVTRChange;
+
+    fn set_risk_factor_for_asset(
+        ref self: TContractState, asset_id: AssetId, risk_factor: FixedTwoDecimal,
+    );
 }
