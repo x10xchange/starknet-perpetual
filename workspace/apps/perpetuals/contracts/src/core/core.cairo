@@ -8,11 +8,11 @@ pub mod Core {
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
+    use openzeppelin::account::utils::is_valid_stark_signature;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
-    use openzeppelin_account::utils::is_valid_stark_signature;
-    use openzeppelin_utils::cryptography::nonces::NoncesComponent;
-    use openzeppelin_utils::snip12::SNIP12Metadata;
+    use openzeppelin::utils::cryptography::nonces::NoncesComponent;
+    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
