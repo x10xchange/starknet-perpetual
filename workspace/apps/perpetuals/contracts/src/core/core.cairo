@@ -19,8 +19,8 @@ pub mod Core {
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::errors::{ErrorTrait, assert_with_error, OptionErrorTrait};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
-    use starknet::ContractAddress;
     use starknet::storage::{Map, Vec, StoragePathEntry};
+    use starknet::{get_contract_address, ContractAddress};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NoncesComponent, storage: nonces, event: NoncesEvent);
@@ -84,7 +84,8 @@ pub mod Core {
         positions: Map<felt252, Position>,
         // Valid oracles for each Asset
         oracles: Map<AssetId, Vec<ContractAddress>>,
-        value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher
+        value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
+        contract_address: ContractAddress,
     }
 
     #[starknet::storage_node]
@@ -120,6 +121,7 @@ pub mod Core {
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
+        self.contract_address.write(get_contract_address());
     }
 
     #[abi(embed_v0)]
