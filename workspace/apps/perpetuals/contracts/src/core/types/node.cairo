@@ -10,7 +10,7 @@ pub const MARKER_ASSET_ID: AssetId = AssetId { value: 'marker' };
 #[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct CollateralNode {
     pub balance: Balance,
-    pub next: Option<AssetId>
+    pub next: Option<AssetId>,
 }
 
 #[generate_trait]
@@ -27,7 +27,7 @@ pub impl CollateralNodeImpl of CollateralNodeTrait {
 pub struct SyntheticNode {
     pub balance: Balance,
     pub funding_index: FundingIndex,
-    pub next: Option<AssetId>
+    pub next: Option<AssetId>,
 }
 
 #[generate_trait]
@@ -36,7 +36,7 @@ pub impl SyntheticNodeImpl of SyntheticNodeTrait {
         SyntheticNode {
             balance: Balance { value: 0 },
             funding_index: FundingIndex { value: 0 },
-            next: Option::None
+            next: Option::None,
         }
     }
 }

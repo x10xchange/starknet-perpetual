@@ -1,11 +1,11 @@
-use contracts_commons::test_utils::{TokenState, TokenConfig, TokenTrait};
+use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait};
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
 
 pub(crate) mod constants {
-    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimalTrait, FixedTwoDecimal};
+    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
 

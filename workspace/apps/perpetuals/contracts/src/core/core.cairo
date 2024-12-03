@@ -17,10 +17,10 @@ pub mod Core {
     use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
     use perpetuals::core::types::{PositionData, Signature};
-    use perpetuals::errors::{ErrorTrait, assert_with_error, OptionErrorTrait};
+    use perpetuals::errors::{ErrorTrait, OptionErrorTrait, assert_with_error};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
-    use starknet::storage::{Map, Vec, StoragePathEntry};
-    use starknet::{get_contract_address, ContractAddress};
+    use starknet::storage::{Map, StoragePathEntry, Vec};
+    use starknet::{ContractAddress, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NoncesComponent, storage: nonces, event: NoncesEvent);
@@ -96,7 +96,7 @@ pub mod Core {
         owner: ContractAddress,
         public_key: felt252,
         // Iterateble map of synthetic asset.
-        synthetic_assets: Map<AssetId, SyntheticNode>
+        synthetic_assets: Map<AssetId, SyntheticNode>,
     }
 
     #[event]
@@ -113,7 +113,7 @@ pub mod Core {
         #[flat]
         RolesEvent: RolesComponent::Event,
         #[flat]
-        SRC5Event: SRC5Component::Event
+        SRC5Event: SRC5Component::Event,
     }
 
     #[constructor]
@@ -141,7 +141,7 @@ pub mod Core {
             expiry: Timestamp,
             amount: u128,
             salt: felt252,
-            signature: Signature
+            signature: Signature,
         ) {}
 
         // Funding
@@ -172,16 +172,16 @@ pub mod Core {
         }
 
         fn _validate_stark_signature(
-            self: @ContractState, public_key: felt252, hash: felt252, signature: Signature
+            self: @ContractState, public_key: felt252, hash: felt252, signature: Signature,
         ) {
             assert_with_error(
                 is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
-                CoreErrors::INVALID_STARK_SIGNATURE
+                CoreErrors::INVALID_STARK_SIGNATURE,
             );
         }
 
         fn _validate_owner_signature(
-            self: @ContractState, owner: ContractAddress, hash: felt252, signature: Signature
+            self: @ContractState, owner: ContractAddress, hash: felt252, signature: Signature,
         ) {
             let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
                 .is_valid_signature(hash, signature);
@@ -198,7 +198,7 @@ pub mod Core {
             PositionData {
                 version: position.version.read(),
                 owner: position.owner.read(),
-                asset_entries: array![].span()
+                asset_entries: array![].span(),
             }
         }
 

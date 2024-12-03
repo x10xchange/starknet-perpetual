@@ -19,7 +19,7 @@ pub impl OptionErrorImpl<T, E, +ErrorTrait<E>, +Drop<E>> of OptionErrorTrait<T, 
     fn unwrap_with_error(self: Option<T>, err: E) -> T {
         match self {
             Option::Some(x) => x,
-            Option::None => panic_with_error(err)
+            Option::None => panic_with_error(err),
         }
     }
 }

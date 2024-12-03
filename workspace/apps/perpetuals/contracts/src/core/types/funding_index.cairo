@@ -2,7 +2,7 @@ use core::num::traits::zero::Zero;
 
 #[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
-    pub value: i64
+    pub value: i64,
 }
 
 impl FundingIndexZero of Zero<FundingIndex> {

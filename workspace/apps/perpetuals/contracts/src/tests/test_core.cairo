@@ -16,7 +16,7 @@ fn test_constructor() {
     Core::constructor(ref state, value_risk_calculator: VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS());
     assert_eq!(
         state.value_risk_calculator_dispatcher.read().contract_address,
-        VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS()
+        VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
     );
 }
 

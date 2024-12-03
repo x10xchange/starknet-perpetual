@@ -19,7 +19,7 @@ pub struct Asset {
     pub name: felt252,
     pub oracle_price: u64,
     pub quorum: u8,
-    pub risk_factor: FixedTwoDecimal
+    pub risk_factor: FixedTwoDecimal,
 }
 
 #[generate_trait]
@@ -34,5 +34,5 @@ pub impl AssetImpl of AssetTrait {
 
 #[derive(Drop, Copy, PartialEq, Serde, Hash, starknet::Store)]
 pub struct AssetId {
-    pub value: felt252
+    pub value: felt252,
 }

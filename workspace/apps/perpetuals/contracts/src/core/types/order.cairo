@@ -1,7 +1,7 @@
 use contracts_commons::types::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::{Signature, Fee};
+use perpetuals::core::types::{Fee, Signature};
 
 pub struct Order {
     pub order_type: OrderType,
@@ -14,9 +14,9 @@ pub struct Order {
     pub expiration: Timestamp,
     pub nonce: felt252,
     pub signature: Signature,
-    pub position_id: felt252
+    pub position_id: felt252,
 }
 
 pub enum OrderType {
-    Limit
+    Limit,
 }
