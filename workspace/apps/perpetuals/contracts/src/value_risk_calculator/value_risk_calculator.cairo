@@ -17,16 +17,16 @@ pub mod ValueRiskCalculator {
     pub fn constructor(ref self: ContractState) {}
 
     #[abi(embed_v0)]
-    impl ValueRiskCalculatorImpl of IValueRiskCalculator<ContractState> {
+    pub impl ValueRiskCalculatorImpl of IValueRiskCalculator<ContractState> {
         fn calculate_position_tvtr_change(
-            self: @ContractState, position: PositionData, position_diff: PositionDiff
+            self: @ContractState, position: PositionData, position_diff: PositionDiff,
         ) -> PositionTVTRChange {
             // Calculate the total value and total risk before the diff.
             let mut total_value_before = 0_i128;
             let mut total_risk_before = 0_u128;
             let asset_entries = position.asset_entries;
             for asset_entry in asset_entries {
-                let balance = *asset_entry.value.value;
+                let balance = *asset_entry.balance.value;
                 let price = *asset_entry.price;
                 let risk_factor = *asset_entry.risk_factor;
 

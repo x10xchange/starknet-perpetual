@@ -5,8 +5,10 @@ use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
 
 pub(crate) mod constants {
+    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimalTrait, FixedTwoDecimal};
     use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
+
 
     pub fn VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS() -> ContractAddress {
         contract_address_const::<'VALUE_RISK_CALCULATOR_ADDRESS'>()
@@ -17,19 +19,23 @@ pub(crate) mod constants {
     pub fn ASSET_ID() -> AssetId {
         AssetId { value: 'asset_id' }
     }
+    pub fn RISK_FACTOR() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    pub const PRICE: u64 = 900;
 }
 
 
 #[derive(Drop, Copy)]
 pub struct CoreConfig {
-    pub tv_tr_calculator: ContractAddress
+    pub tv_tr_calculator: ContractAddress,
 }
 
 /// The `CoreState` struct represents the state of the Core contract.
 /// It includes the contract address
 #[derive(Drop, Copy)]
 pub struct CoreState {
-    pub address: ContractAddress
+    pub address: ContractAddress,
 }
 
 
@@ -56,7 +62,7 @@ pub struct ValueRiskCalculatorConfig {}
 /// It includes the contract address
 #[derive(Drop, Copy)]
 pub struct ValueRiskCalculatorState {
-    pub address: ContractAddress
+    pub address: ContractAddress,
 }
 
 
@@ -88,7 +94,7 @@ pub impl ValueRiskCalculatorImpl of ValueRiskCalculatorTrait {
 struct SystemConfig {
     pub token: TokenConfig,
     pub core: CoreConfig,
-    pub tv_tr_calculator: ValueRiskCalculatorConfig
+    pub tv_tr_calculator: ValueRiskCalculatorConfig,
 }
 
 /// The `SystemState` struct represents the state of the entire system.
@@ -98,7 +104,7 @@ struct SystemConfig {
 pub struct SystemState {
     pub token: TokenState,
     pub core: CoreState,
-    pub tv_tr_calculator: ValueRiskCalculatorState
+    pub tv_tr_calculator: ValueRiskCalculatorState,
 }
 
 

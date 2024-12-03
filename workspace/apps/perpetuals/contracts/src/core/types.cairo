@@ -19,15 +19,15 @@ pub type Signature = Array<felt252>;
 pub struct PositionData {
     pub version: u8,
     pub owner: ContractAddress,
-    pub asset_entries: Span<AssetEntry>
+    pub asset_entries: Span<AssetEntry>,
 }
 
 #[derive(Drop, Serde)]
 pub struct AssetEntry {
     pub id: AssetId,
-    pub value: Balance,
+    pub balance: Balance,
     pub price: u64,
-    pub risk_factor: FixedTwoDecimal
+    pub risk_factor: FixedTwoDecimal,
 }
 
 #[derive(Drop, Serde)]
@@ -36,7 +36,7 @@ pub struct AssetDiffEntry {
     pub before: Balance,
     pub after: Balance,
     pub price: u64,
-    pub risk_factor: FixedTwoDecimal
+    pub risk_factor: FixedTwoDecimal,
 }
 
 pub type PositionDiff = Span<AssetDiffEntry>;
