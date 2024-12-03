@@ -70,9 +70,12 @@ pub mod Core {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         // Configurations
+        price_validation_interval: TimeDelta,
         funding_validation_interval: TimeDelta,
         max_funding_rate: FixedTwoDecimal,
         // Validations
+        // Updates each price validation.
+        last_price_validation: Timestamp,
         // Updates every funding tick.
         last_funding_tick: Timestamp,
         assets: Map<AssetId, Option<Asset>>,
