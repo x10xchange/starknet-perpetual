@@ -1,42 +1,59 @@
+use core::num::traits::Zero;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding_index::FundingIndex;
 
-pub const MARKER_ASSET_ID: AssetId = AssetId { value: 'marker' };
+pub const VERSION: u8 = 0;
+pub const HEAD_ASSET_ID: AssetId = AssetId { value: 'head' };
 
-// Collateral asset in a position.
-// - balance: The amount of the collateral asset held in the position.
-// - next: The next collateral asset id in the position.
+/// This is a trait for a node in a Storage Map.
+/// head() returns first node of the Map.
+/// head_asset_id() returns the asset_id of the first node in the Map.
+pub trait Node<T, NEXT> {
+    fn head() -> T;
+    fn head_asset_id() -> NEXT;
+}
+
+/// Collateral asset in a position.
+/// - balance: The amount of the collateral asset held in the position.
+/// - next: The next collateral asset id in the position.
 #[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct CollateralNode {
+    pub version: u8,
     pub balance: Balance,
     pub next: Option<AssetId>,
 }
 
-#[generate_trait]
-pub impl CollateralNodeImpl of CollateralNodeTrait {
-    fn marker() -> CollateralNode {
-        CollateralNode { balance: Balance { value: 0 }, next: Option::None }
+impl CollateralNodeImpl of Node<CollateralNode, AssetId> {
+    fn head() -> CollateralNode {
+        CollateralNode { version: VERSION, balance: Zero::zero(), next: Option::None }
+    }
+    fn head_asset_id() -> AssetId {
+        HEAD_ASSET_ID
     }
 }
 
-// Synthetic asset in a position.
-// - balance: The amount of the synthetic asset held in the position.
-// - funding_index: The funding index at the time of the last update.
-// - next: The next synthetic asset id in the position.
+/// Synthetic asset in a position.
+/// - balance: The amount of the synthetic asset held in the position.
+/// - funding_index: The funding index at the time of the last update.
+/// - next: The next synthetic asset id in the position.
 pub struct SyntheticNode {
+    pub version: u8,
     pub balance: Balance,
     pub funding_index: FundingIndex,
     pub next: Option<AssetId>,
 }
 
-#[generate_trait]
-pub impl SyntheticNodeImpl of SyntheticNodeTrait {
-    fn marker() -> SyntheticNode {
+impl SyntheticNodeImpl of Node<SyntheticNode, AssetId> {
+    fn head() -> SyntheticNode {
         SyntheticNode {
-            balance: Balance { value: 0 },
-            funding_index: FundingIndex { value: 0 },
+            version: VERSION,
+            balance: Zero::zero(),
+            funding_index: Zero::zero(),
             next: Option::None,
         }
+    }
+    fn head_asset_id() -> AssetId {
+        HEAD_ASSET_ID
     }
 }

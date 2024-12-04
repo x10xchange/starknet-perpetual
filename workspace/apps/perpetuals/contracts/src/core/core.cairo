@@ -14,7 +14,9 @@ pub mod Core {
     use openzeppelin::utils::cryptography::nonces::NoncesComponent;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::asset::{Asset, AssetId, AssetTrait};
+    use perpetuals::core::types::asset::AssetId;
+    use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
+    use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
     use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::errors::{ErrorTrait, OptionErrorTrait, assert_with_error};
@@ -78,11 +80,12 @@ pub mod Core {
         last_price_validation: Timestamp,
         // Updates every funding tick.
         last_funding_tick: Timestamp,
-        assets: Map<AssetId, Option<Asset>>,
+        collateral_timely_data: Map<AssetId, CollateralTimelyData>,
+        collateral_configs: Map<AssetId, Option<CollateralConfig>>,
+        synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
         fulfillment: Map<felt252, i128>,
-        // position_id to Position
         positions: Map<felt252, Position>,
-        // Valid oracles for each Asset
         oracles: Map<AssetId, Vec<ContractAddress>>,
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
         contract_address: ContractAddress,
@@ -91,11 +94,9 @@ pub mod Core {
     #[starknet::storage_node]
     struct Position {
         version: u8,
-        // Iterateble map of collateral asset.
+        owner_account: ContractAddress,
+        owner_public_key: felt252,
         collateral_assets: Map<AssetId, CollateralNode>,
-        owner: ContractAddress,
-        public_key: felt252,
-        // Iterateble map of synthetic asset.
         synthetic_assets: Map<AssetId, SyntheticNode>,
     }
 
@@ -165,11 +166,6 @@ pub mod Core {
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
 
-        fn _validate_assets(self: @ContractState, asset_ids: Array<AssetId>) {
-            for id in asset_ids {
-                assert_with_error(self._get_asset(id).is_active(), CoreErrors::ASSET_NOT_ACTIVE);
-            };
-        }
 
         fn _validate_stark_signature(
             self: @ContractState, public_key: felt252, hash: felt252, signature: Signature,
@@ -191,49 +187,41 @@ pub mod Core {
             assert_with_error(signature_valid, CoreErrors::INVALID_OWNER_SIGNATURE);
         }
 
-        fn _get_position(self: @ContractState, position_id: felt252) -> PositionData {
+        fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
-            assert_with_error(position.owner.read().is_non_zero(), CoreErrors::INVALID_POSITION);
+            assert_with_error(
+                position.owner_account.read().is_non_zero(), CoreErrors::INVALID_POSITION
+            );
             // TODO: Implement the 'asset_entries' field.
             PositionData { version: position.version.read(), asset_entries: array![].span() }
         }
 
-        fn _get_asset(self: @ContractState, id: AssetId) -> Asset {
-            self.assets.read(id).unwrap_with_error(CoreErrors::ASSET_NOT_EXISTS)
+        fn _get_collateral_config(
+            self: @ContractState, collateral_id: AssetId
+        ) -> CollateralConfig {
+            self
+                .collateral_configs
+                .read(collateral_id)
+                .unwrap_with_error(CoreErrors::COLLATERAL_NOT_EXISTS)
         }
 
-        fn _get_collateral(self: @ContractState, id: AssetId) -> Asset {
-            let asset = self.assets.read(id).unwrap_with_error(CoreErrors::COLLATERAL_NOT_EXISTS);
-            assert_with_error(!asset.is_synthetic(), CoreErrors::NOT_COLLATERAL);
-            assert_with_error(asset.is_active(), CoreErrors::COLLATERAL_NOT_ACTIVE);
-            asset
-        }
-
-        fn _get_synthetic(self: @ContractState, id: AssetId) -> Asset {
-            let asset = self.assets.read(id).unwrap_with_error(CoreErrors::SYNTHETIC_NOT_EXISTS);
-            assert_with_error(asset.is_synthetic(), CoreErrors::NOT_SYNTHETIC);
-            assert_with_error(asset.is_active(), CoreErrors::SYNTHETIC_NOT_ACTIVE);
-            asset
-        }
-
-        fn _is_asset_exist(self: @ContractState, id: AssetId) -> bool {
-            self.assets.read(id).is_some()
+        fn _get_synthetic_config(self: @ContractState, synthetic_id: AssetId) -> SyntheticConfig {
+            self
+                .synthetic_configs
+                .read(synthetic_id)
+                .unwrap_with_error(CoreErrors::SYNTHETIC_NOT_EXISTS)
         }
     }
 
     #[derive(Drop)]
     pub enum CoreErrors {
         ALREADY_FULFILLED,
-        ASSET_NOT_ACTIVE,
-        ASSET_NOT_EXISTS,
         INVALID_OWNER_SIGNATURE,
         INVALID_POSITION,
         INVALID_STARK_SIGNATURE,
         COLLATERAL_NOT_EXISTS,
-        NOT_COLLATERAL,
         COLLATERAL_NOT_ACTIVE,
         SYNTHETIC_NOT_EXISTS,
-        NOT_SYNTHETIC,
         SYNTHETIC_NOT_ACTIVE,
     }
 
@@ -241,16 +229,12 @@ pub mod Core {
         fn message(self: CoreErrors) -> ByteArray {
             match self {
                 CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
-                CoreErrors::ASSET_NOT_ACTIVE => "Asset is not active",
-                CoreErrors::ASSET_NOT_EXISTS => "Asset does not exist",
                 CoreErrors::INVALID_OWNER_SIGNATURE => "Invalid account owner is_valid_signature",
                 CoreErrors::INVALID_POSITION => "Invalid position",
                 CoreErrors::INVALID_STARK_SIGNATURE => "Invalid public key stark signature",
                 CoreErrors::COLLATERAL_NOT_EXISTS => "Collateral does not exist",
-                CoreErrors::NOT_COLLATERAL => "Asset is not a collateral",
                 CoreErrors::COLLATERAL_NOT_ACTIVE => "Collateral is not active",
                 CoreErrors::SYNTHETIC_NOT_EXISTS => "Synthetic does not exist",
-                CoreErrors::NOT_SYNTHETIC => "Asset is not a synthetic",
                 CoreErrors::SYNTHETIC_NOT_ACTIVE => "Synthetic is not active",
             }
         }
