@@ -4,7 +4,7 @@ pub mod Core {
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-    use contracts_commons::types::time::{TimeDelta, Timestamp};
+    use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -15,9 +15,13 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
-    use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
-    use perpetuals::core::types::node::{CollateralNode, SyntheticNode};
+    use perpetuals::core::types::asset::collateral::{
+        CollateralAsset, CollateralConfig, CollateralTimelyData,
+    };
+    use perpetuals::core::types::asset::synthetic::{
+        SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
+    };
+    use perpetuals::core::types::node::Node;
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::errors::{ErrorTrait, OptionErrorTrait, assert_with_error};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
@@ -102,8 +106,8 @@ pub mod Core {
         version: u8,
         owner_account: ContractAddress,
         owner_public_key: felt252,
-        collateral_assets: Map<AssetId, CollateralNode>,
-        synthetic_assets: Map<AssetId, SyntheticNode>,
+        collateral_assets: Map<AssetId, CollateralAsset>,
+        synthetic_assets: Map<AssetId, SyntheticAsset>,
     }
 
     #[event]
@@ -172,6 +176,52 @@ pub mod Core {
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
 
+        /// If `price_validation_interval` has passed since `last_price_validation`, validate
+        /// synthetic and collateral prices and update `last_price_validation` to current time.
+        fn _validate_prices(ref self: ContractState) {
+            let now = Time::now();
+            let price_validation_interval = self.price_validation_interval.read();
+            if now.sub(self.last_price_validation.read()) >= price_validation_interval {
+                self._validate_synthetic_prices(now, price_validation_interval);
+                self._validate_collateral_prices(now, price_validation_interval);
+                self.last_price_validation.write(now);
+            }
+        }
+
+        fn _validate_synthetic_prices(
+            self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
+        ) {
+            let mut head: SyntheticTimelyData = Node::head();
+            while head.next.is_some() {
+                let last_price_update = self
+                    .synthetic_timely_data
+                    .read(head.next.unwrap())
+                    .last_price_update;
+                assert_with_error(
+                    now.sub(last_price_update) < price_validation_interval,
+                    CoreErrors::EXPIRED_PRICE,
+                );
+                head = self.synthetic_timely_data.read(head.next.unwrap());
+            };
+        }
+
+
+        fn _validate_collateral_prices(
+            self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
+        ) {
+            let mut head: CollateralTimelyData = Node::head();
+            while head.next.is_some() {
+                let last_price_update = self
+                    .synthetic_timely_data
+                    .read(head.next.unwrap())
+                    .last_price_update;
+                assert_with_error(
+                    now.sub(last_price_update) < price_validation_interval,
+                    CoreErrors::EXPIRED_PRICE,
+                );
+                head = self.collateral_timely_data.read(head.next.unwrap());
+            };
+        }
 
         fn _validate_stark_signature(
             self: @ContractState, public_key: felt252, hash: felt252, signature: Signature,
@@ -222,6 +272,7 @@ pub mod Core {
     #[derive(Drop)]
     pub enum CoreErrors {
         ALREADY_FULFILLED,
+        EXPIRED_PRICE,
         INVALID_OWNER_SIGNATURE,
         INVALID_POSITION,
         INVALID_STARK_SIGNATURE,
@@ -235,6 +286,7 @@ pub mod Core {
         fn message(self: CoreErrors) -> ByteArray {
             match self {
                 CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
+                CoreErrors::EXPIRED_PRICE => "Asset price is expired",
                 CoreErrors::INVALID_OWNER_SIGNATURE => "Invalid account owner is_valid_signature",
                 CoreErrors::INVALID_POSITION => "Invalid position",
                 CoreErrors::INVALID_STARK_SIGNATURE => "Invalid public key stark signature",
