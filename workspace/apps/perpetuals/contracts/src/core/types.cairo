@@ -19,7 +19,7 @@ pub struct PositionData {
     pub asset_entries: Span<AssetEntry>,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Copy)]
 pub struct AssetEntry {
     pub id: AssetId,
     pub balance: Balance,
