@@ -59,6 +59,7 @@ pub mod Core {
 
     #[storage]
     struct Storage {
+        // --- Components ---
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
@@ -71,24 +72,29 @@ pub mod Core {
         roles: RolesComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        // Configurations
+        // --- Initialization ---
+        value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
+        contract_address: ContractAddress,
+        // --- System Configuration ---
         price_validation_interval: TimeDelta,
         funding_validation_interval: TimeDelta,
         max_funding_rate: FixedTwoDecimal,
-        // Validations
+        // --- Validations ---
         // Updates each price validation.
         last_price_validation: Timestamp,
         // Updates every funding tick.
         last_funding_tick: Timestamp,
-        collateral_timely_data: Map<AssetId, CollateralTimelyData>,
-        collateral_configs: Map<AssetId, Option<CollateralConfig>>,
-        synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-        synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
+        // Message hash to fulfilled amount.
         fulfillment: Map<felt252, i128>,
-        positions: Map<felt252, Position>,
+        // --- Asset Configuration ---
+        collateral_configs: Map<AssetId, Option<CollateralConfig>>,
+        synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
         oracles: Map<AssetId, Vec<ContractAddress>>,
-        value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
-        contract_address: ContractAddress,
+        // --- Asset Data ---
+        collateral_timely_data: Map<AssetId, CollateralTimelyData>,
+        synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        // --- Position Data ---
+        positions: Map<felt252, Position>,
     }
 
     #[starknet::storage_node]
@@ -190,14 +196,14 @@ pub mod Core {
         fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
             assert_with_error(
-                position.owner_account.read().is_non_zero(), CoreErrors::INVALID_POSITION
+                position.owner_account.read().is_non_zero(), CoreErrors::INVALID_POSITION,
             );
             // TODO: Implement the 'asset_entries' field.
             PositionData { version: position.version.read(), asset_entries: array![].span() }
         }
 
         fn _get_collateral_config(
-            self: @ContractState, collateral_id: AssetId
+            self: @ContractState, collateral_id: AssetId,
         ) -> CollateralConfig {
             self
                 .collateral_configs
