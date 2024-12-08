@@ -2,8 +2,8 @@ use contracts_commons::test_utils::cheat_caller_address_once;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionData};
 use perpetuals::tests::commons::constants::{ASSET_ID, PRICE, RISK_FACTOR};
-use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator::ValueRiskCalculatorImpl;
 use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator;
+use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator::ValueRiskCalculatorImpl;
 use snforge_std::test_address;
 
 fn CONTRACT_STATE() -> ValueRiskCalculator::ContractState {

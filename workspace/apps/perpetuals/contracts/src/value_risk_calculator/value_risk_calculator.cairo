@@ -1,7 +1,7 @@
 #[starknet::contract]
 pub mod ValueRiskCalculator {
     use contracts_commons::math::Abs;
-    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimalTrait, FixedTwoDecimal};
+    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::{PositionData, PositionDiff};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculator;
