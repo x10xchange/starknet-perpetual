@@ -13,6 +13,7 @@ pub mod Core {
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::utils::cryptography::nonces::NoncesComponent;
     use openzeppelin::utils::snip12::SNIP12Metadata;
+    use perpetuals::core::errors::*;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{
@@ -23,7 +24,6 @@ pub mod Core {
     };
     use perpetuals::core::types::node::Node;
     use perpetuals::core::types::{PositionData, Signature};
-    use perpetuals::errors::{ErrorTrait, OptionErrorTrait, assert_with_error};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, StoragePathEntry, Vec};
     use starknet::{ContractAddress, get_contract_address};
@@ -197,10 +197,7 @@ pub mod Core {
                     .synthetic_timely_data
                     .read(head.next.unwrap())
                     .last_price_update;
-                assert_with_error(
-                    now.sub(last_price_update) < price_validation_interval,
-                    CoreErrors::EXPIRED_PRICE,
-                );
+                assert(now.sub(last_price_update) < price_validation_interval, EXPIRED_PRICE);
                 head = self.synthetic_timely_data.read(head.next.unwrap());
             };
         }
@@ -215,10 +212,7 @@ pub mod Core {
                     .synthetic_timely_data
                     .read(head.next.unwrap())
                     .last_price_update;
-                assert_with_error(
-                    now.sub(last_price_update) < price_validation_interval,
-                    CoreErrors::EXPIRED_PRICE,
-                );
+                assert(now.sub(last_price_update) < price_validation_interval, EXPIRED_PRICE);
                 head = self.collateral_timely_data.read(head.next.unwrap());
             };
         }
@@ -226,9 +220,9 @@ pub mod Core {
         fn _validate_stark_signature(
             self: @ContractState, public_key: felt252, hash: felt252, signature: Signature,
         ) {
-            assert_with_error(
+            assert(
                 is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
-                CoreErrors::INVALID_STARK_SIGNATURE,
+                INVALID_STARK_SIGNATURE,
             );
         }
 
@@ -240,14 +234,12 @@ pub mod Core {
             // Check either 'VALID' or true for backwards compatibility.
             let signature_valid = is_valid_signature_felt == starknet::VALIDATED
                 || is_valid_signature_felt == 1;
-            assert_with_error(signature_valid, CoreErrors::INVALID_OWNER_SIGNATURE);
+            assert(signature_valid, INVALID_OWNER_SIGNATURE);
         }
 
         fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
-            assert_with_error(
-                position.owner_account.read().is_non_zero(), CoreErrors::INVALID_POSITION,
-            );
+            assert(position.owner_account.read().is_non_zero(), INVALID_POSITION);
             // TODO: Implement the 'asset_entries' field.
             PositionData { version: position.version.read(), asset_entries: array![].span() }
         }
@@ -255,46 +247,11 @@ pub mod Core {
         fn _get_collateral_config(
             self: @ContractState, collateral_id: AssetId,
         ) -> CollateralConfig {
-            self
-                .collateral_configs
-                .read(collateral_id)
-                .unwrap_with_error(CoreErrors::COLLATERAL_NOT_EXISTS)
+            self.collateral_configs.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
         }
 
         fn _get_synthetic_config(self: @ContractState, synthetic_id: AssetId) -> SyntheticConfig {
-            self
-                .synthetic_configs
-                .read(synthetic_id)
-                .unwrap_with_error(CoreErrors::SYNTHETIC_NOT_EXISTS)
-        }
-    }
-
-    #[derive(Drop)]
-    pub enum CoreErrors {
-        ALREADY_FULFILLED,
-        EXPIRED_PRICE,
-        INVALID_OWNER_SIGNATURE,
-        INVALID_POSITION,
-        INVALID_STARK_SIGNATURE,
-        COLLATERAL_NOT_EXISTS,
-        COLLATERAL_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS,
-        SYNTHETIC_NOT_ACTIVE,
-    }
-
-    pub impl CoreErrorsImpl of ErrorTrait<CoreErrors> {
-        fn message(self: CoreErrors) -> ByteArray {
-            match self {
-                CoreErrors::ALREADY_FULFILLED => "Already fulfilled",
-                CoreErrors::EXPIRED_PRICE => "Asset price is expired",
-                CoreErrors::INVALID_OWNER_SIGNATURE => "Invalid account owner is_valid_signature",
-                CoreErrors::INVALID_POSITION => "Invalid position",
-                CoreErrors::INVALID_STARK_SIGNATURE => "Invalid public key stark signature",
-                CoreErrors::COLLATERAL_NOT_EXISTS => "Collateral does not exist",
-                CoreErrors::COLLATERAL_NOT_ACTIVE => "Collateral is not active",
-                CoreErrors::SYNTHETIC_NOT_EXISTS => "Synthetic does not exist",
-                CoreErrors::SYNTHETIC_NOT_ACTIVE => "Synthetic is not active",
-            }
+            self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
     }
 }
