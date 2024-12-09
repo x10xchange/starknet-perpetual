@@ -6,6 +6,7 @@ use starknet::ContractAddress;
 
 pub(crate) mod constants {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
+    use contracts_commons::types::time::{Time, TimeDelta};
     use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
 
@@ -22,7 +23,14 @@ pub(crate) mod constants {
     pub fn RISK_FACTOR() -> FixedTwoDecimal {
         FixedTwoDecimalTrait::new(50)
     }
+    pub fn PRICE_VALIDATION_INTERVAL() -> TimeDelta {
+        Time::days(count: 1)
+    }
+    pub fn FUNDING_VALIDATION_INTERVAL() -> TimeDelta {
+        Time::days(count: 1)
+    }
     pub const PRICE: u64 = 900;
+    pub const MAX_FUNDING_RATE: u32 = 5;
 }
 
 

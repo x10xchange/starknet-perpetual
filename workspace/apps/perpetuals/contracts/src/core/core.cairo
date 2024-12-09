@@ -3,7 +3,6 @@ pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
     use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
@@ -82,7 +81,8 @@ pub mod Core {
         // --- System Configuration ---
         price_validation_interval: TimeDelta,
         funding_validation_interval: TimeDelta,
-        max_funding_rate: FixedTwoDecimal,
+        /// 32-bit fixed-point number with a 32-bit fractional part.
+        max_funding_rate: u32,
         // --- Validations ---
         // Updates each price validation.
         last_price_validation: Timestamp,
@@ -128,10 +128,19 @@ pub mod Core {
     }
 
     #[constructor]
-    pub fn constructor(ref self: ContractState, value_risk_calculator: ContractAddress) {
+    pub fn constructor(
+        ref self: ContractState,
+        value_risk_calculator: ContractAddress,
+        price_validation_interval: TimeDelta,
+        funding_validation_interval: TimeDelta,
+        max_funding_rate: u32,
+    ) {
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
+        self.price_validation_interval.write(price_validation_interval);
+        self.funding_validation_interval.write(funding_validation_interval);
+        self.max_funding_rate.write(max_funding_rate);
         self.contract_address.write(get_contract_address());
     }
 
