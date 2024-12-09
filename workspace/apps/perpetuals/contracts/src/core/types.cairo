@@ -3,6 +3,7 @@ pub mod balance;
 pub mod funding_index;
 pub mod node;
 pub mod order;
+pub mod withdraw_message;
 
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;

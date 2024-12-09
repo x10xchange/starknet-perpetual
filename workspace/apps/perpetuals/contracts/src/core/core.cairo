@@ -1,8 +1,11 @@
 #[starknet::contract]
 pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
+    use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
+    use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
+    use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
@@ -10,6 +13,7 @@ pub mod Core {
     use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
     use openzeppelin::account::utils::is_valid_stark_signature;
     use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::utils::cryptography::nonces::NoncesComponent;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::errors::*;
@@ -22,6 +26,7 @@ pub mod Core {
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
     use perpetuals::core::types::node::Node;
+    use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, StoragePathEntry, Vec};
@@ -77,7 +82,6 @@ pub mod Core {
         src5: SRC5Component::Storage,
         // --- Initialization ---
         value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
-        contract_address: ContractAddress,
         // --- System Configuration ---
         price_validation_interval: TimeDelta,
         funding_validation_interval: TimeDelta,
@@ -141,7 +145,6 @@ pub mod Core {
         self.price_validation_interval.write(price_validation_interval);
         self.funding_validation_interval.write(funding_validation_interval);
         self.max_funding_rate.write(max_funding_rate);
-        self.contract_address.write(get_contract_address());
     }
 
     #[abi(embed_v0)]
@@ -152,17 +155,66 @@ pub mod Core {
         fn liquidate(self: @ContractState) {}
         fn trade(self: @ContractState) {}
         fn transfer(self: @ContractState) {}
+
         fn withdraw(
             ref self: ContractState,
-            position_id: felt252,
-            collateral_id: AssetId,
-            recipient: ContractAddress,
-            nonce: felt252,
-            expiry: Timestamp,
-            amount: u128,
-            salt: felt252,
             signature: Signature,
-        ) {}
+            system_nonce: felt252,
+            // WithdrawMessage
+            position_id: felt252,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral_id: AssetId,
+            amount: u128,
+            recipient: ContractAddress,
+        ) {
+            /// Validations - Withdraw:
+            self.roles.only_operator();
+            self.pausable.assert_not_paused();
+            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+            let now = Time::now();
+            assert(now < expiration, WITHDRAW_EXPIRED);
+            let collateral = self._get_collateral_config(collateral_id);
+            assert(collateral.is_active, COLLATERAL_NOT_ACTIVE);
+            assert(
+                now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
+                FUNDING_EXPIRED,
+            );
+            self._validate_prices();
+            let position = self.positions.entry(position_id);
+            let withdraw_message = WithdrawMessage {
+                position_id, salt, expiration, collateral_id, amount, recipient,
+            };
+            let position_owner = position.owner_account.read();
+            let mut msg_hash = withdraw_message.get_message_hash(position_owner);
+            if position_owner.is_non_zero() {
+                assert(
+                    is_valid_owner_signature(position_owner, msg_hash, signature),
+                    INVALID_OWNER_SIGNATURE,
+                );
+            } else {
+                let public_key = position.owner_public_key.read();
+                msg_hash = withdraw_message.get_message_hash(public_key);
+                assert(
+                    is_valid_stark_signature(:msg_hash, :public_key, signature: signature.span()),
+                    INVALID_STARK_SIGNATURE,
+                );
+            };
+            let fulfillment_entry = self.fulfillment.entry(msg_hash);
+            assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
+
+            // TODO: Apply funding
+            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral.address };
+            erc20_dispatcher.transfer(:recipient, amount: amount.into());
+            let amount = amount.try_into().expect(AMOUNT_TOO_LARGE);
+            let balance_entry = position.collateral_assets.entry(collateral_id).balance;
+            balance_entry.write(balance_entry.read() - amount.into());
+            fulfillment_entry.write(amount);
+
+            /// Validations - Fundamentals:
+            // TODO: Validate position is healthy
+            ()
+        }
 
         // Funding
         fn funding_tick(self: @ContractState) {}
@@ -235,17 +287,6 @@ pub mod Core {
             );
         }
 
-        fn _validate_owner_signature(
-            self: @ContractState, owner: ContractAddress, hash: felt252, signature: Signature,
-        ) {
-            let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
-                .is_valid_signature(hash, signature);
-            // Check either 'VALID' or true for backwards compatibility.
-            let signature_valid = is_valid_signature_felt == starknet::VALIDATED
-                || is_valid_signature_felt == 1;
-            assert(signature_valid, INVALID_OWNER_SIGNATURE);
-        }
-
         fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
             let position = self.positions.entry(position_id);
             assert(position.owner_account.read().is_non_zero(), INVALID_POSITION);
@@ -262,5 +303,14 @@ pub mod Core {
         fn _get_synthetic_config(self: @ContractState, synthetic_id: AssetId) -> SyntheticConfig {
             self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
+    }
+
+    fn is_valid_owner_signature(
+        owner: ContractAddress, hash: felt252, signature: Signature,
+    ) -> bool {
+        let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
+            .is_valid_signature(:hash, :signature);
+        // Check either 'VALID' or true for backwards compatibility.
+        is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
     }
 }

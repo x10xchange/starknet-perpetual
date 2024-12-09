@@ -13,14 +13,15 @@ pub trait ICore<TContractState> {
     fn transfer(self: @TContractState);
     fn withdraw(
         ref self: TContractState,
-        position_id: felt252,
-        collateral_id: AssetId,
-        recipient: ContractAddress,
-        nonce: felt252,
-        expiry: Timestamp,
-        amount: u128,
-        salt: felt252,
         signature: Signature,
+        system_nonce: felt252,
+        // WithdrawMessage
+        position_id: felt252,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral_id: AssetId,
+        amount: u128,
+        recipient: ContractAddress,
     );
 
     // Funding
