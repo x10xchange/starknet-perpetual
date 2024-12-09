@@ -16,7 +16,7 @@ snforge_std.workspace = true
 sierra = true
 
 [scripts]
-test = "snforge test"
+test = "SNFORGE_BACKTRACE=1 snforge test"
 
 [tool.fmt]
 sort-module-level-items = true

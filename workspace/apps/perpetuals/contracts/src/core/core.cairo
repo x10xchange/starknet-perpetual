@@ -145,6 +145,14 @@ pub mod Core {
         self.price_validation_interval.write(price_validation_interval);
         self.funding_validation_interval.write(funding_validation_interval);
         self.max_funding_rate.write(max_funding_rate);
+
+        // Initialize the head of the collateral and synthetic timely data maps.
+        let mut head: CollateralTimelyData = Node::head();
+        let head_asset_id: AssetId = Node::<CollateralTimelyData>::head_asset_id();
+        self.collateral_timely_data.write(head_asset_id, head);
+        let mut head: SyntheticTimelyData = Node::head();
+        let head_asset_id: AssetId = Node::<SyntheticTimelyData>::head_asset_id();
+        self.synthetic_timely_data.write(head_asset_id, head);
     }
 
     #[abi(embed_v0)]
@@ -252,13 +260,17 @@ pub mod Core {
         fn _validate_synthetic_prices(
             self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
         ) {
-            let mut head: SyntheticTimelyData = Node::head();
+            let mut head: SyntheticTimelyData = self
+                .synthetic_timely_data
+                .read(Node::<SyntheticTimelyData>::head_asset_id());
             while head.next.is_some() {
                 let last_price_update = self
                     .synthetic_timely_data
                     .read(head.next.unwrap())
                     .last_price_update;
-                assert(now.sub(last_price_update) < price_validation_interval, EXPIRED_PRICE);
+                assert(
+                    now.sub(last_price_update) < price_validation_interval, SYNTHETIC_EXPIRED_PRICE,
+                );
                 head = self.synthetic_timely_data.read(head.next.unwrap());
             };
         }
@@ -267,13 +279,18 @@ pub mod Core {
         fn _validate_collateral_prices(
             self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
         ) {
-            let mut head: CollateralTimelyData = Node::head();
+            let mut head: CollateralTimelyData = self
+                .collateral_timely_data
+                .read(Node::<CollateralTimelyData>::head_asset_id());
             while head.next.is_some() {
                 let last_price_update = self
                     .synthetic_timely_data
                     .read(head.next.unwrap())
                     .last_price_update;
-                assert(now.sub(last_price_update) < price_validation_interval, EXPIRED_PRICE);
+                assert(
+                    now.sub(last_price_update) < price_validation_interval,
+                    COLLATERAL_EXPIRED_PRICE,
+                );
                 head = self.collateral_timely_data.read(head.next.unwrap());
             };
         }

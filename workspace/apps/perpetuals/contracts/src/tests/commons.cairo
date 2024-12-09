@@ -10,7 +10,6 @@ pub(crate) mod constants {
     use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
 
-
     pub fn VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS() -> ContractAddress {
         contract_address_const::<'VALUE_RISK_CALCULATOR_ADDRESS'>()
     }
@@ -31,6 +30,14 @@ pub(crate) mod constants {
     }
     pub const PRICE: u64 = 900;
     pub const MAX_FUNDING_RATE: u32 = 5;
+    pub const COLLATERAL_NAME: felt252 = 'COLLATERAL_NAME';
+    pub const COLLATERAL_SYMBOL: felt252 = 'COLLATERAL_SYMBOL';
+    pub const COLLATERAL_DECIMALS: u8 = 6;
+    pub const COLLATERAL_QUORUM: u8 = 0;
+    pub const SYNTHETIC_NAME: felt252 = 'SYNTHETIC_NAME';
+    pub const SYNTHETIC_SYMBOL: felt252 = 'SYNTHETIC_SYMBOL';
+    pub const SYNTHETIC_DECIMALS: u8 = 6;
+    pub const SYNTHETIC_QUORUM: u8 = 1;
 }
 
 

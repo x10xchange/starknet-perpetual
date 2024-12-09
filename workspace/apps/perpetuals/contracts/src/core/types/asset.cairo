@@ -1,7 +1,7 @@
 pub mod collateral;
 pub mod synthetic;
 
-#[derive(Drop, Copy, Serde, Hash, starknet::Store)]
+#[derive(Copy, Debug, Drop, Hash, Serde, starknet::Store)]
 pub struct AssetId {
     pub value: felt252,
 }
