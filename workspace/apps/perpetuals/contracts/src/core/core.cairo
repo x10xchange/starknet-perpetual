@@ -210,8 +210,8 @@ pub mod Core {
             };
             let fulfillment_entry = self.fulfillment.entry(msg_hash);
             assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
-
-            // TODO: Apply funding
+            /// Execution - Withdraw:
+            self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral.address };
             erc20_dispatcher.transfer(:recipient, amount: amount.into());
             let amount = amount.try_into().expect(AMOUNT_TOO_LARGE);
@@ -240,7 +240,7 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _apply_funding(self: @ContractState) {}
+        fn _apply_funding(ref self: ContractState, position_id: felt252) {}
         fn _get_asset_price(self: @ContractState) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
