@@ -47,8 +47,8 @@ fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
     Core::constructor(
         ref state,
         value_risk_calculator: VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
-        price_validation_interval: PRICE_VALIDATION_INTERVAL(),
-        funding_validation_interval: FUNDING_VALIDATION_INTERVAL(),
+        price_validation_interval: PRICE_VALIDATION_INTERVAL,
+        funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
     );
     state
@@ -61,17 +61,17 @@ fn test_constructor() {
         state.value_risk_calculator_dispatcher.read().contract_address,
         VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
     );
-    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL());
-    assert_eq!(state.funding_validation_interval.read(), FUNDING_VALIDATION_INTERVAL());
+    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL);
+    assert_eq!(state.funding_validation_interval.read(), FUNDING_VALIDATION_INTERVAL);
     assert_eq!(state.max_funding_rate.read(), MAX_FUNDING_RATE);
-    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL());
+    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL);
 }
 
 #[test]
 fn test_validate_collateral_prices() {
     let mut state = INITIALIZED_CONTRACT_STATE();
     let now = Time::now();
-    let collateral_id = ASSET_ID();
+    let collateral_id = ASSET_ID;
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -89,7 +89,7 @@ fn test_validate_collateral_prices() {
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
 
     // Call the function
-    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL());
+    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -98,7 +98,7 @@ fn test_validate_collateral_prices() {
 fn test_validate_collateral_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let collateral_id = ASSET_ID();
+    let collateral_id = ASSET_ID;
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -114,17 +114,17 @@ fn test_validate_collateral_prices_expired() {
         version: COLLATERAL_VERSION, price: PRICE, last_price_update: now, next: Option::None,
     };
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
-    let now = now.add(PRICE_VALIDATION_INTERVAL());
+    let now = now.add(PRICE_VALIDATION_INTERVAL);
     // Set the block timestamp to be after the price validation interval
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL());
+    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
 }
 #[test]
 fn test_validate_synthetic_prices() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID();
+    let synthetic_id = ASSET_ID;
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
         name: SYNTHETIC_NAME,
@@ -144,7 +144,7 @@ fn test_validate_synthetic_prices() {
     };
     add_synthetic(ref state, synthetic_id, synthetic_timely_data, synthetic_config);
     // Call the function
-    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL());
+    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -153,7 +153,7 @@ fn test_validate_synthetic_prices() {
 fn test_validate_synthetic_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID();
+    let synthetic_id = ASSET_ID;
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
         name: SYNTHETIC_NAME,
@@ -173,11 +173,11 @@ fn test_validate_synthetic_prices_expired() {
     };
     add_synthetic(ref state, synthetic_id, synthetic_timely_data, synthetic_config);
 
-    let now = now.add(PRICE_VALIDATION_INTERVAL());
+    let now = now.add(PRICE_VALIDATION_INTERVAL);
     // Set the block timestamp to be after the price validation interval
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL());
+    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
 }
 
 #[test]

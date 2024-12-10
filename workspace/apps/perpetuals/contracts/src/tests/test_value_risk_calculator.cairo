@@ -13,7 +13,7 @@ fn CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
 fn INITIALIZED_CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
     let mut state = CONTRACT_STATE();
     ValueRiskCalculator::constructor(ref state);
-    state.set_risk_factor_for_asset(ASSET_ID(), RISK_FACTOR());
+    state.set_risk_factor_for_asset(ASSET_ID, RISK_FACTOR());
     state
 }
 
@@ -34,12 +34,12 @@ fn test_constructor() {
 fn test_calculate_position_tvtr_change_basic_case() {
     let mut state = INITIALIZED_CONTRACT_STATE();
     // Create a position with a single asset entry.
-    let asset_entry = AssetEntry { id: ASSET_ID(), balance: Balance { value: 60 }, price: PRICE };
+    let asset_entry = AssetEntry { id: ASSET_ID, balance: Balance { value: 60 }, price: PRICE };
     let position_data = PositionData { version: 0, asset_entries: array![asset_entry].span() };
 
     // Create a position diff with a single asset diff entry.
     let asset_diff_entry = AssetDiffEntry {
-        id: ASSET_ID(), before: Balance { value: 60 }, after: Balance { value: 80 }, price: PRICE,
+        id: ASSET_ID, before: Balance { value: 60 }, after: Balance { value: 80 }, price: PRICE,
     };
     let position_diff = array![asset_diff_entry].span();
 
@@ -72,7 +72,7 @@ fn test_calculate_position_tvtr_change_negative_balance() {
     let mut state = INITIALIZED_CONTRACT_STATE();
 
     // Create a position with a single asset entry.
-    let asset_entry = AssetEntry { id: ASSET_ID(), balance: Balance { value: -60 }, price: PRICE };
+    let asset_entry = AssetEntry { id: ASSET_ID, balance: Balance { value: -60 }, price: PRICE };
     let position_data = PositionData { version: 0, asset_entries: array![asset_entry].span() };
 
     // Create a position diff with a single asset diff entry.

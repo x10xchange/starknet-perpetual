@@ -6,7 +6,7 @@ use starknet::ContractAddress;
 
 pub(crate) mod constants {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
-    use contracts_commons::types::time::{Time, TimeDelta};
+    use contracts_commons::types::time::TimeDelta;
     use perpetuals::core::types::asset::AssetId;
     use starknet::{ContractAddress, contract_address_const};
 
@@ -16,18 +16,15 @@ pub(crate) mod constants {
     pub fn TOKEN_ADDRESS() -> ContractAddress {
         contract_address_const::<'TOKEN_ADDRESS'>()
     }
-    pub fn ASSET_ID() -> AssetId {
-        AssetId { value: 'asset_id' }
-    }
     pub fn RISK_FACTOR() -> FixedTwoDecimal {
         FixedTwoDecimalTrait::new(50)
     }
-    pub fn PRICE_VALIDATION_INTERVAL() -> TimeDelta {
-        Time::days(count: 1)
-    }
-    pub fn FUNDING_VALIDATION_INTERVAL() -> TimeDelta {
-        Time::days(count: 1)
-    }
+
+    pub const ASSET_ID: AssetId = AssetId { value: selector!("asset_id") };
+    /// 1 day in seconds.
+    pub const PRICE_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
+    /// 1 day in seconds.
+    pub const FUNDING_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
     pub const PRICE: u64 = 900;
     pub const MAX_FUNDING_RATE: u32 = 5;
     pub const COLLATERAL_NAME: felt252 = 'COLLATERAL_NAME';
