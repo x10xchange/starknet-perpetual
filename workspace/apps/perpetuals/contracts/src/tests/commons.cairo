@@ -1,4 +1,5 @@
 use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait};
+use contracts_commons::test_utils::{set_account_as_app_role_admin, set_account_as_operator};
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
@@ -18,6 +19,15 @@ pub(crate) mod constants {
     }
     pub fn RISK_FACTOR() -> FixedTwoDecimal {
         FixedTwoDecimalTrait::new(50)
+    }
+    pub fn GOVERNANCE_ADMIN() -> ContractAddress {
+        contract_address_const::<'GOVERNANCE_ADMIN'>()
+    }
+    pub fn APP_ROLE_ADMIN() -> ContractAddress {
+        contract_address_const::<'APP_ROLE_ADMIN'>()
+    }
+    pub fn OPERATOR() -> ContractAddress {
+        contract_address_const::<'OPERATOR'>()
     }
 
     pub const ASSET_ID: AssetId = AssetId { value: selector!("asset_id") };
@@ -50,6 +60,23 @@ pub struct CoreState {
     pub address: ContractAddress,
 }
 
+
+#[derive(Drop, Copy)]
+pub(crate) struct PerpetualsInitConfig {
+    pub governance_admin: ContractAddress,
+    pub app_role_admin: ContractAddress,
+    pub operator: ContractAddress,
+}
+
+impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
+    fn default() -> PerpetualsInitConfig {
+        PerpetualsInitConfig {
+            governance_admin: constants::GOVERNANCE_ADMIN(),
+            app_role_admin: constants::APP_ROLE_ADMIN(),
+            operator: constants::OPERATOR(),
+        }
+    }
+}
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
@@ -99,6 +126,16 @@ pub impl ValueRiskCalculatorImpl of ValueRiskCalculatorTrait {
     }
 }
 
+pub(crate) fn set_default_roles(perpetuals_contract: ContractAddress, cfg: PerpetualsInitConfig) {
+    set_account_as_app_role_admin(
+        contract: perpetuals_contract,
+        account: cfg.app_role_admin,
+        governance_admin: cfg.governance_admin,
+    );
+    set_account_as_operator(
+        contract: perpetuals_contract, account: cfg.operator, app_role_admin: cfg.app_role_admin,
+    );
+}
 
 /// The `SystemConfig` struct represents the configuration settings for the entire system.
 /// It includes configurations for the token, core,

@@ -134,11 +134,14 @@ pub mod Core {
     #[constructor]
     pub fn constructor(
         ref self: ContractState,
+        governance_admin: ContractAddress,
         value_risk_calculator: ContractAddress,
         price_validation_interval: TimeDelta,
         funding_validation_interval: TimeDelta,
         max_funding_rate: u32,
     ) {
+        self.roles.initialize(:governance_admin);
+        self.replaceability.upgrade_delay.write(Zero::zero());
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });

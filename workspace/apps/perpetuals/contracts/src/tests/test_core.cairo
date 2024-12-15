@@ -1,3 +1,4 @@
+use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::types::time::Time;
 use core::num::traits::Zero;
 use perpetuals::core::core::{Core, Core::InternalCoreFunctionsTrait};
@@ -46,6 +47,7 @@ fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
     let mut state = CONTRACT_STATE();
     Core::constructor(
         ref state,
+        governance_admin: GOVERNANCE_ADMIN(),
         value_risk_calculator: VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
         price_validation_interval: PRICE_VALIDATION_INTERVAL,
         funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
@@ -57,6 +59,7 @@ fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
 #[test]
 fn test_constructor() {
     let mut state = INITIALIZED_CONTRACT_STATE();
+    assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert_eq!(
         state.value_risk_calculator_dispatcher.read().contract_address,
         VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
