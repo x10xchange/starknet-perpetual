@@ -167,6 +167,26 @@ pub mod Core {
         fn trade(self: @ContractState) {}
         fn transfer(self: @ContractState) {}
 
+        /// Withdraw collateral `amount` from the a position to `recipient`.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The `system_nonce` must be valid.
+        /// - The `expiration` time has not passed.
+        /// - The collateral asset exists in the system.
+        /// - The collateral asset is active.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - [The prices of all assets in the system are valid](`_validate_prices`).
+        /// - The withdrawal message has not been fulfilled.
+        /// - The `signature` is valid.
+        /// - Validate the position is healthy after the withdraw.
+        ///
+        /// Execution:
+        /// - [Apply funding](`_apply_funding`) to the position.
+        /// - Transfer the collateral `amount` to the `recipient`.
+        /// - Update the position's collateral balance.
+        /// - Mark the withdrawal message as fulfilled.
         fn withdraw(
             ref self: ContractState,
             signature: Signature,
