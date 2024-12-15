@@ -1,6 +1,7 @@
 use contracts_commons::types::time::Timestamp;
-use perpetuals::core::types::Signature;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::order::Order;
+use perpetuals::core::types::{Fee, Signature};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -9,7 +10,16 @@ pub trait ICore<TContractState> {
     fn deleverage(self: @TContractState);
     fn deposit(self: @TContractState);
     fn liquidate(self: @TContractState);
-    fn trade(self: @TContractState);
+    fn trade(
+        ref self: TContractState,
+        order_a: Order,
+        order_b: Order,
+        actual_fee_a: Fee,
+        actual_fee_b: Fee,
+        actual_amount_base_a: i128,
+        actual_amount_quote_a: i128,
+        system_nonce: felt252,
+    );
     fn transfer(self: @TContractState);
     fn withdraw(
         ref self: TContractState,

@@ -26,8 +26,9 @@ pub mod Core {
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
     use perpetuals::core::types::node::Node;
+    use perpetuals::core::types::order::Order;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
-    use perpetuals::core::types::{PositionData, Signature};
+    use perpetuals::core::types::{Fee, PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, StoragePathEntry, Vec};
     use starknet::{ContractAddress, get_contract_address};
@@ -164,7 +165,16 @@ pub mod Core {
         fn deleverage(self: @ContractState) {}
         fn deposit(self: @ContractState) {}
         fn liquidate(self: @ContractState) {}
-        fn trade(self: @ContractState) {}
+        fn trade(
+            ref self: ContractState,
+            order_a: Order,
+            order_b: Order,
+            actual_fee_a: Fee,
+            actual_fee_b: Fee,
+            actual_amount_base_a: i128,
+            actual_amount_quote_a: i128,
+            system_nonce: felt252,
+        ) {}
         fn transfer(self: @ContractState) {}
 
         /// Withdraw collateral `amount` from the a position to `recipient`.

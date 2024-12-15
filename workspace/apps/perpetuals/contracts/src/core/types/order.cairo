@@ -4,6 +4,7 @@ use perpetuals::core::types::{Fee, Signature};
 
 pub const VERSION: u8 = 0;
 
+#[derive(Drop, Serde)]
 pub struct Order {
     pub version: u8,
     pub signature: Signature,

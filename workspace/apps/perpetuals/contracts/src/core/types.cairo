@@ -8,6 +8,7 @@ pub mod withdraw_message;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 
+#[derive(Drop, Serde)]
 pub struct Fee {
     pub value: u64,
 }
