@@ -3,7 +3,7 @@ use contracts_commons::types::time::Timestamp;
 use core::num::traits::Zero;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::funding_index::FundingIndex;
+use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::node::Node;
 
 pub const VERSION: u8 = 0;

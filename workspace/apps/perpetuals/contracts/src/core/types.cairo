@@ -1,6 +1,6 @@
 pub mod asset;
 pub mod balance;
-pub mod funding_index;
+pub mod funding;
 pub mod node;
 pub mod order;
 pub mod withdraw_message;

@@ -1,8 +1,15 @@
 use core::num::traits::zero::Zero;
+use perpetuals::core::types::asset::AssetId;
 
 #[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
     pub value: i64,
+}
+
+#[derive(Copy, Drop, starknet::Store, Serde)]
+pub struct FundingTick {
+    pub asset_id: AssetId,
+    pub funding_index: FundingIndex,
 }
 
 impl FundingIndexZero of Zero<FundingIndex> {
@@ -14,6 +21,18 @@ impl FundingIndexZero of Zero<FundingIndex> {
     }
     fn is_non_zero(self: @FundingIndex) -> bool {
         self.value.is_non_zero()
+    }
+}
+
+impl FundingIndexSubImpl of Sub<FundingIndex> {
+    fn sub(lhs: FundingIndex, rhs: FundingIndex) -> FundingIndex {
+        FundingIndex { value: lhs.value - rhs.value }
+    }
+}
+
+impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
+    fn into(self: FundingIndex) -> i64 {
+        self.value
     }
 }
 

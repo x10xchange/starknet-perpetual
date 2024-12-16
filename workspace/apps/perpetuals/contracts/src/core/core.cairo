@@ -5,6 +5,7 @@ pub mod Core {
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
+    use contracts_commons::math::Abs;
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
@@ -25,6 +26,7 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
+    use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::node::Node;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
@@ -101,6 +103,7 @@ pub mod Core {
         oracles: Map<AssetId, Vec<ContractAddress>>,
         // --- Asset Data ---
         collateral_timely_data: Map<AssetId, CollateralTimelyData>,
+        num_of_active_synthetic_assets: usize,
         synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         // --- Position Data ---
         positions: Map<felt252, Position>,
@@ -257,8 +260,68 @@ pub mod Core {
             ()
         }
 
-        // Funding
-        fn funding_tick(self: @ContractState) {}
+        /// Funding tick is called by the operator to update the funding index of all synthetic
+        /// assets.
+        ///
+        /// Funding ticks asset ids MUST be in ascending order.
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The system nonce must be valid.
+        /// - The number of funding ticks must be equal to the number of active synthetic assets.
+        ///
+        /// Execution:
+        /// - Initialize the previous asset id to zero.
+        /// - For each funding tick in funding_ticks:
+        ///     - Validate the the funding tick asset_id is larger then the previous asset id.
+        ///     - The funding tick synthetic asset_id asset exists in the system.
+        ///     - The funding tick synthetic asset_id asset is active.
+        ///     - The funding index must be within the max funding rate using the following formula:
+        ///         |prev_funding_index-new_funding_index| <= max_funding_rate * time_diff *
+        ///         synthetic_price
+        ///    - Update the synthetic asset's funding index.
+        ///    - Update the previous asset id to the current funding tick asset id.
+        /// - Update the last funding tick time.
+        fn funding_tick(
+            ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+        ) {
+            /// Validations - Funding:
+            self.roles.only_operator();
+            self.pausable.assert_not_paused();
+            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+            assert(
+                funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
+                INVALID_FUNDING_TICK,
+            );
+            /// Execution - Funding tick:
+            let now = Time::now();
+            let mut prev_asset_id: AssetId = Zero::zero();
+            for funding_tick in funding_ticks {
+                assert(*funding_tick.asset_id > prev_asset_id, INVALID_FUNDING_TICK);
+                let asset_id = *funding_tick.asset_id;
+                let synthetic_config = self._get_synthetic_config(asset_id);
+                assert(synthetic_config.is_active, SYNTHETIC_NOT_ACTIVE);
+                let synthetic_timely_data = self.synthetic_timely_data.read(*funding_tick.asset_id);
+                let last_funding_index = synthetic_timely_data.funding_index;
+                let last_funding_tick = self.last_funding_tick.read();
+                let index_diff: i64 = (last_funding_index - *funding_tick.funding_index).into();
+                let time_diff: u64 = (now.sub(last_funding_tick)).into();
+                let synthetic_price = synthetic_timely_data.price;
+                assert(
+                    index_diff.abs() <= self.max_funding_rate.read().into()
+                        * time_diff
+                        * synthetic_price,
+                    INVALID_FUNDING_TICK,
+                );
+                self
+                    .synthetic_timely_data
+                    .entry(asset_id)
+                    .funding_index
+                    .write(*funding_tick.funding_index);
+                prev_asset_id = asset_id;
+            };
+            self.last_funding_tick.write(now);
+        }
 
         // Configuration
         fn add_asset(self: @ContractState) {}

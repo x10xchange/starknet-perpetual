@@ -1,5 +1,6 @@
 use contracts_commons::types::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::{Fee, Signature};
 use starknet::ContractAddress;
@@ -35,7 +36,9 @@ pub trait ICore<TContractState> {
     );
 
     // Funding
-    fn funding_tick(self: @TContractState);
+    fn funding_tick(
+        ref self: TContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+    );
 
     // Configuration
     fn add_asset(self: @TContractState);
