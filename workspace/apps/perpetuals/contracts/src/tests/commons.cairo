@@ -45,6 +45,46 @@ pub(crate) mod constants {
     pub const SYNTHETIC_SYMBOL: felt252 = 'SYNTHETIC_SYMBOL';
     pub const SYNTHETIC_DECIMALS: u8 = 6;
     pub const SYNTHETIC_QUORUM: u8 = 1;
+
+    /// Assets IDs
+    pub fn ASSET_ID_1() -> AssetId {
+        AssetId { value: 'asset_id_1' }
+    }
+    pub fn ASSET_ID_2() -> AssetId {
+        AssetId { value: 'asset_id_2' }
+    }
+    pub fn ASSET_ID_3() -> AssetId {
+        AssetId { value: 'asset_id_3' }
+    }
+    pub fn ASSET_ID_4() -> AssetId {
+        AssetId { value: 'asset_id_4' }
+    }
+    pub fn ASSET_ID_5() -> AssetId {
+        AssetId { value: 'asset_id_5' }
+    }
+
+    /// Risk factors
+    pub fn RISK_FACTOR_1() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    pub fn RISK_FACTOR_2() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    pub fn RISK_FACTOR_3() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    pub fn RISK_FACTOR_4() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    pub fn RISK_FACTOR_5() -> FixedTwoDecimal {
+        FixedTwoDecimalTrait::new(50)
+    }
+    /// Prices
+    pub const PRICE_1: u64 = 900;
+    pub const PRICE_2: u64 = 900;
+    pub const PRICE_3: u64 = 900;
+    pub const PRICE_4: u64 = 900;
+    pub const PRICE_5: u64 = 900;
 }
 
 
