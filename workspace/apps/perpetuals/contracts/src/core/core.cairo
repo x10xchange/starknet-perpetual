@@ -27,7 +27,6 @@ pub mod Core {
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
     use perpetuals::core::types::funding::FundingTick;
-    use perpetuals::core::types::node::Node;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{Fee, PositionData, Signature};
@@ -102,8 +101,10 @@ pub mod Core {
         synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
         oracles: Map<AssetId, Vec<ContractAddress>>,
         // --- Asset Data ---
+        collateral_timely_data_head: Option<AssetId>,
         collateral_timely_data: Map<AssetId, CollateralTimelyData>,
         num_of_active_synthetic_assets: usize,
+        synthetic_timely_data_head: Option<AssetId>,
         synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         // --- Position Data ---
         positions: Map<felt252, Position>,
@@ -114,7 +115,9 @@ pub mod Core {
         version: u8,
         owner_account: ContractAddress,
         owner_public_key: felt252,
+        collateral_assets_head: Option<AssetId>,
         collateral_assets: Map<AssetId, CollateralAsset>,
+        synthetic_assets_head: Option<AssetId>,
         synthetic_assets: Map<AssetId, SyntheticAsset>,
     }
 
@@ -152,14 +155,6 @@ pub mod Core {
         self.price_validation_interval.write(price_validation_interval);
         self.funding_validation_interval.write(funding_validation_interval);
         self.max_funding_rate.write(max_funding_rate);
-
-        // Initialize the head of the collateral and synthetic timely data maps.
-        let mut head: CollateralTimelyData = Node::head();
-        let head_asset_id: AssetId = Node::<CollateralTimelyData>::head_asset_id();
-        self.collateral_timely_data.write(head_asset_id, head);
-        let mut head: SyntheticTimelyData = Node::head();
-        let head_asset_id: AssetId = Node::<SyntheticTimelyData>::head_asset_id();
-        self.synthetic_timely_data.write(head_asset_id, head);
     }
 
     #[abi(embed_v0)]
@@ -215,7 +210,7 @@ pub mod Core {
             /// Validations - Withdraw:
             self.roles.only_operator();
             self.pausable.assert_not_paused();
-            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+            self._consume_nonce(:system_nonce);
             let now = Time::now();
             assert(now < expiration, WITHDRAW_EXPIRED);
             let collateral = self._get_collateral_config(collateral_id);
@@ -288,7 +283,7 @@ pub mod Core {
             /// Validations - Funding:
             self.roles.only_operator();
             self.pausable.assert_not_paused();
-            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+            self._consume_nonce(:system_nonce);
             assert(
                 funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
                 INVALID_FUNDING_TICK,
@@ -340,6 +335,9 @@ pub mod Core {
         fn _get_asset_price(self: @ContractState) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
+        fn _consume_nonce(ref self: ContractState, system_nonce: felt252) {
+            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+        }
 
         /// If `price_validation_interval` has passed since `last_price_validation`, validate
         /// synthetic and collateral prices and update `last_price_validation` to current time.
@@ -356,38 +354,28 @@ pub mod Core {
         fn _validate_synthetic_prices(
             self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
         ) {
-            let mut head: SyntheticTimelyData = self
-                .synthetic_timely_data
-                .read(Node::<SyntheticTimelyData>::head_asset_id());
-            while head.next.is_some() {
-                let last_price_update = self
-                    .synthetic_timely_data
-                    .read(head.next.unwrap())
-                    .last_price_update;
+            let mut asset_id_opt = self.synthetic_timely_data_head.read();
+            while let Option::Some(asset_id) = asset_id_opt {
+                let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
                 assert(
-                    now.sub(last_price_update) < price_validation_interval, SYNTHETIC_EXPIRED_PRICE,
+                    now.sub(synthetic_timely_data.last_price_update) < price_validation_interval,
+                    SYNTHETIC_EXPIRED_PRICE,
                 );
-                head = self.synthetic_timely_data.read(head.next.unwrap());
+                asset_id_opt = synthetic_timely_data.next;
             };
         }
-
 
         fn _validate_collateral_prices(
             self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
         ) {
-            let mut head: CollateralTimelyData = self
-                .collateral_timely_data
-                .read(Node::<CollateralTimelyData>::head_asset_id());
-            while head.next.is_some() {
-                let last_price_update = self
-                    .synthetic_timely_data
-                    .read(head.next.unwrap())
-                    .last_price_update;
+            let mut asset_id_opt = self.collateral_timely_data_head.read();
+            while let Option::Some(asset_id) = asset_id_opt {
+                let collateral_timely_data = self.collateral_timely_data.read(asset_id);
                 assert(
-                    now.sub(last_price_update) < price_validation_interval,
+                    now.sub(collateral_timely_data.last_price_update) < price_validation_interval,
                     COLLATERAL_EXPIRED_PRICE,
                 );
-                head = self.collateral_timely_data.read(head.next.unwrap());
+                asset_id_opt = collateral_timely_data.next;
             };
         }
 

@@ -8,7 +8,7 @@ use starknet::ContractAddress;
 pub(crate) mod constants {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::TimeDelta;
-    use perpetuals::core::types::asset::AssetId;
+    use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use starknet::{ContractAddress, contract_address_const};
 
     pub fn VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS() -> ContractAddress {
@@ -30,7 +30,6 @@ pub(crate) mod constants {
         contract_address_const::<'OPERATOR'>()
     }
 
-    pub const ASSET_ID: AssetId = AssetId { value: selector!("asset_id") };
     /// 1 day in seconds.
     pub const PRICE_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
     /// 1 day in seconds.
@@ -47,20 +46,23 @@ pub(crate) mod constants {
     pub const SYNTHETIC_QUORUM: u8 = 1;
 
     /// Assets IDs
+    pub fn ASSET_ID() -> AssetId {
+        AssetIdTrait::new(value: selector!("asset_id"))
+    }
     pub fn ASSET_ID_1() -> AssetId {
-        AssetId { value: 'asset_id_1' }
+        AssetIdTrait::new(value: selector!("asset_id_1"))
     }
     pub fn ASSET_ID_2() -> AssetId {
-        AssetId { value: 'asset_id_2' }
+        AssetIdTrait::new(value: selector!("asset_id_2"))
     }
     pub fn ASSET_ID_3() -> AssetId {
-        AssetId { value: 'asset_id_3' }
+        AssetIdTrait::new(value: selector!("asset_id_3"))
     }
     pub fn ASSET_ID_4() -> AssetId {
-        AssetId { value: 'asset_id_4' }
+        AssetIdTrait::new(value: selector!("asset_id_4"))
     }
     pub fn ASSET_ID_5() -> AssetId {
-        AssetId { value: 'asset_id_5' }
+        AssetIdTrait::new(value: selector!("asset_id_5"))
     }
 
     /// Risk factors
@@ -86,7 +88,6 @@ pub(crate) mod constants {
     pub const PRICE_4: u64 = 900;
     pub const PRICE_5: u64 = 900;
 }
-
 
 #[derive(Drop, Copy)]
 pub struct CoreConfig {

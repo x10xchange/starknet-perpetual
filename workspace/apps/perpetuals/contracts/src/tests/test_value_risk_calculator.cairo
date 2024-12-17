@@ -1,7 +1,7 @@
 use contracts_commons::test_utils::cheat_caller_address_once;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionData};
-use perpetuals::tests::commons::constants::{ASSET_ID, PRICE, RISK_FACTOR};
+use perpetuals::tests::commons::constants::{ASSET_ID, RISK_FACTOR};
 use perpetuals::tests::commons::constants::{ASSET_ID_1, PRICE_1, RISK_FACTOR_1};
 use perpetuals::tests::commons::constants::{ASSET_ID_2, PRICE_2, RISK_FACTOR_2};
 use perpetuals::tests::commons::constants::{ASSET_ID_3, PRICE_3, RISK_FACTOR_3};
@@ -18,7 +18,7 @@ fn CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
 fn INITIALIZED_CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
     let mut state = CONTRACT_STATE();
     ValueRiskCalculator::constructor(ref state);
-    state.set_risk_factor_for_asset(ASSET_ID, RISK_FACTOR());
+    state.set_risk_factor_for_asset(ASSET_ID(), RISK_FACTOR());
     state.set_risk_factor_for_asset(ASSET_ID_1(), RISK_FACTOR_1());
     state.set_risk_factor_for_asset(ASSET_ID_2(), RISK_FACTOR_2());
     state.set_risk_factor_for_asset(ASSET_ID_3(), RISK_FACTOR_3());

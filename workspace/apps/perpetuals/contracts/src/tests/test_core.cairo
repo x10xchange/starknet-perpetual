@@ -7,7 +7,6 @@ use perpetuals::core::types::asset::collateral::VERSION as COLLATERAL_VERSION;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
 use perpetuals::core::types::asset::synthetic::VERSION as SYNTHETIC_VERSION;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
-use perpetuals::core::types::node::Node;
 use perpetuals::tests::commons::constants::*;
 use snforge_std::start_cheat_block_timestamp_global;
 
@@ -18,28 +17,30 @@ fn CONTRACT_STATE() -> Core::ContractState {
 fn add_colateral(
     ref state: Core::ContractState,
     collateral_id: AssetId,
-    collateral_timely_data: CollateralTimelyData,
+    mut collateral_timely_data: CollateralTimelyData,
     collateral_config: CollateralConfig,
 ) {
+    match state.collateral_timely_data_head.read() {
+        Option::Some(head) => { collateral_timely_data.next = Option::Some(head); },
+        _ => {},
+    }
     state.collateral_timely_data.write(collateral_id, collateral_timely_data);
-    let head_asset_id: AssetId = Node::<CollateralTimelyData>::head_asset_id();
-    let mut head: CollateralTimelyData = state.collateral_timely_data.read(head_asset_id);
-    head.next = Option::Some(collateral_id);
-    state.collateral_timely_data.write(head_asset_id, head);
+    state.collateral_timely_data_head.write(Option::Some(collateral_id));
     state.collateral_configs.write(collateral_id, Option::Some(collateral_config));
 }
 
 fn add_synthetic(
     ref state: Core::ContractState,
     synthetic_id: AssetId,
-    synthetic_timely_data: SyntheticTimelyData,
+    mut synthetic_timely_data: SyntheticTimelyData,
     synthetic_config: SyntheticConfig,
 ) {
+    match state.synthetic_timely_data_head.read() {
+        Option::Some(head) => { synthetic_timely_data.next = Option::Some(head); },
+        _ => {},
+    }
     state.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
-    let head_asset_id: AssetId = Node::<SyntheticTimelyData>::head_asset_id();
-    let mut head: SyntheticTimelyData = state.synthetic_timely_data.read(head_asset_id);
-    head.next = Option::Some(synthetic_id);
-    state.synthetic_timely_data.write(head_asset_id, head);
+    state.synthetic_timely_data_head.write(Option::Some(synthetic_id));
     state.synthetic_configs.write(synthetic_id, Option::Some(synthetic_config));
 }
 
@@ -74,7 +75,7 @@ fn test_constructor() {
 fn test_validate_collateral_prices() {
     let mut state = INITIALIZED_CONTRACT_STATE();
     let now = Time::now();
-    let collateral_id = ASSET_ID;
+    let collateral_id = ASSET_ID();
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -101,7 +102,7 @@ fn test_validate_collateral_prices() {
 fn test_validate_collateral_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let collateral_id = ASSET_ID;
+    let collateral_id = ASSET_ID();
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -127,7 +128,7 @@ fn test_validate_collateral_prices_expired() {
 fn test_validate_synthetic_prices() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID;
+    let synthetic_id = ASSET_ID();
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
         name: SYNTHETIC_NAME,
@@ -156,7 +157,7 @@ fn test_validate_synthetic_prices() {
 fn test_validate_synthetic_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID;
+    let synthetic_id = ASSET_ID();
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
         name: SYNTHETIC_NAME,

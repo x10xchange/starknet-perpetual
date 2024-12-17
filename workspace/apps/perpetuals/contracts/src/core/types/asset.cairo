@@ -5,7 +5,18 @@ pub mod synthetic;
 
 #[derive(Copy, Debug, Drop, Hash, Serde, starknet::Store)]
 pub struct AssetId {
-    pub value: felt252,
+    value: felt252,
+}
+
+#[generate_trait]
+pub impl AssetIdImpl of AssetIdTrait {
+    fn new(value: felt252) -> AssetId {
+        AssetId { value }
+    }
+
+    fn value(self: @AssetId) -> felt252 {
+        *self.value
+    }
 }
 
 impl AssetIdZero of Zero<AssetId> {

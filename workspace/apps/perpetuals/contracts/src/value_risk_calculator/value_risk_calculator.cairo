@@ -4,8 +4,9 @@ pub mod ValueRiskCalculator {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::{PositionData, PositionDiff};
-    use perpetuals::value_risk_calculator::interface::IValueRiskCalculator;
-    use perpetuals::value_risk_calculator::interface::{PositionTVTR, PositionTVTRChange};
+    use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionState};
+    use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
+    use perpetuals::value_risk_calculator::interface::{PositionTVTRChange, changeEffects};
     use starknet::storage::Map;
 
 
@@ -24,6 +25,15 @@ pub mod ValueRiskCalculator {
 
     #[abi(embed_v0)]
     pub impl ValueRiskCalculatorImpl of IValueRiskCalculator<ContractState> {
+        fn evaluate_position_change(
+            self: @ContractState, position: PositionData, position_diff: PositionDiff,
+        ) -> PositionChangeResult {
+            PositionChangeResult {
+                position_state_before_change: PositionState::Healthy,
+                position_state_after_change: PositionState::Healthy,
+                change_effects: changeEffects { is_healthier: true, is_fair_deleverage: true },
+            }
+        }
         fn set_risk_factor_for_asset(
             ref self: ContractState, asset_id: AssetId, risk_factor: FixedTwoDecimal,
         ) {

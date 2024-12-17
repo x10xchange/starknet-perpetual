@@ -1,9 +1,7 @@
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::Timestamp;
-use core::num::traits::Zero;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::node::Node;
 use starknet::ContractAddress;
 
 pub const VERSION: u8 = 0;
@@ -32,18 +30,6 @@ pub struct CollateralTimelyData {
     pub next: Option<AssetId>,
 }
 
-impl CollateralTimelyDataImpl of Node<CollateralTimelyData> {
-    fn head() -> CollateralTimelyData {
-        CollateralTimelyData {
-            version: VERSION,
-            price: Zero::zero(),
-            last_price_update: Zero::zero(),
-            next: Option::None,
-        }
-    }
-}
-
-
 /// Collateral asset in a position.
 /// - balance: The amount of the collateral asset held in the position.
 /// - next: The next collateral asset id in the position.
@@ -52,10 +38,4 @@ pub struct CollateralAsset {
     pub version: u8,
     pub balance: Balance,
     pub next: Option<AssetId>,
-}
-
-pub impl CollateralAssetImpl of Node<CollateralAsset> {
-    fn head() -> CollateralAsset {
-        CollateralAsset { version: VERSION, balance: Zero::zero(), next: Option::None }
-    }
 }
