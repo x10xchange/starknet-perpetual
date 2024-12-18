@@ -19,10 +19,8 @@ pub struct Order {
     pub signature: Signature,
     // OrderMessage
     pub position_id: felt252,
-    pub base_type: AssetId,
-    pub quote_type: AssetId,
-    pub amount_base: i128,
-    pub amount_quote: i128,
+    pub base: AssetAmount,
+    pub quote: AssetAmount,
     pub fee_token_type: AssetId,
     pub fee: Fee,
     pub expiration: Timestamp,
