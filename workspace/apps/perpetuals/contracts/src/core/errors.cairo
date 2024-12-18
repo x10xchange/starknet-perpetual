@@ -1,3 +1,5 @@
+use perpetuals::core::types::asset::AssetId;
+
 pub const ALREADY_FULFILLED: felt252 = 'ALREADY_FULFILLED';
 pub const COLLATERAL_EXPIRED_PRICE: felt252 = 'COLLATERAL_EXPIRED_PRICE';
 pub const SYNTHETIC_EXPIRED_PRICE: felt252 = 'SYNTHETIC_EXPIRED_PRICE';
@@ -11,4 +13,8 @@ pub const SYNTHETIC_NOT_ACTIVE: felt252 = 'SYNTHETIC_NOT_ACTIVE';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
 pub const FUNDING_EXPIRED: felt252 = 'FUNDING_EXPIRED';
 pub const AMOUNT_TOO_LARGE: felt252 = 'AMOUNT_TOO_LARGE';
-pub const INVALID_FUNDING_TICK: felt252 = 'INVALID_FUNDING_TICK';
+pub const INVALID_FUNDING_TICK_LEN: felt252 = 'INVALID_FUNDING_TICK_LEN';
+
+pub fn invalid_funding_tick_err(synthetic_id: AssetId) -> ByteArray {
+    format!("INVALID_FUNDING_TICK synthetic_id: {:?}", synthetic_id)
+}

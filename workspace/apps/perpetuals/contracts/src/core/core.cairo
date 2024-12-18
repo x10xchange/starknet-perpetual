@@ -5,6 +5,7 @@ pub mod Core {
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
+    use contracts_commons::errors::assert_with_byte_array;
     use contracts_commons::math::Abs;
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
@@ -207,10 +208,7 @@ pub mod Core {
             amount: u128,
             recipient: ContractAddress,
         ) {
-            /// Validations - Withdraw:
-            self.roles.only_operator();
-            self.pausable.assert_not_paused();
-            self._consume_nonce(:system_nonce);
+            self._validate_common_prerequisites(:system_nonce);
             let now = Time::now();
             assert(now < expiration, WITHDRAW_EXPIRED);
             let collateral = self._get_collateral_config(collateral_id);
@@ -280,42 +278,8 @@ pub mod Core {
         fn funding_tick(
             ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
         ) {
-            /// Validations - Funding:
-            self.roles.only_operator();
-            self.pausable.assert_not_paused();
-            self._consume_nonce(:system_nonce);
-            assert(
-                funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
-                INVALID_FUNDING_TICK,
-            );
-            /// Execution - Funding tick:
-            let now = Time::now();
-            let mut prev_asset_id: AssetId = Zero::zero();
-            for funding_tick in funding_ticks {
-                assert(*funding_tick.asset_id > prev_asset_id, INVALID_FUNDING_TICK);
-                let asset_id = *funding_tick.asset_id;
-                let synthetic_config = self._get_synthetic_config(asset_id);
-                assert(synthetic_config.is_active, SYNTHETIC_NOT_ACTIVE);
-                let synthetic_timely_data = self.synthetic_timely_data.read(*funding_tick.asset_id);
-                let last_funding_index = synthetic_timely_data.funding_index;
-                let last_funding_tick = self.last_funding_tick.read();
-                let index_diff: i64 = (last_funding_index - *funding_tick.funding_index).into();
-                let time_diff: u64 = (now.sub(last_funding_tick)).into();
-                let synthetic_price = synthetic_timely_data.price;
-                assert(
-                    index_diff.abs() <= self.max_funding_rate.read().into()
-                        * time_diff
-                        * synthetic_price,
-                    INVALID_FUNDING_TICK,
-                );
-                self
-                    .synthetic_timely_data
-                    .entry(asset_id)
-                    .funding_index
-                    .write(*funding_tick.funding_index);
-                prev_asset_id = asset_id;
-            };
-            self.last_funding_tick.write(now);
+            self._validate_funding_tick(funding_ticks, system_nonce);
+            self._execute_funding_tick(funding_ticks);
         }
 
         // Configuration
@@ -403,6 +367,64 @@ pub mod Core {
 
         fn _get_synthetic_config(self: @ContractState, synthetic_id: AssetId) -> SyntheticConfig {
             self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
+        }
+
+        fn _validate_common_prerequisites(ref self: ContractState, system_nonce: felt252) {
+            self.roles.only_operator();
+            self.pausable.assert_not_paused();
+            self._consume_nonce(system_nonce);
+        }
+
+        fn _validate_funding_tick(
+            ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+        ) {
+            self._validate_common_prerequisites(:system_nonce);
+            assert(
+                funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
+                INVALID_FUNDING_TICK_LEN,
+            );
+        }
+
+        fn _execute_funding_tick(ref self: ContractState, funding_ticks: Span<FundingTick>) {
+            let now = Time::now();
+            let mut prev_synthetic_id: AssetId = Zero::zero();
+            for funding_tick in funding_ticks {
+                self
+                    ._process_funding_tick(
+                        funding_tick: *funding_tick, :now, ref :prev_synthetic_id,
+                    );
+            };
+            self.last_funding_tick.write(now);
+        }
+
+        fn _process_funding_tick(
+            ref self: ContractState,
+            funding_tick: FundingTick,
+            now: Timestamp,
+            ref prev_synthetic_id: AssetId,
+        ) {
+            let synthetic_id = funding_tick.asset_id;
+            assert_with_byte_array(
+                condition: synthetic_id > prev_synthetic_id,
+                err: invalid_funding_tick_err(:synthetic_id),
+            );
+            let synthetic_config = self._get_synthetic_config(:synthetic_id);
+            assert(synthetic_config.is_active, SYNTHETIC_NOT_ACTIVE);
+            let funding_index = funding_tick.funding_index;
+            let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
+            let last_funding_index = synthetic_timely_data.funding_index;
+            let last_funding_tick = self.last_funding_tick.read();
+            let index_diff: i64 = (last_funding_index - funding_index).into();
+            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
+            let synthetic_price = synthetic_timely_data.price;
+            assert_with_byte_array(
+                condition: index_diff.abs() <= self.max_funding_rate.read().into()
+                    * time_diff
+                    * synthetic_price,
+                err: invalid_funding_tick_err(:synthetic_id),
+            );
+            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(funding_index);
+            prev_synthetic_id = synthetic_id;
         }
     }
 
