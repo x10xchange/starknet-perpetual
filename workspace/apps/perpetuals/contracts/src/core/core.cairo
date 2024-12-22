@@ -30,7 +30,7 @@ pub mod Core {
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
-    use perpetuals::core::types::{Fee, PositionData, Signature};
+    use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, StoragePathEntry, Vec};
     use starknet::{ContractAddress, get_contract_address};
@@ -166,14 +166,20 @@ pub mod Core {
         fn liquidate(self: @ContractState) {}
         fn trade(
             ref self: ContractState,
+            system_nonce: felt252,
+            signature_a: Signature,
+            signature_b: Signature,
             order_a: Order,
             order_b: Order,
-            actual_fee_a: Fee,
-            actual_fee_b: Fee,
+            actual_fee_a: i128,
+            actual_fee_b: i128,
             actual_amount_base_a: i128,
             actual_amount_quote_a: i128,
-            system_nonce: felt252,
-        ) {}
+        ) {
+            /// Validations:
+            self._validate_trade(:signature_a, :signature_b, :order_a, :order_b, :system_nonce);
+            // TODO: execute trade flow.
+        }
         fn transfer(self: @ContractState) {}
 
         /// Withdraw collateral `amount` from the a position to `recipient`.
@@ -198,30 +204,21 @@ pub mod Core {
         /// - Mark the withdrawal message as fulfilled.
         fn withdraw(
             ref self: ContractState,
-            signature: Signature,
             system_nonce: felt252,
+            signature: Signature,
             // WithdrawMessage
-            position_id: felt252,
-            salt: felt252,
-            expiration: Timestamp,
-            collateral_id: AssetId,
-            amount: u128,
-            recipient: ContractAddress,
+            withdraw_message: WithdrawMessage,
         ) {
-            self._validate_common_prerequisites(:system_nonce);
             let now = Time::now();
-            assert(now < expiration, WITHDRAW_EXPIRED);
-            let collateral = self._get_collateral_config(collateral_id);
-            assert(collateral.is_active, COLLATERAL_NOT_ACTIVE);
-            assert(
-                now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
-                FUNDING_EXPIRED,
-            );
-            self._validate_prices();
+            self._validate_user_flow(:system_nonce, :now);
+            let amount = withdraw_message.collateral.amount;
+            assert(amount > 0, INVALID_WITHDRAW_AMOUNT);
+            assert(now < withdraw_message.expiration, WITHDRAW_EXPIRED);
+            let collateral_id = withdraw_message.collateral.asset_id;
+            let collateral_cfg = self._get_collateral_config(:collateral_id);
+            assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
+            let position_id = withdraw_message.position_id;
             let position = self.positions.entry(position_id);
-            let withdraw_message = WithdrawMessage {
-                position_id, salt, expiration, collateral_id, amount, recipient,
-            };
             let position_owner = position.owner_account.read();
             let mut msg_hash = withdraw_message.get_message_hash(position_owner);
             if position_owner.is_non_zero() {
@@ -241,8 +238,9 @@ pub mod Core {
             assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
             /// Execution - Withdraw:
             self._apply_funding(:position_id);
-            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral.address };
-            erc20_dispatcher.transfer(:recipient, amount: amount.into());
+            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
+            erc20_dispatcher
+                .transfer(recipient: withdraw_message.recipient, amount: amount.abs().into());
             let amount = amount.try_into().expect(AMOUNT_TOO_LARGE);
             let balance_entry = position.collateral_assets.entry(collateral_id).balance;
             balance_entry.write(balance_entry.read() - amount.into());
@@ -305,8 +303,7 @@ pub mod Core {
 
         /// If `price_validation_interval` has passed since `last_price_validation`, validate
         /// synthetic and collateral prices and update `last_price_validation` to current time.
-        fn _validate_prices(ref self: ContractState) {
-            let now = Time::now();
+        fn _validate_prices(ref self: ContractState, now: Timestamp) {
             let price_validation_interval = self.price_validation_interval.read();
             if now.sub(self.last_price_validation.read()) >= price_validation_interval {
                 self._validate_synthetic_prices(now, price_validation_interval);
@@ -375,6 +372,38 @@ pub mod Core {
             self._consume_nonce(system_nonce);
         }
 
+        fn _validate_user_flow(ref self: ContractState, system_nonce: felt252, now: Timestamp) {
+            self._validate_common_prerequisites(:system_nonce);
+            // Funding validation.
+            assert(
+                now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
+                FUNDING_EXPIRED,
+            );
+            // Price validation.
+            self._validate_prices(:now);
+        }
+
+        fn _validate_order(
+            ref self: ContractState, signature: Signature, order: Order, now: Timestamp,
+        ) {
+            // Positive fee check.
+            assert(order.fee.amount > 0, INVALID_NON_POSITIVE_FEE);
+
+            // Expiration check.
+            assert_with_byte_array(
+                now < order.expiration, trade_order_expired_err(order.position_id),
+            );
+
+            // Asset check.
+            let collateral = self._get_collateral_config(order.fee.asset_id);
+            assert(collateral.is_active, COLLATERAL_NOT_ACTIVE);
+
+            // Public key signature validation.
+            let public_key = self.positions.entry(order.position_id).owner_public_key.read();
+            let hash = order.get_message_hash(public_key);
+            self._validate_stark_signature(:public_key, :hash, :signature);
+        }
+
         fn _validate_funding_tick(
             ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
         ) {
@@ -425,6 +454,22 @@ pub mod Core {
             );
             self.synthetic_timely_data.entry(synthetic_id).funding_index.write(funding_index);
             prev_synthetic_id = synthetic_id;
+        }
+
+        fn _validate_trade(
+            ref self: ContractState,
+            signature_a: Signature,
+            signature_b: Signature,
+            order_a: Order,
+            order_b: Order,
+            system_nonce: felt252,
+        ) {
+            let now = Time::now();
+            self._validate_user_flow(:system_nonce, :now);
+
+            self._validate_order(signature: signature_a, order: order_a, :now);
+            self._validate_order(signature: signature_b, order: order_b, :now);
+            // TODO: validate non-basic rules.
         }
     }
 

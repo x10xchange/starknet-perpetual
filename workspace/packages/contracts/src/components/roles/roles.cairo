@@ -1,5 +1,5 @@
 #[starknet::component]
-pub mod RolesComponent {
+pub(crate) mod RolesComponent {
     use AccessErrors::{ALREADY_INITIALIZED, GOV_ADMIN_CANNOT_RENOUNCE, ZERO_ADDRESS};
     use AccessErrors::{ONLY_APP_GOVERNOR, ONLY_OPERATOR, ONLY_TOKEN_ADMIN};
     use AccessErrors::{ONLY_SECURITY_ADMIN, ONLY_SECURITY_AGENT, ONLY_UPGRADE_GOVERNOR};
@@ -10,8 +10,8 @@ pub mod RolesComponent {
     use RolesInterface::{SECURITY_ADMIN, SECURITY_AGENT, TOKEN_ADMIN, UPGRADE_GOVERNOR};
     use RolesInterface::{SecurityAgentAdded, SecurityAgentRemoved, TokenAdminAdded};
     use RolesInterface::{TokenAdminRemoved, UpgradeGovernorAdded, UpgradeGovernorRemoved};
+    use contracts_commons::components::roles::errors::AccessErrors;
     use contracts_commons::components::roles::interface as RolesInterface;
-    use contracts_commons::errors::AccessErrors;
     use core::num::traits::Zero;
     use starknet::{ContractAddress, get_caller_address};
 

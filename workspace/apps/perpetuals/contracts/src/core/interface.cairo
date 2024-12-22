@@ -1,9 +1,7 @@
-use contracts_commons::types::time::Timestamp;
-use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::Signature;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
-use perpetuals::core::types::{Fee, Signature};
-use starknet::ContractAddress;
+use perpetuals::core::types::withdraw_message::WithdrawMessage;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -13,26 +11,22 @@ pub trait ICore<TContractState> {
     fn liquidate(self: @TContractState);
     fn trade(
         ref self: TContractState,
+        system_nonce: felt252,
+        signature_a: Signature,
+        signature_b: Signature,
         order_a: Order,
         order_b: Order,
-        actual_fee_a: Fee,
-        actual_fee_b: Fee,
+        actual_fee_a: i128,
+        actual_fee_b: i128,
         actual_amount_base_a: i128,
         actual_amount_quote_a: i128,
-        system_nonce: felt252,
     );
     fn transfer(self: @TContractState);
     fn withdraw(
         ref self: TContractState,
-        signature: Signature,
         system_nonce: felt252,
-        // WithdrawMessage
-        position_id: felt252,
-        salt: felt252,
-        expiration: Timestamp,
-        collateral_id: AssetId,
-        amount: u128,
-        recipient: ContractAddress,
+        signature: Signature,
+        withdraw_message: WithdrawMessage,
     );
 
     // Funding

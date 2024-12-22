@@ -1,12 +1,12 @@
 use contracts_commons::test_utils::cheat_caller_address_once;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionData};
-use perpetuals::tests::commons::constants::{ASSET_ID, RISK_FACTOR};
-use perpetuals::tests::commons::constants::{ASSET_ID_1, PRICE_1, RISK_FACTOR_1};
-use perpetuals::tests::commons::constants::{ASSET_ID_2, PRICE_2, RISK_FACTOR_2};
-use perpetuals::tests::commons::constants::{ASSET_ID_3, PRICE_3, RISK_FACTOR_3};
-use perpetuals::tests::commons::constants::{ASSET_ID_4, PRICE_4, RISK_FACTOR_4};
-use perpetuals::tests::commons::constants::{ASSET_ID_5, PRICE_5, RISK_FACTOR_5};
+use perpetuals::tests::constants::{ASSET_ID, RISK_FACTOR};
+use perpetuals::tests::constants::{ASSET_ID_1, PRICE_1, RISK_FACTOR_1};
+use perpetuals::tests::constants::{ASSET_ID_2, PRICE_2, RISK_FACTOR_2};
+use perpetuals::tests::constants::{ASSET_ID_3, PRICE_3, RISK_FACTOR_3};
+use perpetuals::tests::constants::{ASSET_ID_4, PRICE_4, RISK_FACTOR_4};
+use perpetuals::tests::constants::{ASSET_ID_5, PRICE_5, RISK_FACTOR_5};
 use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator;
 use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator::ValueRiskCalculatorImpl;
 use snforge_std::test_address;

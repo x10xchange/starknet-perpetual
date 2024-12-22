@@ -7,12 +7,13 @@ pub mod withdraw_message;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 
-#[derive(Copy, Drop, Hash, Serde)]
-pub struct Fee {
-    pub value: u64,
-}
-
 pub type Signature = Array<felt252>;
+
+#[derive(Copy, Drop, Hash, Serde)]
+pub struct AssetAmount {
+    pub asset_id: AssetId,
+    pub amount: i128,
+}
 
 #[derive(Drop, Serde)]
 pub struct PositionData {

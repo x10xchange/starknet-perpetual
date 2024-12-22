@@ -1,25 +1,40 @@
+use contracts_commons::math::Abs;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::{PositionData, PositionDiff};
 
 
-#[derive(Drop, Serde)]
+#[derive(Copy, Drop, Serde)]
 pub struct PositionTVTR {
     pub total_value: i128,
     pub total_risk: u128,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Copy, Drop, Serde)]
 pub struct PositionTVTRChange {
     pub before: PositionTVTR,
     pub after: PositionTVTR,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, PartialEq)]
 pub enum PositionState {
     Healthy,
     Liquidatable,
     Deleveragable,
+}
+
+
+#[generate_trait]
+pub impl PositionStateImpl of PositionStateTrait {
+    fn new(position_tvtr: PositionTVTR) -> PositionState {
+        if position_tvtr.total_value < 0 {
+            return PositionState::Deleveragable;
+        }
+        if position_tvtr.total_risk > position_tvtr.total_value.abs() {
+            return PositionState::Liquidatable;
+        }
+        PositionState::Healthy
+    }
 }
 
 /// A struct representing the assessment of a position after a change.

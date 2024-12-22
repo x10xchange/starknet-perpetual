@@ -1,5 +1,7 @@
+pub(crate) mod errors;
+
 pub mod interface;
 
-pub mod roles;
+pub(crate) mod roles;
 
 pub use roles::RolesComponent;

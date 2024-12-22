@@ -11,8 +11,6 @@ pub struct CollateralConfig {
     pub version: u8,
     // Collateral ERC20 contract address
     pub address: ContractAddress,
-    pub name: felt252,
-    pub symbol: felt252,
     pub decimals: u8,
     // Configurable.
     pub is_active: bool,

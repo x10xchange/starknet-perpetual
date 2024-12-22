@@ -1,10 +1,10 @@
 #[starknet::contract]
 pub mod ValueRiskCalculator {
-    use contracts_commons::math::Abs;
+    use contracts_commons::math::{Abs, FractionTrait};
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::{PositionData, PositionDiff};
-    use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionState};
+    use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionStateTrait};
     use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
     use perpetuals::value_risk_calculator::interface::{PositionTVTRChange, changeEffects};
     use starknet::storage::Map;
@@ -22,16 +22,39 @@ pub mod ValueRiskCalculator {
     #[constructor]
     pub fn constructor(ref self: ContractState) {}
 
+    /// The position is fair if the total_value divided by the total_risk is the same
+    /// before and after the change.
+    fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
+        let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
+        let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
+        before_ratio == after_ratio
+    }
+
+    /// The position is healthier if the total_value divided by the total_risk
+    /// is higher after the change and the total_risk is lower.
+    /// Formal definition:
+    /// total_value_after / total_risk_after > total_value_before / total_risk_before
+    /// AND total_risk_after < total_risk_before.
+    fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
+        let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
+        let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
+        after_ratio > before_ratio && after.total_risk < before.total_risk
+    }
+
 
     #[abi(embed_v0)]
     pub impl ValueRiskCalculatorImpl of IValueRiskCalculator<ContractState> {
         fn evaluate_position_change(
             self: @ContractState, position: PositionData, position_diff: PositionDiff,
         ) -> PositionChangeResult {
+            let tvtr = self.calculate_position_tvtr_change(position, position_diff);
             PositionChangeResult {
-                position_state_before_change: PositionState::Healthy,
-                position_state_after_change: PositionState::Healthy,
-                change_effects: changeEffects { is_healthier: true, is_fair_deleverage: true },
+                position_state_before_change: PositionStateTrait::new(tvtr.before),
+                position_state_after_change: PositionStateTrait::new(tvtr.after),
+                change_effects: changeEffects {
+                    is_healthier: is_healthier(tvtr.before, tvtr.after),
+                    is_fair_deleverage: is_fair_deleverage(tvtr.before, tvtr.after),
+                },
             }
         }
         fn set_risk_factor_for_asset(

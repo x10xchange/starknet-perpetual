@@ -9,8 +9,6 @@ pub const VERSION: u8 = 0;
 #[derive(Drop, Copy, starknet::Store, Serde)]
 pub struct SyntheticConfig {
     pub version: u8,
-    pub name: felt252,
-    pub symbol: felt252,
     pub decimals: u8,
     // Configurable.
     pub is_active: bool,
