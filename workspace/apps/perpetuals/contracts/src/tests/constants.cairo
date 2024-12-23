@@ -42,8 +42,10 @@ pub const PRICE: u64 = 900;
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_DECIMALS: u8 = 6;
 pub const COLLATERAL_QUORUM: u8 = 0;
+pub const COLLATERAL_QUANTUM: u64 = 1_000_000_000;
 pub const SYNTHETIC_DECIMALS: u8 = 6;
 pub const SYNTHETIC_QUORUM: u8 = 1;
+pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
 pub const POSITION_ID: felt252 = 'POSITION_ID';
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000;
 

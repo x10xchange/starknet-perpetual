@@ -119,6 +119,7 @@ pub fn collateral_config_from_token_state(token_state: TokenState) -> Collateral
     CollateralConfig {
         version: VERSION,
         address: token_state.address,
+        quantum: COLLATERAL_QUANTUM,
         decimals: COLLATERAL_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),

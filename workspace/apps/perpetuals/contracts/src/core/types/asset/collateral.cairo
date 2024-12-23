@@ -6,11 +6,12 @@ use starknet::ContractAddress;
 
 pub const VERSION: u8 = 0;
 
-#[derive(Drop, Copy, starknet::Store, Serde)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralConfig {
     pub version: u8,
     // Collateral ERC20 contract address
     pub address: ContractAddress,
+    pub quantum: u64,
     pub decimals: u8,
     // Configurable.
     pub is_active: bool,
@@ -20,7 +21,7 @@ pub struct CollateralConfig {
     // TODO: Oracels
 }
 
-#[derive(Drop, Copy, starknet::Store, Serde)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralTimelyData {
     pub version: u8,
     pub price: u64,
@@ -31,7 +32,7 @@ pub struct CollateralTimelyData {
 /// Collateral asset in a position.
 /// - balance: The amount of the collateral asset held in the position.
 /// - next: The next collateral asset id in the position.
-#[derive(Drop, Copy, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralAsset {
     pub version: u8,
     pub balance: Balance,

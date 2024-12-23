@@ -6,9 +6,10 @@ use perpetuals::core::types::funding::FundingIndex;
 
 pub const VERSION: u8 = 0;
 
-#[derive(Drop, Copy, starknet::Store, Serde)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticConfig {
     pub version: u8,
+    pub resolution: u64,
     pub decimals: u8,
     // Configurable.
     pub is_active: bool,
@@ -17,7 +18,7 @@ pub struct SyntheticConfig {
     // TODO: Oracels
 }
 
-#[derive(Drop, Copy, starknet::Store, Serde)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticTimelyData {
     pub version: u8,
     pub price: u64,
@@ -30,7 +31,7 @@ pub struct SyntheticTimelyData {
 /// - balance: The amount of the synthetic asset held in the position.
 /// - funding_index: The funding index at the time of the last update.
 /// - next: The next synthetic asset id in the position.
-#[derive(Drop, Copy, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticAsset {
     pub version: u8,
     pub balance: Balance,

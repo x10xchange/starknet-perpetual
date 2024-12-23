@@ -79,6 +79,7 @@ fn test_validate_collateral_prices() {
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
+        quantum: COLLATERAL_QUANTUM,
         decimals: COLLATERAL_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),
@@ -104,6 +105,7 @@ fn test_validate_collateral_prices_expired() {
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
+        quantum: COLLATERAL_QUANTUM,
         decimals: COLLATERAL_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),
@@ -127,6 +129,7 @@ fn test_validate_synthetic_prices() {
     let synthetic_id = ASSET_ID();
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
+        resolution: SYNTHETIC_RESOLUTION,
         decimals: SYNTHETIC_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),
@@ -154,6 +157,7 @@ fn test_validate_synthetic_prices_expired() {
     let synthetic_id = ASSET_ID();
     let synthetic_config = SyntheticConfig {
         version: SYNTHETIC_VERSION,
+        resolution: SYNTHETIC_RESOLUTION,
         decimals: SYNTHETIC_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),
