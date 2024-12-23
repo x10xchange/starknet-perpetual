@@ -24,7 +24,7 @@ sort-module-level-items = true
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
-inlining-strategy = "default"
+inlining-strategy = "avoid"
 
 [[test]]
 name = "perpetuals_unittest"

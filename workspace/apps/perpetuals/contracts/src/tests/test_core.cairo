@@ -20,9 +20,8 @@ fn add_colateral(
     mut collateral_timely_data: CollateralTimelyData,
     collateral_config: CollateralConfig,
 ) {
-    match state.collateral_timely_data_head.read() {
-        Option::Some(head) => { collateral_timely_data.next = Option::Some(head); },
-        _ => {},
+    if let Option::Some(head) = state.collateral_timely_data_head.read() {
+        collateral_timely_data.next = Option::Some(head);
     }
     state.collateral_timely_data.write(collateral_id, collateral_timely_data);
     state.collateral_timely_data_head.write(Option::Some(collateral_id));
@@ -35,9 +34,8 @@ fn add_synthetic(
     mut synthetic_timely_data: SyntheticTimelyData,
     synthetic_config: SyntheticConfig,
 ) {
-    match state.synthetic_timely_data_head.read() {
-        Option::Some(head) => { synthetic_timely_data.next = Option::Some(head); },
-        _ => {},
+    if let Option::Some(head) = state.synthetic_timely_data_head.read() {
+        synthetic_timely_data.next = Option::Some(head);
     }
     state.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
     state.synthetic_timely_data_head.write(Option::Some(synthetic_id));
