@@ -3,6 +3,9 @@ use perpetuals::core::types::asset::AssetId;
 
 #[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
+    /// Signed 64-bit fixed-point number:
+    /// 1 sign bit, 31-bits integer part, 32-bits fractional part.
+    /// Represents values as: actual_value = stored_value / 2**32.
     pub value: i64,
 }
 

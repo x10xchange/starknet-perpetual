@@ -46,6 +46,9 @@ pub mod Core {
     impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
     impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
 
+    // 2^32
+    const TWO_POW_32: u64 = 4294967296;
+
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
 
@@ -495,20 +498,22 @@ pub mod Core {
             );
             let synthetic_config = self._get_synthetic_config(:synthetic_id);
             assert(synthetic_config.is_active, SYNTHETIC_NOT_ACTIVE);
-            let funding_index = funding_tick.funding_index;
+            let new_funding_index = funding_tick.funding_index;
             let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
-            let last_funding_index = synthetic_timely_data.funding_index;
+            let index_diff: i64 = (synthetic_timely_data.funding_index - new_funding_index).into();
             let last_funding_tick = self.last_funding_tick.read();
-            let index_diff: i64 = (last_funding_index - funding_index).into();
             let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
             let synthetic_price = synthetic_timely_data.price;
             assert_with_byte_array(
-                condition: index_diff.abs() <= self.max_funding_rate.read().into()
-                    * time_diff
-                    * synthetic_price,
+                index_diff
+                    .abs() <= _funding_rate_calc(
+                        max_funding_rate: self.max_funding_rate.read(),
+                        :time_diff,
+                        :synthetic_price,
+                    ),
                 err: invalid_funding_tick_err(:synthetic_id),
             );
-            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(funding_index);
+            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(new_funding_index);
             prev_synthetic_id = synthetic_id;
         }
 
@@ -536,5 +541,11 @@ pub mod Core {
             .is_valid_signature(:hash, :signature);
         // Check either 'VALID' or true for backwards compatibility.
         is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
+    }
+
+    /// Calculate the funding rate using the following formula:
+    /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
+    fn _funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: u64) -> u64 {
+        max_funding_rate.into() * time_diff * synthetic_price / TWO_POW_32
     }
 }
