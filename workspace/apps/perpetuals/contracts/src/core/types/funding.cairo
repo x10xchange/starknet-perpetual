@@ -39,7 +39,6 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use core::num::traits::zero::Zero;

@@ -101,7 +101,7 @@ pub mod Core {
         // Updates every funding tick.
         last_funding_tick: Timestamp,
         // Message hash to fulfilled amount.
-        fulfillment: Map<felt252, i128>,
+        fulfillment: Map<felt252, i64>,
         // --- Asset Configuration ---
         collateral_configs: Map<AssetId, Option<CollateralConfig>>,
         synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
@@ -176,10 +176,10 @@ pub mod Core {
             signature_b: Signature,
             order_a: Order,
             order_b: Order,
-            actual_fee_a: i128,
-            actual_fee_b: i128,
-            actual_amount_base_a: i128,
-            actual_amount_quote_a: i128,
+            actual_fee_a: i64,
+            actual_fee_b: i64,
+            actual_amount_base_a: i64,
+            actual_amount_quote_a: i64,
         ) {
             /// Validations:
             self._validate_trade(:signature_a, :signature_b, :order_a, :order_b, :system_nonce);

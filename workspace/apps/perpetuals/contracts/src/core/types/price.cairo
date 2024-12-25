@@ -1,5 +1,5 @@
 use core::num::traits::Zero;
-use perpetuals::core::types::Balance;
+use perpetuals::core::types::balance::{Balance, BalanceTrait};
 
 // 2^28
 pub const TWO_POW_28: u64 = 268435456;
@@ -43,10 +43,10 @@ pub trait PriceMulTrait<T> {
     fn mul(self: @Price, rhs: T) -> Self::Target;
 }
 
-impl PriceMulI128 of PriceMulTrait<i128> {
+impl PriceMulI128 of PriceMulTrait<i64> {
     type Target = i128;
-    fn mul(self: @Price, rhs: i128) -> Self::Target {
-        mul::<i128>(self, rhs)
+    fn mul(self: @Price, rhs: i64) -> Self::Target {
+        mul::<i64>(self, rhs)
     }
 }
 
@@ -60,7 +60,7 @@ impl PriceMulU32 of PriceMulTrait<u32> {
 impl PriceMulBalance of PriceMulTrait<Balance> {
     type Target = i128;
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
-        mul::<i128>(self, rhs.into())
+        mul::<i64>(self, rhs.into())
     }
 }
 
@@ -133,9 +133,9 @@ mod tests {
     }
 
     #[test]
-    fn test_price_mul_i128() {
+    fn test_price_mul_i64() {
         let price = PriceTrait::new(100 * TWO_POW_28);
-        let result = price.mul(2_i128);
+        let result = price.mul(2_i64);
         assert_eq!(result, 200);
     }
 
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn test_price_mul_balance() {
         let price = PriceTrait::new(100 * TWO_POW_28);
-        let balance = Balance { value: 2 };
+        let balance = BalanceTrait::new(value: 2);
         let result = price.mul(balance);
         assert_eq!(result, 200);
     }

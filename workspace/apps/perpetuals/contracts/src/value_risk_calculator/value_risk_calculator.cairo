@@ -71,7 +71,7 @@ pub mod ValueRiskCalculator {
             let mut total_risk_before = 0_u128;
             let asset_entries = position.asset_entries;
             for asset_entry in asset_entries {
-                let balance = *asset_entry.balance.value;
+                let balance = *asset_entry.balance;
                 let price = *asset_entry.price;
                 let asset_id = *asset_entry.id;
                 let risk_factor = self.risk_factors.read(asset_id);

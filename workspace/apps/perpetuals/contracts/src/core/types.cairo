@@ -14,7 +14,7 @@ pub type Signature = Array<felt252>;
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct AssetAmount {
     pub asset_id: AssetId,
-    pub amount: i128,
+    pub amount: i64,
 }
 
 #[derive(Drop, Serde)]
