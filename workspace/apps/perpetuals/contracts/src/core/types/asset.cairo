@@ -37,9 +37,4 @@ impl AssetIdlOrd of PartialOrd<AssetId> {
         let r: u256 = rhs.value.into();
         l < r
     }
-    fn le(lhs: AssetId, rhs: AssetId) -> bool {
-        let l: u256 = lhs.value.into();
-        let r: u256 = rhs.value.into();
-        l <= r
-    }
 }

@@ -45,7 +45,7 @@ fn test_calculate_position_tvtr_change_basic_case() {
     let mut state = INITIALIZED_CONTRACT_STATE();
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1,
+        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
@@ -88,7 +88,7 @@ fn test_calculate_position_tvtr_change_negative_balance() {
 
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: ASSET_ID_1(), balance: Balance { value: -60 }, price: PRICE_1,
+        id: ASSET_ID_1(), balance: Balance { value: -60 }, price: PRICE_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
@@ -130,19 +130,19 @@ fn test_calculate_position_tvtr_change_multiple_assets() {
 
     // Create a position with multiple asset entries.
     let asset_entry_1 = AssetEntry {
-        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1,
+        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1(),
     };
     let asset_entry_2 = AssetEntry {
-        id: ASSET_ID_2(), balance: Balance { value: 40 }, price: PRICE_2,
+        id: ASSET_ID_2(), balance: Balance { value: 40 }, price: PRICE_2(),
     };
     let asset_entry_3 = AssetEntry {
-        id: ASSET_ID_3(), balance: Balance { value: 20 }, price: PRICE_3,
+        id: ASSET_ID_3(), balance: Balance { value: 20 }, price: PRICE_3(),
     };
     let asset_entry_4 = AssetEntry {
-        id: ASSET_ID_4(), balance: Balance { value: 10 }, price: PRICE_4,
+        id: ASSET_ID_4(), balance: Balance { value: 10 }, price: PRICE_4(),
     };
     let asset_entry_5 = AssetEntry {
-        id: ASSET_ID_5(), balance: Balance { value: 5 }, price: PRICE_5,
+        id: ASSET_ID_5(), balance: Balance { value: 5 }, price: PRICE_5(),
     };
     let position_data = PositionData {
         asset_entries: array![
@@ -206,7 +206,7 @@ fn test_calculate_position_tvtr_empty_diff() {
 
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1,
+        id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 

@@ -2,6 +2,7 @@ use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 
 pub const VERSION: u8 = 0;
@@ -24,7 +25,7 @@ pub struct CollateralConfig {
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralTimelyData {
     pub version: u8,
-    pub price: u64,
+    pub price: Price,
     pub last_price_update: Timestamp,
     pub next: Option<AssetId>,
 }

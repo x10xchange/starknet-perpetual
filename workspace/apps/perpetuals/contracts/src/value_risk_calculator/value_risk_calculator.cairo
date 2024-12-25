@@ -3,6 +3,7 @@ pub mod ValueRiskCalculator {
     use contracts_commons::math::{Abs, FractionTrait};
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use perpetuals::core::types::asset::AssetId;
+    use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::{PositionData, PositionDiff};
     use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionStateTrait};
     use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
@@ -74,7 +75,7 @@ pub mod ValueRiskCalculator {
                 let price = *asset_entry.price;
                 let asset_id = *asset_entry.id;
                 let risk_factor = self.risk_factors.read(asset_id);
-                let asset_value = balance * price.into();
+                let asset_value: i128 = price.mul(rhs: balance);
 
                 // Update the total value and total risk.
                 total_value_before += asset_value;
@@ -88,10 +89,10 @@ pub mod ValueRiskCalculator {
                 let asset_id = *asset_diff_entry.id;
                 let risk_factor = self.risk_factors.read(asset_id);
                 let price = *asset_diff_entry.price;
-                let balance_before = *asset_diff_entry.before.value;
-                let balance_after = *asset_diff_entry.after.value;
-                let asset_value_before = balance_before * price.into();
-                let asset_value_after = balance_after * price.into();
+                let balance_before = *asset_diff_entry.before;
+                let balance_after = *asset_diff_entry.after;
+                let asset_value_before = price.mul(rhs: balance_before);
+                let asset_value_after = price.mul(rhs: balance_after);
 
                 /// Update the total value.
                 total_value_after += asset_value_after;

@@ -30,6 +30,7 @@ pub mod Core {
     };
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
+    use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
@@ -503,13 +504,13 @@ pub mod Core {
             let index_diff: i64 = (synthetic_timely_data.funding_index - new_funding_index).into();
             let last_funding_tick = self.last_funding_tick.read();
             let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
-            let synthetic_price = synthetic_timely_data.price;
             assert_with_byte_array(
-                index_diff
-                    .abs() <= _funding_rate_calc(
+                condition: index_diff
+                    .abs()
+                    .into() <= _funding_rate_calc(
                         max_funding_rate: self.max_funding_rate.read(),
                         :time_diff,
-                        :synthetic_price,
+                        synthetic_price: synthetic_timely_data.price,
                     ),
                 err: invalid_funding_tick_err(:synthetic_id),
             );
@@ -545,7 +546,7 @@ pub mod Core {
 
     /// Calculate the funding rate using the following formula:
     /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
-    fn _funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: u64) -> u64 {
-        max_funding_rate.into() * time_diff * synthetic_price / TWO_POW_32
+    fn _funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: Price) -> u128 {
+        synthetic_price.mul(rhs: max_funding_rate) * time_diff.into() / TWO_POW_32.into()
     }
 }

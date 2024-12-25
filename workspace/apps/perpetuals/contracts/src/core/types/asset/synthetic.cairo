@@ -3,6 +3,7 @@ use contracts_commons::types::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
+use perpetuals::core::types::price::Price;
 
 pub const VERSION: u8 = 0;
 
@@ -21,7 +22,7 @@ pub struct SyntheticConfig {
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticTimelyData {
     pub version: u8,
-    pub price: u64,
+    pub price: Price,
     pub last_price_update: Timestamp,
     pub funding_index: FundingIndex,
     pub next: Option<AssetId>,

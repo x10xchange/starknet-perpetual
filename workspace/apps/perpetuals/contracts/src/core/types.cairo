@@ -2,10 +2,12 @@ pub mod asset;
 pub mod balance;
 pub mod funding;
 pub mod order;
+pub mod price;
 pub mod withdraw_message;
 
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::price::Price;
 
 pub type Signature = Array<felt252>;
 
@@ -24,7 +26,7 @@ pub struct PositionData {
 pub struct AssetEntry {
     pub id: AssetId,
     pub balance: Balance,
-    pub price: u64,
+    pub price: Price,
 }
 
 #[derive(Drop, Serde)]
@@ -32,7 +34,7 @@ pub struct AssetDiffEntry {
     pub id: AssetId,
     pub before: Balance,
     pub after: Balance,
-    pub price: u64,
+    pub price: Price,
 }
 
 pub type PositionDiff = Span<AssetDiffEntry>;

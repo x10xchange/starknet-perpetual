@@ -1,6 +1,7 @@
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::TimeDelta;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
+use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
 use snforge_std::signature::KeyPair;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::{ContractAddress, contract_address_const};
@@ -38,7 +39,6 @@ pub fn OPERATOR() -> ContractAddress {
 pub const PRICE_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 /// 1 day in seconds.
 pub const FUNDING_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
-pub const PRICE: u64 = 900;
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_DECIMALS: u8 = 6;
 pub const COLLATERAL_QUORUM: u8 = 0;
@@ -86,11 +86,24 @@ pub fn RISK_FACTOR_5() -> FixedTwoDecimal {
     FixedTwoDecimalTrait::new(50)
 }
 /// Prices
-pub const PRICE_1: u64 = 900;
-pub const PRICE_2: u64 = 900;
-pub const PRICE_3: u64 = 900;
-pub const PRICE_4: u64 = 900;
-pub const PRICE_5: u64 = 900;
+pub fn PRICE() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
+pub fn PRICE_1() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
+pub fn PRICE_2() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
+pub fn PRICE_3() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
+pub fn PRICE_4() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
+pub fn PRICE_5() -> Price {
+    PriceTrait::new(900 * TWO_POW_28)
+}
 
 /// Assets' metadata
 pub fn COLLATERAL_NAME() -> ByteArray {

@@ -85,7 +85,7 @@ fn test_validate_collateral_prices() {
     };
     // Add collateral timely data with valid last price update
     let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE, last_price_update: now, next: Option::None,
+        version: COLLATERAL_VERSION, price: PRICE(), last_price_update: now, next: Option::None,
     };
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
 
@@ -111,7 +111,7 @@ fn test_validate_collateral_prices_expired() {
     };
     // Add collateral timely data with valid last price update
     let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE, last_price_update: now, next: Option::None,
+        version: COLLATERAL_VERSION, price: PRICE(), last_price_update: now, next: Option::None,
     };
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
     let now = now.add(PRICE_VALIDATION_INTERVAL);
@@ -136,7 +136,7 @@ fn test_validate_synthetic_prices() {
     // Add synthetic timely data with expired last price update
     let synthetic_timely_data = SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE,
+        price: PRICE(),
         last_price_update: now,
         funding_index: Zero::zero(),
         next: Option::None,
@@ -164,7 +164,7 @@ fn test_validate_synthetic_prices_expired() {
     // Add synthetic timely data with expired last price update
     let synthetic_timely_data = SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE,
+        price: PRICE(),
         last_price_update: now,
         funding_index: Zero::zero(),
         next: Option::None,
