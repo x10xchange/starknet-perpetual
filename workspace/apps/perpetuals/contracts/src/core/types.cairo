@@ -17,7 +17,6 @@ pub struct AssetAmount {
 
 #[derive(Drop, Serde)]
 pub struct PositionData {
-    pub version: u8,
     pub asset_entries: Span<AssetEntry>,
 }
 

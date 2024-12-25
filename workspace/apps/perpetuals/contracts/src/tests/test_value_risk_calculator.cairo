@@ -47,7 +47,7 @@ fn test_calculate_position_tvtr_change_basic_case() {
     let asset_entry = AssetEntry {
         id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1,
     };
-    let position_data = PositionData { version: 0, asset_entries: array![asset_entry].span() };
+    let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
     // Create a position diff with a single asset diff entry.
     let asset_diff_entry = AssetDiffEntry {
@@ -90,7 +90,7 @@ fn test_calculate_position_tvtr_change_negative_balance() {
     let asset_entry = AssetEntry {
         id: ASSET_ID_1(), balance: Balance { value: -60 }, price: PRICE_1,
     };
-    let position_data = PositionData { version: 0, asset_entries: array![asset_entry].span() };
+    let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
     // Create a position diff with a single asset diff entry.
     let asset_diff_entry = AssetDiffEntry {
@@ -145,7 +145,6 @@ fn test_calculate_position_tvtr_change_multiple_assets() {
         id: ASSET_ID_5(), balance: Balance { value: 5 }, price: PRICE_5,
     };
     let position_data = PositionData {
-        version: 0,
         asset_entries: array![
             asset_entry_1, asset_entry_2, asset_entry_3, asset_entry_4, asset_entry_5,
         ]
@@ -209,7 +208,7 @@ fn test_calculate_position_tvtr_empty_diff() {
     let asset_entry = AssetEntry {
         id: ASSET_ID_1(), balance: Balance { value: 60 }, price: PRICE_1,
     };
-    let position_data = PositionData { version: 0, asset_entries: array![asset_entry].span() };
+    let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
     // Create an empty position diff.
     let position_diff = array![].span();
@@ -241,7 +240,7 @@ fn test_calculate_position_tvtr_empty_position_and_diff() {
     let mut state = INITIALIZED_CONTRACT_STATE();
 
     // Create an empty position.
-    let position_data = PositionData { version: 0, asset_entries: array![].span() };
+    let position_data = PositionData { asset_entries: array![].span() };
 
     // Create an empty position diff.
     let position_diff = array![].span();

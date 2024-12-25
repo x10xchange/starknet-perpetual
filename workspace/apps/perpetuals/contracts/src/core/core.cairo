@@ -20,6 +20,7 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::errors::*;
     use perpetuals::core::interface::ICore;
+    use perpetuals::core::types::AssetEntry;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{
         CollateralAsset, CollateralConfig, CollateralTimelyData,
@@ -32,7 +33,7 @@ pub mod Core {
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
-    use starknet::storage::{Map, StoragePathEntry, Vec};
+    use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, Vec};
     use starknet::{ContractAddress, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -218,7 +219,7 @@ pub mod Core {
             let collateral_cfg = self._get_collateral_config(:collateral_id);
             assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
             let position_id = withdraw_message.position_id;
-            let position = self.positions.entry(position_id);
+            let position = self._get_position(:position_id);
             let position_owner = position.owner_account.read();
             let mut msg_hash = withdraw_message.get_message_hash(position_owner);
             if position_owner.is_non_zero() {
@@ -349,11 +350,66 @@ pub mod Core {
             );
         }
 
+        fn _get_position(
+            ref self: ContractState, position_id: felt252,
+        ) -> StoragePath<Mutable<Position>> {
+            let mut position = self.positions.entry(position_id);
+            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            position
+        }
+
+        fn _collect_position_collaterals(
+            self: @ContractState,
+            ref asset_entries: Array<AssetEntry>,
+            position: StoragePath<Position>,
+        ) {
+            let mut asset_id_opt = position.collateral_assets_head.read();
+            while let Option::Some(collateral_id) = asset_id_opt {
+                let collateral_asset = position.collateral_assets.read(collateral_id);
+                let collateral_timely_data = self.collateral_timely_data.read(collateral_id);
+                asset_entries
+                    .append(
+                        AssetEntry {
+                            id: collateral_id,
+                            // TODO: consider taking into account the funding index.
+                            balance: collateral_asset.balance,
+                            price: collateral_timely_data.price,
+                        },
+                    );
+
+                asset_id_opt = collateral_asset.next;
+            };
+        }
+
+        fn _collect_position_synthetics(
+            self: @ContractState,
+            ref asset_entries: Array<AssetEntry>,
+            position: StoragePath<Position>,
+        ) {
+            let mut asset_id_opt = position.synthetic_assets_head.read();
+            while let Option::Some(synthetic_id) = asset_id_opt {
+                let synthetic_asset = position.synthetic_assets.read(synthetic_id);
+                let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
+                asset_entries
+                    .append(
+                        AssetEntry {
+                            id: synthetic_id,
+                            balance: synthetic_asset.balance,
+                            price: synthetic_timely_data.price,
+                        },
+                    );
+
+                asset_id_opt = synthetic_asset.next;
+            };
+        }
+
         fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
+            let mut asset_entries = array![];
             let position = self.positions.entry(position_id);
-            assert(position.owner_account.read().is_non_zero(), INVALID_POSITION);
-            // TODO: Implement the 'asset_entries' field.
-            PositionData { version: position.version.read(), asset_entries: array![].span() }
+            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            self._collect_position_collaterals(ref :asset_entries, :position);
+            self._collect_position_synthetics(ref :asset_entries, :position);
+            PositionData { asset_entries: asset_entries.span() }
         }
 
         fn _get_collateral_config(
