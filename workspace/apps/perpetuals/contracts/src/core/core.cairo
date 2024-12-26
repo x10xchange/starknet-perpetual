@@ -28,6 +28,7 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
+    use perpetuals::core::types::deposit_message::DepositMessage;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
@@ -168,6 +169,9 @@ pub mod Core {
         // Flows
         fn deleverage(self: @ContractState) {}
         fn deposit(self: @ContractState) {}
+        fn register_deposit(
+            ref self: ContractState, signature: Signature, deposit_message: DepositMessage,
+        ) {}
         fn liquidate(self: @ContractState) {}
         fn trade(
             ref self: ContractState,
