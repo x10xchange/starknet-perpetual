@@ -1,5 +1,6 @@
 pub mod asset;
 pub mod balance;
+pub mod deposit_message;
 pub mod funding;
 pub mod order;
 pub mod price;
