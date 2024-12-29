@@ -12,6 +12,11 @@ use perpetuals::core::types::price::Price;
 
 pub type Signature = Array<felt252>;
 
+#[derive(Copy, Debug, Drop, Hash, Serde)]
+pub struct PositionId {
+    pub value: felt252,
+}
+
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct AssetAmount {
     pub asset_id: AssetId,

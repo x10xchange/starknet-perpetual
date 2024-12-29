@@ -32,7 +32,7 @@ pub mod Core {
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
-    use perpetuals::core::types::{AssetAmount, AssetEntry};
+    use perpetuals::core::types::{AssetAmount, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, Vec};
@@ -114,7 +114,7 @@ pub mod Core {
         synthetic_timely_data_head: Option<AssetId>,
         synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         // --- Position Data ---
-        positions: Map<felt252, Position>,
+        positions: Map<PositionId, Position>,
     }
 
     #[starknet::storage_node]
@@ -340,7 +340,7 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _apply_funding(ref self: ContractState, position_id: felt252) {}
+        fn _apply_funding(ref self: ContractState, position_id: PositionId) {}
         fn _get_asset_price(self: @ContractState) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
@@ -397,7 +397,7 @@ pub mod Core {
         }
 
         fn _get_position(
-            ref self: ContractState, position_id: felt252,
+            ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
             let mut position = self.positions.entry(position_id);
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
@@ -449,7 +449,7 @@ pub mod Core {
             };
         }
 
-        fn _get_position_data(self: @ContractState, position_id: felt252) -> PositionData {
+        fn _get_position_data(self: @ContractState, position_id: PositionId) -> PositionData {
             let mut asset_entries = array![];
             let position = self.positions.entry(position_id);
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);

@@ -1,5 +1,6 @@
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::TimeDelta;
+use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
 use snforge_std::signature::KeyPair;
@@ -46,9 +47,10 @@ pub const COLLATERAL_QUANTUM: u64 = 1_000_000_000;
 pub const SYNTHETIC_DECIMALS: u8 = 6;
 pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
-pub const POSITION_ID: felt252 = 'POSITION_ID';
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000;
 pub const WITHDRAW_AMOUNT: i64 = 1000;
+
+pub const POSITION_ID: PositionId = PositionId { value: 'POSITION_ID' };
 
 /// Assets IDs
 pub fn ASSET_ID() -> AssetId {

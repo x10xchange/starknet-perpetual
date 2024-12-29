@@ -1,3 +1,4 @@
+use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 
 pub const ALREADY_FULFILLED: felt252 = 'ALREADY_FULFILLED';
@@ -25,7 +26,7 @@ pub const SYNTHETIC_NOT_ACTIVE: felt252 = 'SYNTHETIC_NOT_ACTIVE';
 pub const SYNTHETIC_NOT_EXISTS: felt252 = 'SYNTHETIC_NOT_EXISTS';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
 
-pub fn fulfillment_exceeded_err(position_id: felt252) -> ByteArray {
+pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)
 }
 
@@ -33,15 +34,15 @@ pub fn invalid_funding_tick_err(synthetic_id: AssetId) -> ByteArray {
     format!("INVALID_FUNDING_TICK synthetic_id: {:?}", synthetic_id)
 }
 
-pub fn trade_illegal_base_to_quote_ratio_err(position_id: felt252) -> ByteArray {
+pub fn trade_illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
     format!("TRADE_ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }
 
-pub fn trade_illegal_fee_to_quote_ratio_err(position_id: felt252) -> ByteArray {
+pub fn trade_illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
     format!("TRADE_ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }
 
-pub fn trade_order_expired_err(position_id: felt252) -> ByteArray {
+pub fn trade_order_expired_err(position_id: PositionId) -> ByteArray {
     format!("TRADE_ORDER_EXPIRED position_id: {:?}", position_id)
 }
 

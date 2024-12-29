@@ -5,6 +5,7 @@ use contracts_commons::types::time::TimeDelta;
 use core::num::traits::Zero;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
+use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, VERSION};
 use perpetuals::tests::constants::*;
@@ -31,7 +32,7 @@ pub struct CoreState {
 /// contract.
 #[derive(Drop, Copy)]
 pub struct User {
-    pub position_id: felt252,
+    pub position_id: PositionId,
     pub address: ContractAddress,
     pub key_pair: KeyPair<felt252, felt252>,
     pub salt_counter: felt252,
