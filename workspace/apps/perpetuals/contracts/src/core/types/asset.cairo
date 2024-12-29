@@ -3,7 +3,7 @@ use core::num::traits::zero::Zero;
 pub mod collateral;
 pub mod synthetic;
 
-#[derive(Copy, Debug, Drop, Hash, Serde, starknet::Store)]
+#[derive(Copy, Debug, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct AssetId {
     value: felt252,
 }

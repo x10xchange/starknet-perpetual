@@ -20,10 +20,10 @@ pub trait ICore<TContractState> {
         signature_b: Signature,
         order_a: Order,
         order_b: Order,
-        actual_fee_a: i64,
-        actual_fee_b: i64,
         actual_amount_base_a: i64,
         actual_amount_quote_a: i64,
+        actual_fee_a: i64,
+        actual_fee_b: i64,
     );
     fn transfer(self: @TContractState);
     fn withdraw(

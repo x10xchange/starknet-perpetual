@@ -218,13 +218,13 @@ fn test_validate_synthetic_prices_expired() {
 #[test]
 fn test_validate_prices() {
     let mut state = CONTRACT_STATE();
-    let now = Time::now();
+    let mut now = Time::now();
 
     state.last_price_validation.write(now);
     assert_eq!(state.last_price_validation.read(), now);
     let new_time = now.add(delta: Time::days(count: 1));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
-    let now = Time::now();
+    now = Time::now();
     state._validate_prices(:now);
     assert_eq!(state.last_price_validation.read(), new_time);
 }

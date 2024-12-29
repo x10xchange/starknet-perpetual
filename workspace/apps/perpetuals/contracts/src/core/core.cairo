@@ -6,7 +6,7 @@ pub mod Core {
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
     use contracts_commons::errors::assert_with_byte_array;
-    use contracts_commons::math::Abs;
+    use contracts_commons::math::{Abs, FractionTrait, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
@@ -20,7 +20,6 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::errors::*;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::AssetEntry;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{
         CollateralAsset, CollateralConfig, CollateralTimelyData,
@@ -33,6 +32,7 @@ pub mod Core {
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
+    use perpetuals::core::types::{AssetAmount, AssetEntry};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, Vec};
@@ -173,6 +173,29 @@ pub mod Core {
             ref self: ContractState, signature: Signature, deposit_message: DepositMessage,
         ) {}
         fn liquidate(self: @ContractState) {}
+
+        /// Executes a trade between two orders (Order A and Order B).
+        ///
+        /// Validations:
+        /// - Common user flow validations are performed.
+        /// - Validates signatures for both orders using the public keys of their respective owners.
+        /// - Ensures the fee amounts in both orders are positive.
+        /// - Validates that the base and quote asset types match between the two orders.
+        /// - Verifies the signs of amounts:
+        ///   - Ensures the sign of amounts in each order is consistent.
+        ///   - Ensures the signs between Order A and Order B amounts are opposite where required.
+        /// - Ensures the order fulfillment amounts do not exceed their respective limits.
+        /// - Validates that the fee ratio does not increase.
+        /// - Ensures the base-to-quote amount ratio does not decrease.
+        ///
+        /// Execution:
+        /// - Apply funding to both positions.
+        /// - Subtract the fees from each position's collateral.
+        /// - Add the fees to the `fee_position`.
+        /// - Update Order A's position and Order B's position, based on `actual_amount_base`.
+        /// - Adjust collateral balances.
+        /// - Perform fundamental validation for both positions after the trade.
+        /// - Update order fulfillment.
         fn trade(
             ref self: ContractState,
             system_nonce: felt252,
@@ -180,13 +203,28 @@ pub mod Core {
             signature_b: Signature,
             order_a: Order,
             order_b: Order,
-            actual_fee_a: i64,
-            actual_fee_b: i64,
             actual_amount_base_a: i64,
             actual_amount_quote_a: i64,
+            actual_fee_a: i64,
+            actual_fee_b: i64,
         ) {
             /// Validations:
-            self._validate_trade(:signature_a, :signature_b, :order_a, :order_b, :system_nonce);
+
+            let now = Time::now();
+            self._validate_user_flow(:system_nonce, :now);
+
+            self
+                ._validate_trade(
+                    :signature_a,
+                    :signature_b,
+                    :order_a,
+                    :order_b,
+                    :actual_amount_base_a,
+                    :actual_amount_quote_a,
+                    :actual_fee_a,
+                    :actual_fee_b,
+                    :now,
+                );
             // TODO: execute trade flow.
         }
         fn transfer(self: @ContractState) {}
@@ -430,12 +468,20 @@ pub mod Core {
             self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
 
+        /// Validates common prerequisites:
+        /// - Caller has operator role.
+        /// - Contract is not paused.
+        /// - System nonce is valid.
         fn _validate_common_prerequisites(ref self: ContractState, system_nonce: felt252) {
             self.roles.only_operator();
             self.pausable.assert_not_paused();
             self._consume_nonce(system_nonce);
         }
 
+        /// Validates user flows prerequisites:
+        /// - Common prerequisites (validated by [`_validate_common_prerequisites`]).
+        /// - Funding interval validation.
+        /// - Prices validation.
         fn _validate_user_flow(ref self: ContractState, system_nonce: felt252, now: Timestamp) {
             self._validate_common_prerequisites(:system_nonce);
             // Funding validation.
@@ -448,7 +494,12 @@ pub mod Core {
         }
 
         fn _validate_order(
-            ref self: ContractState, signature: Signature, order: Order, now: Timestamp,
+            ref self: ContractState,
+            signature: Signature,
+            order: Order,
+            now: Timestamp,
+            hash: felt252,
+            public_key: felt252,
         ) {
             // Positive fee check.
             assert(order.fee.amount > 0, INVALID_NON_POSITIVE_FEE);
@@ -458,14 +509,33 @@ pub mod Core {
                 now < order.expiration, trade_order_expired_err(order.position_id),
             );
 
-            // Asset check.
-            let collateral = self._get_collateral_config(order.fee.asset_id);
-            assert(collateral.is_active, COLLATERAL_NOT_ACTIVE);
+            // Assets check.
+            let fee_collateral_config = self._get_collateral_config(order.fee.asset_id);
+            assert(fee_collateral_config.is_active, COLLATERAL_NOT_ACTIVE);
+
+            let quote_collateral_config = self._get_collateral_config(order.quote.asset_id);
+            assert(quote_collateral_config.is_active, COLLATERAL_NOT_ACTIVE);
+
+            let base_collateral_config = self.collateral_configs.read(order.base.asset_id);
+            let is_base_collateral_active = match base_collateral_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            let base_synthetic_config = self.synthetic_configs.read(order.base.asset_id);
+            let is_base_synthetic_active = match base_synthetic_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
 
             // Public key signature validation.
-            let public_key = self.positions.entry(order.position_id).owner_public_key.read();
-            let hash = order.get_message_hash(public_key);
             self._validate_stark_signature(:public_key, :hash, :signature);
+
+            // Sign Validation for amounts.
+            assert(
+                !have_same_sign(order.quote.amount, order.base.amount),
+                INVALID_TRADE_WRONG_AMOUNT_SIGN,
+            );
         }
 
         fn _validate_funding_tick(
@@ -528,14 +598,118 @@ pub mod Core {
             signature_b: Signature,
             order_a: Order,
             order_b: Order,
-            system_nonce: felt252,
+            actual_amount_base_a: i64,
+            actual_amount_quote_a: i64,
+            actual_fee_a: i64,
+            actual_fee_b: i64,
+            now: Timestamp,
         ) {
-            let now = Time::now();
-            self._validate_user_flow(:system_nonce, :now);
+            // Create the order hashes.
+            let public_key_a = self.positions.entry(order_a.position_id).owner_public_key.read();
+            let public_key_b = self.positions.entry(order_b.position_id).owner_public_key.read();
+            let hash_a = order_a.get_message_hash(public_key_a);
+            let hash_b = order_b.get_message_hash(public_key_b);
 
-            self._validate_order(signature: signature_a, order: order_a, :now);
-            self._validate_order(signature: signature_b, order: order_b, :now);
-            // TODO: validate non-basic rules.
+            self
+                ._validate_order(
+                    signature: signature_a,
+                    order: order_a,
+                    :now,
+                    hash: hash_a,
+                    public_key: public_key_a,
+                );
+            self
+                ._validate_order(
+                    signature: signature_b,
+                    order: order_b,
+                    :now,
+                    hash: hash_b,
+                    public_key: public_key_b,
+                );
+
+            // Unpacking.
+            let AssetAmount { asset_id: base_asset_id_a, amount: base_amount_a } = order_a.base;
+            let AssetAmount { asset_id: quote_asset_id_a, amount: quote_amount_a } = order_a.quote;
+            let AssetAmount { asset_id: base_asset_id_b, amount: base_amount_b } = order_b.base;
+            let AssetAmount { asset_id: quote_asset_id_b, amount: quote_amount_b } = order_b.quote;
+            let AssetAmount { amount: fee_amount_a, .. } = order_a.fee;
+            let AssetAmount { amount: fee_amount_b, .. } = order_b.fee;
+
+            // Actual fees amount are positive.
+            assert(actual_fee_a > 0, INVALID_NON_POSITIVE_FEE);
+            assert(actual_fee_b > 0, INVALID_NON_POSITIVE_FEE);
+
+            // Types validation.
+            assert(quote_asset_id_a == quote_asset_id_b, DIFFERENT_QUOTE_ASSET_IDS);
+            assert(base_asset_id_a == base_asset_id_b, DIFFERENT_BASE_ASSET_IDS);
+
+            // Sign Validation for amounts.
+            assert(
+                !have_same_sign(quote_amount_a, quote_amount_b), INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+            );
+            assert(
+                have_same_sign(base_amount_a, actual_amount_base_a), INVALID_TRADE_ACTUAL_BASE_SIGN,
+            );
+            assert(
+                have_same_sign(quote_amount_a, actual_amount_quote_a),
+                INVALID_TRADE_ACTUAL_QUOTE_SIGN,
+            );
+
+            // Order amount is not exceeded.
+            let fulfillment_order_hash_a = self.fulfillment.entry(hash_a).read().abs();
+            assert_with_byte_array(
+                fulfillment_order_hash_a + actual_amount_base_a.abs() <= base_amount_a.abs(),
+                fulfillment_exceeded_err(order_a.position_id),
+            );
+
+            let fulfillment_order_hash_b = self.fulfillment.entry(hash_b).read().abs();
+            assert_with_byte_array(
+                fulfillment_order_hash_b + actual_amount_base_a.abs() <= base_amount_b.abs(),
+                fulfillment_exceeded_err(order_b.position_id),
+            );
+
+            // Fee to quote amount ratio does not increase.
+            let actual_fee_to_quote_amount_ratio_a = FractionTrait::new(
+                actual_fee_a, actual_amount_quote_a.abs(),
+            );
+            let order_a_fee_to_quote_amount_ratio = FractionTrait::new(
+                fee_amount_a, quote_amount_a.abs(),
+            );
+            assert_with_byte_array(
+                actual_fee_to_quote_amount_ratio_a <= order_a_fee_to_quote_amount_ratio,
+                trade_illegal_fee_to_quote_ratio_err(order_a.position_id),
+            );
+
+            let actual_fee_to_quote_amount_ratio_b = FractionTrait::new(
+                actual_fee_b, actual_amount_quote_a.abs(),
+            );
+            let order_b_fee_to_quote_amount_ratio = FractionTrait::new(
+                fee_amount_b, quote_amount_b.abs(),
+            );
+            assert_with_byte_array(
+                actual_fee_to_quote_amount_ratio_b <= order_b_fee_to_quote_amount_ratio,
+                trade_illegal_fee_to_quote_ratio_err(order_b.position_id),
+            );
+
+            // The base-to-quote amount ratio does not decrease.
+            let order_a_base_to_quote_ratio = FractionTrait::new(
+                base_amount_a, quote_amount_a.abs(),
+            );
+            let order_b_base_to_quote_ratio = FractionTrait::new(
+                base_amount_b, quote_amount_b.abs(),
+            );
+            let actual_base_to_quote_ratio = FractionTrait::new(
+                actual_amount_base_a, actual_amount_quote_a.abs(),
+            );
+
+            assert_with_byte_array(
+                order_a_base_to_quote_ratio <= actual_base_to_quote_ratio,
+                trade_illegal_base_to_quote_ratio_err(order_a.position_id),
+            );
+            assert_with_byte_array(
+                actual_base_to_quote_ratio <= -order_b_base_to_quote_ratio,
+                trade_illegal_base_to_quote_ratio_err(order_b.position_id),
+            );
         }
     }
 
