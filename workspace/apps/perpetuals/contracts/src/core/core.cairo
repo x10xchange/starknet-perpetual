@@ -27,6 +27,7 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
+    use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::deposit_message::DepositMessage;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
@@ -235,6 +236,11 @@ pub mod Core {
             let now = Time::now();
             self._validate_user_flow(:system_nonce, :now);
 
+            let public_key_a = self.positions.entry(order_a.position_id).owner_public_key.read();
+            let public_key_b = self.positions.entry(order_b.position_id).owner_public_key.read();
+            let hash_a = order_a.get_message_hash(public_key_a);
+            let hash_b = order_b.get_message_hash(public_key_b);
+
             self
                 ._validate_trade(
                     :signature_a,
@@ -246,8 +252,32 @@ pub mod Core {
                     :actual_fee_a,
                     :actual_fee_b,
                     :now,
+                    :hash_a,
+                    :hash_b,
+                    :public_key_a,
+                    :public_key_b,
                 );
-            // TODO: execute trade flow.
+
+            /// Execution:
+            self
+                ._execute_trade(
+                    :order_a,
+                    :order_b,
+                    :actual_amount_base_a,
+                    :actual_amount_quote_a,
+                    :actual_fee_a,
+                    :actual_fee_b,
+                );
+
+            // Update fulfillments.
+            self
+                .fulfillment
+                .entry(hash_a)
+                .write(self.fulfillment.entry(hash_a).read() + actual_amount_base_a);
+            self
+                .fulfillment
+                .entry(hash_b)
+                .write(self.fulfillment.entry(hash_b).read() - actual_amount_base_a);
         }
         fn transfer(self: @ContractState) {}
 
@@ -616,13 +646,11 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
             now: Timestamp,
+            hash_a: felt252,
+            hash_b: felt252,
+            public_key_a: felt252,
+            public_key_b: felt252,
         ) {
-            // Create the order hashes.
-            let public_key_a = self.positions.entry(order_a.position_id).owner_public_key.read();
-            let public_key_b = self.positions.entry(order_b.position_id).owner_public_key.read();
-            let hash_a = order_a.get_message_hash(public_key_a);
-            let hash_b = order_b.get_message_hash(public_key_b);
-
             self
                 ._validate_order(
                     signature: signature_a,
@@ -725,6 +753,78 @@ pub mod Core {
             );
         }
 
+        fn _execute_trade(
+            ref self: ContractState,
+            order_a: Order,
+            order_b: Order,
+            actual_amount_base_a: i64,
+            actual_amount_quote_a: i64,
+            actual_fee_a: i64,
+            actual_fee_b: i64,
+        ) {
+            // Apply funding to both positions.
+            self._apply_funding(order_a.position_id);
+            self._apply_funding(order_b.position_id);
+
+            let position_entry_a = self._get_position(order_a.position_id);
+            let position_entry_b = self._get_position(order_b.position_id);
+
+            // Handle fees.
+            let mut order_a_fee_balance_path = position_entry_a
+                .collateral_assets
+                .entry(order_a.fee.asset_id)
+                .balance;
+            let mut order_b_fee_balance_path = position_entry_b
+                .collateral_assets
+                .entry(order_b.fee.asset_id)
+                .balance;
+            order_a_fee_balance_path.write(order_a_fee_balance_path.read().sub(actual_fee_a));
+            order_b_fee_balance_path.write(order_b_fee_balance_path.read().sub(actual_fee_b));
+            // TODO: Add the fee to `fee_position`.
+
+            // Update base position.
+            let (mut order_a_base_balance_path, mut order_b_base_balance_path) =
+                match (self.collateral_configs.read(order_a.base.asset_id)) {
+                // Base is collateral.
+                Option::Some(_) => {
+                    (
+                        position_entry_a.collateral_assets.entry(order_a.base.asset_id).balance,
+                        position_entry_b.collateral_assets.entry(order_b.base.asset_id).balance,
+                    )
+                },
+                // Base is synthetic.
+                Option::None => {
+                    (
+                        position_entry_a.synthetic_assets.entry(order_a.base.asset_id).balance,
+                        position_entry_b.synthetic_assets.entry(order_b.base.asset_id).balance,
+                    )
+                },
+            };
+
+            order_a_base_balance_path
+                .write(order_a_base_balance_path.read().add(actual_amount_base_a));
+
+            order_b_base_balance_path
+                .write(order_b_base_balance_path.read().sub(actual_amount_base_a));
+
+            // Update quote position.
+            let mut order_a_quote_balance_path = position_entry_a
+                .collateral_assets
+                .entry(order_a.quote.asset_id)
+                .balance;
+            let mut order_b_quote_balance_path = position_entry_b
+                .collateral_assets
+                .entry(order_b.base.asset_id)
+                .balance;
+            order_a_quote_balance_path
+                .write(order_a_quote_balance_path.read().add(actual_amount_quote_a));
+            order_b_quote_balance_path
+                .write(order_b_quote_balance_path.read().sub(actual_amount_quote_a));
+            /// Validations - Fundamentals:
+        // TODO: Validate position is healthy or healthier.
+        }
+
+
         fn _generate_message_hash<
             T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
         >(
@@ -740,6 +840,7 @@ pub mod Core {
             MessageHash::PublicKeyHash(hash)
         }
     }
+
 
     /// Calculate the funding rate using the following formula:
     /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
