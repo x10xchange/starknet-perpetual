@@ -13,7 +13,6 @@ pub struct DepositMessage {
     pub collateral: AssetAmount,
     pub owner_public_key: felt252,
     pub owner_account: ContractAddress,
-    pub depositing_address: ContractAddress,
 }
 
 
@@ -25,7 +24,6 @@ pub struct DepositMessage {
 ///    \"collateral\":\"AssetAmount\",
 ///    \"owner_public_key\":\"felt\"
 ///    \"owner_account\":\"ContractAddress\"
-///    \"depositing_address\":\"ContractAddress\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
@@ -42,7 +40,7 @@ pub struct DepositMessage {
 ///    )"
 /// );
 const DEPOSIT_MESSAGE_TYPE_HASH: felt252 =
-    0x29dd3d9e176ff518cc692796e483898a2e82606dcf20e1db468e69f9b457987;
+    0xbd3cd29a87ff6b03a779fe5dc74e3ad33963aa9d4bddd6e6cb21071cb222c4;
 
 impl StructHashImpl of StructHash<DepositMessage> {
     fn hash_struct(self: @DepositMessage) -> felt252 {
@@ -58,7 +56,7 @@ mod tests {
     #[test]
     fn test_deposit_type_hash() {
         let expected = selector!(
-            "\"DepositMessage\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"owner_public_key\":\"felt\",\"owner_account\":\"ContractAddress\",\"depositing_address\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"DepositMessage\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"owner_public_key\":\"felt\",\"owner_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
         );
         assert_eq!(DEPOSIT_MESSAGE_TYPE_HASH, expected);
     }

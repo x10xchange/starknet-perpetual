@@ -8,10 +8,7 @@ use perpetuals::core::types::withdraw_message::WithdrawMessage;
 pub trait ICore<TContractState> {
     // Flows
     fn deleverage(self: @TContractState);
-    fn deposit(self: @TContractState);
-    fn register_deposit(
-        ref self: TContractState, signature: Signature, deposit_message: DepositMessage,
-    );
+    fn deposit(ref self: TContractState, signature: Signature, deposit_message: DepositMessage);
     fn liquidate(self: @TContractState);
     fn trade(
         ref self: TContractState,

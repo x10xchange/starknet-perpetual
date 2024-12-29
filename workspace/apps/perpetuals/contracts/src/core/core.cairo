@@ -36,9 +36,11 @@ pub mod Core {
     use perpetuals::core::types::{AssetAmount, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
-    use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, Vec};
-    use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::storage::{
+        Map, Mutable, StorageMapReadAccess, StorageMapWriteAccess, StoragePath, StoragePathEntry,
+        StoragePointerReadAccess, Vec,
+    };
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NoncesComponent, storage: nonces, event: NoncesEvent);
@@ -120,6 +122,8 @@ pub mod Core {
         num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        fact_registry: Map<felt252, Timestamp>,
+        pending_deposits: Map<AssetId, i64>,
         // --- Position Data ---
         pub positions: Map<PositionId, Position>,
     }
@@ -191,10 +195,29 @@ pub mod Core {
     pub impl CoreImpl of ICore<ContractState> {
         // Flows
         fn deleverage(self: @ContractState) {}
-        fn deposit(self: @ContractState) {}
-        fn register_deposit(
-            ref self: ContractState, signature: Signature, deposit_message: DepositMessage,
-        ) {}
+        fn deposit(ref self: ContractState, signature: Signature, deposit_message: DepositMessage) {
+            let caller_address = get_caller_address();
+            let msg_hash = deposit_message.get_message_hash(signer: caller_address);
+            self.fact_registry.write(key: msg_hash, value: Time::now());
+            let collateral_amount = deposit_message.collateral.amount;
+            let asset_id = deposit_message.collateral.asset_id;
+            self
+                .pending_deposits
+                .write(
+                    key: asset_id, value: self.pending_deposits.read(asset_id) + collateral_amount,
+                );
+            let collateral_cfg = self._get_collateral_config(collateral_id: asset_id);
+            let quantum = collateral_cfg.quantum;
+            assert(collateral_amount > 0, INVALID_DEPOSIT_AMOUNT);
+            let amount = collateral_amount.abs() * quantum;
+            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
+            erc20_dispatcher
+                .transfer_from(
+                    sender: caller_address,
+                    recipient: get_contract_address(),
+                    amount: amount.into(),
+                );
+        }
         fn liquidate(self: @ContractState) {}
 
         /// Executes a trade between two orders (Order A and Order B).
