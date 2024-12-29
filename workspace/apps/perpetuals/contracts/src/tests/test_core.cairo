@@ -20,6 +20,7 @@ use perpetuals::tests::test_utils::{
 use snforge_std::start_cheat_block_timestamp_global;
 use snforge_std::test_address;
 use starknet::storage::StoragePathEntry;
+use starknet::storage::{StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
 
 fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()

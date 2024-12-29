@@ -36,6 +36,7 @@ pub mod Core {
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, Vec};
+    use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
     use starknet::{ContractAddress, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -85,50 +86,50 @@ pub mod Core {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
-        nonces: NoncesComponent::Storage,
+        pub nonces: NoncesComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
         replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
-        roles: RolesComponent::Storage,
+        pub roles: RolesComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         // --- Initialization ---
-        value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
+        pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
         // --- System Configuration ---
-        price_validation_interval: TimeDelta,
-        funding_validation_interval: TimeDelta,
+        pub price_validation_interval: TimeDelta,
+        pub funding_validation_interval: TimeDelta,
         /// 32-bit fixed-point number with a 32-bit fractional part.
-        max_funding_rate: u32,
+        pub max_funding_rate: u32,
         // --- Validations ---
         // Updates each price validation.
-        last_price_validation: Timestamp,
+        pub last_price_validation: Timestamp,
         // Updates every funding tick.
-        last_funding_tick: Timestamp,
+        pub last_funding_tick: Timestamp,
         // Message hash to fulfilled amount.
         fulfillment: Map<felt252, i64>,
         // --- Asset Configuration ---
-        collateral_configs: Map<AssetId, Option<CollateralConfig>>,
-        synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
+        pub collateral_configs: Map<AssetId, Option<CollateralConfig>>,
+        pub synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
         oracles: Map<AssetId, Vec<ContractAddress>>,
         // --- Asset Data ---
-        collateral_timely_data_head: Option<AssetId>,
-        collateral_timely_data: Map<AssetId, CollateralTimelyData>,
+        pub collateral_timely_data_head: Option<AssetId>,
+        pub collateral_timely_data: Map<AssetId, CollateralTimelyData>,
         num_of_active_synthetic_assets: usize,
-        synthetic_timely_data_head: Option<AssetId>,
-        synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        pub synthetic_timely_data_head: Option<AssetId>,
+        pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         // --- Position Data ---
-        positions: Map<PositionId, Position>,
+        pub positions: Map<PositionId, Position>,
     }
 
     #[starknet::storage_node]
     struct Position {
         version: u8,
         owner_account: ContractAddress,
-        owner_public_key: felt252,
+        pub owner_public_key: felt252,
         collateral_assets_head: Option<AssetId>,
-        collateral_assets: Map<AssetId, CollateralAsset>,
+        pub collateral_assets: Map<AssetId, CollateralAsset>,
         synthetic_assets_head: Option<AssetId>,
         synthetic_assets: Map<AssetId, SyntheticAsset>,
     }

@@ -9,6 +9,7 @@ pub mod ValueRiskCalculator {
     use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
     use perpetuals::value_risk_calculator::interface::{PositionTVTRChange, changeEffects};
     use starknet::storage::Map;
+    use starknet::storage::{StorageMapReadAccess, StorageMapWriteAccess};
 
 
     #[storage]
