@@ -218,6 +218,31 @@ pub mod Core {
                     amount: amount.into(),
                 );
         }
+        fn withdraw_request(
+            ref self: ContractState, signature: Signature, withraw_message: WithdrawMessage,
+        ) {
+            let position_id = withraw_message.position_id;
+            let position = self.positions.entry(position_id);
+            let signature_hash = self._generate_message_hash(:position, message: withraw_message);
+            let msg_hash = match signature_hash {
+                MessageHash::AccountHash(hash) => {
+                    assert(
+                        is_valid_owner_signature(
+                            owner: position.owner_account.read(), :hash, :signature,
+                        ),
+                        INVALID_OWNER_SIGNATURE,
+                    );
+                    hash
+                },
+                MessageHash::PublicKeyHash(hash) => {
+                    validate_stark_signature(
+                        public_key: position.owner_public_key.read(), :hash, :signature,
+                    );
+                    hash
+                },
+            };
+            self.fact_registry.write(key: msg_hash, value: Time::now());
+        }
         fn liquidate(self: @ContractState) {}
 
         /// Executes a trade between two orders (Order A and Order B).

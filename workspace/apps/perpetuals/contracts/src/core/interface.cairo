@@ -9,6 +9,9 @@ pub trait ICore<TContractState> {
     // Flows
     fn deleverage(self: @TContractState);
     fn deposit(ref self: TContractState, signature: Signature, deposit_message: DepositMessage);
+    fn withdraw_request(
+        ref self: TContractState, signature: Signature, withraw_message: WithdrawMessage,
+    );
     fn liquidate(self: @TContractState);
     fn trade(
         ref self: TContractState,
