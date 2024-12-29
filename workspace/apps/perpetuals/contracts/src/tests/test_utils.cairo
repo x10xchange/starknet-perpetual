@@ -1,8 +1,17 @@
+use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait};
+use contracts_commons::test_utils::{cheat_caller_address_once};
+use contracts_commons::types::time::TimeDelta;
+use core::num::traits::Zero;
+use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, VERSION};
 use perpetuals::tests::constants::*;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
+use snforge_std::signature::KeyPair;
+use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
+use snforge_std::test_address;
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
 
@@ -18,12 +27,44 @@ pub struct CoreState {
     pub address: ContractAddress,
 }
 
-
+/// The `User` struct represents a user corresponding to a position in the state of the Core
+/// contract.
 #[derive(Drop, Copy)]
+pub struct User {
+    pub position_id: felt252,
+    pub address: ContractAddress,
+    pub key_pair: KeyPair<felt252, felt252>,
+    pub salt_counter: felt252,
+    pub deposited_collateral: i64,
+}
+
+#[generate_trait]
+pub impl UserImpl of UserTrait {
+    fn sign_message(self: User, message: felt252) -> Array<felt252> {
+        let (r, s) = self.key_pair.sign(message).unwrap();
+        array![r, s]
+    }
+}
+
+impl UserDefault of Default<User> {
+    fn default() -> User {
+        User {
+            position_id: POSITION_ID,
+            address: POSITION_OWNER(),
+            key_pair: KEY_PAIR(),
+            salt_counter: Zero::zero(),
+            deposited_collateral: Zero::zero(),
+        }
+    }
+}
+
+#[derive(Drop)]
 pub(crate) struct PerpetualsInitConfig {
     pub governance_admin: ContractAddress,
     pub app_role_admin: ContractAddress,
     pub operator: ContractAddress,
+    pub funding_validation_interval: TimeDelta,
+    pub collateral_cfg: CollateralCfg,
 }
 
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
@@ -32,7 +73,36 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             governance_admin: GOVERNANCE_ADMIN(),
             app_role_admin: APP_ROLE_ADMIN(),
             operator: OPERATOR(),
+            funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
+            collateral_cfg: CollateralCfg {
+                token_cfg: TokenConfig {
+                    name: COLLATERAL_NAME(),
+                    symbol: COLLATERAL_SYMBOL(),
+                    initial_supply: INITIAL_SUPPLY,
+                    owner: COLLATERAL_OWNER(),
+                },
+                asset_id: ASSET_ID(),
+            },
         }
+    }
+}
+
+/// The 'CollateralCfg' struct represents a deployed collateral with an associated asset id.
+#[derive(Drop)]
+pub struct CollateralCfg {
+    pub token_cfg: TokenConfig,
+    pub asset_id: AssetId,
+}
+
+pub fn generate_collateral_config(token_state: @TokenState) -> CollateralConfig {
+    CollateralConfig {
+        version: VERSION,
+        address: *token_state.address,
+        quantum: COLLATERAL_QUANTUM,
+        decimals: COLLATERAL_DECIMALS,
+        is_active: true,
+        risk_factor: RISK_FACTOR(),
+        quorum: COLLATERAL_QUORUM,
     }
 }
 
@@ -61,7 +131,6 @@ pub struct ValueRiskCalculatorConfig {}
 pub struct ValueRiskCalculatorState {
     pub address: ContractAddress,
 }
-
 
 #[generate_trait]
 pub impl ValueRiskCalculatorImpl of ValueRiskCalculatorTrait {
@@ -103,7 +172,6 @@ pub struct SystemState {
     pub tv_tr_calculator: ValueRiskCalculatorState,
 }
 
-
 #[generate_trait]
 pub impl SystemImpl of SystemTrait {
     /// Deploys the system configuration and returns the system state.
@@ -115,24 +183,13 @@ pub impl SystemImpl of SystemTrait {
     }
 }
 
-pub fn collateral_config_from_token_state(token_state: TokenState) -> CollateralConfig {
-    CollateralConfig {
-        version: VERSION,
-        address: token_state.address,
-        quantum: COLLATERAL_QUANTUM,
-        decimals: COLLATERAL_DECIMALS,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: COLLATERAL_QUORUM,
-    }
-}
-
-pub fn deploy_collateral() -> TokenState {
-    let token_config = TokenConfig {
-        name: COLLATERAL_NAME(),
-        symbol: COLLATERAL_SYMBOL(),
-        initial_supply: INITIAL_SUPPLY,
-        owner: COLLATERAL_OWNER(),
-    };
-    token_config.deploy()
+pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
+    cheat_caller_address_once(
+        contract_address: test_address(), caller_address: *cfg.governance_admin,
+    );
+    state.register_app_role_admin(account: *cfg.app_role_admin);
+    cheat_caller_address_once(
+        contract_address: test_address(), caller_address: *cfg.app_role_admin,
+    );
+    state.register_operator(account: *cfg.operator);
 }

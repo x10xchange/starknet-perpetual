@@ -1,14 +1,25 @@
 use contracts_commons::components::roles::interface::IRoles;
+use contracts_commons::message_hash::OffchainMessageHash;
+use contracts_commons::test_utils::{TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::Time;
 use core::num::traits::Zero;
-use perpetuals::core::core::{Core, Core::InternalCoreFunctionsTrait};
+use openzeppelin::utils::interfaces::INonces;
+use perpetuals::core::core::{Core, Core::InternalCoreFunctionsTrait, Core::SNIP12MetadataImpl};
+use perpetuals::core::interface::ICore;
+use perpetuals::core::types::AssetAmount;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::VERSION as COLLATERAL_VERSION;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
 use perpetuals::core::types::asset::synthetic::VERSION as SYNTHETIC_VERSION;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::withdraw_message::WithdrawMessage;
 use perpetuals::tests::constants::*;
+use perpetuals::tests::test_utils::{
+    PerpetualsInitConfig, User, UserTrait, generate_collateral_config, set_roles,
+};
 use snforge_std::start_cheat_block_timestamp_global;
+use snforge_std::test_address;
+use starknet::storage::StoragePathEntry;
 
 fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()
@@ -40,6 +51,32 @@ fn add_synthetic(
     state.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
     state.synthetic_timely_data_head.write(Option::Some(synthetic_id));
     state.synthetic_configs.write(synthetic_id, Option::Some(synthetic_config));
+}
+
+fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
+    let mut state = INITIALIZED_CONTRACT_STATE();
+    set_roles(ref :state, :cfg);
+    state.last_funding_tick.write(Time::now());
+    state.last_price_validation.write(Time::now());
+    state.funding_validation_interval.write(*cfg.funding_validation_interval);
+    let collateral_config = generate_collateral_config(:token_state);
+    state.collateral_configs.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+    state
+}
+
+fn init_user_for_withdraw(
+    cfg: @PerpetualsInitConfig,
+    ref state: Core::ContractState,
+    ref user: User,
+    token_state: @TokenState,
+) {
+    let position = state.positions.entry(user.position_id);
+    position.owner_public_key.write(user.key_pair.public_key);
+    let asset_balance = position.collateral_assets.entry(*cfg.collateral_cfg.asset_id).balance;
+    let current_amount = asset_balance.read();
+    asset_balance.write(WITHDRAW_AMOUNT.into() + current_amount);
+    (*token_state).fund(recipient: test_address(), amount: WITHDRAW_AMOUNT.try_into().unwrap());
+    user.deposited_collateral = current_amount.into() + WITHDRAW_AMOUNT;
 }
 
 fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
@@ -199,4 +236,40 @@ fn test_validate_prices_no_update_needed() {
     state.last_price_validation.write(now);
     state._validate_prices(:now);
     assert_eq!(state.last_price_validation.read(), now);
+}
+
+#[test]
+fn test_successful_withdraw() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_user_for_withdraw(cfg: @cfg, ref :state, ref :user, token_state: @token_state);
+
+    // Setup parameters:
+    let mut expiration = Time::now();
+    expiration += Time::days(1);
+
+    let mut withdraw_message = WithdrawMessage {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral: AssetAmount {
+            asset_id: cfg.collateral_cfg.asset_id, amount: user.deposited_collateral,
+        },
+        recipient: user.address,
+    };
+    let signature = user.sign_message(withdraw_message.get_message_hash(user.key_pair.public_key));
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let system_nonce = state.nonces.nonces(owner: test_address());
+
+    // Test:
+    state.withdraw(:system_nonce, :signature, :withdraw_message);
+
+    // Check:
+    let user_balance = token_state.balance_of(user.address);
+    assert_eq!(user_balance, WITHDRAW_AMOUNT.try_into().unwrap());
+    let contract_state_balance = token_state.balance_of(test_address());
+    assert_eq!(contract_state_balance, Zero::zero());
 }

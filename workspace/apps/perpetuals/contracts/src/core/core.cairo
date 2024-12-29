@@ -55,7 +55,7 @@ pub mod Core {
     const VERSION: felt252 = 'v0';
 
     /// Required for hash computation.
-    impl SNIP12MetadataImpl of SNIP12Metadata {
+    pub impl SNIP12MetadataImpl of SNIP12Metadata {
         fn name() -> felt252 {
             NAME
         }

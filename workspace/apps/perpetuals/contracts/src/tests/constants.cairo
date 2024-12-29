@@ -48,6 +48,7 @@ pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
 pub const POSITION_ID: felt252 = 'POSITION_ID';
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000;
+pub const WITHDRAW_AMOUNT: i64 = 1000;
 
 /// Assets IDs
 pub fn ASSET_ID() -> AssetId {
