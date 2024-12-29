@@ -64,6 +64,11 @@ pub mod Core {
         }
     }
 
+    enum MessageHash {
+        AccountHash: felt252,
+        PublicKeyHash: felt252,
+    }
+
     #[abi(embed_v0)]
     impl ReplaceabilityImpl =
         ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
@@ -162,6 +167,22 @@ pub mod Core {
         self.price_validation_interval.write(price_validation_interval);
         self.funding_validation_interval.write(funding_validation_interval);
         self.max_funding_rate.write(max_funding_rate);
+    }
+
+    fn is_valid_owner_signature(
+        owner: ContractAddress, hash: felt252, signature: Signature,
+    ) -> bool {
+        let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
+            .is_valid_signature(:hash, :signature);
+        // Check either 'VALID' or true for backwards compatibility.
+        is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
+    }
+
+    fn validate_stark_signature(public_key: felt252, hash: felt252, signature: Signature) {
+        assert(
+            is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
+            INVALID_STARK_SIGNATURE,
+        );
     }
 
     #[abi(embed_v0)]
@@ -387,15 +408,6 @@ pub mod Core {
             };
         }
 
-        fn _validate_stark_signature(
-            self: @ContractState, public_key: felt252, hash: felt252, signature: Signature,
-        ) {
-            assert(
-                is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
-                INVALID_STARK_SIGNATURE,
-            );
-        }
-
         fn _get_position(
             ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
@@ -529,7 +541,7 @@ pub mod Core {
             assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
 
             // Public key signature validation.
-            self._validate_stark_signature(:public_key, :hash, :signature);
+            validate_stark_signature(:public_key, :hash, :signature);
 
             // Sign Validation for amounts.
             assert(
@@ -711,15 +723,21 @@ pub mod Core {
                 trade_illegal_base_to_quote_ratio_err(order_b.position_id),
             );
         }
-    }
 
-    fn is_valid_owner_signature(
-        owner: ContractAddress, hash: felt252, signature: Signature,
-    ) -> bool {
-        let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
-            .is_valid_signature(:hash, :signature);
-        // Check either 'VALID' or true for backwards compatibility.
-        is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
+        fn _generate_message_hash<
+            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
+        >(
+            ref self: ContractState, position: StoragePath<Mutable<Position>>, message: T,
+        ) -> MessageHash {
+            let owner_account = position.owner_account.read();
+            if owner_account.is_non_zero() {
+                let hash = message.get_message_hash(signer: owner_account);
+                return MessageHash::AccountHash(hash);
+            };
+            let public_key = position.owner_public_key.read();
+            let hash = message.get_message_hash(signer: public_key);
+            MessageHash::PublicKeyHash(hash)
+        }
     }
 
     /// Calculate the funding rate using the following formula:
