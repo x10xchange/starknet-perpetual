@@ -1,5 +1,5 @@
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-use contracts_commons::types::time::Timestamp;
+use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;

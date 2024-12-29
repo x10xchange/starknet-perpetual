@@ -1,5 +1,5 @@
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
-use contracts_commons::types::time::TimeDelta;
+use contracts_commons::types::time::time::TimeDelta;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};

@@ -1,7 +1,7 @@
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait};
 use contracts_commons::test_utils::{cheat_caller_address_once};
-use contracts_commons::types::time::TimeDelta;
+use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;

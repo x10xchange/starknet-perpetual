@@ -1,4 +1,4 @@
-use contracts_commons::types::time::Timestamp;
+use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;

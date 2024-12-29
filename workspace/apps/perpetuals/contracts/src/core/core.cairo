@@ -8,7 +8,7 @@ pub mod Core {
     use contracts_commons::errors::assert_with_byte_array;
     use contracts_commons::math::{Abs, FractionTrait, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
-    use contracts_commons::types::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
