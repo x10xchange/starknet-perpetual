@@ -5,9 +5,9 @@ pub mod ValueRiskCalculator {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::{PositionData, PositionDiff};
+    use perpetuals::value_risk_calculator::interface::{ChangeEffects, PositionTVTRChange};
     use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionStateTrait};
     use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
-    use perpetuals::value_risk_calculator::interface::{PositionTVTRChange, changeEffects};
     use starknet::storage::Map;
     use starknet::storage::{StorageMapReadAccess, StorageMapWriteAccess};
 
@@ -53,7 +53,7 @@ pub mod ValueRiskCalculator {
             PositionChangeResult {
                 position_state_before_change: PositionStateTrait::new(tvtr.before),
                 position_state_after_change: PositionStateTrait::new(tvtr.after),
-                change_effects: changeEffects {
+                change_effects: ChangeEffects {
                     is_healthier: is_healthier(tvtr.before, tvtr.after),
                     is_fair_deleverage: is_fair_deleverage(tvtr.before, tvtr.after),
                 },
@@ -64,6 +64,10 @@ pub mod ValueRiskCalculator {
         ) {
             self.risk_factors.write(asset_id, risk_factor);
         }
+    }
+
+    #[generate_trait]
+    pub impl InternalValueRiskCalculatorFunctions of InternalValueRiskCalculatorFunctionsTrait {
         fn calculate_position_tvtr_change(
             self: @ContractState, position: PositionData, position_diff: PositionDiff,
         ) -> PositionTVTRChange {
@@ -85,7 +89,7 @@ pub mod ValueRiskCalculator {
 
             // Calculate the total value and total risk after the diff.
             let mut total_value_after = total_value_before;
-            let mut total_risk_after: i128 = total_risk_before.try_into().unwrap();
+            let mut total_risk_after: u128 = total_risk_before;
             for asset_diff_entry in position_diff {
                 let asset_id = *asset_diff_entry.id;
                 let risk_factor = self.risk_factors.read(asset_id);
@@ -100,8 +104,8 @@ pub mod ValueRiskCalculator {
                 total_value_after -= asset_value_before;
 
                 /// Update the total risk.
-                total_risk_after += risk_factor.mul(asset_value_after.abs()).try_into().unwrap();
-                total_risk_after -= risk_factor.mul(asset_value_before.abs()).try_into().unwrap();
+                total_risk_after += risk_factor.mul(asset_value_after.abs());
+                total_risk_after -= risk_factor.mul(asset_value_before.abs());
             };
 
             // Return the total value and total risk before and after the diff.
@@ -110,8 +114,7 @@ pub mod ValueRiskCalculator {
                     total_value: total_value_before, total_risk: total_risk_before,
                 },
                 after: PositionTVTR {
-                    total_value: total_value_after,
-                    total_risk: total_risk_after.try_into().unwrap(),
+                    total_value: total_value_after, total_risk: total_risk_after,
                 },
             }
         }

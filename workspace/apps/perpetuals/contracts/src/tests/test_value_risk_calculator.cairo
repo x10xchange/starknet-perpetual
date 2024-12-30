@@ -8,6 +8,7 @@ use perpetuals::tests::constants::{ASSET_ID_3, PRICE_3, RISK_FACTOR_3};
 use perpetuals::tests::constants::{ASSET_ID_4, PRICE_4, RISK_FACTOR_4};
 use perpetuals::tests::constants::{ASSET_ID_5, PRICE_5, RISK_FACTOR_5};
 use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator;
+use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator::InternalValueRiskCalculatorFunctionsTrait;
 use perpetuals::value_risk_calculator::value_risk_calculator::ValueRiskCalculator::ValueRiskCalculatorImpl;
 use snforge_std::test_address;
 

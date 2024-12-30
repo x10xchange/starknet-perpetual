@@ -46,7 +46,7 @@ pub impl PositionStateImpl of PositionStateTrait {
 /// - `is_fair_deleverage`:
 ///     Indicates whether the deleveraging process is fair.
 #[derive(Drop, Serde)]
-pub struct changeEffects {
+pub struct ChangeEffects {
     pub is_healthier: bool,
     pub is_fair_deleverage: bool,
 }
@@ -56,21 +56,12 @@ pub struct changeEffects {
 pub struct PositionChangeResult {
     pub position_state_before_change: PositionState,
     pub position_state_after_change: PositionState,
-    pub change_effects: changeEffects,
+    pub change_effects: ChangeEffects,
 }
 
 
 #[starknet::interface]
 pub trait IValueRiskCalculator<TContractState> {
-    fn calculate_position_tvtr_change(
-        self: @TContractState, position: PositionData, position_diff: PositionDiff,
-    ) -> PositionTVTRChange;
-
-    fn set_risk_factor_for_asset(
-        ref self: TContractState, asset_id: AssetId, risk_factor: FixedTwoDecimal,
-    );
-
-
     /// Evaluates the state of a position before and after applying a change, and assesses the
     /// impact of the change.
     ///
@@ -88,4 +79,8 @@ pub trait IValueRiskCalculator<TContractState> {
     fn evaluate_position_change(
         self: @TContractState, position: PositionData, position_diff: PositionDiff,
     ) -> PositionChangeResult;
+
+    fn set_risk_factor_for_asset(
+        ref self: TContractState, asset_id: AssetId, risk_factor: FixedTwoDecimal,
+    );
 }
