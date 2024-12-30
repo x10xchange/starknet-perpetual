@@ -262,10 +262,10 @@ fn test_successful_withdraw() {
         recipient: user.address,
     };
     let signature = user.sign_message(withdraw_message.get_message_hash(user.key_pair.public_key));
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let system_nonce = state.nonces.nonces(owner: test_address());
 
     // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state.withdraw(:system_nonce, :signature, :withdraw_message);
 
     // Check:
