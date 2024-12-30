@@ -10,7 +10,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 
-pub type Signature = Array<felt252>;
+pub type Signature = Span<felt252>;
 
 #[derive(Copy, Debug, Drop, Hash, Serde)]
 pub struct PositionId {

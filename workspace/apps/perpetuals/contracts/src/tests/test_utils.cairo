@@ -5,9 +5,9 @@ use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, VERSION};
+use perpetuals::core::types::{PositionId, Signature};
 use perpetuals::tests::constants::*;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
 use snforge_std::signature::KeyPair;
@@ -41,9 +41,9 @@ pub struct User {
 
 #[generate_trait]
 pub impl UserImpl of UserTrait {
-    fn sign_message(self: User, message: felt252) -> Array<felt252> {
+    fn sign_message(self: User, message: felt252) -> Signature {
         let (r, s) = self.key_pair.sign(message).unwrap();
-        array![r, s]
+        array![r, s].span()
     }
 }
 

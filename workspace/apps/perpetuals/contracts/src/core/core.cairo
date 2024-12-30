@@ -176,19 +176,12 @@ pub mod Core {
     }
 
     fn is_valid_owner_signature(
-        owner: ContractAddress, hash: felt252, signature: Signature,
+        msg_hash: felt252, owner: ContractAddress, signature: Signature,
     ) -> bool {
         let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
-            .is_valid_signature(:hash, :signature);
+            .is_valid_signature(hash: msg_hash, signature: signature.into());
         // Check either 'VALID' or true for backwards compatibility.
         is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
-    }
-
-    fn validate_stark_signature(public_key: felt252, hash: felt252, signature: Signature) {
-        assert(
-            is_valid_stark_signature(msg_hash: hash, :public_key, signature: signature.span()),
-            INVALID_STARK_SIGNATURE,
-        );
     }
 
     #[abi(embed_v0)]
@@ -225,20 +218,23 @@ pub mod Core {
             let position = self.positions.entry(position_id);
             let signature_hash = self._generate_message_hash(:position, message: withraw_message);
             let msg_hash = match signature_hash {
-                MessageHash::AccountHash(hash) => {
+                MessageHash::AccountHash(msg_hash) => {
                     assert(
                         is_valid_owner_signature(
-                            owner: position.owner_account.read(), :hash, :signature,
+                            :msg_hash, owner: position.owner_account.read(), :signature,
                         ),
                         INVALID_OWNER_SIGNATURE,
                     );
-                    hash
+                    msg_hash
                 },
-                MessageHash::PublicKeyHash(hash) => {
-                    validate_stark_signature(
-                        public_key: position.owner_public_key.read(), :hash, :signature,
+                MessageHash::PublicKeyHash(msg_hash) => {
+                    assert(
+                        is_valid_stark_signature(
+                            :msg_hash, public_key: position.owner_public_key.read(), :signature,
+                        ),
+                        INVALID_STARK_SIGNATURE,
                     );
-                    hash
+                    msg_hash
                 },
             };
             self.fact_registry.write(key: msg_hash, value: Time::now());
@@ -370,14 +366,14 @@ pub mod Core {
             let mut msg_hash = withdraw_message.get_message_hash(position_owner);
             if position_owner.is_non_zero() {
                 assert(
-                    is_valid_owner_signature(position_owner, msg_hash, signature),
+                    is_valid_owner_signature(:msg_hash, owner: position_owner, :signature),
                     INVALID_OWNER_SIGNATURE,
                 );
             } else {
                 let public_key = position.owner_public_key.read();
                 msg_hash = withdraw_message.get_message_hash(public_key);
                 assert(
-                    is_valid_stark_signature(:msg_hash, :public_key, signature: signature.span()),
+                    is_valid_stark_signature(:msg_hash, :public_key, :signature),
                     INVALID_STARK_SIGNATURE,
                 );
             };
@@ -589,7 +585,7 @@ pub mod Core {
             signature: Signature,
             order: Order,
             now: Timestamp,
-            hash: felt252,
+            msg_hash: felt252,
             public_key: felt252,
         ) {
             // Positive fee check.
@@ -620,7 +616,7 @@ pub mod Core {
             assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
 
             // Public key signature validation.
-            validate_stark_signature(:public_key, :hash, :signature);
+            is_valid_stark_signature(:msg_hash, :public_key, :signature);
 
             // Sign Validation for amounts.
             assert(
@@ -704,7 +700,7 @@ pub mod Core {
                     signature: signature_a,
                     order: order_a,
                     :now,
-                    hash: hash_a,
+                    msg_hash: hash_a,
                     public_key: public_key_a,
                 );
             self
@@ -712,7 +708,7 @@ pub mod Core {
                     signature: signature_b,
                     order: order_b,
                     :now,
-                    hash: hash_b,
+                    msg_hash: hash_b,
                     public_key: public_key_b,
                 );
 
