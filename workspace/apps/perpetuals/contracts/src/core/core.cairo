@@ -616,7 +616,10 @@ pub mod Core {
             assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
 
             // Public key signature validation.
-            is_valid_stark_signature(:msg_hash, :public_key, :signature);
+            assert(
+                is_valid_stark_signature(:msg_hash, :public_key, :signature),
+                INVALID_STARK_SIGNATURE,
+            );
 
             // Sign Validation for amounts.
             assert(
