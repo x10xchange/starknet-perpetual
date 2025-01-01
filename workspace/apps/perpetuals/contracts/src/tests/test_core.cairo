@@ -252,7 +252,7 @@ fn test_successful_withdraw() {
     let mut expiration = Time::now();
     expiration += Time::days(1);
 
-    let mut withdraw_message = WithdrawMessage {
+    let mut message = WithdrawMessage {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -261,12 +261,12 @@ fn test_successful_withdraw() {
         },
         recipient: user.address,
     };
-    let signature = user.sign_message(withdraw_message.get_message_hash(user.key_pair.public_key));
+    let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
     let system_nonce = state.nonces.nonces(owner: test_address());
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.withdraw(:system_nonce, :signature, :withdraw_message);
+    state.withdraw(:system_nonce, :signature, :message);
 
     // Check:
     let user_balance = token_state.balance_of(user.address);

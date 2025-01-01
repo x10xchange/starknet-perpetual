@@ -68,11 +68,6 @@ pub mod Core {
         }
     }
 
-    enum MessageHash {
-        AccountHash: felt252,
-        PublicKeyHash: felt252,
-    }
-
     #[abi(embed_v0)]
     impl ReplaceabilityImpl =
         ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
@@ -188,6 +183,7 @@ pub mod Core {
     pub impl CoreImpl of ICore<ContractState> {
         // Flows
         fn deleverage(self: @ContractState) {}
+
         fn deposit(ref self: ContractState, signature: Signature, deposit_message: DepositMessage) {
             let caller_address = get_caller_address();
             let msg_hash = deposit_message.get_message_hash(signer: caller_address);
@@ -211,34 +207,15 @@ pub mod Core {
                     amount: amount.into(),
                 );
         }
+
         fn withdraw_request(
-            ref self: ContractState, signature: Signature, withraw_message: WithdrawMessage,
+            ref self: ContractState, signature: Signature, message: WithdrawMessage,
         ) {
-            let position_id = withraw_message.position_id;
-            let position = self.positions.entry(position_id);
-            let signature_hash = self._generate_message_hash(:position, message: withraw_message);
-            let msg_hash = match signature_hash {
-                MessageHash::AccountHash(msg_hash) => {
-                    assert(
-                        is_valid_owner_signature(
-                            :msg_hash, owner: position.owner_account.read(), :signature,
-                        ),
-                        INVALID_OWNER_SIGNATURE,
-                    );
-                    msg_hash
-                },
-                MessageHash::PublicKeyHash(msg_hash) => {
-                    assert(
-                        is_valid_stark_signature(
-                            :msg_hash, public_key: position.owner_public_key.read(), :signature,
-                        ),
-                        INVALID_STARK_SIGNATURE,
-                    );
-                    msg_hash
-                },
-            };
+            let position = self._get_position(message.position_id);
+            let msg_hash = position._generate_valid_message_hash(:message, :signature);
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
+
         fn liquidate(self: @ContractState) {}
 
         /// Executes a trade between two orders (Order A and Order B).
@@ -280,15 +257,16 @@ pub mod Core {
             let now = Time::now();
             self._validate_user_flow(:system_nonce, :now);
 
-            let public_key_a = self.positions.entry(order_a.position_id).owner_public_key.read();
-            let public_key_b = self.positions.entry(order_b.position_id).owner_public_key.read();
-            let hash_a = order_a.get_message_hash(public_key_a);
-            let hash_b = order_b.get_message_hash(public_key_b);
+            // Signatures validation:
+            let position_a = self._get_position(order_a.position_id);
+            let msg_hash_a = position_a
+                ._generate_valid_message_hash(message: order_a, signature: signature_a);
+            let position_b = self._get_position(order_b.position_id);
+            let msg_hash_b = position_b
+                ._generate_valid_message_hash(message: order_b, signature: signature_b);
 
             self
                 ._validate_trade(
-                    :signature_a,
-                    :signature_b,
                     :order_a,
                     :order_b,
                     :actual_amount_base_a,
@@ -296,10 +274,8 @@ pub mod Core {
                     :actual_fee_a,
                     :actual_fee_b,
                     :now,
-                    :hash_a,
-                    :hash_b,
-                    :public_key_a,
-                    :public_key_b,
+                    :msg_hash_a,
+                    :msg_hash_b,
                 );
 
             /// Execution:
@@ -316,13 +292,14 @@ pub mod Core {
             // Update fulfillments.
             self
                 .fulfillment
-                .entry(hash_a)
-                .write(self.fulfillment.entry(hash_a).read() + actual_amount_base_a);
+                .entry(msg_hash_a)
+                .write(self.fulfillment.entry(msg_hash_a).read() + actual_amount_base_a);
             self
                 .fulfillment
-                .entry(hash_b)
-                .write(self.fulfillment.entry(hash_b).read() - actual_amount_base_a);
+                .entry(msg_hash_b)
+                .write(self.fulfillment.entry(msg_hash_b).read() - actual_amount_base_a);
         }
+
         fn transfer(self: @ContractState) {}
 
         /// Withdraw collateral `amount` from the a position to `recipient`.
@@ -350,40 +327,25 @@ pub mod Core {
             system_nonce: felt252,
             signature: Signature,
             // WithdrawMessage
-            withdraw_message: WithdrawMessage,
+            message: WithdrawMessage,
         ) {
             let now = Time::now();
             self._validate_user_flow(:system_nonce, :now);
-            let amount = withdraw_message.collateral.amount;
+            let amount = message.collateral.amount;
             assert(amount > 0, INVALID_WITHDRAW_AMOUNT);
-            assert(now < withdraw_message.expiration, WITHDRAW_EXPIRED);
-            let collateral_id = withdraw_message.collateral.asset_id;
+            assert(now < message.expiration, WITHDRAW_EXPIRED);
+            let collateral_id = message.collateral.asset_id;
             let collateral_cfg = self._get_collateral_config(:collateral_id);
             assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
-            let position_id = withdraw_message.position_id;
+            let position_id = message.position_id;
             let position = self._get_position(:position_id);
-            let position_owner = position.owner_account.read();
-            let mut msg_hash = withdraw_message.get_message_hash(position_owner);
-            if position_owner.is_non_zero() {
-                assert(
-                    is_valid_owner_signature(:msg_hash, owner: position_owner, :signature),
-                    INVALID_OWNER_SIGNATURE,
-                );
-            } else {
-                let public_key = position.owner_public_key.read();
-                msg_hash = withdraw_message.get_message_hash(public_key);
-                assert(
-                    is_valid_stark_signature(:msg_hash, :public_key, :signature),
-                    INVALID_STARK_SIGNATURE,
-                );
-            };
+            let mut msg_hash = position._generate_message_hash(:message);
             let fulfillment_entry = self.fulfillment.entry(msg_hash);
             assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
             /// Execution - Withdraw:
             self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
-            erc20_dispatcher
-                .transfer(recipient: withdraw_message.recipient, amount: amount.abs().into());
+            erc20_dispatcher.transfer(recipient: message.recipient, amount: amount.abs().into());
             let amount = amount.try_into().expect(AMOUNT_TOO_LARGE);
             let balance_entry = position.collateral_assets.entry(collateral_id).balance;
             balance_entry.write(balance_entry.read() - amount.into());
@@ -580,14 +542,7 @@ pub mod Core {
             self._validate_prices(:now);
         }
 
-        fn _validate_order(
-            ref self: ContractState,
-            signature: Signature,
-            order: Order,
-            now: Timestamp,
-            msg_hash: felt252,
-            public_key: felt252,
-        ) {
+        fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
             // Positive fee check.
             assert(order.fee.amount > 0, INVALID_NON_POSITIVE_FEE);
 
@@ -614,12 +569,6 @@ pub mod Core {
                 Option::None => false,
             };
             assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
-
-            // Public key signature validation.
-            assert(
-                is_valid_stark_signature(:msg_hash, :public_key, :signature),
-                INVALID_STARK_SIGNATURE,
-            );
 
             // Sign Validation for amounts.
             assert(
@@ -684,8 +633,6 @@ pub mod Core {
 
         fn _validate_trade(
             ref self: ContractState,
-            signature_a: Signature,
-            signature_b: Signature,
             order_a: Order,
             order_b: Order,
             actual_amount_base_a: i64,
@@ -693,27 +640,11 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
             now: Timestamp,
-            hash_a: felt252,
-            hash_b: felt252,
-            public_key_a: felt252,
-            public_key_b: felt252,
+            msg_hash_a: felt252,
+            msg_hash_b: felt252,
         ) {
-            self
-                ._validate_order(
-                    signature: signature_a,
-                    order: order_a,
-                    :now,
-                    msg_hash: hash_a,
-                    public_key: public_key_a,
-                );
-            self
-                ._validate_order(
-                    signature: signature_b,
-                    order: order_b,
-                    :now,
-                    msg_hash: hash_b,
-                    public_key: public_key_b,
-                );
+            self._validate_order(order: order_a, :now);
+            self._validate_order(order: order_b, :now);
 
             // Unpacking.
             let AssetAmount { asset_id: base_asset_id_a, amount: base_amount_a } = order_a.base;
@@ -744,13 +675,13 @@ pub mod Core {
             );
 
             // Order amount is not exceeded.
-            let fulfillment_order_hash_a = self.fulfillment.entry(hash_a).read().abs();
+            let fulfillment_order_hash_a = self.fulfillment.entry(msg_hash_a).read().abs();
             assert_with_byte_array(
                 fulfillment_order_hash_a + actual_amount_base_a.abs() <= base_amount_a.abs(),
                 fulfillment_exceeded_err(order_a.position_id),
             );
 
-            let fulfillment_order_hash_b = self.fulfillment.entry(hash_b).read().abs();
+            let fulfillment_order_hash_b = self.fulfillment.entry(msg_hash_b).read().abs();
             assert_with_byte_array(
                 fulfillment_order_hash_b + actual_amount_base_a.abs() <= base_amount_b.abs(),
                 fulfillment_exceeded_err(order_b.position_id),
@@ -871,20 +802,40 @@ pub mod Core {
         // TODO: Validate position is healthy or healthier.
         }
 
-
         fn _generate_message_hash<
             T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
         >(
-            ref self: ContractState, position: StoragePath<Mutable<Position>>, message: T,
-        ) -> MessageHash {
-            let owner_account = position.owner_account.read();
+            self: @StoragePath<Mutable<Position>>, message: T,
+        ) -> felt252 {
+            let owner_account = self.owner_account.read();
             if owner_account.is_non_zero() {
-                let hash = message.get_message_hash(signer: owner_account);
-                return MessageHash::AccountHash(hash);
+                return message.get_message_hash(signer: owner_account);
             };
-            let public_key = position.owner_public_key.read();
-            let hash = message.get_message_hash(signer: public_key);
-            MessageHash::PublicKeyHash(hash)
+
+            message.get_message_hash(signer: self.owner_public_key.read())
+        }
+
+        fn _generate_valid_message_hash<
+            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
+        >(
+            self: @StoragePath<Mutable<Position>>, message: T, signature: Signature,
+        ) -> felt252 {
+            let msg_hash = self._generate_message_hash(:message);
+            let owner_account = self.owner_account.read();
+            if owner_account.is_non_zero() {
+                assert(
+                    is_valid_owner_signature(:msg_hash, owner: owner_account, :signature),
+                    INVALID_OWNER_SIGNATURE,
+                );
+            } else {
+                assert(
+                    is_valid_stark_signature(
+                        :msg_hash, public_key: self.owner_public_key.read(), :signature,
+                    ),
+                    INVALID_STARK_SIGNATURE,
+                );
+            };
+            msg_hash
         }
     }
 
