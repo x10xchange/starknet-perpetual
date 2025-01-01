@@ -7,7 +7,7 @@ pub const TWO_POW_28: u64 = 268435456;
 // 2^56
 const LIMIT: u64 = 72057594037927936;
 
-#[derive(Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+#[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Price {
     // Unsigned 28-bit fixed point decimal percision.
     // 28-bit for the integer part and 28-bit for the fractional part.

@@ -27,13 +27,13 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
-    use perpetuals::core::types::balance::BalanceTrait;
+    use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit_message::DepositMessage;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
-    use perpetuals::core::types::{AssetAmount, AssetEntry, PositionId};
+    use perpetuals::core::types::{AssetAmount, AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
     use starknet::storage::{
@@ -731,6 +731,117 @@ pub mod Core {
             );
         }
 
+        /// Updates the asset entry diff. If the asset entry does not exist, it creates a new one;
+        /// otherwise, it updates the after-balance.
+        fn _update_asset_entry_diff(
+            ref self: ContractState,
+            ref asset_diff_entries: Array<AssetDiffEntry>,
+            asset_id: AssetId,
+            price: Price,
+            balance: Balance,
+            amount: i64,
+        ) {
+            let mut collateral_asset_diff_entry = Option::None;
+            for asset_diff_entry in asset_diff_entries.span() {
+                if asset_id == *asset_diff_entry.id {
+                    collateral_asset_diff_entry = Option::Some(*asset_diff_entry);
+                    break;
+                }
+            };
+            if collateral_asset_diff_entry.is_none() {
+                // Add new asset diff entry.
+                collateral_asset_diff_entry =
+                    Option::Some(
+                        AssetDiffEntry {
+                            id: asset_id, before: balance, after: balance, price: price,
+                        },
+                    );
+                asset_diff_entries
+                    .append(collateral_asset_diff_entry.expect('INVALID_ASSET_DIFF_ENTRY'));
+            }
+
+            collateral_asset_diff_entry.expect('INVALID_ASSET_DIFF_ENTRY').after.add(amount);
+        }
+
+        fn _create_asset_diff_entries_from_order(
+            ref self: ContractState,
+            order: Order,
+            actual_amount_base: i64,
+            actual_amount_quote: i64,
+            actual_fee: i64,
+        ) -> Span<AssetDiffEntry> {
+            // TODO(Mohammad): Consider defining and using a set instead of an array.
+            let mut asset_diff_entries: Array<AssetDiffEntry> = array![];
+            let position_id = order.position_id;
+
+            // fee asset.
+            let fee_asset_id = order.fee.asset_id;
+            let fee_price = self.collateral_timely_data.read(fee_asset_id).price;
+            let fee_balance = self
+                ._get_position(position_id)
+                .collateral_assets
+                .entry(fee_asset_id)
+                .balance
+                .read();
+            self
+                ._update_asset_entry_diff(
+                    ref asset_diff_entries, fee_asset_id, fee_price, fee_balance, -actual_fee,
+                );
+
+            // Quote asset.
+            let quote_asset_id = order.quote.asset_id;
+            let quote_price = self.collateral_timely_data.read(quote_asset_id).price;
+            let quote_balance = self
+                ._get_position(position_id)
+                .collateral_assets
+                .entry(quote_asset_id)
+                .balance
+                .read();
+            self
+                ._update_asset_entry_diff(
+                    ref asset_diff_entries,
+                    quote_asset_id,
+                    quote_price,
+                    quote_balance,
+                    -actual_amount_quote,
+                );
+
+            // Base asset.
+            let base_asset_id = order.base.asset_id;
+            let (price, balance) = match self.collateral_configs.read(base_asset_id) {
+                Option::Some(_) => {
+                    (
+                        self.collateral_timely_data.read(base_asset_id).price,
+                        self
+                            ._get_position(position_id)
+                            .collateral_assets
+                            .entry(base_asset_id)
+                            .balance
+                            .read(),
+                    )
+                },
+                Option::None => {
+                    (
+                        self.synthetic_timely_data.read(base_asset_id).price,
+                        self
+                            ._get_position(position_id)
+                            .synthetic_assets
+                            .entry(base_asset_id)
+                            .balance
+                            .read(),
+                    )
+                },
+            };
+
+            self
+                ._update_asset_entry_diff(
+                    ref asset_diff_entries, base_asset_id, price, balance, actual_amount_base,
+                );
+
+            asset_diff_entries.span()
+        }
+
+
         fn _execute_trade(
             ref self: ContractState,
             order_a: Order,
@@ -743,6 +854,20 @@ pub mod Core {
             // Apply funding to both positions.
             self._apply_funding(order_a.position_id);
             self._apply_funding(order_b.position_id);
+
+            let _position_snapshot_a = self._get_position_data(order_a.position_id);
+            let _asset_diff_entries_a = self
+                ._create_asset_diff_entries_from_order(
+                    order_a, actual_amount_base_a, actual_amount_quote_a, actual_fee_a,
+                );
+
+            let _position_snapshot_b = self._get_position_data(order_b.position_id);
+            let _asset_diff_entries_b = self
+                ._create_asset_diff_entries_from_order(
+                    order_b, -actual_amount_base_a, -actual_amount_quote_a, actual_fee_b,
+                );
+
+            // TODO: calculate TVTR change.
 
             let position_entry_a = self._get_position(order_a.position_id);
             let position_entry_b = self._get_position(order_b.position_id);

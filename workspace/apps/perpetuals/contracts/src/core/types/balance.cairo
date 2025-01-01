@@ -1,6 +1,6 @@
 use core::num::traits::Zero;
 
-#[derive(Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+#[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Balance {
     value: i64,
 }

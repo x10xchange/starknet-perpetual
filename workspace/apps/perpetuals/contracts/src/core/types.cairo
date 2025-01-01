@@ -36,7 +36,7 @@ pub struct AssetEntry {
     pub price: Price,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Copy, Default, Drop, Serde)]
 pub struct AssetDiffEntry {
     pub id: AssetId,
     pub before: Balance,
