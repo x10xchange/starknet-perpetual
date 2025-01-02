@@ -170,15 +170,6 @@ pub mod Core {
         self.max_funding_rate.write(max_funding_rate);
     }
 
-    fn is_valid_owner_signature(
-        msg_hash: felt252, owner: ContractAddress, signature: Signature,
-    ) -> bool {
-        let is_valid_signature_felt = ISRC6Dispatcher { contract_address: owner }
-            .is_valid_signature(hash: msg_hash, signature: signature.into());
-        // Check either 'VALID' or true for backwards compatibility.
-        is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1
-    }
-
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
         // Flows
@@ -211,9 +202,7 @@ pub mod Core {
         fn withdraw_request(
             ref self: ContractState, signature: Signature, message: WithdrawMessage,
         ) {
-            let position = self._get_position(message.position_id);
-            let msg_hash = position._generate_valid_message_hash(:message, :signature);
-            self.fact_registry.write(key: msg_hash, value: Time::now());
+            self._register_fact(:signature, position_id: message.position_id, :message);
         }
 
         fn liquidate(self: @ContractState) {}
@@ -259,11 +248,11 @@ pub mod Core {
 
             // Signatures validation:
             let position_a = self._get_position(order_a.position_id);
-            let msg_hash_a = position_a
-                ._generate_valid_message_hash(message: order_a, signature: signature_a);
             let position_b = self._get_position(order_b.position_id);
-            let msg_hash_b = position_b
-                ._generate_valid_message_hash(message: order_b, signature: signature_b);
+            let msg_hash_a = position_a._generate_message_hash_with_public_key(message: order_a);
+            position_a._validate_stark_signature(msg_hash: msg_hash_a, signature: signature_a);
+            let msg_hash_b = position_b._generate_message_hash_with_public_key(message: order_b);
+            position_b._validate_stark_signature(msg_hash: msg_hash_b, signature: signature_b);
 
             self
                 ._validate_trade(
@@ -339,9 +328,10 @@ pub mod Core {
             assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
-            let mut msg_hash = position._generate_message_hash(:message);
-            let fulfillment_entry = self.fulfillment.entry(msg_hash);
+            let hash = position._generate_message_hash_with_owner_account_or_public_key(:message);
+            let fulfillment_entry = self.fulfillment.entry(hash);
             assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
+
             /// Execution - Withdraw:
             self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
@@ -927,40 +917,67 @@ pub mod Core {
         // TODO: Validate position is healthy or healthier.
         }
 
-        fn _generate_message_hash<
+        fn _validate_stark_signature(
+            self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
+        ) {
+            assert(
+                is_valid_stark_signature(
+                    :msg_hash, public_key: self.owner_public_key.read(), :signature,
+                ),
+                INVALID_STARK_SIGNATURE,
+            );
+        }
+
+        fn _validate_owner_signature(
+            self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
+        ) -> bool {
+            let contract_address = self.owner_account.read();
+            if contract_address.is_zero() {
+                return false;
+            }
+            let is_valid_signature_felt = ISRC6Dispatcher { contract_address }
+                .is_valid_signature(hash: msg_hash, signature: signature.into());
+            // Check either 'VALID' or true for backwards compatibility.
+            assert(
+                is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1,
+                INVALID_OWNER_SIGNATURE,
+            );
+            true
+        }
+
+        fn _generate_message_hash_with_public_key<
             T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
         >(
             self: @StoragePath<Mutable<Position>>, message: T,
         ) -> felt252 {
-            let owner_account = self.owner_account.read();
-            if owner_account.is_non_zero() {
-                return message.get_message_hash(signer: owner_account);
-            };
-
             message.get_message_hash(signer: self.owner_public_key.read())
         }
 
-        fn _generate_valid_message_hash<
+        fn _generate_message_hash_with_owner_account_or_public_key<
             T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
         >(
-            self: @StoragePath<Mutable<Position>>, message: T, signature: Signature,
+            self: @StoragePath<Mutable<Position>>, message: T,
         ) -> felt252 {
-            let msg_hash = self._generate_message_hash(:message);
-            let owner_account = self.owner_account.read();
-            if owner_account.is_non_zero() {
-                assert(
-                    is_valid_owner_signature(:msg_hash, owner: owner_account, :signature),
-                    INVALID_OWNER_SIGNATURE,
-                );
+            let signer = self.owner_account.read();
+            if signer.is_non_zero() {
+                message.get_message_hash(:signer)
             } else {
-                assert(
-                    is_valid_stark_signature(
-                        :msg_hash, public_key: self.owner_public_key.read(), :signature,
-                    ),
-                    INVALID_STARK_SIGNATURE,
-                );
+                message.get_message_hash(signer: self.owner_public_key.read())
+            }
+        }
+
+        fn _register_fact<
+            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
+        >(
+            ref self: ContractState, signature: Signature, position_id: PositionId, message: T,
+        ) {
+            let position = self._get_position(position_id);
+            let msg_hash = position
+                ._generate_message_hash_with_owner_account_or_public_key(:message);
+            if !position._validate_owner_signature(:msg_hash, :signature) {
+                position._validate_stark_signature(:msg_hash, :signature);
             };
-            msg_hash
+            self.fact_registry.write(key: msg_hash, value: Time::now());
         }
     }
 
