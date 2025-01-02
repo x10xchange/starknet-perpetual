@@ -3,6 +3,7 @@ use perpetuals::core::types::deposit_message::DepositMessage;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::transfer_message::TransferMessage;
+use perpetuals::core::types::update_position_public_key_message::UpdatePositionPublicKeyMessage;
 use perpetuals::core::types::withdraw_message::WithdrawMessage;
 
 #[starknet::interface]
@@ -12,6 +13,9 @@ pub trait ICore<TContractState> {
     fn deposit(ref self: TContractState, signature: Signature, deposit_message: DepositMessage);
     fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawMessage);
     fn transfer_request(ref self: TContractState, signature: Signature, message: TransferMessage);
+    fn update_position_public_key_request(
+        ref self: TContractState, signature: Signature, message: UpdatePositionPublicKeyMessage,
+    );
     fn liquidate(self: @TContractState);
     fn trade(
         ref self: TContractState,

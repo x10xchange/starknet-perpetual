@@ -33,6 +33,7 @@ pub mod Core {
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::transfer_message::TransferMessage;
+    use perpetuals::core::types::update_position_public_key_message::UpdatePositionPublicKeyMessage;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{AssetAmount, AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
@@ -210,6 +211,19 @@ pub mod Core {
             ref self: ContractState, signature: Signature, message: TransferMessage,
         ) {
             self._register_fact(:signature, position_id: message.sender, :message);
+        }
+
+        fn update_position_public_key_request(
+            ref self: ContractState, signature: Signature, message: UpdatePositionPublicKeyMessage,
+        ) {
+            let position_id = message.position_id;
+            let position = self.positions.entry(position_id);
+            let owner_account = position.owner_account.read();
+            let msg_hash = message.get_message_hash(signer: owner_account);
+            assert(
+                position._validate_owner_signature(:msg_hash, :signature), INVALID_OWNER_SIGNATURE,
+            );
+            self.fact_registry.write(key: msg_hash, value: Time::now());
         }
 
         fn liquidate(self: @ContractState) {}
