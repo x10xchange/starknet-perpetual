@@ -920,9 +920,9 @@ pub mod Core {
                 .entry(order_b.quote.asset_id)
                 .balance;
             order_a_quote_balance_path
-                .write(order_a_quote_balance_path.read().sub(actual_amount_quote_a));
+                .write(order_a_quote_balance_path.read().add(actual_amount_quote_a));
             order_b_quote_balance_path
-                .write(order_b_quote_balance_path.read().add(actual_amount_quote_a));
+                .write(order_b_quote_balance_path.read().sub(actual_amount_quote_a));
             /// Validations - Fundamentals:
         // TODO: Validate position is healthy or healthier.
         }
