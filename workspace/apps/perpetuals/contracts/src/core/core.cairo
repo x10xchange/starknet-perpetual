@@ -32,6 +32,7 @@ pub mod Core {
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
     use perpetuals::core::types::price::{Price, PriceMulTrait};
+    use perpetuals::core::types::transfer_message::TransferMessage;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{AssetAmount, AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
@@ -203,6 +204,12 @@ pub mod Core {
             ref self: ContractState, signature: Signature, message: WithdrawMessage,
         ) {
             self._register_fact(:signature, position_id: message.position_id, :message);
+        }
+
+        fn transfer_request(
+            ref self: ContractState, signature: Signature, message: TransferMessage,
+        ) {
+            self._register_fact(:signature, position_id: message.sender, :message);
         }
 
         fn liquidate(self: @ContractState) {}
