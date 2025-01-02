@@ -5,6 +5,7 @@ pub mod funding;
 pub mod order;
 pub mod price;
 pub mod transfer_message;
+pub mod update_position_public_key_message;
 pub mod withdraw_message;
 
 use perpetuals::core::types::asset::AssetId;
