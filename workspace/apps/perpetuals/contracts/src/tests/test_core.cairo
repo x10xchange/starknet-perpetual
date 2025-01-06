@@ -241,6 +241,9 @@ fn test_validate_prices_no_update_needed() {
 
 #[test]
 fn test_successful_withdraw() {
+    // Set a non zero timestamp as Time::now().
+    start_cheat_block_timestamp_global(block_timestamp: Time::now().add(Time::seconds(1)).into());
+
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -265,8 +268,9 @@ fn test_successful_withdraw() {
     let system_nonce = state.nonces.nonces(owner: test_address());
 
     // Test:
+    state.withdraw_request(:signature, :message);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.withdraw(:system_nonce, :signature, :message);
+    state.withdraw(:system_nonce, :message);
 
     // Check:
     let user_balance = token_state.balance_of(user.address);

@@ -30,12 +30,7 @@ pub trait ICore<TContractState> {
         actual_fee_b: i64,
     );
     fn transfer(self: @TContractState);
-    fn withdraw(
-        ref self: TContractState,
-        system_nonce: felt252,
-        signature: Signature,
-        message: WithdrawMessage,
-    );
+    fn withdraw(ref self: TContractState, system_nonce: felt252, message: WithdrawMessage);
 
     // Funding
     fn funding_tick(

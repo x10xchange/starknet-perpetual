@@ -5,7 +5,7 @@ edition = "2024_07"
 
 [dependencies]
 starknet.workspace = true
-contracts_commons = { path = "../../../packages/contracts" }
+contracts_commons.workspace = true
 openzeppelin.workspace = true
 
 [dev-dependencies]

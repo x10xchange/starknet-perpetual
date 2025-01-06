@@ -7,6 +7,7 @@ pub const BASE_ASSET_NOT_ACTIVE: felt252 = 'BASE_ASSET_NOT_ACTIVE';
 pub const COLLATERAL_EXPIRED_PRICE: felt252 = 'COLLATERAL_EXPIRED_PRICE';
 pub const COLLATERAL_NOT_ACTIVE: felt252 = 'COLLATERAL_NOT_ACTIVE';
 pub const COLLATERAL_NOT_EXISTS: felt252 = 'COLLATERAL_NOT_EXISTS';
+pub const FACT_NOT_REGISTERED: felt252 = 'FACT_NOT_REGISTERED';
 pub const FUNDING_EXPIRED: felt252 = 'FUNDING_EXPIRED';
 pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
 pub const DIFFERENT_QUOTE_ASSET_IDS: felt252 = 'DIFFERENT_QUOTE_ASSET_IDS';
@@ -33,6 +34,10 @@ pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
 
 pub fn invalid_funding_tick_err(synthetic_id: AssetId) -> ByteArray {
     format!("INVALID_FUNDING_TICK synthetic_id: {:?}", synthetic_id)
+}
+
+pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
+    format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
 }
 
 pub fn trade_illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {

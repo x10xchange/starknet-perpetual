@@ -27,7 +27,7 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
-    use perpetuals::core::types::balance::{Balance, BalanceTrait};
+    use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::deposit_message::DepositMessage;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
@@ -37,7 +37,9 @@ pub mod Core {
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
     use perpetuals::core::types::{AssetAmount, AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
-    use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
+    use perpetuals::value_risk_calculator::interface::{
+        IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
+    };
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StorageMapWriteAccess, StoragePath, StoragePathEntry,
         StoragePointerReadAccess, Vec,
@@ -265,15 +267,34 @@ pub mod Core {
             /// Validations:
 
             let now = Time::now();
+            let position_id_a = order_a.position_id;
+            let position_id_b = order_b.position_id;
+
             self._validate_user_flow(:system_nonce, :now);
 
             // Signatures validation:
-            let position_a = self._get_position(order_a.position_id);
-            let position_b = self._get_position(order_b.position_id);
-            let msg_hash_a = position_a._generate_message_hash_with_public_key(message: order_a);
-            position_a._validate_stark_signature(msg_hash: msg_hash_a, signature: signature_a);
-            let msg_hash_b = position_b._generate_message_hash_with_public_key(message: order_b);
-            position_b._validate_stark_signature(msg_hash: msg_hash_b, signature: signature_b);
+            let position_a = self._get_position(position_id_a);
+            let position_b = self._get_position(position_id_b);
+            let hash_a = position_a._generate_message_hash_with_public_key(message: order_a);
+            position_a._validate_stark_signature(msg_hash: hash_a, signature: signature_a);
+            let hash_b = position_b._generate_message_hash_with_public_key(message: order_b);
+            position_b._validate_stark_signature(msg_hash: hash_b, signature: signature_b);
+
+            // Validate and update fulfillments.
+            self
+                ._update_fulfillment(
+                    position_id: position_id_a,
+                    hash: hash_a,
+                    order_amount: order_a.base.amount,
+                    actual_amount: actual_amount_base_a,
+                );
+            self
+                ._update_fulfillment(
+                    position_id: position_id_b,
+                    hash: hash_b,
+                    order_amount: order_b.base.amount,
+                    actual_amount: -actual_amount_base_a,
+                );
 
             self
                 ._validate_trade(
@@ -284,8 +305,6 @@ pub mod Core {
                     :actual_fee_a,
                     :actual_fee_b,
                     :now,
-                    :msg_hash_a,
-                    :msg_hash_b,
                 );
 
             /// Execution:
@@ -298,16 +317,6 @@ pub mod Core {
                     :actual_fee_a,
                     :actual_fee_b,
                 );
-
-            // Update fulfillments.
-            self
-                .fulfillment
-                .entry(msg_hash_a)
-                .write(self.fulfillment.entry(msg_hash_a).read() + actual_amount_base_a);
-            self
-                .fulfillment
-                .entry(msg_hash_b)
-                .write(self.fulfillment.entry(msg_hash_b).read() - actual_amount_base_a);
         }
 
         fn transfer(self: @ContractState) {}
@@ -324,7 +333,7 @@ pub mod Core {
         /// - The funding validation interval has not passed since the last funding tick.
         /// - [The prices of all assets in the system are valid](`_validate_prices`).
         /// - The withdrawal message has not been fulfilled.
-        /// - The `signature` is valid.
+        /// - A fact was registered for the withdraw message.
         /// - Validate the position is healthy after the withdraw.
         ///
         /// Execution:
@@ -334,9 +343,7 @@ pub mod Core {
         /// - Mark the withdrawal message as fulfilled.
         fn withdraw(
             ref self: ContractState,
-            system_nonce: felt252,
-            signature: Signature,
-            // WithdrawMessage
+            system_nonce: felt252, // WithdrawMessage
             message: WithdrawMessage,
         ) {
             let now = Time::now();
@@ -350,17 +357,20 @@ pub mod Core {
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
             let hash = position._generate_message_hash_with_owner_account_or_public_key(:message);
-            let fulfillment_entry = self.fulfillment.entry(hash);
-            assert(fulfillment_entry.read().is_zero(), ALREADY_FULFILLED);
+            self._use_fact(:hash);
+
+            // Equivalent to `fulfillment` being zero.
+            self
+                ._update_fulfillment(
+                    :position_id, :hash, order_amount: amount, actual_amount: amount,
+                );
 
             /// Execution - Withdraw:
             self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher.transfer(recipient: message.recipient, amount: amount.abs().into());
-            let amount = amount.try_into().expect(AMOUNT_TOO_LARGE);
             let balance_entry = position.collateral_assets.entry(collateral_id).balance;
             balance_entry.write(balance_entry.read() - amount.into());
-            fulfillment_entry.write(amount);
 
             /// Validations - Fundamentals:
             // TODO: Validate position is healthy
@@ -415,6 +425,28 @@ pub mod Core {
         fn _post_update(self: @ContractState) {}
         fn _consume_nonce(ref self: ContractState, system_nonce: felt252) {
             self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+        }
+
+        fn _use_fact(ref self: ContractState, hash: felt252) {
+            let fact = self.fact_registry.entry(hash);
+            assert(fact.read().is_non_zero(), FACT_NOT_REGISTERED);
+            fact.write(Zero::zero());
+        }
+
+        fn _update_fulfillment(
+            ref self: ContractState,
+            position_id: PositionId,
+            hash: felt252,
+            order_amount: i64,
+            actual_amount: i64,
+        ) {
+            let fulfillment_entry = self.fulfillment.entry(hash);
+            let final_amount = fulfillment_entry.read() + actual_amount;
+            // Both `final_amount` and `order_amount` are guaranteed to have the same sign.
+            assert_with_byte_array(
+                final_amount.abs() <= order_amount.abs(), fulfillment_exceeded_err(:position_id),
+            );
+            fulfillment_entry.write(final_amount);
         }
 
         /// If `price_validation_interval` has passed since `last_price_validation`, validate
@@ -651,8 +683,6 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
             now: Timestamp,
-            msg_hash_a: felt252,
-            msg_hash_b: felt252,
         ) {
             self._validate_order(order: order_a, :now);
             self._validate_order(order: order_b, :now);
@@ -683,19 +713,6 @@ pub mod Core {
             assert(
                 have_same_sign(quote_amount_a, actual_amount_quote_a),
                 INVALID_TRADE_ACTUAL_QUOTE_SIGN,
-            );
-
-            // Order amount is not exceeded.
-            let fulfillment_order_hash_a = self.fulfillment.entry(msg_hash_a).read().abs();
-            assert_with_byte_array(
-                fulfillment_order_hash_a + actual_amount_base_a.abs() <= base_amount_a.abs(),
-                fulfillment_exceeded_err(order_a.position_id),
-            );
-
-            let fulfillment_order_hash_b = self.fulfillment.entry(msg_hash_b).read().abs();
-            assert_with_byte_array(
-                fulfillment_order_hash_b + actual_amount_base_a.abs() <= base_amount_b.abs(),
-                fulfillment_exceeded_err(order_b.position_id),
             );
 
             // Fee to quote amount ratio does not increase.
@@ -742,38 +759,9 @@ pub mod Core {
             );
         }
 
-        /// Updates the asset entry diff. If the asset entry does not exist, it creates a new one;
-        /// otherwise, it updates the after-balance.
-        fn _update_asset_entry_diff(
-            ref self: ContractState,
-            ref asset_diff_entries: Array<AssetDiffEntry>,
-            asset_id: AssetId,
-            price: Price,
-            balance: Balance,
-            amount: i64,
-        ) {
-            let mut collateral_asset_diff_entry = Option::None;
-            for asset_diff_entry in asset_diff_entries.span() {
-                if asset_id == *asset_diff_entry.id {
-                    collateral_asset_diff_entry = Option::Some(*asset_diff_entry);
-                    break;
-                }
-            };
-            if collateral_asset_diff_entry.is_none() {
-                // Add new asset diff entry.
-                collateral_asset_diff_entry =
-                    Option::Some(
-                        AssetDiffEntry {
-                            id: asset_id, before: balance, after: balance, price: price,
-                        },
-                    );
-                asset_diff_entries
-                    .append(collateral_asset_diff_entry.expect('INVALID_ASSET_DIFF_ENTRY'));
-            }
-
-            collateral_asset_diff_entry.expect('INVALID_ASSET_DIFF_ENTRY').after.add(amount);
-        }
-
+        /// Builds asset diff entries from an order's fee, quote, and base assets, handling overlaps
+        /// by updating existing entries. If an asset matches an existing entry, only `after
+        /// balance` is updated.
         fn _create_asset_diff_entries_from_order(
             ref self: ContractState,
             order: Order,
@@ -781,8 +769,6 @@ pub mod Core {
             actual_amount_quote: i64,
             actual_fee: i64,
         ) -> Span<AssetDiffEntry> {
-            // TODO(Mohammad): Consider defining and using a set instead of an array.
-            let mut asset_diff_entries: Array<AssetDiffEntry> = array![];
             let position_id = order.position_id;
 
             // fee asset.
@@ -794,33 +780,48 @@ pub mod Core {
                 .entry(fee_asset_id)
                 .balance
                 .read();
-            self
-                ._update_asset_entry_diff(
-                    ref asset_diff_entries, fee_asset_id, fee_price, fee_balance, -actual_fee,
-                );
+
+            let mut fee_diff = AssetDiffEntry {
+                id: fee_asset_id,
+                before: fee_balance,
+                after: fee_balance.sub(actual_fee),
+                price: fee_price,
+            };
 
             // Quote asset.
             let quote_asset_id = order.quote.asset_id;
-            let quote_price = self.collateral_timely_data.read(quote_asset_id).price;
-            let quote_balance = self
-                ._get_position(position_id)
-                .collateral_assets
-                .entry(quote_asset_id)
-                .balance
-                .read();
-            self
-                ._update_asset_entry_diff(
-                    ref asset_diff_entries,
-                    quote_asset_id,
-                    quote_price,
-                    quote_balance,
-                    -actual_amount_quote,
-                );
+            let mut quote_diff: AssetDiffEntry = Default::default();
+
+            if quote_asset_id == fee_asset_id {
+                fee_diff.after.add(actual_amount_quote);
+            } else {
+                let quote_price = self.collateral_timely_data.read(quote_asset_id).price;
+                let quote_balance = self
+                    ._get_position(position_id)
+                    .collateral_assets
+                    .entry(quote_asset_id)
+                    .balance
+                    .read();
+
+                quote_diff =
+                    AssetDiffEntry {
+                        id: quote_asset_id,
+                        before: quote_balance,
+                        after: quote_balance.add(actual_amount_quote),
+                        price: quote_price,
+                    };
+            }
 
             // Base asset.
             let base_asset_id = order.base.asset_id;
-            let (price, balance) = match self.collateral_configs.read(base_asset_id) {
-                Option::Some(_) => {
+            let mut base_diff: AssetDiffEntry = Default::default();
+
+            if base_asset_id == fee_asset_id {
+                fee_diff.after.add(actual_amount_base);
+            } else if base_asset_id == quote_asset_id {
+                quote_diff.after.add(actual_amount_base);
+            } else {
+                let (base_price, base_balance) = if self._is_collateral(base_asset_id) {
                     (
                         self.collateral_timely_data.read(base_asset_id).price,
                         self
@@ -830,8 +831,7 @@ pub mod Core {
                             .balance
                             .read(),
                     )
-                },
-                Option::None => {
+                } else {
                     (
                         self.synthetic_timely_data.read(base_asset_id).price,
                         self
@@ -841,17 +841,26 @@ pub mod Core {
                             .balance
                             .read(),
                     )
-                },
+                };
+
+                base_diff =
+                    AssetDiffEntry {
+                        id: base_asset_id,
+                        before: base_balance,
+                        after: base_balance.add(actual_amount_base),
+                        price: base_price,
+                    };
+            }
+
+            // Build asset diff entries array.
+            let mut diff_entries = array![];
+            for asset_diff in array![fee_diff, quote_diff, base_diff] {
+                if asset_diff.id != Default::default() {
+                    diff_entries.append(asset_diff);
+                }
             };
-
-            self
-                ._update_asset_entry_diff(
-                    ref asset_diff_entries, base_asset_id, price, balance, actual_amount_base,
-                );
-
-            asset_diff_entries.span()
+            diff_entries.span()
         }
-
 
         fn _execute_trade(
             ref self: ContractState,
@@ -866,19 +875,24 @@ pub mod Core {
             self._apply_funding(order_a.position_id);
             self._apply_funding(order_b.position_id);
 
-            let _position_snapshot_a = self._get_position_data(order_a.position_id);
-            let _asset_diff_entries_a = self
+            let position_data_a = self._get_position_data(order_a.position_id);
+            let asset_diff_entries_a = self
                 ._create_asset_diff_entries_from_order(
-                    order_a, actual_amount_base_a, actual_amount_quote_a, actual_fee_a,
+                    order: order_a,
+                    actual_amount_base: actual_amount_base_a,
+                    actual_amount_quote: actual_amount_quote_a,
+                    actual_fee: actual_fee_a,
                 );
 
-            let _position_snapshot_b = self._get_position_data(order_b.position_id);
-            let _asset_diff_entries_b = self
+            let position_data_b = self._get_position_data(order_b.position_id);
+            let asset_diff_entries_b = self
                 ._create_asset_diff_entries_from_order(
-                    order_b, -actual_amount_base_a, -actual_amount_quote_a, actual_fee_b,
+                    order: order_b,
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -actual_amount_base_a,
+                    actual_amount_quote: -actual_amount_quote_a,
+                    actual_fee: actual_fee_b,
                 );
-
-            // TODO: calculate TVTR change.
 
             let position_entry_a = self._get_position(order_a.position_id);
             let position_entry_b = self._get_position(order_b.position_id);
@@ -897,22 +911,19 @@ pub mod Core {
             // TODO: Add the fee to `fee_position`.
 
             // Update base position.
-            let (mut order_a_base_balance_path, mut order_b_base_balance_path) =
-                match (self.collateral_configs.read(order_a.base.asset_id)) {
+            let (mut order_a_base_balance_path, mut order_b_base_balance_path) = if self
+                ._is_collateral(order_a.base.asset_id) {
                 // Base is collateral.
-                Option::Some(_) => {
-                    (
-                        position_entry_a.collateral_assets.entry(order_a.base.asset_id).balance,
-                        position_entry_b.collateral_assets.entry(order_b.base.asset_id).balance,
-                    )
-                },
+                (
+                    position_entry_a.collateral_assets.entry(order_a.base.asset_id).balance,
+                    position_entry_b.collateral_assets.entry(order_b.base.asset_id).balance,
+                )
+            } else {
                 // Base is synthetic.
-                Option::None => {
-                    (
-                        position_entry_a.synthetic_assets.entry(order_a.base.asset_id).balance,
-                        position_entry_b.synthetic_assets.entry(order_b.base.asset_id).balance,
-                    )
-                },
+                (
+                    position_entry_a.synthetic_assets.entry(order_a.base.asset_id).balance,
+                    position_entry_b.synthetic_assets.entry(order_b.base.asset_id).balance,
+                )
             };
 
             order_a_base_balance_path
@@ -934,8 +945,36 @@ pub mod Core {
                 .write(order_a_quote_balance_path.read().add(actual_amount_quote_a));
             order_b_quote_balance_path
                 .write(order_b_quote_balance_path.read().sub(actual_amount_quote_a));
+
             /// Validations - Fundamentals:
-        // TODO: Validate position is healthy or healthier.
+            self
+                ._validate_position_is_healthy_or_healthier(
+                    order_a.position_id, position_data_a, asset_diff_entries_a,
+                );
+            self
+                ._validate_position_is_healthy_or_healthier(
+                    order_b.position_id, position_data_b, asset_diff_entries_b,
+                );
+        }
+
+        fn _validate_position_is_healthy_or_healthier(
+            self: @ContractState,
+            position_id: PositionId,
+            position_data: PositionData,
+            asset_diff_entries: Span<AssetDiffEntry>,
+        ) {
+            let position_change_result = self
+                .value_risk_calculator_dispatcher
+                .read()
+                .evaluate_position_change(position_data, asset_diff_entries);
+
+            let position_is_healthier = position_change_result.change_effects.is_healthier;
+            let position_is_healthy = position_change_result
+                .position_state_after_change == PositionState::Healthy;
+            assert_with_byte_array(
+                position_is_healthier || position_is_healthy,
+                position_not_healthy_nor_healthier(position_id),
+            );
         }
 
         fn _validate_stark_signature(
@@ -1000,8 +1039,11 @@ pub mod Core {
             };
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
-    }
 
+        fn _is_collateral(self: @ContractState, asset_id: AssetId) -> bool {
+            self.collateral_configs.read(asset_id).is_some()
+        }
+    }
 
     /// Calculate the funding rate using the following formula:
     /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
