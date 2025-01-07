@@ -12,6 +12,7 @@ use perpetuals::core::types::asset::collateral::VERSION as COLLATERAL_VERSION;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
 use perpetuals::core::types::asset::synthetic::VERSION as SYNTHETIC_VERSION;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::deposit_message::DepositMessage;
 use perpetuals::core::types::withdraw_message::WithdrawMessage;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
@@ -19,6 +20,7 @@ use perpetuals::tests::test_utils::{
 };
 use snforge_std::start_cheat_block_timestamp_global;
 use snforge_std::test_address;
+use starknet::get_caller_address;
 use starknet::storage::StoragePathEntry;
 use starknet::storage::{StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
 
@@ -78,6 +80,31 @@ fn init_user_for_withdraw(
     asset_balance.write(WITHDRAW_AMOUNT.into() + current_amount);
     (*token_state).fund(recipient: test_address(), amount: WITHDRAW_AMOUNT.try_into().unwrap());
     user.deposited_collateral = current_amount.into() + WITHDRAW_AMOUNT;
+}
+
+fn init_user_for_deposit(
+    cfg: @PerpetualsInitConfig,
+    ref state: Core::ContractState,
+    ref user: User,
+    token_state: @TokenState,
+) {
+    let position = state.positions.entry(user.position_id);
+    position.owner_public_key.write(user.key_pair.public_key);
+    let asset_balance = position.collateral_assets.entry(*cfg.collateral_cfg.asset_id).balance;
+    let current_amount = asset_balance.read();
+    asset_balance.write(DEPOSIT_AMOUNT.into() + current_amount);
+    (*token_state)
+        .fund(
+            recipient: user.address,
+            amount: DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
+        );
+    (*token_state)
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
+        );
+    user.deposited_collateral = current_amount.into() + DEPOSIT_AMOUNT;
 }
 
 fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
@@ -277,4 +304,59 @@ fn test_successful_withdraw() {
     assert_eq!(user_balance, WITHDRAW_AMOUNT.try_into().unwrap());
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, Zero::zero());
+}
+
+#[test]
+fn test_successful_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_user_for_deposit(cfg: @cfg, ref :state, ref :user, token_state: @token_state);
+    let mut expected_time = Time::now();
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(block_timestamp: Time::days(count: 1).into());
+    let mut expiration = Time::now();
+    expiration += Time::days(2);
+
+    let mut message = DepositMessage {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral: AssetAmount {
+            asset_id: cfg.collateral_cfg.asset_id, amount: user.deposited_collateral,
+        },
+        owner_public_key: user.key_pair.public_key,
+        owner_account: user.address,
+    };
+    let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
+
+    // Check before deposit:
+    let user_balance_before_deposit = token_state.balance_of(user.address);
+    assert_eq!(
+        user_balance_before_deposit,
+        DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
+    );
+    let contract_state_balance_before_deposit = token_state.balance_of(test_address());
+    assert_eq!(contract_state_balance_before_deposit, Zero::zero());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.deposit(:signature, deposit_message: message);
+    expected_time += Time::days(1);
+
+    // Check after deposit:
+    let user_balance_after_deposit = token_state.balance_of(user.address);
+    assert_eq!(user_balance_after_deposit, Zero::zero());
+    let contract_state_balance_after_deposit = token_state.balance_of(test_address());
+    assert_eq!(
+        contract_state_balance_after_deposit,
+        DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
+    );
+    assert_eq!(
+        state.fact_registry.entry(message.get_message_hash(get_caller_address())).read(),
+        expected_time,
+    );
 }

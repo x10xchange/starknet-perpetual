@@ -121,7 +121,7 @@ pub mod Core {
         num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-        fact_registry: Map<felt252, Timestamp>,
+        pub fact_registry: Map<felt252, Timestamp>,
         pending_deposits: Map<AssetId, i64>,
         // --- Position Data ---
         pub positions: Map<PositionId, Position>,
