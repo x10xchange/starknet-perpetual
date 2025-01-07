@@ -1,5 +1,5 @@
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait};
+use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState};
 use contracts_commons::test_utils::{cheat_caller_address_once};
 use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;

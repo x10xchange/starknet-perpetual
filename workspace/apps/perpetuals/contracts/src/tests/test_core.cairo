@@ -1,6 +1,6 @@
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::{TokenState, TokenTrait, cheat_caller_address_once};
+use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::Time;
 use core::num::traits::Zero;
 use openzeppelin::utils::interfaces::INonces;
