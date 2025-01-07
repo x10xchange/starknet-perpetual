@@ -7,7 +7,6 @@ use perpetuals::core::types::PositionId;
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct UpdatePositionPublicKeyMessage {
     pub position_id: PositionId,
-    pub salt: felt252,
     pub expiration: Timestamp,
     pub new_public_key: felt252,
 }
@@ -16,7 +15,6 @@ pub struct UpdatePositionPublicKeyMessage {
 /// selector!(
 ///   "\"UpdatePositionPublicKeyMessage\"(
 ///    \"position_id\":\"PositionId\",
-///    \"salt\":\"felt252\",
 ///    \"expiration\":\"Timestamp\",
 ///    \"new_public_key\":\"felt252\"
 ///    )
@@ -28,7 +26,7 @@ pub struct UpdatePositionPublicKeyMessage {
 ///    )
 /// );
 const UPDATE_POSITION_PUBLIC_KEY_MESSAGE_TYPE_HASH: felt252 =
-    0x12b46305a09bde3ae0a8e62d318e36036b11ab57c993a6c4254231018176a53;
+    0x173c6d60ec931b1fead98d90a671ec24d864948665fee09f76d8470df9ae10e;
 
 impl StructHashImpl of StructHash<UpdatePositionPublicKeyMessage> {
     fn hash_struct(self: @UpdatePositionPublicKeyMessage) -> felt252 {
@@ -47,7 +45,7 @@ mod tests {
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"UpdatePositionPublicKeyMessage\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt252\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"UpdatePositionPublicKeyMessage\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt252\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(UPDATE_POSITION_PUBLIC_KEY_MESSAGE_TYPE_HASH, expected);
     }
