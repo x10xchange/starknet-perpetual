@@ -1,5 +1,7 @@
+use contracts_commons::constants::TWO_POW_32;
 use core::num::traits::zero::Zero;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::price::{Price, PriceMulTrait};
 
 #[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingIndex {
@@ -37,6 +39,12 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
     fn into(self: FundingIndex) -> i64 {
         self.value
     }
+}
+
+/// Calculate the funding rate using the following formula:
+/// `max_funding_rate * time_diff * synthetic_price / 2^32`.
+pub fn funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: Price) -> u128 {
+    synthetic_price.mul(rhs: max_funding_rate) * time_diff.into() / TWO_POW_32.into()
 }
 
 #[cfg(test)]

@@ -29,9 +29,8 @@ pub mod Core {
     };
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::deposit_message::DepositMessage;
-    use perpetuals::core::types::funding::FundingTick;
+    use perpetuals::core::types::funding::{FundingTick, funding_rate_calc};
     use perpetuals::core::types::order::Order;
-    use perpetuals::core::types::price::{Price, PriceMulTrait};
     use perpetuals::core::types::transfer_message::TransferMessage;
     use perpetuals::core::types::update_position_public_key_message::UpdatePositionPublicKeyMessage;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
@@ -55,9 +54,6 @@ pub mod Core {
 
     impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
     impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
-
-    // 2^32
-    const TWO_POW_32: u64 = 4294967296;
 
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
@@ -663,7 +659,7 @@ pub mod Core {
             assert_with_byte_array(
                 condition: index_diff
                     .abs()
-                    .into() <= _funding_rate_calc(
+                    .into() <= funding_rate_calc(
                         max_funding_rate: self.max_funding_rate.read(),
                         :time_diff,
                         synthetic_price: synthetic_timely_data.price,
@@ -1043,11 +1039,5 @@ pub mod Core {
         fn _is_collateral(self: @ContractState, asset_id: AssetId) -> bool {
             self.collateral_configs.read(asset_id).is_some()
         }
-    }
-
-    /// Calculate the funding rate using the following formula:
-    /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
-    fn _funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: Price) -> u128 {
-        synthetic_price.mul(rhs: max_funding_rate) * time_diff.into() / TWO_POW_32.into()
     }
 }
