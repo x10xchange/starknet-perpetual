@@ -331,7 +331,6 @@ fn test_successful_deposit() {
         owner_public_key: user.key_pair.public_key,
         owner_account: user.address,
     };
-    let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
 
     // Check before deposit:
     let user_balance_before_deposit = token_state.balance_of(user.address);
@@ -344,7 +343,7 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.deposit(:signature, deposit_message: message);
+    state.deposit(deposit_message: message);
     expected_time += Time::days(1);
 
     // Check after deposit:

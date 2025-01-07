@@ -179,7 +179,7 @@ pub mod Core {
         // Flows
         fn deleverage(self: @ContractState) {}
 
-        fn deposit(ref self: ContractState, signature: Signature, deposit_message: DepositMessage) {
+        fn deposit(ref self: ContractState, deposit_message: DepositMessage) {
             let caller_address = get_caller_address();
             let msg_hash = deposit_message.get_message_hash(signer: caller_address);
             self.fact_registry.write(key: msg_hash, value: Time::now());
