@@ -360,7 +360,11 @@ pub mod Core {
             /// Execution - Withdraw:
             self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
-            erc20_dispatcher.transfer(recipient: message.recipient, amount: amount.abs().into());
+            erc20_dispatcher
+                .transfer(
+                    recipient: message.recipient,
+                    amount: (collateral_cfg.quantum * amount.abs()).into(),
+                );
             let balance_entry = position.collateral_assets.entry(collateral_id).balance;
             balance_entry.write(balance_entry.read() - amount.into());
 

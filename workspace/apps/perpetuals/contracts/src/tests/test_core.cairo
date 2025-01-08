@@ -1,4 +1,5 @@
 use contracts_commons::components::roles::interface::IRoles;
+use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::Time;
@@ -78,7 +79,11 @@ fn init_user_for_withdraw(
     let asset_balance = position.collateral_assets.entry(*cfg.collateral_cfg.asset_id).balance;
     let current_amount = asset_balance.read();
     asset_balance.write(WITHDRAW_AMOUNT.into() + current_amount);
-    (*token_state).fund(recipient: test_address(), amount: WITHDRAW_AMOUNT.try_into().unwrap());
+    (*token_state)
+        .fund(
+            recipient: test_address(),
+            amount: (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).try_into().unwrap(),
+        );
     user.deposited_collateral = current_amount.into() + WITHDRAW_AMOUNT;
 }
 
@@ -301,7 +306,7 @@ fn test_successful_withdraw() {
 
     // Check:
     let user_balance = token_state.balance_of(user.address);
-    assert_eq!(user_balance, WITHDRAW_AMOUNT.try_into().unwrap());
+    assert_eq!(user_balance, (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).try_into().unwrap());
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, Zero::zero());
 }

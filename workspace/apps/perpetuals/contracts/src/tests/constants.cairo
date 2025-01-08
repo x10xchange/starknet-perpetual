@@ -43,11 +43,11 @@ pub const FUNDING_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_DECIMALS: u8 = 6;
 pub const COLLATERAL_QUORUM: u8 = 0;
-pub const COLLATERAL_QUANTUM: u64 = 1_000_000_000;
+pub const COLLATERAL_QUANTUM: u64 = 1_000_000;
 pub const SYNTHETIC_DECIMALS: u8 = 6;
 pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
-pub const INITIAL_SUPPLY: u256 = 10_000_000_000;
+pub const INITIAL_SUPPLY: u256 = 10_000_000_000_000_000;
 pub const WITHDRAW_AMOUNT: i64 = 1000;
 pub const DEPOSIT_AMOUNT: i64 = 10;
 
