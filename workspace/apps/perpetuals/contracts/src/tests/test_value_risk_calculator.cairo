@@ -260,3 +260,25 @@ fn test_calculate_position_tvtr_empty_position_and_diff() {
     /// Ensures `total_risk` after the change is `0`.
     assert_eq!(position_tvtr_change.after.total_risk, 0);
 }
+
+
+/// Test the `evaluate_position_change` function for the case where the position is empty, and no
+/// diff is provided.
+#[test]
+fn test_evaluate_position_change_empty_position_and_empty_diff() {
+    let mut state = INITIALIZED_CONTRACT_STATE();
+
+    // Create an empty position.
+    let position_data = PositionData { asset_entries: array![].span() };
+
+    // Create an empty position diff.
+    let position_diff = array![].span();
+
+    let evaluated_position_change = state.evaluate_position_change(position_data, position_diff);
+
+    /// Ensures `position_state_before_change` is `Healthy`.
+    assert!(
+        evaluated_position_change.change_effects.is_none(),
+        "Expected position_state_before_change to be Healthy",
+    );
+}

@@ -50,13 +50,21 @@ pub mod ValueRiskCalculator {
             self: @ContractState, position: PositionData, position_diff: PositionDiff,
         ) -> PositionChangeResult {
             let tvtr = self.calculate_position_tvtr_change(position, position_diff);
+
+            let change_effects = if tvtr.before.total_risk != 0 && tvtr.after.total_risk != 0 {
+                Option::Some(
+                    ChangeEffects {
+                        is_healthier: is_healthier(tvtr.before, tvtr.after),
+                        is_fair_deleverage: is_fair_deleverage(tvtr.before, tvtr.after),
+                    },
+                )
+            } else {
+                Option::None
+            };
             PositionChangeResult {
                 position_state_before_change: PositionStateTrait::new(tvtr.before),
                 position_state_after_change: PositionStateTrait::new(tvtr.after),
-                change_effects: ChangeEffects {
-                    is_healthier: is_healthier(tvtr.before, tvtr.after),
-                    is_fair_deleverage: is_fair_deleverage(tvtr.before, tvtr.after),
-                },
+                change_effects,
             }
         }
         fn set_risk_factor_for_asset(

@@ -934,7 +934,12 @@ pub mod Core {
                 .read()
                 .evaluate_position_change(position_data, asset_diff_entries);
 
-            let position_is_healthier = position_change_result.change_effects.is_healthier;
+            let position_is_healthier = if let Option::Some(change_effects) = position_change_result
+                .change_effects {
+                change_effects.is_healthier
+            } else {
+                false
+            };
             let position_is_healthy = position_change_result
                 .position_state_after_change == PositionState::Healthy;
             assert_with_byte_array(

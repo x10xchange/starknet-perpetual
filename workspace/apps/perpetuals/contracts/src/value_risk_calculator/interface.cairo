@@ -56,7 +56,7 @@ pub struct ChangeEffects {
 pub struct PositionChangeResult {
     pub position_state_before_change: PositionState,
     pub position_state_after_change: PositionState,
-    pub change_effects: ChangeEffects,
+    pub change_effects: Option<ChangeEffects>,
 }
 
 
