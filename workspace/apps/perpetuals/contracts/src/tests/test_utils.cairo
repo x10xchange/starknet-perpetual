@@ -3,6 +3,7 @@ use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState};
 use contracts_commons::test_utils::{cheat_caller_address_once};
 use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
+use openzeppelin_testing::deployment::declare_and_deploy;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::core::types::asset::AssetId;
@@ -193,4 +194,8 @@ pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConf
         contract_address: test_address(), caller_address: *cfg.app_role_admin,
     );
     state.register_operator(account: *cfg.operator);
+}
+
+pub(crate) fn deploy_value_risk_calculator_contract() -> ContractAddress {
+    declare_and_deploy("ValueRiskCalculator", array![])
 }

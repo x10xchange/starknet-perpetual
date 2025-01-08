@@ -17,7 +17,8 @@ use perpetuals::core::types::deposit_message::DepositMessage;
 use perpetuals::core::types::withdraw_message::WithdrawMessage;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
-    PerpetualsInitConfig, User, UserTrait, generate_collateral_config, set_roles,
+    PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
+    generate_collateral_config, set_roles,
 };
 use snforge_std::start_cheat_block_timestamp_global;
 use snforge_std::test_address;
@@ -58,7 +59,7 @@ fn add_synthetic(
 }
 
 fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
-    let mut state = INITIALIZED_CONTRACT_STATE();
+    let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
     state.last_funding_tick.write(Time::now());
     state.last_price_validation.write(Time::now());
@@ -112,12 +113,12 @@ fn init_user_for_deposit(
     user.deposited_collateral = current_amount.into() + DEPOSIT_AMOUNT;
 }
 
-fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
+fn initialized_contract_state() -> Core::ContractState {
     let mut state = CONTRACT_STATE();
     Core::constructor(
         ref state,
         governance_admin: GOVERNANCE_ADMIN(),
-        value_risk_calculator: VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
+        value_risk_calculator: deploy_value_risk_calculator_contract(),
         price_validation_interval: PRICE_VALIDATION_INTERVAL,
         funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
@@ -127,12 +128,8 @@ fn INITIALIZED_CONTRACT_STATE() -> Core::ContractState {
 
 #[test]
 fn test_constructor() {
-    let mut state = INITIALIZED_CONTRACT_STATE();
+    let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(
-        state.value_risk_calculator_dispatcher.read().contract_address,
-        VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS(),
-    );
     assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL);
     assert_eq!(state.funding_validation_interval.read(), FUNDING_VALIDATION_INTERVAL);
     assert_eq!(state.max_funding_rate.read(), MAX_FUNDING_RATE);
@@ -141,7 +138,7 @@ fn test_constructor() {
 
 #[test]
 fn test_validate_collateral_prices() {
-    let mut state = INITIALIZED_CONTRACT_STATE();
+    let mut state = initialized_contract_state();
     let now = Time::now();
     let collateral_id = ASSET_ID();
     let collateral_config = CollateralConfig {

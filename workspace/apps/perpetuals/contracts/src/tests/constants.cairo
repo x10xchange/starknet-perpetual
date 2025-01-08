@@ -17,9 +17,6 @@ pub fn COLLATERAL_OWNER() -> ContractAddress nopanic {
 pub fn POSITION_OWNER() -> ContractAddress nopanic {
     contract_address_const::<'POSITION_OWNER'>()
 }
-pub fn VALUE_RISK_CALCULATOR_CONTRACT_ADDRESS() -> ContractAddress {
-    contract_address_const::<'VALUE_RISK_CALCULATOR_ADDRESS'>()
-}
 pub fn TOKEN_ADDRESS() -> ContractAddress {
     contract_address_const::<'TOKEN_ADDRESS'>()
 }
