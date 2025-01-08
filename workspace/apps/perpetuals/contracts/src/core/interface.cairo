@@ -11,15 +11,10 @@ pub trait ICore<TContractState> {
     // Flows
     fn deleverage(self: @TContractState);
     fn deposit(ref self: TContractState, deposit_message: DepositMessage);
-    fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawMessage);
-    fn transfer_request(ref self: TContractState, signature: Signature, message: TransferMessage);
-    fn update_position_public_key_request(
-        ref self: TContractState, signature: Signature, message: UpdatePositionPublicKeyMessage,
-    );
     fn liquidate(self: @TContractState);
     fn trade(
         ref self: TContractState,
-        system_nonce: felt252,
+        operator_nonce: felt252,
         signature_a: Signature,
         signature_b: Signature,
         order_a: Order,
@@ -30,11 +25,16 @@ pub trait ICore<TContractState> {
         actual_fee_b: i64,
     );
     fn transfer(self: @TContractState);
-    fn withdraw(ref self: TContractState, system_nonce: felt252, message: WithdrawMessage);
+    fn transfer_request(ref self: TContractState, signature: Signature, message: TransferMessage);
+    fn update_position_public_key_request(
+        ref self: TContractState, signature: Signature, message: UpdatePositionPublicKeyMessage,
+    );
+    fn withdraw(ref self: TContractState, operator_nonce: felt252, message: WithdrawMessage);
+    fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawMessage);
 
     // Funding
     fn funding_tick(
-        ref self: TContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+        ref self: TContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
     );
 
     // Configuration

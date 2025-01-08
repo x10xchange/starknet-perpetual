@@ -250,7 +250,7 @@ pub mod Core {
         /// - Update order fulfillment.
         fn trade(
             ref self: ContractState,
-            system_nonce: felt252,
+            operator_nonce: felt252,
             signature_a: Signature,
             signature_b: Signature,
             order_a: Order,
@@ -266,7 +266,7 @@ pub mod Core {
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
 
-            self._validate_user_flow(:system_nonce, :now);
+            self._validate_operator_flow(:operator_nonce, :now);
 
             // Signatures validation:
             let position_a = self._get_position(position_id_a);
@@ -322,7 +322,7 @@ pub mod Core {
         /// Validations:
         /// - Only the operator can call this function.
         /// - The contract must not be paused.
-        /// - The `system_nonce` must be valid.
+        /// - The `operator_nonce` must be valid.
         /// - The `expiration` time has not passed.
         /// - The collateral asset exists in the system.
         /// - The collateral asset is active.
@@ -337,13 +337,9 @@ pub mod Core {
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
-        fn withdraw(
-            ref self: ContractState,
-            system_nonce: felt252, // WithdrawMessage
-            message: WithdrawMessage,
-        ) {
+        fn withdraw(ref self: ContractState, operator_nonce: felt252, message: WithdrawMessage) {
             let now = Time::now();
-            self._validate_user_flow(:system_nonce, :now);
+            self._validate_operator_flow(:operator_nonce, :now);
             let amount = message.collateral.amount;
             assert(amount > 0, INVALID_WITHDRAW_AMOUNT);
             assert(now < message.expiration, WITHDRAW_EXPIRED);
@@ -396,10 +392,10 @@ pub mod Core {
         ///    - Update the previous asset id to the current funding tick asset id.
         /// - Update the last funding tick time.
         fn funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
         ) {
-            self._validate_funding_tick(funding_ticks, system_nonce);
-            self._execute_funding_tick(funding_ticks);
+            self._validate_funding_tick(:funding_ticks, :operator_nonce);
+            self._execute_funding_tick(:funding_ticks);
         }
 
         // Configuration
@@ -419,8 +415,12 @@ pub mod Core {
         fn _get_asset_price(self: @ContractState) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
-        fn _consume_nonce(ref self: ContractState, system_nonce: felt252) {
-            self.nonces.use_checked_nonce(get_contract_address(), system_nonce);
+
+        /// Validates the operator nonce and consumes it.
+        /// Only the operator can call this function.
+        fn _consume_operator_nonce(ref self: ContractState, operator_nonce: felt252) {
+            self.roles.only_operator();
+            self.nonces.use_checked_nonce(owner: get_contract_address(), nonce: operator_nonce);
         }
 
         fn _use_fact(ref self: ContractState, hash: felt252) {
@@ -578,22 +578,11 @@ pub mod Core {
             assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
         }
 
-        /// Validates common prerequisites:
-        /// - Caller has operator role.
-        /// - Contract is not paused.
-        /// - System nonce is valid.
-        fn _validate_common_prerequisites(ref self: ContractState, system_nonce: felt252) {
-            self.roles.only_operator();
-            self.pausable.assert_not_paused();
-            self._consume_nonce(system_nonce);
-        }
 
-        /// Validates user flows prerequisites:
-        /// - Common prerequisites (validated by [`_validate_common_prerequisites`]).
+        /// Validates assets integrity prerequisites:
         /// - Funding interval validation.
         /// - Prices validation.
-        fn _validate_user_flow(ref self: ContractState, system_nonce: felt252, now: Timestamp) {
-            self._validate_common_prerequisites(:system_nonce);
+        fn _validate_assets_integrity(ref self: ContractState, now: Timestamp) {
             // Funding validation.
             assert(
                 now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
@@ -601,6 +590,19 @@ pub mod Core {
             );
             // Price validation.
             self._validate_prices(:now);
+        }
+
+        /// Validates operator flows prerequisites:
+        /// - Contract is not paused.
+        /// - Caller has operator role.
+        /// - Operator nonce is valid.
+        /// - Assets integrity [_validate_assets_integrity].
+        fn _validate_operator_flow(
+            ref self: ContractState, operator_nonce: felt252, now: Timestamp,
+        ) {
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+            self._validate_assets_integrity(:now);
         }
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
@@ -625,9 +627,10 @@ pub mod Core {
         }
 
         fn _validate_funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, system_nonce: felt252,
+            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
         ) {
-            self._validate_common_prerequisites(:system_nonce);
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
             assert(
                 funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
                 INVALID_FUNDING_TICK_LEN,
