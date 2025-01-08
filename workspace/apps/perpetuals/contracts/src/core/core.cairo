@@ -34,7 +34,7 @@ pub mod Core {
     use perpetuals::core::types::transfer_message::TransferMessage;
     use perpetuals::core::types::update_position_public_key_message::UpdatePositionPublicKeyMessage;
     use perpetuals::core::types::withdraw_message::WithdrawMessage;
-    use perpetuals::core::types::{AssetAmount, AssetDiffEntry, AssetEntry, PositionId};
+    use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
@@ -556,6 +556,28 @@ pub mod Core {
             self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
 
+        fn _validate_collateral_active(self: @ContractState, collateral_id: AssetId) {
+            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
+        }
+
+        fn _validate_synthetic_active(self: @ContractState, synthetic_id: AssetId) {
+            assert(self._get_synthetic_config(synthetic_id).is_active, SYNTHETIC_NOT_ACTIVE);
+        }
+
+        fn _is_order_base_asset_active(self: @ContractState, base_asset_id: AssetId) {
+            let base_collateral_config = self.collateral_configs.read(base_asset_id);
+            let is_base_collateral_active = match base_collateral_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            let base_synthetic_config = self.synthetic_configs.read(base_asset_id);
+            let is_base_synthetic_active = match base_synthetic_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
+        }
+
         /// Validates common prerequisites:
         /// - Caller has operator role.
         /// - Contract is not paused.
@@ -583,7 +605,7 @@ pub mod Core {
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
             // Positive fee check.
-            assert(order.fee.amount > 0, INVALID_NON_POSITIVE_FEE);
+            assert(0 <= order.fee.amount, INVALID_NEGATIVE_FEE);
 
             // Expiration check.
             assert_with_byte_array(
@@ -591,27 +613,13 @@ pub mod Core {
             );
 
             // Assets check.
-            let fee_collateral_config = self._get_collateral_config(order.fee.asset_id);
-            assert(fee_collateral_config.is_active, COLLATERAL_NOT_ACTIVE);
-
-            let quote_collateral_config = self._get_collateral_config(order.quote.asset_id);
-            assert(quote_collateral_config.is_active, COLLATERAL_NOT_ACTIVE);
-
-            let base_collateral_config = self.collateral_configs.read(order.base.asset_id);
-            let is_base_collateral_active = match base_collateral_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            let base_synthetic_config = self.synthetic_configs.read(order.base.asset_id);
-            let is_base_synthetic_active = match base_synthetic_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
+            self._validate_collateral_active(collateral_id: order.fee.asset_id);
+            self._validate_collateral_active(collateral_id: order.quote.asset_id);
+            self._is_order_base_asset_active(base_asset_id: order.base.asset_id);
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(order.quote.amount, order.base.amount),
+                !have_same_sign(a: order.quote.amount, b: order.base.amount),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
         }
@@ -649,8 +657,7 @@ pub mod Core {
                 condition: synthetic_id > prev_synthetic_id,
                 err: invalid_funding_tick_err(:synthetic_id),
             );
-            let synthetic_config = self._get_synthetic_config(:synthetic_id);
-            assert(synthetic_config.is_active, SYNTHETIC_NOT_ACTIVE);
+            self._validate_synthetic_active(:synthetic_id);
             let new_funding_index = funding_tick.funding_index;
             let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
             let index_diff: i64 = (synthetic_timely_data.funding_index - new_funding_index).into();
@@ -683,75 +690,31 @@ pub mod Core {
             self._validate_order(order: order_a, :now);
             self._validate_order(order: order_b, :now);
 
-            // Unpacking.
-            let AssetAmount { asset_id: base_asset_id_a, amount: base_amount_a } = order_a.base;
-            let AssetAmount { asset_id: quote_asset_id_a, amount: quote_amount_a } = order_a.quote;
-            let AssetAmount { asset_id: base_asset_id_b, amount: base_amount_b } = order_b.base;
-            let AssetAmount { asset_id: quote_asset_id_b, amount: quote_amount_b } = order_b.quote;
-            let AssetAmount { amount: fee_amount_a, .. } = order_a.fee;
-            let AssetAmount { amount: fee_amount_b, .. } = order_b.fee;
-
+            _validate_order_with_actual_amounts(
+                order: order_a,
+                actual_amount_base: actual_amount_base_a,
+                actual_amount_quote: actual_amount_quote_a,
+                actual_fee: actual_fee_a,
+            );
+            _validate_order_with_actual_amounts(
+                order: order_b,
+                // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                actual_amount_base: -actual_amount_base_a,
+                actual_amount_quote: -actual_amount_quote_a,
+                actual_fee: actual_fee_b,
+            );
             // Actual fees amount are positive.
-            assert(actual_fee_a > 0, INVALID_NON_POSITIVE_FEE);
-            assert(actual_fee_b > 0, INVALID_NON_POSITIVE_FEE);
+            assert(0 <= actual_fee_a, INVALID_NEGATIVE_FEE);
+            assert(0 <= actual_fee_b, INVALID_NEGATIVE_FEE);
 
             // Types validation.
-            assert(quote_asset_id_a == quote_asset_id_b, DIFFERENT_QUOTE_ASSET_IDS);
-            assert(base_asset_id_a == base_asset_id_b, DIFFERENT_BASE_ASSET_IDS);
+            assert(order_a.quote.asset_id == order_b.quote.asset_id, DIFFERENT_QUOTE_ASSET_IDS);
+            assert(order_a.base.asset_id == order_b.base.asset_id, DIFFERENT_BASE_ASSET_IDS);
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(quote_amount_a, quote_amount_b), INVALID_TRADE_QUOTE_AMOUNT_SIGN,
-            );
-            assert(
-                have_same_sign(base_amount_a, actual_amount_base_a), INVALID_TRADE_ACTUAL_BASE_SIGN,
-            );
-            assert(
-                have_same_sign(quote_amount_a, actual_amount_quote_a),
-                INVALID_TRADE_ACTUAL_QUOTE_SIGN,
-            );
-
-            // Fee to quote amount ratio does not increase.
-            let actual_fee_to_quote_amount_ratio_a = FractionTrait::new(
-                actual_fee_a, actual_amount_quote_a.abs(),
-            );
-            let order_a_fee_to_quote_amount_ratio = FractionTrait::new(
-                fee_amount_a, quote_amount_a.abs(),
-            );
-            assert_with_byte_array(
-                actual_fee_to_quote_amount_ratio_a <= order_a_fee_to_quote_amount_ratio,
-                trade_illegal_fee_to_quote_ratio_err(order_a.position_id),
-            );
-
-            let actual_fee_to_quote_amount_ratio_b = FractionTrait::new(
-                actual_fee_b, actual_amount_quote_a.abs(),
-            );
-            let order_b_fee_to_quote_amount_ratio = FractionTrait::new(
-                fee_amount_b, quote_amount_b.abs(),
-            );
-            assert_with_byte_array(
-                actual_fee_to_quote_amount_ratio_b <= order_b_fee_to_quote_amount_ratio,
-                trade_illegal_fee_to_quote_ratio_err(order_b.position_id),
-            );
-
-            // The base-to-quote amount ratio does not decrease.
-            let order_a_base_to_quote_ratio = FractionTrait::new(
-                base_amount_a, quote_amount_a.abs(),
-            );
-            let order_b_base_to_quote_ratio = FractionTrait::new(
-                base_amount_b, quote_amount_b.abs(),
-            );
-            let actual_base_to_quote_ratio = FractionTrait::new(
-                actual_amount_base_a, actual_amount_quote_a.abs(),
-            );
-
-            assert_with_byte_array(
-                order_a_base_to_quote_ratio <= actual_base_to_quote_ratio,
-                trade_illegal_base_to_quote_ratio_err(order_a.position_id),
-            );
-            assert_with_byte_array(
-                actual_base_to_quote_ratio <= -order_b_base_to_quote_ratio,
-                trade_illegal_base_to_quote_ratio_err(order_b.position_id),
+                !have_same_sign(a: order_a.quote.amount, b: order_b.quote.amount),
+                INVALID_TRADE_QUOTE_AMOUNT_SIGN,
             );
         }
 
@@ -1039,5 +1002,80 @@ pub mod Core {
         fn _is_collateral(self: @ContractState, asset_id: AssetId) -> bool {
             self.collateral_configs.read(asset_id).is_some()
         }
+    }
+
+    /// It validates the given order with the actual amounts.
+    fn _validate_order_with_actual_amounts(
+        order: Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: i64,
+    ) {
+        let order_amount_base = order.base.amount;
+        let order_amount_quote = order.quote.amount;
+        let order_amount_fee = order.fee.amount;
+
+        // Sign Validation for amounts.
+        assert(
+            have_same_sign(a: order_amount_base, b: actual_amount_base),
+            INVALID_TRADE_ACTUAL_BASE_SIGN,
+        );
+        assert(
+            have_same_sign(a: order_amount_quote, b: actual_amount_quote),
+            INVALID_TRADE_ACTUAL_QUOTE_SIGN,
+        );
+
+        _validaite_fee_to_quote_ratio(
+            position_id: order.position_id,
+            :actual_fee,
+            :actual_amount_quote,
+            :order_amount_fee,
+            :order_amount_quote,
+        );
+
+        _validaite_base_to_quote_ratio(
+            position_id: order.position_id,
+            :actual_amount_base,
+            :actual_amount_quote,
+            :order_amount_base,
+            :order_amount_quote,
+        );
+    }
+
+    fn _validaite_fee_to_quote_ratio(
+        position_id: PositionId,
+        actual_fee: i64,
+        actual_amount_quote: i64,
+        order_amount_fee: i64,
+        order_amount_quote: i64,
+    ) {
+        // Fee to quote amount ratio does not increase.
+        let actual_fee_to_quote_amount_ratio = FractionTrait::new(
+            numerator: actual_fee, denominator: actual_amount_quote.abs(),
+        );
+        let order_fee_to_quote_amount_ratio = FractionTrait::new(
+            numerator: order_amount_fee, denominator: order_amount_quote.abs(),
+        );
+        assert_with_byte_array(
+            actual_fee_to_quote_amount_ratio <= order_fee_to_quote_amount_ratio,
+            trade_illegal_fee_to_quote_ratio_err(position_id),
+        );
+    }
+
+    fn _validaite_base_to_quote_ratio(
+        position_id: PositionId,
+        actual_amount_base: i64,
+        actual_amount_quote: i64,
+        order_amount_base: i64,
+        order_amount_quote: i64,
+    ) {
+        // The base-to-quote amount ratio does not decrease.
+        let order_base_to_quote_ratio = FractionTrait::new(
+            numerator: order_amount_base, denominator: order_amount_quote.abs(),
+        );
+        let actual_base_to_quote_ratio = FractionTrait::new(
+            numerator: actual_amount_base, denominator: actual_amount_quote.abs(),
+        );
+        assert_with_byte_array(
+            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
+            trade_illegal_base_to_quote_ratio_err(position_id),
+        );
     }
 }
