@@ -173,7 +173,7 @@ pub mod Core {
                 );
             let collateral_cfg = self.assets._get_collateral_config(collateral_id: asset_id);
             let quantum = collateral_cfg.quantum;
-            assert(collateral_amount > 0, INVALID_DEPOSIT_AMOUNT);
+            assert(collateral_amount > 0, INVALID_NON_POSITIVE_AMOUNT);
             let amount = collateral_amount.abs() * quantum;
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher
@@ -319,7 +319,7 @@ pub mod Core {
             let now = Time::now();
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = message.collateral.amount;
-            assert(amount > 0, INVALID_WITHDRAW_AMOUNT);
+            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
             assert(now < message.expiration, WITHDRAW_EXPIRED);
             let collateral_id = message.collateral.asset_id;
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
