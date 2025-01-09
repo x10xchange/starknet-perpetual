@@ -38,16 +38,14 @@ pub const PRICE_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 /// 1 day in seconds.
 pub const FUNDING_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 pub const MAX_FUNDING_RATE: u32 = 5;
-pub const COLLATERAL_DECIMALS: u8 = 6;
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1_000_000;
-pub const SYNTHETIC_DECIMALS: u8 = 6;
+pub const SYNTHETIC_NAME: felt252 = 'SYNTHETIC_NAME';
 pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000_000_000;
 pub const WITHDRAW_AMOUNT: i64 = 1000;
 pub const DEPOSIT_AMOUNT: i64 = 10;
-
 pub const POSITION_ID: PositionId = PositionId { value: 0 };
 
 /// Assets IDs
@@ -112,9 +110,6 @@ pub fn COLLATERAL_NAME() -> ByteArray {
 }
 pub fn COLLATERAL_SYMBOL() -> ByteArray {
     "COL"
-}
-pub fn SYNTHETIC_NAME() -> ByteArray {
-    "SYNTHETIC_NAME"
 }
 pub fn SYNTHETIC_SYMBOL() -> ByteArray {
     "SYN"

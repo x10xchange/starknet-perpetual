@@ -12,11 +12,11 @@ pub struct CollateralConfig {
     pub version: u8,
     // Collateral ERC20 contract address
     pub address: ContractAddress,
-    pub quantum: u64,
-    pub decimals: u8,
-    // Configurable.
+    // Configurable
     pub is_active: bool,
     pub risk_factor: FixedTwoDecimal,
+    // Smallest unit of a token in the system.
+    pub quantum: u64,
     // Number of oracles that need to sign on the price to accept it.
     pub quorum: u8,
     // TODO: Oracels

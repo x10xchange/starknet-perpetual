@@ -101,7 +101,6 @@ pub fn generate_collateral_config(token_state: @TokenState) -> CollateralConfig 
         version: VERSION,
         address: *token_state.address,
         quantum: COLLATERAL_QUANTUM,
-        decimals: COLLATERAL_DECIMALS,
         is_active: true,
         risk_factor: RISK_FACTOR(),
         quorum: COLLATERAL_QUORUM,

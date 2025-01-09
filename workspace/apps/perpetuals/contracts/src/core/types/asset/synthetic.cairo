@@ -10,12 +10,13 @@ pub const VERSION: u8 = 0;
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticConfig {
     pub version: u8,
-    pub resolution: u64,
-    pub decimals: u8,
-    // Configurable.
+    pub name: felt252,
+    // Configurable
     pub is_active: bool,
     pub risk_factor: FixedTwoDecimal,
     pub quorum: u8,
+    // Smallest unit of a synthetic asset in the system.
+    pub resolution: u64,
     // TODO: Oracels
 }
 
