@@ -5,11 +5,11 @@ pub mod ValueRiskCalculator {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::{PositionData, PositionDiff};
-    use perpetuals::value_risk_calculator::interface::{ChangeEffects, PositionTVTRChange};
-    use perpetuals::value_risk_calculator::interface::{IValueRiskCalculator, PositionStateTrait};
-    use perpetuals::value_risk_calculator::interface::{PositionChangeResult, PositionTVTR};
-    use starknet::storage::Map;
-    use starknet::storage::{StorageMapReadAccess, StorageMapWriteAccess};
+    use perpetuals::value_risk_calculator::interface::{
+        ChangeEffects, IValueRiskCalculator, PositionChangeResult, PositionStateTrait, PositionTVTR,
+        PositionTVTRChange,
+    };
+    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
 
 
     #[storage]

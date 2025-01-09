@@ -65,10 +65,7 @@ pub fn funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price:
 #[cfg(test)]
 mod tests {
     use core::num::traits::zero::Zero;
-    use super::BalanceTrait;
-    use super::FundingIndex;
-    use super::FundingIndexMulTrait;
-    use super::TWO_POW_32;
+    use super::{BalanceTrait, FundingIndex, FundingIndexMulTrait, TWO_POW_32};
 
     #[test]
     fn test_zero() {

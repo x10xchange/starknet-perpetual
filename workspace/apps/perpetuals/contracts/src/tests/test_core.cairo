@@ -5,14 +5,17 @@ use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_ca
 use contracts_commons::types::time::time::Time;
 use core::num::traits::Zero;
 use openzeppelin::utils::interfaces::INonces;
-use perpetuals::core::core::{Core, Core::InternalCoreFunctionsTrait, Core::SNIP12MetadataImpl};
+use perpetuals::core::core::Core;
+use perpetuals::core::core::Core::{InternalCoreFunctionsTrait, SNIP12MetadataImpl};
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::AssetAmount;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::collateral::VERSION as COLLATERAL_VERSION;
-use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
-use perpetuals::core::types::asset::synthetic::VERSION as SYNTHETIC_VERSION;
-use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::asset::collateral::{
+    CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+};
+use perpetuals::core::types::asset::synthetic::{
+    SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
+};
 use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
@@ -20,11 +23,11 @@ use perpetuals::tests::test_utils::{
     PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
     generate_collateral_config, set_roles,
 };
-use snforge_std::start_cheat_block_timestamp_global;
-use snforge_std::test_address;
+use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::get_caller_address;
-use starknet::storage::StoragePathEntry;
-use starknet::storage::{StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
+use starknet::storage::{
+    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+};
 
 fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()

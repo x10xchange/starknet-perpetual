@@ -7,7 +7,6 @@ pub mod price;
 pub mod transfer;
 pub mod update_position_public_key;
 pub mod withdraw;
-
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;

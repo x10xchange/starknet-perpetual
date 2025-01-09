@@ -1,6 +1,5 @@
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState};
-use contracts_commons::test_utils::{cheat_caller_address_once};
+use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -13,8 +12,7 @@ use perpetuals::tests::constants::*;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
 use snforge_std::signature::KeyPair;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
-use snforge_std::test_address;
-use snforge_std::{ContractClassTrait, DeclareResultTrait};
+use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
 
 #[derive(Drop, Copy)]

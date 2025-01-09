@@ -35,8 +35,7 @@ pub mod Core {
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionId};
-    use perpetuals::core::types::{PositionData, Signature};
+    use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionData, PositionId, Signature};
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
     };
