@@ -40,25 +40,24 @@ pub struct Order {
 ///    )
 /// );
 
-const ORDER_MESSAGE_TYPE_HASH: felt252 =
-    0x2bac1bd11aeb68b0d97408f089a43e23b5704a15b881de50d5c5776ecfc5fe0;
+const ORDER_TYPE_HASH: felt252 = 0x2bac1bd11aeb68b0d97408f089a43e23b5704a15b881de50d5c5776ecfc5fe0;
 
 impl StructHashImpl of StructHash<Order> {
     fn hash_struct(self: @Order) -> felt252 {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(ORDER_MESSAGE_TYPE_HASH).update_with(*self).finalize()
+        hash_state.update_with(ORDER_TYPE_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ORDER_MESSAGE_TYPE_HASH;
+    use super::ORDER_TYPE_HASH;
 
     #[test]
     fn test_order_type_hash() {
         let expected = selector!(
             "\"Order\"(\"position_id\":\"felt\",\"base\":\"AssetAmount\",\"quote\":\"AssetAmount\",\"fee\":\"AssetAmount\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i128\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(ORDER_MESSAGE_TYPE_HASH, expected);
+        assert_eq!(ORDER_TYPE_HASH, expected);
     }
 }

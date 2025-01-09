@@ -6,7 +6,7 @@ use perpetuals::core::types::{AssetAmount, PositionId};
 use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
-pub struct DepositMessage {
+pub struct DepositArgs {
     pub position_id: PositionId,
     pub salt: felt252,
     pub expiration: Timestamp,
@@ -17,7 +17,7 @@ pub struct DepositMessage {
 
 
 /// selector!(
-///   "\"DepositMessage\"(
+///   "\"DepositArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"salt\":\"felt\",
 ///    \"expiration\":\"Timestamp\",
@@ -39,26 +39,26 @@ pub struct DepositMessage {
 ///    \"value\":\"felt\"
 ///    )"
 /// );
-const DEPOSIT_MESSAGE_TYPE_HASH: felt252 =
-    0xbd3cd29a87ff6b03a779fe5dc74e3ad33963aa9d4bddd6e6cb21071cb222c4;
+const DEPOSIT_ARGS_TYPE_HASH: felt252 =
+    0xb90aa3c323ba1ed9f7e26a680eec6b3461c1933e94d62cec1597cb9de4c2d0;
 
-impl StructHashImpl of StructHash<DepositMessage> {
-    fn hash_struct(self: @DepositMessage) -> felt252 {
+impl StructHashImpl of StructHash<DepositArgs> {
+    fn hash_struct(self: @DepositArgs) -> felt252 {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(DEPOSIT_MESSAGE_TYPE_HASH).update_with(*self).finalize()
+        hash_state.update_with(DEPOSIT_ARGS_TYPE_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::DEPOSIT_MESSAGE_TYPE_HASH;
+    use super::DEPOSIT_ARGS_TYPE_HASH;
 
     #[test]
     fn test_deposit_type_hash() {
         let expected = selector!(
-            "\"DepositMessage\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"owner_public_key\":\"felt\",\"owner_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"DepositArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"owner_public_key\":\"felt\",\"owner_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
         );
-        assert_eq!(DEPOSIT_MESSAGE_TYPE_HASH, expected);
+        assert_eq!(DEPOSIT_ARGS_TYPE_HASH, expected);
     }
 }
 

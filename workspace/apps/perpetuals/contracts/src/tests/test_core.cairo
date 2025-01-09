@@ -13,8 +13,8 @@ use perpetuals::core::types::asset::collateral::VERSION as COLLATERAL_VERSION;
 use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
 use perpetuals::core::types::asset::synthetic::VERSION as SYNTHETIC_VERSION;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
-use perpetuals::core::types::deposit_message::DepositMessage;
-use perpetuals::core::types::withdraw_message::WithdrawMessage;
+use perpetuals::core::types::deposit::DepositArgs;
+use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
     PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
@@ -284,7 +284,7 @@ fn test_successful_withdraw() {
     let mut expiration = Time::now();
     expiration += Time::days(1);
 
-    let mut message = WithdrawMessage {
+    let mut message = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -323,7 +323,7 @@ fn test_successful_deposit() {
     let mut expiration = Time::now();
     expiration += Time::days(2);
 
-    let mut message = DepositMessage {
+    let mut message = DepositArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -345,7 +345,7 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.deposit(deposit_message: message);
+    state.deposit(deposit_args: message);
     expected_time += Time::days(1);
 
     // Check after deposit:

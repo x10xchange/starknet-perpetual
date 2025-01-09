@@ -1,12 +1,12 @@
 pub mod asset;
 pub mod balance;
-pub mod deposit_message;
+pub mod deposit;
 pub mod funding;
 pub mod order;
 pub mod price;
-pub mod transfer_message;
-pub mod update_position_public_key_message;
-pub mod withdraw_message;
+pub mod transfer;
+pub mod update_position_public_key;
+pub mod withdraw;
 
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;

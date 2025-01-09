@@ -6,7 +6,7 @@ use perpetuals::core::types::{AssetAmount, PositionId};
 use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
-pub struct TransferMessage {
+pub struct TransferArgs {
     pub sender: PositionId,
     pub recipient: PositionId,
     pub salt: felt252,
@@ -18,7 +18,7 @@ pub struct TransferMessage {
 
 
 /// selector!(
-///   "\"TransferMessage\"(
+///   "\"TransferArgs\"(
 ///    \"sender\":\"PositionId\",
 ///    \"recipient\":\"PositionId\",
 ///    \"salt\":\"felt\",
@@ -41,26 +41,26 @@ pub struct TransferMessage {
 ///    \"value\":\"felt\"
 ///    )"
 /// );
-const TRANSFER_MESSAGE_TYPE_HASH: felt252 =
-    0x3411899f21f2c2d87be2c481b911d8fb033af08352e5ca598f9d8d7144b8821;
+const TRANSFER_ARGS_TYPE_HASH: felt252 =
+    0x295744ddc78fc1d31c140d9a418978d269dac230225a9279fc154de3ab2e0f3;
 
-impl StructHashImpl of StructHash<TransferMessage> {
-    fn hash_struct(self: @TransferMessage) -> felt252 {
+impl StructHashImpl of StructHash<TransferArgs> {
+    fn hash_struct(self: @TransferArgs) -> felt252 {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(TRANSFER_MESSAGE_TYPE_HASH).update_with(*self).finalize()
+        hash_state.update_with(TRANSFER_ARGS_TYPE_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::TRANSFER_MESSAGE_TYPE_HASH;
+    use super::TRANSFER_ARGS_TYPE_HASH;
 
     #[test]
     fn test_transfer_type_hash() {
         let expected = selector!(
-            "\"TransferMessage\"(\"sender\":\"PositionId\",\"recipient\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient_public_key\":\"felt\",\"recipient_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"TransferArgs\"(\"sender\":\"PositionId\",\"recipient\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient_public_key\":\"felt\",\"recipient_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
         );
-        assert_eq!(TRANSFER_MESSAGE_TYPE_HASH, expected);
+        assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
     }
 }
 

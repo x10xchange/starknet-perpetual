@@ -28,12 +28,12 @@ pub mod Core {
         SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
     };
     use perpetuals::core::types::balance::BalanceTrait;
-    use perpetuals::core::types::deposit_message::DepositMessage;
+    use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::{FundingTick, funding_rate_calc};
     use perpetuals::core::types::order::Order;
-    use perpetuals::core::types::transfer_message::TransferMessage;
-    use perpetuals::core::types::update_position_public_key_message::UpdatePositionPublicKeyMessage;
-    use perpetuals::core::types::withdraw_message::WithdrawMessage;
+    use perpetuals::core::types::transfer::TransferArgs;
+    use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
+    use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionId};
     use perpetuals::core::types::{PositionData, Signature};
     use perpetuals::value_risk_calculator::interface::{
@@ -175,12 +175,12 @@ pub mod Core {
         // Flows
         fn deleverage(self: @ContractState) {}
 
-        fn deposit(ref self: ContractState, deposit_message: DepositMessage) {
+        fn deposit(ref self: ContractState, deposit_args: DepositArgs) {
             let caller_address = get_caller_address();
-            let msg_hash = deposit_message.get_message_hash(signer: caller_address);
+            let msg_hash = deposit_args.get_message_hash(signer: caller_address);
             self.fact_registry.write(key: msg_hash, value: Time::now());
-            let collateral_amount = deposit_message.collateral.amount;
-            let asset_id = deposit_message.collateral.asset_id;
+            let collateral_amount = deposit_args.collateral.amount;
+            let asset_id = deposit_args.collateral.asset_id;
             self
                 .pending_deposits
                 .write(
@@ -199,20 +199,16 @@ pub mod Core {
                 );
         }
 
-        fn withdraw_request(
-            ref self: ContractState, signature: Signature, message: WithdrawMessage,
-        ) {
+        fn withdraw_request(ref self: ContractState, signature: Signature, message: WithdrawArgs) {
             self._register_fact(:signature, position_id: message.position_id, :message);
         }
 
-        fn transfer_request(
-            ref self: ContractState, signature: Signature, message: TransferMessage,
-        ) {
+        fn transfer_request(ref self: ContractState, signature: Signature, message: TransferArgs) {
             self._register_fact(:signature, position_id: message.sender, :message);
         }
 
         fn update_position_public_key_request(
-            ref self: ContractState, signature: Signature, message: UpdatePositionPublicKeyMessage,
+            ref self: ContractState, signature: Signature, message: UpdatePositionPublicKeyArgs,
         ) {
             let position_id = message.position_id;
             let position = self.positions.entry(position_id);
@@ -334,7 +330,7 @@ pub mod Core {
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
-        fn withdraw(ref self: ContractState, operator_nonce: felt252, message: WithdrawMessage) {
+        fn withdraw(ref self: ContractState, operator_nonce: felt252, message: WithdrawArgs) {
             let now = Time::now();
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = message.collateral.amount;

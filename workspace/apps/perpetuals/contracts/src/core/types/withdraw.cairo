@@ -6,7 +6,7 @@ use perpetuals::core::types::{AssetAmount, PositionId};
 use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
-pub struct WithdrawMessage {
+pub struct WithdrawArgs {
     pub position_id: PositionId,
     pub salt: felt252,
     pub expiration: Timestamp,
@@ -14,9 +14,8 @@ pub struct WithdrawMessage {
     pub recipient: ContractAddress,
 }
 
-
 /// selector!(
-///   "\"WithdrawMessage\"(
+///   "\"WithdrawArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"salt\":\"felt\",
 ///    \"expiration\":\"Timestamp\",
@@ -37,25 +36,25 @@ pub struct WithdrawMessage {
 ///    \"value\":\"felt\"
 ///    )"
 /// );
-const WITHDRAW_MESSAGE_TYPE_HASH: felt252 =
-    0x57d2c2a95b7df8469c5d9212753fd4bb55a6f93444175e254f1f9cef3e32b3;
+const WITHDRAW_ARGS_TYPE_HASH: felt252 =
+    0x3ba0a952228788e50a6e418238b46842e5d070e7f381191adc65bade6b91c99;
 
-impl StructHashImpl of StructHash<WithdrawMessage> {
-    fn hash_struct(self: @WithdrawMessage) -> felt252 {
+impl StructHashImpl of StructHash<WithdrawArgs> {
+    fn hash_struct(self: @WithdrawArgs) -> felt252 {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(WITHDRAW_MESSAGE_TYPE_HASH).update_with(*self).finalize()
+        hash_state.update_with(WITHDRAW_ARGS_TYPE_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::WITHDRAW_MESSAGE_TYPE_HASH;
+    use super::WITHDRAW_ARGS_TYPE_HASH;
 
     #[test]
     fn test_withdraw_type_hash() {
         let expected = selector!(
-            "\"WithdrawMessage\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"AssetAmount\"(\"asset_id\":\"felt\",\"amount\":\"i128\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"WithdrawArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"AssetAmount\"(\"asset_id\":\"felt\",\"amount\":\"i128\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
         );
-        assert_eq!(WITHDRAW_MESSAGE_TYPE_HASH, expected);
+        assert_eq!(WITHDRAW_ARGS_TYPE_HASH, expected);
     }
 }
