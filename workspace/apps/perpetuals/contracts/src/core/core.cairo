@@ -216,11 +216,8 @@ pub mod Core {
         ) {
             let position_id = message.position_id;
             let position = self.positions.entry(position_id);
-            let owner_account = position.owner_account.read();
-            let msg_hash = message.get_message_hash(signer: owner_account);
-            assert(
-                position._validate_owner_signature(:msg_hash, :signature), INVALID_OWNER_SIGNATURE,
-            );
+            let msg_hash = message.get_message_hash(signer: position.owner_account.read());
+            position._validate_owner_signature(:msg_hash, :signature);
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
 
@@ -961,11 +958,9 @@ pub mod Core {
 
         fn _validate_owner_signature(
             self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
-        ) -> bool {
+        ) {
             let contract_address = self.owner_account.read();
-            if contract_address.is_zero() {
-                return false;
-            }
+            assert(contract_address.is_non_zero(), NO_OWNER_ACCOUNT);
             let is_valid_signature_felt = ISRC6Dispatcher { contract_address }
                 .is_valid_signature(hash: msg_hash, signature: signature.into());
             // Check either 'VALID' or true for backwards compatibility.
@@ -973,7 +968,6 @@ pub mod Core {
                 is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1,
                 INVALID_OWNER_SIGNATURE,
             );
-            true
         }
 
         fn _generate_message_hash_with_public_key<
@@ -1005,9 +999,11 @@ pub mod Core {
             let position = self._get_position(position_id);
             let msg_hash = position
                 ._generate_message_hash_with_owner_account_or_public_key(:message);
-            if !position._validate_owner_signature(:msg_hash, :signature) {
+            if position.owner_account.read().is_non_zero() {
+                position._validate_owner_signature(:msg_hash, :signature);
+            } else {
                 position._validate_stark_signature(:msg_hash, :signature);
-            };
+            }
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
 
