@@ -16,7 +16,7 @@ pub type Signature = Span<felt252>;
 
 #[derive(Copy, Debug, Drop, Hash, Serde)]
 pub struct PositionId {
-    pub value: felt252,
+    pub value: u32,
 }
 
 #[derive(Copy, Drop, Hash, Serde)]
