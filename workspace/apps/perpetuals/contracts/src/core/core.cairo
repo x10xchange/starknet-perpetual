@@ -31,6 +31,7 @@ pub mod Core {
     use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::{FundingTick, funding_rate_calc};
     use perpetuals::core::types::order::Order;
+    use perpetuals::core::types::price::Price;
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -358,12 +359,24 @@ pub mod Core {
                     recipient: message.recipient,
                     amount: (collateral_cfg.quantum * amount.abs()).into(),
                 );
-            let balance_entry = position.collateral_assets.entry(collateral_id).balance;
-            balance_entry.write(balance_entry.read() - amount.into());
+            let balance = position.collateral_assets.entry(collateral_id).balance;
+            let before = balance.read();
+            let after = before.sub(amount);
+            balance.write(after);
 
             /// Validations - Fundamentals:
-            // TODO: Validate position is healthy
-            ()
+            let position_data = self._get_position_data(:position_id);
+            let price = self._get_collateral_price(:collateral_id);
+            let position_diff = array![AssetDiffEntry { id: collateral_id, before, after, price }]
+                .span();
+
+            let value_risk_calculator_dispatcher = self.value_risk_calculator_dispatcher.read();
+            let position_change_result = value_risk_calculator_dispatcher
+                .evaluate_position_change(position: position_data, :position_diff);
+            assert(
+                position_change_result.position_state_after_change == PositionState::Healthy,
+                POSITION_UNHEALTHY,
+            );
         }
 
         /// Funding tick is called by the operator to update the funding index of all synthetic
@@ -418,6 +431,10 @@ pub mod Core {
         fn _consume_operator_nonce(ref self: ContractState, operator_nonce: felt252) {
             self.roles.only_operator();
             self.nonces.use_checked_nonce(owner: get_contract_address(), nonce: operator_nonce);
+        }
+
+        fn _get_collateral_price(self: @ContractState, collateral_id: AssetId) -> Price {
+            self.collateral_timely_data.read(collateral_id).price
         }
 
         fn _use_fact(ref self: ContractState, hash: felt252) {
