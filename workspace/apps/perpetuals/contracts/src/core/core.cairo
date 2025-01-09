@@ -18,20 +18,17 @@ pub mod Core {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::utils::cryptography::nonces::NoncesComponent;
     use openzeppelin::utils::snip12::SNIP12Metadata;
+    use perpetuals::core::components::assets::AssetsComponent;
+    use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::*;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::{
-        CollateralAsset, CollateralConfig, CollateralTimelyData,
-    };
-    use perpetuals::core::types::asset::synthetic::{
-        SyntheticAsset, SyntheticConfig, SyntheticTimelyData,
-    };
-    use perpetuals::core::types::balance::BalanceTrait;
+    use perpetuals::core::types::asset::collateral::CollateralAsset;
+    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+    use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
-    use perpetuals::core::types::funding::{FundingTick, funding_rate_calc};
+    use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
-    use perpetuals::core::types::price::Price;
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -41,7 +38,7 @@ pub mod Core {
     };
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StorageMapWriteAccess, StoragePath, StoragePathEntry,
-        StoragePointerReadAccess, Vec,
+        StoragePointerReadAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
@@ -51,9 +48,23 @@ pub mod Core {
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
 
     impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
     impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl ReplaceabilityImpl =
+        ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
 
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
@@ -67,16 +78,6 @@ pub mod Core {
             VERSION
         }
     }
-
-    #[abi(embed_v0)]
-    impl ReplaceabilityImpl =
-        ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
-
-    #[abi(embed_v0)]
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-
-    #[abi(embed_v0)]
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -93,33 +94,13 @@ pub mod Core {
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        // --- Initialization ---
+        #[substorage(v0)]
+        pub assets: AssetsComponent::Storage,
         pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
-        // --- System Configuration ---
-        pub price_validation_interval: TimeDelta,
-        pub funding_validation_interval: TimeDelta,
-        /// 32-bit fixed-point number with a 32-bit fractional part.
-        pub max_funding_rate: u32,
-        // --- Validations ---
-        // Updates each price validation.
-        pub last_price_validation: Timestamp,
-        // Updates every funding tick.
-        pub last_funding_tick: Timestamp,
-        // Message hash to fulfilled amount.
-        fulfillment: Map<felt252, i64>,
-        // --- Asset Configuration ---
-        pub collateral_configs: Map<AssetId, Option<CollateralConfig>>,
-        pub synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
-        oracles: Map<AssetId, Vec<ContractAddress>>,
-        // --- Asset Data ---
-        pub collateral_timely_data_head: Option<AssetId>,
-        pub collateral_timely_data: Map<AssetId, CollateralTimelyData>,
-        num_of_active_synthetic_assets: usize,
-        pub synthetic_timely_data_head: Option<AssetId>,
-        pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         pub fact_registry: Map<felt252, Timestamp>,
         pending_deposits: Map<AssetId, i64>,
-        // --- Position Data ---
+        // Message hash to fulfilled amount.
+        fulfillment: Map<felt252, i64>,
         pub positions: Map<PositionId, Position>,
     }
 
@@ -149,6 +130,8 @@ pub mod Core {
         RolesEvent: RolesComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
+        #[flat]
+        AssetsEvent: AssetsComponent::Event,
     }
 
     #[constructor]
@@ -165,9 +148,11 @@ pub mod Core {
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
-        self.price_validation_interval.write(price_validation_interval);
-        self.funding_validation_interval.write(funding_validation_interval);
-        self.max_funding_rate.write(max_funding_rate);
+        self
+            .assets
+            .initialize(
+                :price_validation_interval, :funding_validation_interval, :max_funding_rate,
+            );
     }
 
     #[abi(embed_v0)]
@@ -186,7 +171,7 @@ pub mod Core {
                 .write(
                     key: asset_id, value: self.pending_deposits.read(asset_id) + collateral_amount,
                 );
-            let collateral_cfg = self._get_collateral_config(collateral_id: asset_id);
+            let collateral_cfg = self.assets._get_collateral_config(collateral_id: asset_id);
             let quantum = collateral_cfg.quantum;
             assert(collateral_amount > 0, INVALID_DEPOSIT_AMOUNT);
             let amount = collateral_amount.abs() * quantum;
@@ -337,7 +322,7 @@ pub mod Core {
             assert(amount > 0, INVALID_WITHDRAW_AMOUNT);
             assert(now < message.expiration, WITHDRAW_EXPIRED);
             let collateral_id = message.collateral.asset_id;
-            let collateral_cfg = self._get_collateral_config(:collateral_id);
+            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
             assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
@@ -365,7 +350,7 @@ pub mod Core {
 
             /// Validations - Fundamentals:
             let position_data = self._get_position_data(:position_id);
-            let price = self._get_collateral_price(:collateral_id);
+            let price = self.assets._get_collateral_price(:collateral_id);
             let position_diff = array![AssetDiffEntry { id: collateral_id, before, after, price }]
                 .span();
 
@@ -404,7 +389,7 @@ pub mod Core {
             ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
         ) {
             self._validate_funding_tick(:funding_ticks, :operator_nonce);
-            self._execute_funding_tick(:funding_ticks);
+            self.assets._execute_funding_tick(:funding_ticks);
         }
 
         // Configuration
@@ -421,7 +406,6 @@ pub mod Core {
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
         fn _apply_funding(ref self: ContractState, position_id: PositionId) {}
-        fn _get_asset_price(self: @ContractState) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
 
@@ -430,10 +414,6 @@ pub mod Core {
         fn _consume_operator_nonce(ref self: ContractState, operator_nonce: felt252) {
             self.roles.only_operator();
             self.nonces.use_checked_nonce(owner: get_contract_address(), nonce: operator_nonce);
-        }
-
-        fn _get_collateral_price(self: @ContractState, collateral_id: AssetId) -> Price {
-            self.collateral_timely_data.read(collateral_id).price
         }
 
         fn _use_fact(ref self: ContractState, hash: felt252) {
@@ -458,45 +438,6 @@ pub mod Core {
             fulfillment_entry.write(final_amount);
         }
 
-        /// If `price_validation_interval` has passed since `last_price_validation`, validate
-        /// synthetic and collateral prices and update `last_price_validation` to current time.
-        fn _validate_prices(ref self: ContractState, now: Timestamp) {
-            let price_validation_interval = self.price_validation_interval.read();
-            if now.sub(self.last_price_validation.read()) >= price_validation_interval {
-                self._validate_synthetic_prices(now, price_validation_interval);
-                self._validate_collateral_prices(now, price_validation_interval);
-                self.last_price_validation.write(now);
-            }
-        }
-
-        fn _validate_synthetic_prices(
-            self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
-        ) {
-            let mut asset_id_opt = self.synthetic_timely_data_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
-                assert(
-                    now.sub(synthetic_timely_data.last_price_update) < price_validation_interval,
-                    SYNTHETIC_EXPIRED_PRICE,
-                );
-                asset_id_opt = synthetic_timely_data.next;
-            };
-        }
-
-        fn _validate_collateral_prices(
-            self: @ContractState, now: Timestamp, price_validation_interval: TimeDelta,
-        ) {
-            let mut asset_id_opt = self.collateral_timely_data_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                let collateral_timely_data = self.collateral_timely_data.read(asset_id);
-                assert(
-                    now.sub(collateral_timely_data.last_price_update) < price_validation_interval,
-                    COLLATERAL_EXPIRED_PRICE,
-                );
-                asset_id_opt = collateral_timely_data.next;
-            };
-        }
-
         fn _get_position(
             ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
@@ -513,14 +454,13 @@ pub mod Core {
             let mut asset_id_opt = position.collateral_assets_head.read();
             while let Option::Some(collateral_id) = asset_id_opt {
                 let collateral_asset = position.collateral_assets.read(collateral_id);
-                let collateral_timely_data = self.collateral_timely_data.read(collateral_id);
                 asset_entries
                     .append(
                         AssetEntry {
                             id: collateral_id,
                             // TODO: consider taking into account the funding index.
                             balance: collateral_asset.balance,
-                            price: collateral_timely_data.price,
+                            price: self.assets._get_collateral_price(:collateral_id),
                         },
                     );
 
@@ -536,13 +476,12 @@ pub mod Core {
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_asset = position.synthetic_assets.read(synthetic_id);
-                let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
                 asset_entries
                     .append(
                         AssetEntry {
                             id: synthetic_id,
                             balance: synthetic_asset.balance,
-                            price: synthetic_timely_data.price,
+                            price: self.assets._get_synthetic_price(:synthetic_id),
                         },
                     );
 
@@ -559,52 +498,6 @@ pub mod Core {
             PositionData { asset_entries: asset_entries.span() }
         }
 
-        fn _get_collateral_config(
-            self: @ContractState, collateral_id: AssetId,
-        ) -> CollateralConfig {
-            self.collateral_configs.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
-        }
-
-        fn _get_synthetic_config(self: @ContractState, synthetic_id: AssetId) -> SyntheticConfig {
-            self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
-        }
-
-        fn _validate_collateral_active(self: @ContractState, collateral_id: AssetId) {
-            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
-        }
-
-        fn _validate_synthetic_active(self: @ContractState, synthetic_id: AssetId) {
-            assert(self._get_synthetic_config(synthetic_id).is_active, SYNTHETIC_NOT_ACTIVE);
-        }
-
-        fn _is_order_base_asset_active(self: @ContractState, base_asset_id: AssetId) {
-            let base_collateral_config = self.collateral_configs.read(base_asset_id);
-            let is_base_collateral_active = match base_collateral_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            let base_synthetic_config = self.synthetic_configs.read(base_asset_id);
-            let is_base_synthetic_active = match base_synthetic_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
-        }
-
-
-        /// Validates assets integrity prerequisites:
-        /// - Funding interval validation.
-        /// - Prices validation.
-        fn _validate_assets_integrity(ref self: ContractState, now: Timestamp) {
-            // Funding validation.
-            assert(
-                now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
-                FUNDING_EXPIRED,
-            );
-            // Price validation.
-            self._validate_prices(:now);
-        }
-
         /// Validates operator flows prerequisites:
         /// - Contract is not paused.
         /// - Caller has operator role.
@@ -615,7 +508,7 @@ pub mod Core {
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
-            self._validate_assets_integrity(:now);
+            self.assets._validate_assets_integrity(:now);
         }
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
@@ -628,9 +521,9 @@ pub mod Core {
             );
 
             // Assets check.
-            self._validate_collateral_active(collateral_id: order.fee.asset_id);
-            self._validate_collateral_active(collateral_id: order.quote.asset_id);
-            self._is_order_base_asset_active(base_asset_id: order.base.asset_id);
+            self.assets._validate_collateral_active(collateral_id: order.fee.asset_id);
+            self.assets._validate_collateral_active(collateral_id: order.quote.asset_id);
+            self.assets._validate_asset_active(asset_id: order.base.asset_id);
 
             // Sign Validation for amounts.
             assert(
@@ -645,52 +538,9 @@ pub mod Core {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             assert(
-                funding_ticks.len() == self.num_of_active_synthetic_assets.read(),
+                funding_ticks.len() == self.assets._get_num_of_active_synthetic_assets(),
                 INVALID_FUNDING_TICK_LEN,
             );
-        }
-
-        fn _execute_funding_tick(ref self: ContractState, funding_ticks: Span<FundingTick>) {
-            let now = Time::now();
-            let mut prev_synthetic_id: AssetId = Zero::zero();
-            for funding_tick in funding_ticks {
-                self
-                    ._process_funding_tick(
-                        funding_tick: *funding_tick, :now, ref :prev_synthetic_id,
-                    );
-            };
-            self.last_funding_tick.write(now);
-        }
-
-        fn _process_funding_tick(
-            ref self: ContractState,
-            funding_tick: FundingTick,
-            now: Timestamp,
-            ref prev_synthetic_id: AssetId,
-        ) {
-            let synthetic_id = funding_tick.asset_id;
-            assert_with_byte_array(
-                condition: synthetic_id > prev_synthetic_id,
-                err: invalid_funding_tick_err(:synthetic_id),
-            );
-            self._validate_synthetic_active(:synthetic_id);
-            let new_funding_index = funding_tick.funding_index;
-            let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
-            let index_diff: i64 = (synthetic_timely_data.funding_index - new_funding_index).into();
-            let last_funding_tick = self.last_funding_tick.read();
-            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
-            assert_with_byte_array(
-                condition: index_diff
-                    .abs()
-                    .into() <= funding_rate_calc(
-                        max_funding_rate: self.max_funding_rate.read(),
-                        :time_diff,
-                        synthetic_price: synthetic_timely_data.price,
-                    ),
-                err: invalid_funding_tick_err(:synthetic_id),
-            );
-            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(new_funding_index);
-            prev_synthetic_id = synthetic_id;
         }
 
         fn _validate_trade(
@@ -748,7 +598,7 @@ pub mod Core {
 
             // fee asset.
             let fee_asset_id = order.fee.asset_id;
-            let fee_price = self.collateral_timely_data.read(fee_asset_id).price;
+            let fee_price = self.assets._get_asset_price(asset_id: fee_asset_id);
             let fee_balance = self
                 ._get_position(position_id)
                 .collateral_assets
@@ -770,7 +620,7 @@ pub mod Core {
             if quote_asset_id == fee_asset_id {
                 fee_diff.after.add(actual_amount_quote);
             } else {
-                let quote_price = self.collateral_timely_data.read(quote_asset_id).price;
+                let quote_price = self.assets._get_collateral_price(collateral_id: quote_asset_id);
                 let quote_balance = self
                     ._get_position(position_id)
                     .collateral_assets
@@ -796,34 +646,15 @@ pub mod Core {
             } else if base_asset_id == quote_asset_id {
                 quote_diff.after.add(actual_amount_base);
             } else {
-                let (base_price, base_balance) = if self._is_collateral(base_asset_id) {
-                    (
-                        self.collateral_timely_data.read(base_asset_id).price,
-                        self
-                            ._get_position(position_id)
-                            .collateral_assets
-                            .entry(base_asset_id)
-                            .balance
-                            .read(),
-                    )
-                } else {
-                    (
-                        self.synthetic_timely_data.read(base_asset_id).price,
-                        self
-                            ._get_position(position_id)
-                            .synthetic_assets
-                            .entry(base_asset_id)
-                            .balance
-                            .read(),
-                    )
-                };
+                let base_balance = self
+                    ._get_position_asset_balance(:position_id, asset_id: base_asset_id);
 
                 base_diff =
                     AssetDiffEntry {
                         id: base_asset_id,
                         before: base_balance,
                         after: base_balance.add(actual_amount_base),
-                        price: base_price,
+                        price: self.assets._get_asset_price(asset_id: base_asset_id),
                     };
             }
 
@@ -887,7 +718,8 @@ pub mod Core {
 
             // Update base position.
             let (mut order_a_base_balance_path, mut order_b_base_balance_path) = if self
-                ._is_collateral(order_a.base.asset_id) {
+                .assets
+                ._is_collateral(asset_id: order_a.base.asset_id) {
                 // Base is collateral.
                 (
                     position_entry_a.collateral_assets.entry(order_a.base.asset_id).balance,
@@ -930,6 +762,16 @@ pub mod Core {
                 ._validate_position_is_healthy_or_healthier(
                     order_b.position_id, position_data_b, asset_diff_entries_b,
                 );
+        }
+
+        fn _get_position_asset_balance(
+            ref self: ContractState, position_id: PositionId, asset_id: AssetId,
+        ) -> Balance {
+            if self.assets._is_collateral(:asset_id) {
+                self._get_position(:position_id).collateral_assets.entry(asset_id).balance.read()
+            } else {
+                self._get_position(:position_id).synthetic_assets.entry(asset_id).balance.read()
+            }
         }
 
         fn _validate_position_is_healthy_or_healthier(
@@ -1018,10 +860,6 @@ pub mod Core {
             }
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
-
-        fn _is_collateral(self: @ContractState, asset_id: AssetId) -> bool {
-            self.collateral_configs.read(asset_id).is_some()
-        }
     }
 
     /// It validates the given order with the actual amounts.
@@ -1042,7 +880,7 @@ pub mod Core {
             INVALID_TRADE_ACTUAL_QUOTE_SIGN,
         );
 
-        _validaite_fee_to_quote_ratio(
+        _validate_fee_to_quote_ratio(
             position_id: order.position_id,
             :actual_fee,
             :actual_amount_quote,
@@ -1050,7 +888,7 @@ pub mod Core {
             :order_amount_quote,
         );
 
-        _validaite_base_to_quote_ratio(
+        _validate_base_to_quote_ratio(
             position_id: order.position_id,
             :actual_amount_base,
             :actual_amount_quote,
@@ -1059,7 +897,7 @@ pub mod Core {
         );
     }
 
-    fn _validaite_fee_to_quote_ratio(
+    fn _validate_fee_to_quote_ratio(
         position_id: PositionId,
         actual_fee: i64,
         actual_amount_quote: i64,
@@ -1079,7 +917,7 @@ pub mod Core {
         );
     }
 
-    fn _validaite_base_to_quote_ratio(
+    fn _validate_base_to_quote_ratio(
         position_id: PositionId,
         actual_amount_base: i64,
         actual_amount_quote: i64,

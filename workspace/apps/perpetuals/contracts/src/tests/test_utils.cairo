@@ -64,6 +64,8 @@ pub(crate) struct PerpetualsInitConfig {
     pub app_role_admin: ContractAddress,
     pub operator: ContractAddress,
     pub funding_validation_interval: TimeDelta,
+    pub price_validation_interval: TimeDelta,
+    pub max_funding_rate: u32,
     pub collateral_cfg: CollateralCfg,
 }
 
@@ -74,6 +76,8 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             app_role_admin: APP_ROLE_ADMIN(),
             operator: OPERATOR(),
             funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
+            price_validation_interval: PRICE_VALIDATION_INTERVAL,
+            max_funding_rate: MAX_FUNDING_RATE,
             collateral_cfg: CollateralCfg {
                 token_cfg: TokenConfig {
                     name: COLLATERAL_NAME(),

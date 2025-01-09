@@ -5,8 +5,10 @@ use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_ca
 use contracts_commons::types::time::time::Time;
 use core::num::traits::Zero;
 use openzeppelin::utils::interfaces::INonces;
+use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
+use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::core::Core;
-use perpetuals::core::core::Core::{InternalCoreFunctionsTrait, SNIP12MetadataImpl};
+use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::AssetAmount;
 use perpetuals::core::types::asset::AssetId;
@@ -39,12 +41,12 @@ fn add_colateral(
     mut collateral_timely_data: CollateralTimelyData,
     collateral_config: CollateralConfig,
 ) {
-    if let Option::Some(head) = state.collateral_timely_data_head.read() {
+    if let Option::Some(head) = state.assets.collateral_timely_data_head.read() {
         collateral_timely_data.next = Option::Some(head);
     }
-    state.collateral_timely_data.write(collateral_id, collateral_timely_data);
-    state.collateral_timely_data_head.write(Option::Some(collateral_id));
-    state.collateral_configs.write(collateral_id, Option::Some(collateral_config));
+    state.assets.collateral_timely_data.write(collateral_id, collateral_timely_data);
+    state.assets.collateral_timely_data_head.write(Option::Some(collateral_id));
+    state.assets.collateral_configs.write(collateral_id, Option::Some(collateral_config));
 }
 
 fn add_synthetic(
@@ -53,22 +55,29 @@ fn add_synthetic(
     mut synthetic_timely_data: SyntheticTimelyData,
     synthetic_config: SyntheticConfig,
 ) {
-    if let Option::Some(head) = state.synthetic_timely_data_head.read() {
+    if let Option::Some(head) = state.assets.synthetic_timely_data_head.read() {
         synthetic_timely_data.next = Option::Some(head);
     }
-    state.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
-    state.synthetic_timely_data_head.write(Option::Some(synthetic_id));
-    state.synthetic_configs.write(synthetic_id, Option::Some(synthetic_config));
+    state.assets.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
+    state.assets.synthetic_timely_data_head.write(Option::Some(synthetic_id));
+    state.assets.synthetic_configs.write(synthetic_id, Option::Some(synthetic_config));
 }
 
 fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
     let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
-    state.last_funding_tick.write(Time::now());
-    state.last_price_validation.write(Time::now());
-    state.funding_validation_interval.write(*cfg.funding_validation_interval);
+    state
+        .assets
+        .initialize(
+            price_validation_interval: *cfg.price_validation_interval,
+            funding_validation_interval: *cfg.funding_validation_interval,
+            max_funding_rate: *cfg.max_funding_rate,
+        );
     let collateral_config = generate_collateral_config(:token_state);
-    state.collateral_configs.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+    state
+        .assets
+        .collateral_configs
+        .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
     state
 }
 
@@ -133,10 +142,9 @@ fn initialized_contract_state() -> Core::ContractState {
 fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL);
-    assert_eq!(state.funding_validation_interval.read(), FUNDING_VALIDATION_INTERVAL);
-    assert_eq!(state.max_funding_rate.read(), MAX_FUNDING_RATE);
-    assert_eq!(state.price_validation_interval.read(), PRICE_VALIDATION_INTERVAL);
+    assert_eq!(state.assets.get_price_validation_interval(), PRICE_VALIDATION_INTERVAL);
+    assert_eq!(state.assets.get_funding_validation_interval(), FUNDING_VALIDATION_INTERVAL);
+    assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
 }
 
 #[test]
@@ -159,7 +167,9 @@ fn test_validate_collateral_prices() {
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
 
     // Call the function
-    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state
+        .assets
+        ._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -186,7 +196,9 @@ fn test_validate_collateral_prices_expired() {
     // Set the block timestamp to be after the price validation interval
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state
+        .assets
+        ._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
 }
 #[test]
 fn test_validate_synthetic_prices() {
@@ -211,7 +223,9 @@ fn test_validate_synthetic_prices() {
     };
     add_synthetic(ref state, synthetic_id, synthetic_timely_data, synthetic_config);
     // Call the function
-    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state
+        .assets
+        ._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -243,7 +257,9 @@ fn test_validate_synthetic_prices_expired() {
     // Set the block timestamp to be after the price validation interval
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state
+        .assets
+        ._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
 }
 
 #[test]
@@ -251,22 +267,22 @@ fn test_validate_prices() {
     let mut state = CONTRACT_STATE();
     let mut now = Time::now();
 
-    state.last_price_validation.write(now);
-    assert_eq!(state.last_price_validation.read(), now);
+    state.assets.last_price_validation.write(now);
+    assert_eq!(state.assets.last_price_validation.read(), now);
     let new_time = now.add(delta: Time::days(count: 1));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     now = Time::now();
-    state._validate_prices(:now);
-    assert_eq!(state.last_price_validation.read(), new_time);
+    state.assets._validate_prices(:now);
+    assert_eq!(state.assets.last_price_validation.read(), new_time);
 }
 
 #[test]
 fn test_validate_prices_no_update_needed() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    state.last_price_validation.write(now);
-    state._validate_prices(:now);
-    assert_eq!(state.last_price_validation.read(), now);
+    state.assets.last_price_validation.write(now);
+    state.assets._validate_prices(:now);
+    assert_eq!(state.assets.last_price_validation.read(), now);
 }
 
 #[test]
