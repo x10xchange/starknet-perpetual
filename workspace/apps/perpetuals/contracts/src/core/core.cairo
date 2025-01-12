@@ -343,13 +343,13 @@ pub mod Core {
                     recipient: message.recipient,
                     amount: (collateral_cfg.quantum * amount.abs()).into(),
                 );
+
+            /// Validations - Fundamentals:
+            let position_data = self._get_position_data(:position_id);
             let balance = position.collateral_assets.entry(collateral_id).balance;
             let before = balance.read();
             let after = before.sub(amount);
             balance.write(after);
-
-            /// Validations - Fundamentals:
-            let position_data = self._get_position_data(:position_id);
             let price = self.assets._get_collateral_price(:collateral_id);
             let position_diff = array![AssetDiffEntry { id: collateral_id, before, after, price }]
                 .span();
