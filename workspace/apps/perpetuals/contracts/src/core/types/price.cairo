@@ -9,7 +9,7 @@ const LIMIT: u64 = 72057594037927936;
 
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Price {
-    // Unsigned 28-bit fixed point decimal percision.
+    // Unsigned 28-bit fixed point decimal precision.
     // 28-bit for the integer part and 28-bit for the fractional part.
     value: u64,
 }
