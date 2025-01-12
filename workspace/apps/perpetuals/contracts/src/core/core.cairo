@@ -9,6 +9,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, FractionTrait, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::utils::AddToStorage;
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -532,6 +533,61 @@ pub mod Core {
             );
         }
 
+        fn _execute_orders(
+            ref self: ContractState,
+            order_a: Order,
+            order_b: Order,
+            actual_amount_base_a: i64,
+            actual_amount_quote_a: i64,
+            actual_fee_a: i64,
+            actual_fee_b: i64,
+        ) {
+            let position_entry_a = self._get_position(position_id: order_a.position_id);
+            let position_entry_b = self._get_position(position_id: order_b.position_id);
+
+            // Handle fees.
+            position_entry_a
+                ._update_balance(
+                    asset_id: order_a.fee.asset_id,
+                    actual_amount: -actual_fee_a,
+                    is_collateral: true,
+                );
+            position_entry_b
+                ._update_balance(
+                    asset_id: order_b.fee.asset_id,
+                    actual_amount: -actual_fee_b,
+                    is_collateral: true,
+                );
+
+            // Update base assets.
+            position_entry_a
+                ._update_balance(
+                    asset_id: order_a.base.asset_id,
+                    actual_amount: actual_amount_base_a,
+                    is_collateral: self.assets._is_collateral(asset_id: order_a.base.asset_id),
+                );
+            position_entry_b
+                ._update_balance(
+                    asset_id: order_b.base.asset_id,
+                    actual_amount: -actual_amount_base_a,
+                    is_collateral: self.assets._is_collateral(asset_id: order_b.base.asset_id),
+                );
+
+            // Update quote assets.
+            position_entry_a
+                ._update_balance(
+                    asset_id: order_a.quote.asset_id,
+                    actual_amount: actual_amount_quote_a,
+                    is_collateral: true,
+                );
+            position_entry_b
+                ._update_balance(
+                    asset_id: order_b.quote.asset_id,
+                    actual_amount: -actual_amount_quote_a,
+                    is_collateral: true,
+                );
+        }
+
         fn _validate_funding_tick(
             ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
         ) {
@@ -700,67 +756,28 @@ pub mod Core {
                     actual_fee: actual_fee_b,
                 );
 
-            let position_entry_a = self._get_position(order_a.position_id);
-            let position_entry_b = self._get_position(order_b.position_id);
-
-            // Handle fees.
-            let mut order_a_fee_balance_path = position_entry_a
-                .collateral_assets
-                .entry(order_a.fee.asset_id)
-                .balance;
-            let mut order_b_fee_balance_path = position_entry_b
-                .collateral_assets
-                .entry(order_b.fee.asset_id)
-                .balance;
-            order_a_fee_balance_path.write(order_a_fee_balance_path.read().sub(actual_fee_a));
-            order_b_fee_balance_path.write(order_b_fee_balance_path.read().sub(actual_fee_b));
-            // TODO: Add the fee to `fee_position`.
-
-            // Update base position.
-            let (mut order_a_base_balance_path, mut order_b_base_balance_path) = if self
-                .assets
-                ._is_collateral(asset_id: order_a.base.asset_id) {
-                // Base is collateral.
-                (
-                    position_entry_a.collateral_assets.entry(order_a.base.asset_id).balance,
-                    position_entry_b.collateral_assets.entry(order_b.base.asset_id).balance,
-                )
-            } else {
-                // Base is synthetic.
-                (
-                    position_entry_a.synthetic_assets.entry(order_a.base.asset_id).balance,
-                    position_entry_b.synthetic_assets.entry(order_b.base.asset_id).balance,
-                )
-            };
-
-            order_a_base_balance_path
-                .write(order_a_base_balance_path.read().add(actual_amount_base_a));
-
-            order_b_base_balance_path
-                .write(order_b_base_balance_path.read().sub(actual_amount_base_a));
-
-            // Update quote position.
-            let mut order_a_quote_balance_path = position_entry_a
-                .collateral_assets
-                .entry(order_a.quote.asset_id)
-                .balance;
-            let mut order_b_quote_balance_path = position_entry_b
-                .collateral_assets
-                .entry(order_b.quote.asset_id)
-                .balance;
-            order_a_quote_balance_path
-                .write(order_a_quote_balance_path.read().add(actual_amount_quote_a));
-            order_b_quote_balance_path
-                .write(order_b_quote_balance_path.read().sub(actual_amount_quote_a));
+            self
+                ._execute_orders(
+                    :order_a,
+                    :order_b,
+                    :actual_amount_base_a,
+                    :actual_amount_quote_a,
+                    :actual_fee_a,
+                    :actual_fee_b,
+                );
 
             /// Validations - Fundamentals:
             self
                 ._validate_position_is_healthy_or_healthier(
-                    order_a.position_id, position_data_a, asset_diff_entries_a,
+                    position_id: order_a.position_id,
+                    position_data: position_data_a,
+                    asset_diff_entries: asset_diff_entries_a,
                 );
             self
                 ._validate_position_is_healthy_or_healthier(
-                    order_b.position_id, position_data_b, asset_diff_entries_b,
+                    position_id: order_b.position_id,
+                    position_data: position_data_b,
+                    asset_diff_entries: asset_diff_entries_b,
                 );
         }
 
@@ -843,6 +860,20 @@ pub mod Core {
             } else {
                 message.get_message_hash(signer: self.owner_public_key.read())
             }
+        }
+
+        fn _update_balance(
+            self: StoragePath<Mutable<Position>>,
+            asset_id: AssetId,
+            actual_amount: i64,
+            is_collateral: bool,
+        ) {
+            let mut balance = if is_collateral {
+                self.collateral_assets.entry(asset_id).balance
+            } else {
+                self.synthetic_assets.entry(asset_id).balance
+            };
+            balance.add_and_write(actual_amount.into());
         }
 
         fn _register_fact<
