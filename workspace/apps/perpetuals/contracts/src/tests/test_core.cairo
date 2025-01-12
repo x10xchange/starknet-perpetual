@@ -19,6 +19,7 @@ use perpetuals::core::types::asset::synthetic::{
     SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
 };
 use perpetuals::core::types::deposit::DepositArgs;
+use perpetuals::core::types::order::Order;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
@@ -73,56 +74,46 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
             funding_validation_interval: *cfg.funding_validation_interval,
             max_funding_rate: *cfg.max_funding_rate,
         );
+    // Collateral asset configs.
     let collateral_config = generate_collateral_config(:token_state);
     state
         .assets
         .collateral_configs
         .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+
+    // Synthetic asset configs.
+    let synthetic_config = SYNTHETIC_CONFIG();
+    state
+        .assets
+        .synthetic_configs
+        .write(*cfg.synthetic_cfg.asset_id, Option::Some(synthetic_config));
+
+    // Fund the contract.
+    (*token_state)
+        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
     state
 }
 
-fn init_user_for_withdraw(
+fn init_position(
     cfg: @PerpetualsInitConfig,
     ref state: Core::ContractState,
-    ref user: User,
+    user: User,
     token_state: @TokenState,
 ) {
     let position = state.positions.entry(user.position_id);
     position.owner_public_key.write(user.key_pair.public_key);
-    let asset_balance = position.collateral_assets.entry(*cfg.collateral_cfg.asset_id).balance;
-    let current_amount = asset_balance.read();
-    asset_balance.write(WITHDRAW_AMOUNT.into() + current_amount);
-    (*token_state)
-        .fund(
-            recipient: test_address(),
-            amount: (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).try_into().unwrap(),
-        );
-    user.deposited_collateral = current_amount.into() + WITHDRAW_AMOUNT;
-}
+    let collateral_asset_balance = position
+        .collateral_assets
+        .entry(*cfg.collateral_cfg.asset_id)
+        .balance;
+    collateral_asset_balance.write(COLLATERAL_BALANCE_AMOUNT.into());
 
-fn init_user_for_deposit(
-    cfg: @PerpetualsInitConfig,
-    ref state: Core::ContractState,
-    ref user: User,
-    token_state: @TokenState,
-) {
-    let position = state.positions.entry(user.position_id);
-    position.owner_public_key.write(user.key_pair.public_key);
-    let asset_balance = position.collateral_assets.entry(*cfg.collateral_cfg.asset_id).balance;
-    let current_amount = asset_balance.read();
-    asset_balance.write(DEPOSIT_AMOUNT.into() + current_amount);
-    (*token_state)
-        .fund(
-            recipient: user.address,
-            amount: DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
-        );
-    (*token_state)
-        .approve(
-            owner: user.address,
-            spender: test_address(),
-            amount: DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
-        );
-    user.deposited_collateral = current_amount.into() + DEPOSIT_AMOUNT;
+    let synthetic_asset_balance = position
+        .synthetic_assets
+        .entry(*cfg.synthetic_cfg.asset_id)
+        .balance;
+    synthetic_asset_balance.write(SYNTHETIC_BALANCE_AMOUNT.into());
 }
 
 fn initialized_contract_state() -> Core::ContractState {
@@ -151,7 +142,7 @@ fn test_constructor() {
 fn test_validate_collateral_prices() {
     let mut state = initialized_contract_state();
     let now = Time::now();
-    let collateral_id = ASSET_ID();
+    let collateral_id = ASSET_ID_1();
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -162,7 +153,7 @@ fn test_validate_collateral_prices() {
     };
     // Add collateral timely data with valid last price update
     let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE(), last_price_update: now, next: Option::None,
+        version: COLLATERAL_VERSION, price: PRICE_1(), last_price_update: now, next: Option::None,
     };
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
 
@@ -178,7 +169,7 @@ fn test_validate_collateral_prices() {
 fn test_validate_collateral_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let collateral_id = ASSET_ID();
+    let collateral_id = ASSET_ID_1();
     let collateral_config = CollateralConfig {
         version: COLLATERAL_VERSION,
         address: TOKEN_ADDRESS(),
@@ -189,7 +180,7 @@ fn test_validate_collateral_prices_expired() {
     };
     // Add collateral timely data with valid last price update
     let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE(), last_price_update: now, next: Option::None,
+        version: COLLATERAL_VERSION, price: PRICE_1(), last_price_update: now, next: Option::None,
     };
     add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
     let now = now.add(PRICE_VALIDATION_INTERVAL);
@@ -204,19 +195,12 @@ fn test_validate_collateral_prices_expired() {
 fn test_validate_synthetic_prices() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID();
-    let synthetic_config = SyntheticConfig {
-        version: SYNTHETIC_VERSION,
-        name: SYNTHETIC_NAME,
-        resolution: SYNTHETIC_RESOLUTION,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: SYNTHETIC_QUORUM,
-    };
+    let synthetic_id = ASSET_ID_1();
+    let synthetic_config = SYNTHETIC_CONFIG();
     // Add synthetic timely data with expired last price update
     let synthetic_timely_data = SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE(),
+        price: PRICE_1(),
         last_price_update: now,
         funding_index: Zero::zero(),
         next: Option::None,
@@ -234,19 +218,12 @@ fn test_validate_synthetic_prices() {
 fn test_validate_synthetic_prices_expired() {
     let mut state = CONTRACT_STATE();
     let now = Time::now();
-    let synthetic_id = ASSET_ID();
-    let synthetic_config = SyntheticConfig {
-        version: SYNTHETIC_VERSION,
-        name: SYNTHETIC_NAME,
-        resolution: SYNTHETIC_RESOLUTION,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: SYNTHETIC_QUORUM,
-    };
+    let synthetic_id = ASSET_ID_1();
+    let synthetic_config = SYNTHETIC_CONFIG();
     // Add synthetic timely data with expired last price update
     let synthetic_timely_data = SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE(),
+        price: PRICE_1(),
         last_price_update: now,
         funding_index: Zero::zero(),
         next: Option::None,
@@ -295,7 +272,7 @@ fn test_successful_withdraw() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
-    init_user_for_withdraw(cfg: @cfg, ref :state, ref :user, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, :user, token_state: @token_state);
 
     // Setup parameters:
     let mut expiration = Time::now();
@@ -305,9 +282,7 @@ fn test_successful_withdraw() {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
-        collateral: AssetAmount {
-            asset_id: cfg.collateral_cfg.asset_id, amount: user.deposited_collateral,
-        },
+        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: user.address,
     };
     let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
@@ -320,7 +295,7 @@ fn test_successful_withdraw() {
 
     // Check:
     let user_balance = token_state.balance_of(user.address);
-    assert_eq!(user_balance, (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).try_into().unwrap());
+    assert_eq!(user_balance, (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).into());
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, Zero::zero());
 }
@@ -332,7 +307,17 @@ fn test_successful_deposit() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
-    init_user_for_deposit(cfg: @cfg, ref :state, ref :user, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, :user, token_state: @token_state);
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: USER_INIT_BALANCE.try_into().unwrap(),
+        );
+
     let mut expected_time = Time::now();
 
     // Setup parameters:
@@ -344,21 +329,16 @@ fn test_successful_deposit() {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
-        collateral: AssetAmount {
-            asset_id: cfg.collateral_cfg.asset_id, amount: user.deposited_collateral,
-        },
+        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: DEPOSIT_AMOUNT },
         owner_public_key: user.key_pair.public_key,
         owner_account: user.address,
     };
 
     // Check before deposit:
     let user_balance_before_deposit = token_state.balance_of(user.address);
-    assert_eq!(
-        user_balance_before_deposit,
-        DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
-    );
+    assert_eq!(user_balance_before_deposit, USER_INIT_BALANCE.try_into().unwrap());
     let contract_state_balance_before_deposit = token_state.balance_of(test_address());
-    assert_eq!(contract_state_balance_before_deposit, Zero::zero());
+    assert_eq!(contract_state_balance_before_deposit, CONTRACT_INIT_BALANCE.try_into().unwrap());
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
@@ -367,14 +347,112 @@ fn test_successful_deposit() {
 
     // Check after deposit:
     let user_balance_after_deposit = token_state.balance_of(user.address);
-    assert_eq!(user_balance_after_deposit, Zero::zero());
+    assert_eq!(
+        user_balance_after_deposit,
+        (USER_INIT_BALANCE - DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM)
+            .try_into()
+            .unwrap(),
+    );
     let contract_state_balance_after_deposit = token_state.balance_of(test_address());
     assert_eq!(
         contract_state_balance_after_deposit,
-        DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM.try_into().unwrap(),
+        (CONTRACT_INIT_BALANCE + DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM)
+            .try_into()
+            .unwrap(),
     );
     assert_eq!(
         state.fact_registry.entry(message.get_message_hash(get_caller_address())).read(),
         expected_time,
     );
 }
+
+#[test]
+fn test_successful_trade() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let mut user_a = Default::default();
+    init_position(cfg: @cfg, ref :state, user: user_a, token_state: @token_state);
+
+    let mut user_b = User {
+        position_id: POSITION_ID_2,
+        address: POSITION_OWNER_2(),
+        key_pair: KEY_PAIR_2(),
+        ..Default::default(),
+    };
+    init_position(cfg: @cfg, ref :state, user: user_b, token_state: @token_state);
+
+    // Test params:
+    let BASE = 10;
+    let QUOTE = -5;
+    let FEE = 1;
+
+    // Setup parameters:
+    let mut expiration = Time::now();
+    expiration += Time::days(1);
+
+    let collateral_id = cfg.collateral_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.asset_id;
+
+    let order_a = Order {
+        position_id: user_a.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: user_a.salt_counter,
+    };
+
+    let order_b = Order {
+        position_id: user_b.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: -BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: user_b.salt_counter,
+    };
+
+    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
+    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
+    let operator_nonce = state.nonces.nonces(owner: test_address());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .trade(
+            :operator_nonce,
+            :signature_a,
+            :signature_b,
+            :order_a,
+            :order_b,
+            actual_amount_base_a: BASE,
+            actual_amount_quote_a: QUOTE,
+            actual_fee_a: FEE,
+            actual_fee_b: FEE,
+        );
+
+    // Check:
+    let position_a = state.positions.entry(user_a.position_id);
+    let position_b = state.positions.entry(user_b.position_id);
+
+    let user_a_collateral_balance = position_a
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let user_a_synthetic_balance = position_a.synthetic_assets.entry(synthetic_id).balance.read();
+    assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
+    assert_eq!(user_a_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+
+    let user_b_collateral_balance = position_b
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let user_b_synthetic_balance = position_b.synthetic_assets.entry(synthetic_id).balance.read();
+    assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
+    assert_eq!(user_b_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
+}
+

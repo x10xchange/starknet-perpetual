@@ -112,7 +112,7 @@ pub mod Core {
         collateral_assets_head: Option<AssetId>,
         pub collateral_assets: Map<AssetId, CollateralAsset>,
         synthetic_assets_head: Option<AssetId>,
-        synthetic_assets: Map<AssetId, SyntheticAsset>,
+        pub synthetic_assets: Map<AssetId, SyntheticAsset>,
     }
 
     #[event]

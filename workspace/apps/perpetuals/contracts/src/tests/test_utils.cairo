@@ -35,7 +35,6 @@ pub struct User {
     pub address: ContractAddress,
     pub key_pair: KeyPair<felt252, felt252>,
     pub salt_counter: felt252,
-    pub deposited_collateral: i64,
 }
 
 #[generate_trait]
@@ -49,11 +48,10 @@ pub impl UserImpl of UserTrait {
 impl UserDefault of Default<User> {
     fn default() -> User {
         User {
-            position_id: POSITION_ID,
-            address: POSITION_OWNER(),
-            key_pair: KEY_PAIR(),
+            position_id: POSITION_ID_1,
+            address: POSITION_OWNER_1(),
+            key_pair: KEY_PAIR_1(),
             salt_counter: Zero::zero(),
-            deposited_collateral: Zero::zero(),
         }
     }
 }
@@ -67,6 +65,7 @@ pub(crate) struct PerpetualsInitConfig {
     pub price_validation_interval: TimeDelta,
     pub max_funding_rate: u32,
     pub collateral_cfg: CollateralCfg,
+    pub synthetic_cfg: SyntheticCfg,
 }
 
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
@@ -85,8 +84,9 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     initial_supply: INITIAL_SUPPLY,
                     owner: COLLATERAL_OWNER(),
                 },
-                asset_id: ASSET_ID(),
+                asset_id: ASSET_ID_1(),
             },
+            synthetic_cfg: SyntheticCfg { asset_id: ASSET_ID_2() },
         }
     }
 }
@@ -95,6 +95,12 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
 #[derive(Drop)]
 pub struct CollateralCfg {
     pub token_cfg: TokenConfig,
+    pub asset_id: AssetId,
+}
+
+/// The 'SyntheticCfg' struct represents a synthetic asset config with an associated asset id.
+#[derive(Drop)]
+pub struct SyntheticCfg {
     pub asset_id: AssetId,
 }
 
