@@ -36,7 +36,9 @@ pub mod Core {
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::types::{AssetDiffEntry, AssetEntry, PositionData, PositionId, Signature};
+    use perpetuals::core::types::{
+        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionId, Signature,
+    };
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
     };
@@ -195,7 +197,66 @@ pub mod Core {
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
 
-        fn liquidate(self: @ContractState) {}
+        fn liquidate(
+            ref self: ContractState,
+            operator_nonce: felt252,
+            signature_liquidator: Signature,
+            liquidated_position_id: PositionId,
+            liquidator_order: Order,
+            actual_amount_base_liquidated: i64,
+            actual_amount_quote_liquidated: i64,
+            actual_liquidator_fee: i64,
+            insurance_fund_fee: AssetAmount,
+        ) {
+            /// Validations:
+            let now = Time::now();
+            self._validate_operator_flow(:operator_nonce, :now);
+
+            // Signatures validation:
+            let liquidator_position = self._get_position(position_id: liquidator_order.position_id);
+            let liquidator_msg_hash = liquidator_position
+                ._generate_message_hash_with_public_key(message: liquidator_order);
+            liquidator_position
+                ._validate_stark_signature(
+                    msg_hash: liquidator_msg_hash, signature: signature_liquidator,
+                );
+
+            // Validate and update fulfilments.
+            self
+                ._update_fulfillment(
+                    position_id: liquidator_order.position_id,
+                    hash: liquidator_msg_hash,
+                    order_amount: liquidator_order.base.amount,
+                    // Passing the negative of actual amounts to `liquidator_order` as it is linked
+                    // to liquidated_order.
+                    actual_amount: -actual_amount_base_liquidated,
+                );
+
+            let liquidated_order = Order {
+                position_id: liquidated_position_id,
+                base: AssetAmount {
+                    asset_id: liquidator_order.base.asset_id, amount: actual_amount_base_liquidated,
+                },
+                quote: AssetAmount {
+                    asset_id: liquidator_order.quote.asset_id,
+                    amount: actual_amount_quote_liquidated,
+                },
+                fee: insurance_fund_fee,
+                // Dummy values needed to initialize the struct and pass validation.
+                ..liquidator_order,
+            };
+
+            // Validations.
+            self
+                ._validate_liquidate(
+                    :liquidated_order,
+                    :liquidator_order,
+                    :actual_liquidator_fee,
+                    :insurance_fund_fee,
+                    :now,
+                );
+            // TODO: Execute liquidation.
+        }
 
         /// Sets the owner of a position to a new account owner.
         ///
@@ -270,8 +331,8 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
 
             // Signatures validation:
-            let position_a = self._get_position(position_id_a);
-            let position_b = self._get_position(position_id_b);
+            let position_a = self._get_position(position_id: position_id_a);
+            let position_b = self._get_position(position_id: position_id_b);
             let hash_a = position_a._generate_message_hash_with_public_key(message: order_a);
             position_a._validate_stark_signature(msg_hash: hash_a, signature: signature_a);
             let hash_b = position_b._generate_message_hash_with_public_key(message: order_b);
@@ -290,6 +351,8 @@ pub mod Core {
                     position_id: position_id_b,
                     hash: hash_b,
                     order_amount: order_b.base.amount,
+                    // Passing the negative of actual amounts to `order_b` as it is linked to
+                    // `order_a`.
                     actual_amount: -actual_amount_base_a,
                 );
 
@@ -659,6 +722,28 @@ pub mod Core {
                 !have_same_sign(a: order_a.quote.amount, b: order_b.quote.amount),
                 INVALID_TRADE_QUOTE_AMOUNT_SIGN,
             );
+        }
+
+
+        fn _validate_liquidate(
+            ref self: ContractState,
+            liquidated_order: Order,
+            liquidator_order: Order,
+            actual_liquidator_fee: i64,
+            insurance_fund_fee: AssetAmount,
+            now: Timestamp,
+        ) {
+            self._validate_order(order: liquidated_order, :now);
+            self._validate_order(order: liquidator_order, :now);
+
+            let actual_amount_base_liquidator = -liquidated_order.base.amount;
+            let actual_amount_quote_liquidator = -liquidated_order.quote.amount;
+            liquidator_order
+                .validate_against_actual_amounts(
+                    actual_amount_base: actual_amount_base_liquidator,
+                    actual_amount_quote: actual_amount_quote_liquidator,
+                    actual_fee: actual_liquidator_fee,
+                );
         }
 
         /// Builds asset diff entries from an order's fee, quote, and base assets, handling overlaps
