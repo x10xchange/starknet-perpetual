@@ -4,8 +4,12 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::math::Abs;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
+    use perpetuals::core::components::assets::errors::{
+        ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_EXPIRED_PRICE, COLLATERAL_NOT_ACTIVE,
+        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
+    };
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::errors::*;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
     use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
@@ -190,8 +194,10 @@ pub(crate) mod AssetsComponent {
 
         fn _validate_collateral_active(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) {
-            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
+        ) -> CollateralConfig {
+            let cfg = self._get_collateral_config(collateral_id);
+            assert(cfg.is_active, COLLATERAL_NOT_ACTIVE);
+            cfg
         }
 
         fn _validate_collateral_prices(

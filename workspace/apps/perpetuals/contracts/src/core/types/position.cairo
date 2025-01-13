@@ -3,7 +3,7 @@ use contracts_commons::utils::AddToStorage;
 use core::num::traits::Zero;
 use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
 use openzeppelin::account::utils::is_valid_stark_signature;
-use perpetuals::core::errors::*;
+use perpetuals::core::errors::{INVALID_OWNER_SIGNATURE, INVALID_STARK_SIGNATURE, NO_OWNER_ACCOUNT};
 use perpetuals::core::types::Signature;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralAsset;

@@ -18,7 +18,13 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-    use perpetuals::core::errors::*;
+    use perpetuals::core::errors::{
+        DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED,
+        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
+        INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        POSITION_UNHEALTHY, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        position_not_healthy_nor_healthier, trade_order_expired_err,
+    };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
@@ -308,8 +314,7 @@ pub mod Core {
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
             assert(now < message.expiration, WITHDRAW_EXPIRED);
             let collateral_id = message.collateral.asset_id;
-            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
-            assert(collateral_cfg.is_active, COLLATERAL_NOT_ACTIVE);
+            let collateral_cfg = self.assets._validate_collateral_active(:collateral_id);
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
             let hash = position._generate_message_hash_with_owner_account_or_public_key(:message);
