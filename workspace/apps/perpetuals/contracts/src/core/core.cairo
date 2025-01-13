@@ -9,12 +9,9 @@ pub mod Core {
     use contracts_commons::math::{Abs, FractionTrait, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use contracts_commons::utils::AddToStorage;
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
-    use openzeppelin::account::utils::is_valid_stark_signature;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::utils::cryptography::nonces::NoncesComponent;
@@ -24,12 +21,11 @@ pub mod Core {
     use perpetuals::core::errors::*;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::CollateralAsset;
-    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::Order;
+    use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -103,17 +99,6 @@ pub mod Core {
         // Message hash to fulfilled amount.
         fulfillment: Map<felt252, i64>,
         pub positions: Map<PositionId, Position>,
-    }
-
-    #[starknet::storage_node]
-    struct Position {
-        version: u8,
-        owner_account: ContractAddress,
-        pub owner_public_key: felt252,
-        collateral_assets_head: Option<AssetId>,
-        pub collateral_assets: Map<AssetId, CollateralAsset>,
-        synthetic_assets_head: Option<AssetId>,
-        pub synthetic_assets: Map<AssetId, SyntheticAsset>,
     }
 
     #[event]
@@ -814,66 +799,6 @@ pub mod Core {
                 position_is_healthier || position_is_healthy,
                 position_not_healthy_nor_healthier(position_id),
             );
-        }
-
-        fn _validate_stark_signature(
-            self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
-        ) {
-            assert(
-                is_valid_stark_signature(
-                    :msg_hash, public_key: self.owner_public_key.read(), :signature,
-                ),
-                INVALID_STARK_SIGNATURE,
-            );
-        }
-
-        fn _validate_owner_signature(
-            self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
-        ) {
-            let contract_address = self.owner_account.read();
-            assert(contract_address.is_non_zero(), NO_OWNER_ACCOUNT);
-            let is_valid_signature_felt = ISRC6Dispatcher { contract_address }
-                .is_valid_signature(hash: msg_hash, signature: signature.into());
-            // Check either 'VALID' or true for backwards compatibility.
-            assert(
-                is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1,
-                INVALID_OWNER_SIGNATURE,
-            );
-        }
-
-        fn _generate_message_hash_with_public_key<
-            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
-        >(
-            self: @StoragePath<Mutable<Position>>, message: T,
-        ) -> felt252 {
-            message.get_message_hash(signer: self.owner_public_key.read())
-        }
-
-        fn _generate_message_hash_with_owner_account_or_public_key<
-            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
-        >(
-            self: @StoragePath<Mutable<Position>>, message: T,
-        ) -> felt252 {
-            let signer = self.owner_account.read();
-            if signer.is_non_zero() {
-                message.get_message_hash(:signer)
-            } else {
-                message.get_message_hash(signer: self.owner_public_key.read())
-            }
-        }
-
-        fn _update_balance(
-            self: StoragePath<Mutable<Position>>,
-            asset_id: AssetId,
-            actual_amount: i64,
-            is_collateral: bool,
-        ) {
-            let mut balance = if is_collateral {
-                self.collateral_assets.entry(asset_id).balance
-            } else {
-                self.synthetic_assets.entry(asset_id).balance
-            };
-            balance.add_and_write(actual_amount.into());
         }
 
         fn _register_fact<
