@@ -16,7 +16,7 @@ pub struct UpdatePositionPublicKeyArgs {
 ///   "\"UpdatePositionPublicKeyArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"expiration\":\"Timestamp\",
-///    \"new_public_key\":\"felt252\"
+///    \"new_public_key\":\"felt\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
@@ -26,7 +26,7 @@ pub struct UpdatePositionPublicKeyArgs {
 ///    )
 /// );
 const UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH: felt252 =
-    0x40c7d98c847517b1e4e365be17941e753a6e230a6d2616d9e734b7f377c8ce;
+    0x2240cb54d7a5d495b3c70779f6e2db647917ca1916b7481511333e343878534;
 
 impl StructHashImpl of StructHash<UpdatePositionPublicKeyArgs> {
     fn hash_struct(self: @UpdatePositionPublicKeyArgs) -> felt252 {
@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"UpdatePositionPublicKeyArgs\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt252\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"UpdatePositionPublicKeyArgs\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH, expected);
     }
