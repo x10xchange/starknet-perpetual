@@ -6,7 +6,7 @@ pub mod Core {
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
     use contracts_commons::errors::assert_with_byte_array;
-    use contracts_commons::math::{Abs, FractionTrait, have_same_sign};
+    use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
@@ -24,7 +24,7 @@ pub mod Core {
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::FundingTick;
-    use perpetuals::core::types::order::Order;
+    use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
@@ -597,19 +597,19 @@ pub mod Core {
             self._validate_order(order: order_a, :now);
             self._validate_order(order: order_b, :now);
 
-            _validate_order_with_actual_amounts(
-                order: order_a,
-                actual_amount_base: actual_amount_base_a,
-                actual_amount_quote: actual_amount_quote_a,
-                actual_fee: actual_fee_a,
-            );
-            _validate_order_with_actual_amounts(
-                order: order_b,
-                // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                actual_amount_base: -actual_amount_base_a,
-                actual_amount_quote: -actual_amount_quote_a,
-                actual_fee: actual_fee_b,
-            );
+            order_a
+                .validate_against_actual_amounts(
+                    actual_amount_base: actual_amount_base_a,
+                    actual_amount_quote: actual_amount_quote_a,
+                    actual_fee: actual_fee_a,
+                );
+            order_b
+                .validate_against_actual_amounts(
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -actual_amount_base_a,
+                    actual_amount_quote: -actual_amount_quote_a,
+                    actual_fee: actual_fee_b,
+                );
             // Actual fees amount are positive.
             assert(0 <= actual_fee_a, INVALID_NEGATIVE_FEE);
             assert(0 <= actual_fee_b, INVALID_NEGATIVE_FEE);
@@ -816,80 +816,5 @@ pub mod Core {
             }
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
-    }
-
-    /// It validates the given order with the actual amounts.
-    fn _validate_order_with_actual_amounts(
-        order: Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: i64,
-    ) {
-        let order_amount_base = order.base.amount;
-        let order_amount_quote = order.quote.amount;
-        let order_amount_fee = order.fee.amount;
-
-        // Sign Validation for amounts.
-        assert(
-            have_same_sign(a: order_amount_base, b: actual_amount_base),
-            INVALID_TRADE_ACTUAL_BASE_SIGN,
-        );
-        assert(
-            have_same_sign(a: order_amount_quote, b: actual_amount_quote),
-            INVALID_TRADE_ACTUAL_QUOTE_SIGN,
-        );
-
-        _validate_fee_to_quote_ratio(
-            position_id: order.position_id,
-            :actual_fee,
-            :actual_amount_quote,
-            :order_amount_fee,
-            :order_amount_quote,
-        );
-
-        _validate_base_to_quote_ratio(
-            position_id: order.position_id,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :order_amount_base,
-            :order_amount_quote,
-        );
-    }
-
-    fn _validate_fee_to_quote_ratio(
-        position_id: PositionId,
-        actual_fee: i64,
-        actual_amount_quote: i64,
-        order_amount_fee: i64,
-        order_amount_quote: i64,
-    ) {
-        // Fee to quote amount ratio does not increase.
-        let actual_fee_to_quote_amount_ratio = FractionTrait::new(
-            numerator: actual_fee, denominator: actual_amount_quote.abs(),
-        );
-        let order_fee_to_quote_amount_ratio = FractionTrait::new(
-            numerator: order_amount_fee, denominator: order_amount_quote.abs(),
-        );
-        assert_with_byte_array(
-            actual_fee_to_quote_amount_ratio <= order_fee_to_quote_amount_ratio,
-            trade_illegal_fee_to_quote_ratio_err(position_id),
-        );
-    }
-
-    fn _validate_base_to_quote_ratio(
-        position_id: PositionId,
-        actual_amount_base: i64,
-        actual_amount_quote: i64,
-        order_amount_base: i64,
-        order_amount_quote: i64,
-    ) {
-        // The base-to-quote amount ratio does not decrease.
-        let order_base_to_quote_ratio = FractionTrait::new(
-            numerator: order_amount_base, denominator: order_amount_quote.abs(),
-        );
-        let actual_base_to_quote_ratio = FractionTrait::new(
-            numerator: actual_amount_base, denominator: actual_amount_quote.abs(),
-        );
-        assert_with_byte_array(
-            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
-            trade_illegal_base_to_quote_ratio_err(position_id),
-        );
     }
 }

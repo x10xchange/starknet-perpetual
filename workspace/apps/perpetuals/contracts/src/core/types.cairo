@@ -2,7 +2,7 @@ pub mod asset;
 pub mod balance;
 pub mod deposit;
 pub mod funding;
-pub mod order;
+pub(crate) mod order;
 pub mod position;
 pub mod price;
 pub mod transfer;
