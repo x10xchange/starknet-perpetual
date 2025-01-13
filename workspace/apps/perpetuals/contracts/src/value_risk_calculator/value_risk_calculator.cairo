@@ -40,7 +40,7 @@ pub mod ValueRiskCalculator {
     fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
         let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
         let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
-        after_ratio > before_ratio && after.total_risk < before.total_risk
+        after_ratio >= before_ratio && after.total_risk < before.total_risk
     }
 
 

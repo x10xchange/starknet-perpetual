@@ -28,12 +28,12 @@ pub enum PositionState {
 pub impl PositionStateImpl of PositionStateTrait {
     fn new(position_tvtr: PositionTVTR) -> PositionState {
         if position_tvtr.total_value < 0 {
-            return PositionState::Deleveragable;
+            PositionState::Deleveragable
+        } else if position_tvtr.total_value.abs() < position_tvtr.total_risk {
+            PositionState::Liquidatable
+        } else {
+            PositionState::Healthy
         }
-        if position_tvtr.total_risk > position_tvtr.total_value.abs() {
-            return PositionState::Liquidatable;
-        }
-        PositionState::Healthy
     }
 }
 
