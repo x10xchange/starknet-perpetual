@@ -2,6 +2,7 @@ use perpetuals::core::types::Signature;
 use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
+use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -12,6 +13,12 @@ pub trait ICore<TContractState> {
     fn deleverage(self: @TContractState);
     fn deposit(ref self: TContractState, deposit_args: DepositArgs);
     fn liquidate(self: @TContractState);
+    fn set_position_owner(
+        ref self: TContractState,
+        operator_nonce: felt252,
+        signature: Signature,
+        message: SetPositionOwnerArgs,
+    );
     fn trade(
         ref self: TContractState,
         operator_nonce: felt252,

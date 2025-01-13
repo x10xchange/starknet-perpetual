@@ -5,6 +5,7 @@ pub mod funding;
 pub(crate) mod order;
 pub mod position;
 pub mod price;
+pub(crate) mod set_position_owner;
 pub mod transfer;
 pub mod update_position_public_key;
 pub mod withdraw;

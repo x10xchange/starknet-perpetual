@@ -22,8 +22,8 @@ pub mod Core {
         DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED,
         INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
         INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
-        POSITION_UNHEALTHY, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        position_not_healthy_nor_healthier, trade_order_expired_err,
+        POSITION_HAS_ACCOUNT, POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
@@ -32,6 +32,7 @@ pub mod Core {
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{Position, PositionTrait};
+    use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -195,6 +196,36 @@ pub mod Core {
         }
 
         fn liquidate(self: @ContractState) {}
+
+        /// Sets the owner of a position to a new account owner.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The caller must be the operator.
+        /// - The operator nonce must be valid.
+        /// - The expiration time has not passed.
+        /// - The position has no account owner.
+        /// - The signature is valid.
+        fn set_position_owner(
+            ref self: ContractState,
+            operator_nonce: felt252,
+            signature: Signature,
+            message: SetPositionOwnerArgs,
+        ) {
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+            let now = Time::now();
+            assert(message.expiration > now, SET_POSITION_OWNER_EXPIRED);
+            let position_id = message.position_id;
+            let position = self._get_position(:position_id);
+            assert(position.owner_account.read().is_zero(), POSITION_HAS_ACCOUNT);
+            position
+                ._validate_stark_signature(
+                    msg_hash: position._generate_message_hash_with_public_key(:message),
+                    signature: signature,
+                );
+            position.owner_account.write(message.new_account_owner);
+        }
 
         /// Executes a trade between two orders (Order A and Order B).
         ///
