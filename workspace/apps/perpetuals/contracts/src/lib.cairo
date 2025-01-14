@@ -1,5 +1,4 @@
 pub mod core;
-pub mod direct_interaction;
 
 #[cfg(test)]
 mod tests;
