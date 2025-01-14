@@ -4,19 +4,19 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::{PositionData, PositionDiff};
 
 
-#[derive(Copy, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionTVTR {
     pub total_value: i128,
     pub total_risk: u128,
 }
 
-#[derive(Copy, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionTVTRChange {
     pub before: PositionTVTR,
     pub after: PositionTVTR,
 }
 
-#[derive(Drop, Serde, PartialEq)]
+#[derive(Drop, Debug, PartialEq, Serde)]
 pub enum PositionState {
     Healthy,
     Liquidatable,
@@ -45,14 +45,14 @@ pub impl PositionStateImpl of PositionStateTrait {
 ///     The position is healthier if the risk has decreased.
 /// - `is_fair_deleverage`:
 ///     Indicates whether the deleveraging process is fair.
-#[derive(Drop, Serde)]
+#[derive(Debug, Drop, Serde)]
 pub struct ChangeEffects {
     pub is_healthier: bool,
     pub is_fair_deleverage: bool,
 }
 
 /// Representing the evaluation of position's state and the effects of a proposed change.
-#[derive(Drop, Serde)]
+#[derive(Debug, Drop, Serde)]
 pub struct PositionChangeResult {
     pub position_state_before_change: PositionState,
     pub position_state_after_change: PositionState,

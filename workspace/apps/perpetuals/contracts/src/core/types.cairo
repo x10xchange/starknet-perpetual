@@ -26,12 +26,12 @@ pub struct AssetAmount {
     pub amount: i64,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Debug, Drop, Serde)]
 pub struct PositionData {
     pub asset_entries: Span<AssetEntry>,
 }
 
-#[derive(Drop, Serde, Copy)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct AssetEntry {
     pub id: AssetId,
     pub balance: Balance,
