@@ -154,7 +154,7 @@ pub(crate) mod AssetsComponent {
         fn _get_synthetic_price(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> Price {
-            self.collateral_timely_data.entry(synthetic_id).price.read()
+            self.synthetic_timely_data.entry(synthetic_id).price.read()
         }
 
         fn _is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
