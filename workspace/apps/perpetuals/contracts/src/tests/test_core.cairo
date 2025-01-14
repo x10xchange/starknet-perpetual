@@ -325,7 +325,7 @@ fn test_successful_deposit() {
     let mut expiration = Time::now();
     expiration += Time::days(2);
 
-    let mut message = DepositArgs {
+    let mut deposit_args = DepositArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -342,7 +342,7 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.deposit(deposit_args: message);
+    state.deposit(:deposit_args);
     expected_time += Time::days(1);
 
     // Check after deposit:
@@ -361,7 +361,7 @@ fn test_successful_deposit() {
             .unwrap(),
     );
     assert_eq!(
-        state.fact_registry.entry(message.get_message_hash(get_caller_address())).read(),
+        state.fact_registry.entry(deposit_args.get_message_hash(get_caller_address())).read(),
         expected_time,
     );
 }

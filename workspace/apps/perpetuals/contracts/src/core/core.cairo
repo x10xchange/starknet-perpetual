@@ -9,6 +9,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::utils::SubFromStorage;
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -19,11 +20,12 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED,
+        DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED,
         INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
         INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
-        POSITION_HAS_ACCOUNT, POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
+        OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT,
+        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
@@ -177,6 +179,41 @@ pub mod Core {
                     recipient: get_contract_address(),
                     amount: amount.into(),
                 );
+        }
+
+        fn process_deposit(
+            ref self: ContractState,
+            operator_nonce: felt252,
+            depositing_address: ContractAddress,
+            deposit_args: DepositArgs,
+        ) {
+            self._validate_deposit(:operator_nonce, :depositing_address, :deposit_args);
+            let position_id = deposit_args.position_id;
+            self._apply_funding(:position_id);
+
+            let position = self._get_position(:position_id);
+            /// Position with no owner_public_key is considered as a new position. Then we set the
+            /// owner_public_key and owner_account. Otherwise, we check that they match.
+            if position.owner_public_key.read().is_zero() {
+                position.owner_public_key.write(deposit_args.owner_public_key);
+                position.owner_account.write(deposit_args.owner_account);
+            } else {
+                assert(
+                    position.owner_public_key.read() == deposit_args.owner_public_key,
+                    OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
+                );
+                assert(
+                    position.owner_account.read() == deposit_args.owner_account,
+                    OWNER_ACCOUNT_DOES_NOT_MATCH,
+                );
+            }
+            let collateral_id = deposit_args.collateral.asset_id;
+            let amount = deposit_args.collateral.amount;
+            position
+                ._update_balance(
+                    asset_id: collateral_id, actual_amount: amount, is_collateral: true,
+                );
+            self.pending_deposits.entry(collateral_id).sub_and_write(amount);
         }
 
         fn withdraw_request(ref self: ContractState, signature: Signature, message: WithdrawArgs) {
@@ -670,6 +707,30 @@ pub mod Core {
                     actual_amount: -actual_amount_quote_a,
                     is_collateral: true,
                 );
+        }
+
+        fn _validate_deposit(
+            ref self: ContractState,
+            operator_nonce: felt252,
+            depositing_address: ContractAddress,
+            deposit_args: DepositArgs,
+        ) {
+            let now = Time::now();
+            self._validate_operator_flow(:operator_nonce, :now);
+            let amount = deposit_args.collateral.amount;
+            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
+            assert(now < deposit_args.expiration, DEPOSIT_EXPIRED);
+            self
+                .assets
+                ._validate_collateral_active(collateral_id: deposit_args.collateral.asset_id);
+
+            let hash = deposit_args.get_message_hash(signer: depositing_address);
+            let position_id = deposit_args.position_id;
+            self
+                ._update_fulfillment(
+                    :position_id, :hash, order_amount: amount, actual_amount: amount,
+                );
+            self._use_fact(:hash);
         }
 
         fn _validate_funding_tick(

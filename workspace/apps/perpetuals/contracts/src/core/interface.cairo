@@ -6,6 +6,7 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId, Signature};
+use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -28,6 +29,12 @@ pub trait ICore<TContractState> {
         operator_nonce: felt252,
         signature: Signature,
         message: SetPositionOwnerArgs,
+    );
+    fn process_deposit(
+        ref self: TContractState,
+        operator_nonce: felt252,
+        depositing_address: ContractAddress,
+        deposit_args: DepositArgs,
     );
     fn trade(
         ref self: TContractState,
