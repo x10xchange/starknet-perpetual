@@ -366,6 +366,8 @@ fn test_successful_deposit() {
     );
 }
 
+// Trade tests.
+
 #[test]
 fn test_successful_trade() {
     // Setup state, token and user:
@@ -456,3 +458,125 @@ fn test_successful_trade() {
     assert_eq!(user_b_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
 }
 
+// TODO: Add all the illegal trade cases once safe dispatcher is supported.
+#[test]
+#[should_panic(expected: 'INVALID_NEGATIVE_FEE')]
+fn test_invalid_trade_non_positve_fee() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let mut user = Default::default();
+    init_position(cfg: @cfg, ref :state, user: user, token_state: @token_state);
+
+    // Test params:
+    let BASE = 10;
+    let QUOTE = -5;
+    let FEE = -1;
+
+    // Setup parameters:
+    let mut expiration = Time::now();
+    expiration += Time::days(1);
+
+    let collateral_id = cfg.collateral_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.asset_id;
+
+    let order = Order {
+        position_id: user.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: user.salt_counter,
+    };
+
+    let signature = user.sign_message(order.get_message_hash(user.key_pair.public_key));
+    let operator_nonce = state.nonces.nonces(owner: test_address());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .trade(
+            :operator_nonce,
+            signature_a: signature,
+            signature_b: signature,
+            order_a: order,
+            order_b: order,
+            actual_amount_base_a: BASE,
+            actual_amount_quote_a: QUOTE,
+            actual_fee_a: 1,
+            actual_fee_b: 1,
+        );
+}
+
+
+#[test]
+#[should_panic(expected: 'INVALID_TRADE_WRONG_AMOUNT_SIGN')]
+fn test_invalid_trade_same_base_signs() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let mut user_a = Default::default();
+    init_position(cfg: @cfg, ref :state, user: user_a, token_state: @token_state);
+
+    let mut user_b = User {
+        position_id: POSITION_ID_2,
+        address: POSITION_OWNER_2(),
+        key_pair: KEY_PAIR_2(),
+        ..Default::default(),
+    };
+    init_position(cfg: @cfg, ref :state, user: user_b, token_state: @token_state);
+
+    // Test params:
+    let BASE = 10;
+    let QUOTE = -5;
+    let FEE = 1;
+
+    // Setup parameters:
+    let mut expiration = Time::now();
+    expiration += Time::days(1);
+
+    let collateral_id = cfg.collateral_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.asset_id;
+
+    let order_a = Order {
+        position_id: user_a.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: user_a.salt_counter,
+    };
+
+    // Wrong sign for base amount.
+    let order_b = Order {
+        position_id: user_b.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: user_b.salt_counter,
+    };
+
+    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
+    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
+    let operator_nonce = state.nonces.nonces(owner: test_address());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .trade(
+            :operator_nonce,
+            :signature_a,
+            :signature_b,
+            :order_a,
+            :order_b,
+            actual_amount_base_a: BASE,
+            actual_amount_quote_a: QUOTE,
+            actual_fee_a: FEE,
+            actual_fee_b: FEE,
+        );
+}
