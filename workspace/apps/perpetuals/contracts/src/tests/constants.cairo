@@ -1,7 +1,13 @@
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
-use contracts_commons::types::time::time::TimeDelta;
+use contracts_commons::types::time::time::{Time, TimeDelta};
+use core::num::traits::Zero;
 use perpetuals::core::types::PositionId;
-use perpetuals::core::types::asset::synthetic::{SyntheticConfig, VERSION};
+use perpetuals::core::types::asset::collateral::{
+    CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+};
+use perpetuals::core::types::asset::synthetic::{
+    SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
+};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
 use snforge_std::signature::KeyPair;
@@ -40,14 +46,34 @@ pub fn OPERATOR() -> ContractAddress {
     contract_address_const::<'OPERATOR'>()
 }
 
+pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
+    CollateralTimelyData {
+        version: COLLATERAL_VERSION,
+        price: PRICE_1(),
+        last_price_update: Time::now(),
+        next: Option::None,
+    }
+}
+
+
 pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
     SyntheticConfig {
-        version: VERSION,
+        version: SYNTHETIC_VERSION,
         resolution: SYNTHETIC_RESOLUTION,
         name: SYNTHETIC_NAME,
         is_active: true,
         risk_factor: RISK_FACTOR(),
         quorum: SYNTHETIC_QUORUM,
+    }
+}
+
+pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
+    SyntheticTimelyData {
+        version: SYNTHETIC_VERSION,
+        price: PRICE_1(),
+        last_price_update: Time::now(),
+        funding_index: Zero::zero(),
+        next: Option::None,
     }
 }
 
@@ -74,20 +100,23 @@ pub const POSITION_ID_1: PositionId = PositionId { value: 1 };
 pub const POSITION_ID_2: PositionId = PositionId { value: 2 };
 
 /// Assets IDs
-pub fn ASSET_ID_1() -> AssetId {
-    AssetIdTrait::new(value: selector!("asset_id_1"))
+pub fn COLLATERAL_ASSET_ID() -> AssetId {
+    AssetIdTrait::new(value: selector!("COLLATERAL_ASSET_ID"))
 }
-pub fn ASSET_ID_2() -> AssetId {
-    AssetIdTrait::new(value: selector!("asset_id_2"))
+pub fn SYNTHETIC_ASSET_ID_1() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_1"))
 }
-pub fn ASSET_ID_3() -> AssetId {
-    AssetIdTrait::new(value: selector!("asset_id_3"))
+pub fn SYNTHETIC_ASSET_ID_2() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_2"))
 }
-pub fn ASSET_ID_4() -> AssetId {
-    AssetIdTrait::new(value: selector!("asset_id_4"))
+pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
 }
-pub fn ASSET_ID_5() -> AssetId {
-    AssetIdTrait::new(value: selector!("asset_id_5"))
+pub fn SYNTHETIC_ASSET_ID_4() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_4"))
+}
+pub fn SYNTHETIC_ASSET_ID_5() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_5"))
 }
 
 /// Risk factors

@@ -6,7 +6,9 @@ use openzeppelin_testing::deployment::declare_and_deploy;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::collateral::{CollateralConfig, VERSION};
+use perpetuals::core::types::asset::collateral::{
+    CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+};
 use perpetuals::core::types::{PositionId, Signature};
 use perpetuals::tests::constants::*;
 use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
@@ -84,9 +86,9 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     initial_supply: INITIAL_SUPPLY,
                     owner: COLLATERAL_OWNER(),
                 },
-                asset_id: ASSET_ID_1(),
+                asset_id: COLLATERAL_ASSET_ID(),
             },
-            synthetic_cfg: SyntheticCfg { asset_id: ASSET_ID_2() },
+            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID_1() },
         }
     }
 }
@@ -104,15 +106,18 @@ pub struct SyntheticCfg {
     pub asset_id: AssetId,
 }
 
-pub fn generate_collateral_config(token_state: @TokenState) -> CollateralConfig {
-    CollateralConfig {
-        version: VERSION,
-        address: *token_state.address,
-        quantum: COLLATERAL_QUANTUM,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: COLLATERAL_QUORUM,
-    }
+pub fn generate_collateral(token_state: @TokenState) -> (CollateralConfig, CollateralTimelyData) {
+    (
+        CollateralConfig {
+            version: COLLATERAL_VERSION,
+            address: *token_state.address,
+            quantum: COLLATERAL_QUANTUM,
+            is_active: true,
+            risk_factor: RISK_FACTOR(),
+            quorum: COLLATERAL_QUORUM,
+        },
+        COLLATERAL_TIMELY_DATA(),
+    )
 }
 
 #[generate_trait]

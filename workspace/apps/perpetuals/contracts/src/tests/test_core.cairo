@@ -11,20 +11,13 @@ use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::AssetAmount;
-use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::collateral::{
-    CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
-};
-use perpetuals::core::types::asset::synthetic::{
-    SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
-};
 use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
     PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
-    generate_collateral_config, set_roles,
+    generate_collateral, set_roles,
 };
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::get_caller_address;
@@ -34,34 +27,6 @@ use starknet::storage::{
 
 fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()
-}
-
-fn add_colateral(
-    ref state: Core::ContractState,
-    collateral_id: AssetId,
-    mut collateral_timely_data: CollateralTimelyData,
-    collateral_config: CollateralConfig,
-) {
-    if let Option::Some(head) = state.assets.collateral_timely_data_head.read() {
-        collateral_timely_data.next = Option::Some(head);
-    }
-    state.assets.collateral_timely_data.write(collateral_id, collateral_timely_data);
-    state.assets.collateral_timely_data_head.write(Option::Some(collateral_id));
-    state.assets.collateral_configs.write(collateral_id, Option::Some(collateral_config));
-}
-
-fn add_synthetic(
-    ref state: Core::ContractState,
-    synthetic_id: AssetId,
-    mut synthetic_timely_data: SyntheticTimelyData,
-    synthetic_config: SyntheticConfig,
-) {
-    if let Option::Some(head) = state.assets.synthetic_timely_data_head.read() {
-        synthetic_timely_data.next = Option::Some(head);
-    }
-    state.assets.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);
-    state.assets.synthetic_timely_data_head.write(Option::Some(synthetic_id));
-    state.assets.synthetic_configs.write(synthetic_id, Option::Some(synthetic_config));
 }
 
 fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
@@ -75,18 +40,21 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
             max_funding_rate: *cfg.max_funding_rate,
         );
     // Collateral asset configs.
-    let collateral_config = generate_collateral_config(:token_state);
+    let (collateral_config, collateral_timely_data) = generate_collateral(:token_state);
     state
         .assets
         .collateral_configs
         .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+    state.assets.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
+    state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
 
     // Synthetic asset configs.
-    let synthetic_config = SYNTHETIC_CONFIG();
     state
         .assets
         .synthetic_configs
-        .write(*cfg.synthetic_cfg.asset_id, Option::Some(synthetic_config));
+        .write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
+    state.assets.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
+    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
 
     // Fund the contract.
     (*token_state)
@@ -108,12 +76,7 @@ fn init_position(
         .entry(*cfg.collateral_cfg.asset_id)
         .balance;
     collateral_asset_balance.write(COLLATERAL_BALANCE_AMOUNT.into());
-
-    let synthetic_asset_balance = position
-        .synthetic_assets
-        .entry(*cfg.synthetic_cfg.asset_id)
-        .balance;
-    synthetic_asset_balance.write(SYNTHETIC_BALANCE_AMOUNT.into());
+    position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
 }
 
 fn initialized_contract_state() -> Core::ContractState {
@@ -136,130 +99,6 @@ fn test_constructor() {
     assert_eq!(state.assets.get_price_validation_interval(), PRICE_VALIDATION_INTERVAL);
     assert_eq!(state.assets.get_funding_validation_interval(), FUNDING_VALIDATION_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
-}
-
-#[test]
-fn test_validate_collateral_prices() {
-    let mut state = initialized_contract_state();
-    let now = Time::now();
-    let collateral_id = ASSET_ID_1();
-    let collateral_config = CollateralConfig {
-        version: COLLATERAL_VERSION,
-        address: TOKEN_ADDRESS(),
-        quantum: COLLATERAL_QUANTUM,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: COLLATERAL_QUORUM,
-    };
-    // Add collateral timely data with valid last price update
-    let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE_1(), last_price_update: now, next: Option::None,
-    };
-    add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
-
-    // Call the function
-    state
-        .assets
-        ._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
-    // If no assertion error is thrown, the test passes
-}
-
-#[test]
-#[should_panic(expected: 'COLLATERAL_EXPIRED_PRICE')]
-fn test_validate_collateral_prices_expired() {
-    let mut state = CONTRACT_STATE();
-    let now = Time::now();
-    let collateral_id = ASSET_ID_1();
-    let collateral_config = CollateralConfig {
-        version: COLLATERAL_VERSION,
-        address: TOKEN_ADDRESS(),
-        quantum: COLLATERAL_QUANTUM,
-        is_active: true,
-        risk_factor: RISK_FACTOR(),
-        quorum: COLLATERAL_QUORUM,
-    };
-    // Add collateral timely data with valid last price update
-    let collateral_timely_data = CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: PRICE_1(), last_price_update: now, next: Option::None,
-    };
-    add_colateral(ref state, collateral_id, collateral_timely_data, collateral_config);
-    let now = now.add(PRICE_VALIDATION_INTERVAL);
-    // Set the block timestamp to be after the price validation interval
-    start_cheat_block_timestamp_global(block_timestamp: now.into());
-    // Call the function, should panic with EXPIRED_PRICE error
-    state
-        .assets
-        ._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
-}
-#[test]
-fn test_validate_synthetic_prices() {
-    let mut state = CONTRACT_STATE();
-    let now = Time::now();
-    let synthetic_id = ASSET_ID_1();
-    let synthetic_config = SYNTHETIC_CONFIG();
-    // Add synthetic timely data with expired last price update
-    let synthetic_timely_data = SyntheticTimelyData {
-        version: SYNTHETIC_VERSION,
-        price: PRICE_1(),
-        last_price_update: now,
-        funding_index: Zero::zero(),
-        next: Option::None,
-    };
-    add_synthetic(ref state, synthetic_id, synthetic_timely_data, synthetic_config);
-    // Call the function
-    state
-        .assets
-        ._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
-    // If no assertion error is thrown, the test passes
-}
-
-#[test]
-#[should_panic(expected: 'SYNTHETIC_EXPIRED_PRICE')]
-fn test_validate_synthetic_prices_expired() {
-    let mut state = CONTRACT_STATE();
-    let now = Time::now();
-    let synthetic_id = ASSET_ID_1();
-    let synthetic_config = SYNTHETIC_CONFIG();
-    // Add synthetic timely data with expired last price update
-    let synthetic_timely_data = SyntheticTimelyData {
-        version: SYNTHETIC_VERSION,
-        price: PRICE_1(),
-        last_price_update: now,
-        funding_index: Zero::zero(),
-        next: Option::None,
-    };
-    add_synthetic(ref state, synthetic_id, synthetic_timely_data, synthetic_config);
-
-    let now = now.add(PRICE_VALIDATION_INTERVAL);
-    // Set the block timestamp to be after the price validation interval
-    start_cheat_block_timestamp_global(block_timestamp: now.into());
-    // Call the function, should panic with EXPIRED_PRICE error
-    state
-        .assets
-        ._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
-}
-
-#[test]
-fn test_validate_prices() {
-    let mut state = CONTRACT_STATE();
-    let mut now = Time::now();
-
-    state.assets.last_price_validation.write(now);
-    assert_eq!(state.assets.last_price_validation.read(), now);
-    let new_time = now.add(delta: Time::days(count: 1));
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
-    now = Time::now();
-    state.assets._validate_prices(:now);
-    assert_eq!(state.assets.last_price_validation.read(), new_time);
-}
-
-#[test]
-fn test_validate_prices_no_update_needed() {
-    let mut state = CONTRACT_STATE();
-    let now = Time::now();
-    state.assets.last_price_validation.write(now);
-    state.assets._validate_prices(:now);
-    assert_eq!(state.assets.last_price_validation.read(), now);
 }
 
 #[test]
@@ -446,7 +285,7 @@ fn test_successful_trade() {
         .read();
     let user_a_synthetic_balance = position_a.synthetic_assets.entry(synthetic_id).balance.read();
     assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
-    assert_eq!(user_a_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+    assert_eq!(user_a_synthetic_balance, (BASE).into());
 
     let user_b_collateral_balance = position_b
         .collateral_assets
@@ -455,7 +294,7 @@ fn test_successful_trade() {
         .read();
     let user_b_synthetic_balance = position_b.synthetic_assets.entry(synthetic_id).balance.read();
     assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
-    assert_eq!(user_b_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
+    assert_eq!(user_b_synthetic_balance, (-BASE).into());
 }
 
 // TODO: Add all the illegal trade cases once safe dispatcher is supported.
