@@ -5,7 +5,7 @@ use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::types::PositionId;
 
 #[derive(Copy, Drop, Hash, Serde)]
-pub struct UpdatePositionPublicKeyArgs {
+pub struct SetPublicKeyArgs {
     pub position_id: PositionId,
     pub expiration: Timestamp,
     pub new_public_key: felt252,
@@ -13,7 +13,7 @@ pub struct UpdatePositionPublicKeyArgs {
 
 
 /// selector!(
-///   "\"UpdatePositionPublicKeyArgs\"(
+///   "\"SetPublicKeyArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"expiration\":\"Timestamp\",
 ///    \"new_public_key\":\"felt\"
@@ -25,25 +25,25 @@ pub struct UpdatePositionPublicKeyArgs {
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH: felt252 =
-    0x2240cb54d7a5d495b3c70779f6e2db647917ca1916b7481511333e343878534;
+const SET_PUBLIC_KEY_ARGS_HASH: felt252 =
+    0x27005793d92f58c51325473ffb97f3ae01c4a59dbd059e4d55fc660ae2fc0ea;
 
-impl StructHashImpl of StructHash<UpdatePositionPublicKeyArgs> {
-    fn hash_struct(self: @UpdatePositionPublicKeyArgs) -> felt252 {
+impl StructHashImpl of StructHash<SetPublicKeyArgs> {
+    fn hash_struct(self: @SetPublicKeyArgs) -> felt252 {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH).update_with(*self).finalize()
+        hash_state.update_with(SET_PUBLIC_KEY_ARGS_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH;
+    use super::SET_PUBLIC_KEY_ARGS_HASH;
 
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"UpdatePositionPublicKeyArgs\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(UPDATE_POSITION_PUBLIC_KEY_ARGS_HASH, expected);
+        assert_eq!(SET_PUBLIC_KEY_ARGS_HASH, expected);
     }
 }

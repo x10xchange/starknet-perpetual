@@ -2,8 +2,8 @@ use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
+use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
-use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId, Signature};
 use starknet::ContractAddress;
@@ -50,8 +50,9 @@ pub trait ICore<TContractState> {
     );
     fn transfer(self: @TContractState);
     fn transfer_request(ref self: TContractState, signature: Signature, message: TransferArgs);
-    fn update_position_public_key_request(
-        ref self: TContractState, signature: Signature, message: UpdatePositionPublicKeyArgs,
+    fn set_public_key(ref self: TContractState, operator_nonce: felt252, message: SetPublicKeyArgs);
+    fn set_public_key_request(
+        ref self: TContractState, signature: Signature, message: SetPublicKeyArgs,
     );
     fn withdraw(ref self: TContractState, operator_nonce: felt252, message: WithdrawArgs);
     fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawArgs);

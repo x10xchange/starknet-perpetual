@@ -23,10 +23,10 @@ pub mod Core {
         CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED, INVALID_FUNDING_TICK_LEN,
         INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, NO_OWNER_ACCOUNT,
         OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT,
-        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        position_not_healthy_nor_healthier, trade_order_expired_err,
+        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
@@ -36,8 +36,8 @@ pub mod Core {
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
+    use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::transfer::TransferArgs;
-    use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
         AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionId, Signature,
@@ -223,8 +223,32 @@ pub mod Core {
             self._register_fact(:signature, position_id: message.sender, :message);
         }
 
-        fn update_position_public_key_request(
-            ref self: ContractState, signature: Signature, message: UpdatePositionPublicKeyArgs,
+        // TODO: talk about this flow
+        /// Sets the position's public key.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The operator nonce must be valid.
+        /// - The expiration time has not passed.
+        /// - The position has an owner account.
+        /// - The request has been registered.
+        fn set_public_key(
+            ref self: ContractState, operator_nonce: felt252, message: SetPublicKeyArgs,
+        ) {
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+            assert(message.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
+            let position_id = message.position_id;
+            let position = self._get_position(:position_id);
+            let owner_account = position.owner_account.read();
+            assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
+            let hash = message.get_message_hash(signer: owner_account);
+            self._use_fact(:hash);
+            position.owner_public_key.write(message.new_public_key);
+        }
+
+        fn set_public_key_request(
+            ref self: ContractState, signature: Signature, message: SetPublicKeyArgs,
         ) {
             self._register_fact(:signature, position_id: message.position_id, :message);
         }
