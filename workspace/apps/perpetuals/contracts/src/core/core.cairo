@@ -304,11 +304,13 @@ pub mod Core {
 
             // Validations.
             self
-                ._validate_liquidate(
-                    :liquidated_order,
-                    :liquidator_order,
-                    :actual_liquidator_fee,
-                    :insurance_fund_fee,
+                ._validate_orders(
+                    order_a: liquidated_order,
+                    order_b: liquidator_order,
+                    actual_amount_base_a: actual_amount_base_liquidated,
+                    actual_amount_quote_a: actual_amount_quote_liquidated,
+                    actual_fee_a: insurance_fund_fee.amount,
+                    actual_fee_b: actual_liquidator_fee,
                     :now,
                 );
             // TODO: Execute liquidation.
@@ -412,7 +414,7 @@ pub mod Core {
                 );
 
             self
-                ._validate_trade(
+                ._validate_orders(
                     :order_a,
                     :order_b,
                     :actual_amount_base_a,
@@ -868,7 +870,7 @@ pub mod Core {
             );
         }
 
-        fn _validate_trade(
+        fn _validate_orders(
             ref self: ContractState,
             order_a: Order,
             order_b: Order,
@@ -907,28 +909,6 @@ pub mod Core {
                 !have_same_sign(a: order_a.quote.amount, b: order_b.quote.amount),
                 INVALID_TRADE_QUOTE_AMOUNT_SIGN,
             );
-        }
-
-
-        fn _validate_liquidate(
-            ref self: ContractState,
-            liquidated_order: Order,
-            liquidator_order: Order,
-            actual_liquidator_fee: i64,
-            insurance_fund_fee: AssetAmount,
-            now: Timestamp,
-        ) {
-            self._validate_order(order: liquidated_order, :now);
-            self._validate_order(order: liquidator_order, :now);
-
-            let actual_amount_base_liquidator = -liquidated_order.base.amount;
-            let actual_amount_quote_liquidator = -liquidated_order.quote.amount;
-            liquidator_order
-                .validate_against_actual_amounts(
-                    actual_amount_base: actual_amount_base_liquidator,
-                    actual_amount_quote: actual_amount_quote_liquidator,
-                    actual_fee: actual_liquidator_fee,
-                );
         }
 
         /// Builds asset diff entries from an order's fee, quote, and base assets, handling overlaps
