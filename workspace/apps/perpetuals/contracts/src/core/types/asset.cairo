@@ -5,7 +5,7 @@ pub mod synthetic;
 
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct AssetId {
-    value: felt252,
+    pub value: felt252,
 }
 
 #[generate_trait]

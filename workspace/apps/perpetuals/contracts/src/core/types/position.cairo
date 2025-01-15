@@ -1,5 +1,4 @@
 use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::utils::AddToStorage;
 use core::num::traits::Zero;
 use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
 use openzeppelin::account::utils::is_valid_stark_signature;
@@ -9,7 +8,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralAsset;
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
 use starknet::ContractAddress;
-use starknet::storage::{Map, Mutable, StoragePath, StoragePathEntry, StoragePointerReadAccess};
+use starknet::storage::{Map, Mutable, StoragePath, StoragePointerReadAccess};
 
 
 #[starknet::storage_node]
@@ -70,19 +69,5 @@ pub impl PositionImpl of PositionTrait {
         } else {
             message.get_message_hash(signer: self.owner_public_key.read())
         }
-    }
-
-    fn _update_balance(
-        self: StoragePath<Mutable<Position>>,
-        asset_id: AssetId,
-        actual_amount: i64,
-        is_collateral: bool,
-    ) {
-        let mut balance = if is_collateral {
-            self.collateral_assets.entry(asset_id).balance
-        } else {
-            self.synthetic_assets.entry(asset_id).balance
-        };
-        balance.add_and_write(actual_amount.into());
     }
 }

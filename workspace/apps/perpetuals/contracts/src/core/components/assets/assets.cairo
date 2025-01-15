@@ -157,6 +157,18 @@ pub(crate) mod AssetsComponent {
             self.synthetic_timely_data.entry(synthetic_id).price.read()
         }
 
+        fn _is_main_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
+            if let Option::Some(main_collateral) = self.collateral_timely_data_head.read() {
+                return main_collateral == asset_id;
+            }
+            false
+        }
+
+        fn _get_main_collateral_asset_id(self: @ComponentState<TContractState>) -> AssetId {
+            self.collateral_timely_data_head.read().expect(COLLATERAL_NOT_EXISTS)
+        }
+
+
         fn _is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
             self.collateral_configs.read(asset_id).is_some()
         }

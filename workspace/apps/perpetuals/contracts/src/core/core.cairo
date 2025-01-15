@@ -9,6 +9,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::utils::AddToStorage;
     use contracts_commons::utils::SubFromStorage;
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
@@ -28,14 +29,19 @@ pub mod Core {
         position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::asset::AssetId;
+
+    use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
+
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
-    use perpetuals::core::types::funding::FundingTick;
+
+    use perpetuals::core::types::funding::{FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
+
     use perpetuals::core::types::transfer::TransferArgs;
+
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
@@ -189,8 +195,6 @@ pub mod Core {
         ) {
             self._validate_deposit(:operator_nonce, :depositing_address, :deposit_args);
             let position_id = deposit_args.position_id;
-            self._apply_funding(:position_id);
-
             let position = self._get_position(:position_id);
             /// Position with no owner_public_key is considered as a new position. Then we set the
             /// owner_public_key and owner_account. Otherwise, we check that they match.
@@ -209,9 +213,9 @@ pub mod Core {
             }
             let collateral_id = deposit_args.collateral.asset_id;
             let amount = deposit_args.collateral.amount;
-            position
-                ._update_balance(
-                    asset_id: collateral_id, actual_amount: amount, is_collateral: true,
+            self
+                .apply_funding_and_update_balance(
+                    position_id: position_id, asset_id: collateral_id, diff: amount.into(),
                 );
             self.pending_deposits.entry(collateral_id).sub_and_write(amount);
         }
@@ -340,7 +344,6 @@ pub mod Core {
         /// - Ensures the base-to-quote amount ratio does not decrease.
         ///
         /// Execution:
-        /// - Apply funding to both positions.
         /// - Subtract the fees from each position's collateral.
         /// - Add the fees to the `fee_position`.
         /// - Update Order A's position and Order B's position, based on `actual_amount_base`.
@@ -434,7 +437,6 @@ pub mod Core {
         /// - Validate the position is healthy after the withdraw.
         ///
         /// Execution:
-        /// - [Apply funding](`_apply_funding`) to the position.
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
@@ -458,7 +460,6 @@ pub mod Core {
                 );
 
             /// Execution - Withdraw:
-            self._apply_funding(:position_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher
                 .transfer(
@@ -527,7 +528,6 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _apply_funding(ref self: ContractState, position_id: PositionId) {}
         fn _pre_update(self: @ContractState) {}
         fn _post_update(self: @ContractState) {}
 
@@ -560,6 +560,113 @@ pub mod Core {
             fulfillment_entry.write(final_amount);
         }
 
+        fn _get_provisional_balance(
+            self: @ContractState, position_id: PositionId, asset_id: AssetId,
+        ) -> Balance {
+            if self.assets._is_main_collateral(:asset_id) {
+                self._get_provisional_main_collateral_balance(:position_id)
+            } else {
+                self.positions.entry(position_id).synthetic_assets.entry(asset_id).balance.read()
+            }
+        }
+
+
+        /// Updates the balance of a given asset, determining its type (collateral or synthetic)
+        /// and applying the appropriate logic.
+        fn _apply_funding_and_set_balance(
+            ref self: ContractState, position_id: PositionId, asset_id: AssetId, balance: Balance,
+        ) {
+            let mut position = self._get_position(:position_id);
+            if self.assets._is_main_collateral(:asset_id) {
+                position.collateral_assets.entry(asset_id).balance.write(balance);
+            } else {
+                self
+                    ._update_synthetic_balance_and_funding(
+                        :position_id, synthetic_id: asset_id, :balance,
+                    );
+            }
+        }
+
+        fn apply_funding_and_update_balance(
+            ref self: ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
+        ) {
+            let current_balance = self._get_provisional_balance(:position_id, asset_id: asset_id);
+            self
+                ._apply_funding_and_set_balance(
+                    :position_id, :asset_id, balance: current_balance + diff,
+                );
+        }
+
+        fn _get_provisional_main_collateral_balance(
+            self: @ContractState, position_id: PositionId,
+        ) -> Balance {
+            let position = self.positions.entry(position_id);
+            let mut main_collateral_balance = position
+                .collateral_assets
+                .entry(self.assets._get_main_collateral_asset_id())
+                .balance
+                .read();
+            let mut asset_id_opt = position.synthetic_assets_head.read();
+
+            while let Option::Some(synthetic_id) = asset_id_opt {
+                let synthetic_asset = position.synthetic_assets.read(synthetic_id);
+                let balance = synthetic_asset.balance;
+                let funding = synthetic_asset.funding_index;
+                let global_funding = self
+                    .assets
+                    .synthetic_timely_data
+                    .read(synthetic_id)
+                    .funding_index;
+                main_collateral_balance += (global_funding - funding).mul(balance);
+                asset_id_opt = synthetic_asset.next;
+            };
+            main_collateral_balance
+        }
+
+        /// Updates the synthetic balance and handles the funding mechanism.
+        /// This function adjusts the main collateral balance of a position by applying funding
+        /// costs or earnings based on the difference between the global funding index and the
+        /// current funding index.
+        ///
+        /// The main collateral balance is updated using the following formula:
+        /// main_collateral_balance += synthetic_balance * (global_funding_index - funding_index).
+        /// After the adjustment, the `funding_index` is set to `global_funding_index`.
+        ///
+        /// Example:
+        /// main_collateral_balance = 1000;
+        /// synthetic_balance = 50;
+        /// funding_index = 200;
+        /// global_funding_index = 210;
+        ///
+        /// new_synthetic_balance = 300;
+        ///
+        /// After the update:
+        /// main_collateral_balance = 1500; // 1000 + 50 * (210 - 200)
+        /// synthetic_balance = 300;
+        /// synthetic_funding_index = 210;
+        ///
+        fn _update_synthetic_balance_and_funding(
+            ref self: ContractState,
+            position_id: PositionId,
+            synthetic_id: AssetId,
+            balance: Balance,
+        ) {
+            let position = self._get_position(:position_id);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+            let funding = synthetic_asset.funding_index.read();
+            let global_funding = self.assets.synthetic_timely_data.read(synthetic_id).funding_index;
+            let synthetic_balance = synthetic_asset.balance.read();
+
+            position
+                .collateral_assets
+                .entry(self.assets._get_main_collateral_asset_id())
+                .balance
+                .add_and_write((global_funding - funding).mul(synthetic_balance));
+            synthetic_asset.balance.write(balance);
+            synthetic_asset.funding_index.write(global_funding);
+        }
+
+
         fn _get_position(
             ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
@@ -569,10 +676,9 @@ pub mod Core {
         }
 
         fn _collect_position_collaterals(
-            self: @ContractState,
-            ref asset_entries: Array<AssetEntry>,
-            position: StoragePath<Position>,
+            self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
         ) {
+            let position = self.positions.entry(position_id);
             let mut asset_id_opt = position.collateral_assets_head.read();
             while let Option::Some(collateral_id) = asset_id_opt {
                 let collateral_asset = position.collateral_assets.read(collateral_id);
@@ -580,8 +686,8 @@ pub mod Core {
                     .append(
                         AssetEntry {
                             id: collateral_id,
-                            // TODO: consider taking into account the funding index.
-                            balance: collateral_asset.balance,
+                            balance: self
+                                ._get_provisional_balance(:position_id, asset_id: collateral_id),
                             price: self.assets._get_collateral_price(:collateral_id),
                         },
                     );
@@ -591,10 +697,9 @@ pub mod Core {
         }
 
         fn _collect_position_synthetics(
-            self: @ContractState,
-            ref asset_entries: Array<AssetEntry>,
-            position: StoragePath<Position>,
+            self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
         ) {
+            let position = self.positions.entry(position_id);
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_asset = position.synthetic_assets.read(synthetic_id);
@@ -602,7 +707,8 @@ pub mod Core {
                     .append(
                         AssetEntry {
                             id: synthetic_id,
-                            balance: synthetic_asset.balance,
+                            balance: self
+                                ._get_provisional_balance(:position_id, asset_id: synthetic_id),
                             price: self.assets._get_synthetic_price(:synthetic_id),
                         },
                     );
@@ -611,12 +717,13 @@ pub mod Core {
             };
         }
 
+
         fn _get_position_data(self: @ContractState, position_id: PositionId) -> PositionData {
             let mut asset_entries = array![];
             let position = self.positions.entry(position_id);
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
-            self._collect_position_collaterals(ref :asset_entries, :position);
-            self._collect_position_synthetics(ref :asset_entries, :position);
+            self._collect_position_collaterals(ref :asset_entries, :position_id);
+            self._collect_position_synthetics(ref :asset_entries, :position_id);
             PositionData { asset_entries: asset_entries.span() }
         }
 
@@ -663,49 +770,51 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
         ) {
-            let position_entry_a = self._get_position(position_id: order_a.position_id);
-            let position_entry_b = self._get_position(position_id: order_b.position_id);
-
             // Handle fees.
-            position_entry_a
-                ._update_balance(
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_a.position_id,
                     asset_id: order_a.fee.asset_id,
-                    actual_amount: -actual_fee_a,
-                    is_collateral: true,
+                    diff: (-actual_fee_a).into(),
                 );
-            position_entry_b
-                ._update_balance(
+
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_b.position_id,
                     asset_id: order_b.fee.asset_id,
-                    actual_amount: -actual_fee_b,
-                    is_collateral: true,
+                    diff: (-actual_fee_b).into(),
                 );
 
             // Update base assets.
-            position_entry_a
-                ._update_balance(
+
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_a.position_id,
                     asset_id: order_a.base.asset_id,
-                    actual_amount: actual_amount_base_a,
-                    is_collateral: self.assets._is_collateral(asset_id: order_a.base.asset_id),
+                    diff: actual_amount_base_a.into(),
                 );
-            position_entry_b
-                ._update_balance(
+
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_b.position_id,
                     asset_id: order_b.base.asset_id,
-                    actual_amount: -actual_amount_base_a,
-                    is_collateral: self.assets._is_collateral(asset_id: order_b.base.asset_id),
+                    diff: (-actual_amount_base_a).into(),
                 );
 
             // Update quote assets.
-            position_entry_a
-                ._update_balance(
+
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_a.position_id,
                     asset_id: order_a.quote.asset_id,
-                    actual_amount: actual_amount_quote_a,
-                    is_collateral: true,
+                    diff: actual_amount_quote_a.into(),
                 );
-            position_entry_b
-                ._update_balance(
+
+            self
+                .apply_funding_and_update_balance(
+                    position_id: order_b.position_id,
                     asset_id: order_b.quote.asset_id,
-                    actual_amount: -actual_amount_quote_a,
-                    is_collateral: true,
+                    diff: (-actual_amount_quote_a).into(),
                 );
         }
 
@@ -900,10 +1009,6 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
         ) {
-            // Apply funding to both positions.
-            self._apply_funding(order_a.position_id);
-            self._apply_funding(order_b.position_id);
-
             let position_data_a = self._get_position_data(order_a.position_id);
             let asset_diff_entries_a = self
                 ._create_asset_diff_entries_from_order(
