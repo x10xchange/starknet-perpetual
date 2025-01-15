@@ -1,8 +1,7 @@
 use contracts_commons::message_hash::OffchainMessageHash;
 use core::num::traits::Zero;
-use openzeppelin::account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
 use openzeppelin::account::utils::is_valid_stark_signature;
-use perpetuals::core::errors::{INVALID_OWNER_SIGNATURE, INVALID_STARK_SIGNATURE, NO_OWNER_ACCOUNT};
+use perpetuals::core::errors::INVALID_STARK_SIGNATURE;
 use perpetuals::core::types::Signature;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralAsset;
@@ -33,20 +32,6 @@ pub impl PositionImpl of PositionTrait {
                 :msg_hash, public_key: self.owner_public_key.read(), :signature,
             ),
             INVALID_STARK_SIGNATURE,
-        );
-    }
-
-    fn _validate_owner_signature(
-        self: @StoragePath<Mutable<Position>>, msg_hash: felt252, signature: Signature,
-    ) {
-        let contract_address = self.owner_account.read();
-        assert(contract_address.is_non_zero(), NO_OWNER_ACCOUNT);
-        let is_valid_signature_felt = ISRC6Dispatcher { contract_address }
-            .is_valid_signature(hash: msg_hash, signature: signature.into());
-        // Check either 'VALID' or true for backwards compatibility.
-        assert(
-            is_valid_signature_felt == starknet::VALIDATED || is_valid_signature_felt == 1,
-            INVALID_OWNER_SIGNATURE,
         );
     }
 

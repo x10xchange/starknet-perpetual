@@ -9,8 +9,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use contracts_commons::utils::AddToStorage;
-    use contracts_commons::utils::SubFromStorage;
+    use contracts_commons::utils::{AddToStorage, SubFromStorage};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -21,27 +20,23 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED,
-        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
-        INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
+        DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED, INVALID_FUNDING_TICK_LEN,
+        INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
         OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT,
         POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
         position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
-
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
-
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
-
     use perpetuals::core::types::funding::{FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
-
     use perpetuals::core::types::transfer::TransferArgs;
-
     use perpetuals::core::types::update_position_public_key::UpdatePositionPublicKeyArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
@@ -231,11 +226,7 @@ pub mod Core {
         fn update_position_public_key_request(
             ref self: ContractState, signature: Signature, message: UpdatePositionPublicKeyArgs,
         ) {
-            let position_id = message.position_id;
-            let position = self.positions.entry(position_id);
-            let msg_hash = message.get_message_hash(signer: position.owner_account.read());
-            position._validate_owner_signature(:msg_hash, :signature);
-            self.fact_registry.write(key: msg_hash, value: Time::now());
+            self._register_fact(:signature, position_id: message.position_id, :message);
         }
 
         fn liquidate(
@@ -1097,10 +1088,12 @@ pub mod Core {
             let msg_hash = position
                 ._generate_message_hash_with_owner_account_or_public_key(:message);
             if position.owner_account.read().is_non_zero() {
-                position._validate_owner_signature(:msg_hash, :signature);
-            } else {
-                position._validate_stark_signature(:msg_hash, :signature);
+                assert(
+                    position.owner_account.read() == get_caller_address(),
+                    CALLER_IS_NOT_OWNER_ACCOUNT,
+                );
             }
+            position._validate_stark_signature(:msg_hash, :signature);
             self.fact_registry.write(key: msg_hash, value: Time::now());
         }
     }
