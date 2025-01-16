@@ -1,5 +1,7 @@
 #[starknet::contract]
 pub mod Core {
+    use contracts_commons::components::nonce::NonceComponent;
+    use contracts_commons::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
@@ -15,7 +17,6 @@ pub mod Core {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use openzeppelin::utils::cryptography::nonces::NoncesComponent;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
@@ -53,15 +54,15 @@ pub mod Core {
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
-    component!(path: NoncesComponent, storage: nonces, event: NoncesEvent);
+    component!(path: NonceComponent, storage: nonce, event: NonceEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
 
-    impl NoncesImpl = NoncesComponent::NoncesImpl<ContractState>;
-    impl NoncesComponentInternalImpl = NoncesComponent::InternalImpl<ContractState>;
+    impl NonceImpl = NonceComponent::NonceImpl<ContractState>;
+    impl NonceComponentInternalImpl = NonceComponent::InternalImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
@@ -95,7 +96,7 @@ pub mod Core {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
-        pub nonces: NoncesComponent::Storage,
+        pub nonce: NonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
@@ -120,7 +121,7 @@ pub mod Core {
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
-        NoncesEvent: NoncesComponent::Event,
+        NonceEvent: NonceComponent::Event,
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
@@ -206,7 +207,7 @@ pub mod Core {
         /// - Mark the deposit message as fulfilled.
         fn process_deposit(
             ref self: ContractState,
-            operator_nonce: felt252,
+            operator_nonce: u64,
             depositing_address: ContractAddress,
             deposit_args: DepositArgs,
         ) {
@@ -254,9 +255,7 @@ pub mod Core {
         /// - The expiration time has not passed.
         /// - The position has an owner account.
         /// - The request has been registered.
-        fn set_public_key(
-            ref self: ContractState, operator_nonce: felt252, message: SetPublicKeyArgs,
-        ) {
+        fn set_public_key(ref self: ContractState, operator_nonce: u64, message: SetPublicKeyArgs) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             assert(message.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
@@ -301,7 +300,7 @@ pub mod Core {
         /// - Update liquidator order fulfillment.
         fn liquidate(
             ref self: ContractState,
-            operator_nonce: felt252,
+            operator_nonce: u64,
             signature_liquidator: Signature,
             liquidated_position_id: PositionId,
             liquidator_order: Order,
@@ -382,7 +381,7 @@ pub mod Core {
         /// - The signature is valid.
         fn set_position_owner(
             ref self: ContractState,
-            operator_nonce: felt252,
+            operator_nonce: u64,
             signature: Signature,
             message: SetPositionOwnerArgs,
         ) {
@@ -424,7 +423,7 @@ pub mod Core {
         /// - Update order fulfillment.
         fn trade(
             ref self: ContractState,
-            operator_nonce: felt252,
+            operator_nonce: u64,
             signature_a: Signature,
             signature_b: Signature,
             order_a: Order,
@@ -512,7 +511,7 @@ pub mod Core {
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
-        fn withdraw(ref self: ContractState, operator_nonce: felt252, message: WithdrawArgs) {
+        fn withdraw(ref self: ContractState, operator_nonce: u64, message: WithdrawArgs) {
             let now = Time::now();
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = message.collateral.amount;
@@ -581,7 +580,7 @@ pub mod Core {
         ///    - Update the previous asset id to the current funding tick asset id.
         /// - Update the last funding tick time.
         fn funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
+            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
         ) {
             self._validate_funding_tick(:funding_ticks, :operator_nonce);
             self.assets._execute_funding_tick(:funding_ticks);
@@ -605,9 +604,9 @@ pub mod Core {
 
         /// Validates the operator nonce and consumes it.
         /// Only the operator can call this function.
-        fn _consume_operator_nonce(ref self: ContractState, operator_nonce: felt252) {
+        fn _consume_operator_nonce(ref self: ContractState, operator_nonce: u64) {
             self.roles.only_operator();
-            self.nonces.use_checked_nonce(owner: get_contract_address(), nonce: operator_nonce);
+            self.nonce.use_checked_nonce(nonce: operator_nonce);
         }
 
         fn _use_fact(ref self: ContractState, hash: felt252) {
@@ -804,9 +803,7 @@ pub mod Core {
         /// - Caller has operator role.
         /// - Operator nonce is valid.
         /// - Assets integrity [_validate_assets_integrity].
-        fn _validate_operator_flow(
-            ref self: ContractState, operator_nonce: felt252, now: Timestamp,
-        ) {
+        fn _validate_operator_flow(ref self: ContractState, operator_nonce: u64, now: Timestamp) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             self.assets._validate_assets_integrity(:now);
@@ -892,7 +889,7 @@ pub mod Core {
 
         fn _validate_deposit(
             ref self: ContractState,
-            operator_nonce: felt252,
+            operator_nonce: u64,
             depositing_address: ContractAddress,
             deposit_args: DepositArgs,
         ) {
@@ -915,7 +912,7 @@ pub mod Core {
         }
 
         fn _validate_funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
+            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);

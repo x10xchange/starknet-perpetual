@@ -15,7 +15,7 @@ pub trait ICore<TContractState> {
     fn deposit(ref self: TContractState, deposit_args: DepositArgs);
     fn liquidate(
         ref self: TContractState,
-        operator_nonce: felt252,
+        operator_nonce: u64,
         signature_liquidator: Signature,
         liquidated_position_id: PositionId,
         liquidator_order: Order,
@@ -26,19 +26,19 @@ pub trait ICore<TContractState> {
     );
     fn set_position_owner(
         ref self: TContractState,
-        operator_nonce: felt252,
+        operator_nonce: u64,
         signature: Signature,
         message: SetPositionOwnerArgs,
     );
     fn process_deposit(
         ref self: TContractState,
-        operator_nonce: felt252,
+        operator_nonce: u64,
         depositing_address: ContractAddress,
         deposit_args: DepositArgs,
     );
     fn trade(
         ref self: TContractState,
-        operator_nonce: felt252,
+        operator_nonce: u64,
         signature_a: Signature,
         signature_b: Signature,
         order_a: Order,
@@ -50,16 +50,16 @@ pub trait ICore<TContractState> {
     );
     fn transfer(self: @TContractState);
     fn transfer_request(ref self: TContractState, signature: Signature, message: TransferArgs);
-    fn set_public_key(ref self: TContractState, operator_nonce: felt252, message: SetPublicKeyArgs);
+    fn set_public_key(ref self: TContractState, operator_nonce: u64, message: SetPublicKeyArgs);
     fn set_public_key_request(
         ref self: TContractState, signature: Signature, message: SetPublicKeyArgs,
     );
-    fn withdraw(ref self: TContractState, operator_nonce: felt252, message: WithdrawArgs);
+    fn withdraw(ref self: TContractState, operator_nonce: u64, message: WithdrawArgs);
     fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawArgs);
 
     // Funding
     fn funding_tick(
-        ref self: TContractState, funding_ticks: Span<FundingTick>, operator_nonce: felt252,
+        ref self: TContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
     );
 
     // Configuration
