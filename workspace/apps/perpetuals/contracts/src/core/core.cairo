@@ -96,7 +96,7 @@ pub mod Core {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
-        pub nonce: NonceComponent::Storage,
+        nonce: NonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]

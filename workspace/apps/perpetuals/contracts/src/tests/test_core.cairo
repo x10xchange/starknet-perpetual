@@ -127,7 +127,7 @@ fn test_successful_withdraw() {
         recipient: user.address,
     };
     let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
-    let operator_nonce = state.nonce.nonce();
+    let operator_nonce = state.nonce();
 
     // Test:
     state.withdraw_request(:signature, :message);
@@ -259,7 +259,7 @@ fn test_successful_trade() {
 
     let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
     let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
-    let operator_nonce = state.nonce.nonce();
+    let operator_nonce = state.nonce();
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -326,7 +326,7 @@ fn test_invalid_trade_non_positve_fee() {
     };
 
     let signature = user.sign_message(order.get_message_hash(user.key_pair.public_key));
-    let operator_nonce = state.nonce.nonce();
+    let operator_nonce = state.nonce();
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -397,7 +397,7 @@ fn test_invalid_trade_same_base_signs() {
 
     let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
     let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
-    let operator_nonce = state.nonce.nonce();
+    let operator_nonce = state.nonce();
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
