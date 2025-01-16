@@ -33,9 +33,6 @@ pub fn POSITION_OWNER_2() -> ContractAddress nopanic {
 pub fn TOKEN_ADDRESS() -> ContractAddress {
     contract_address_const::<'TOKEN_ADDRESS'>()
 }
-pub fn RISK_FACTOR() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
 pub fn GOVERNANCE_ADMIN() -> ContractAddress {
     contract_address_const::<'GOVERNANCE_ADMIN'>()
 }
@@ -62,7 +59,7 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
         resolution: SYNTHETIC_RESOLUTION,
         name: SYNTHETIC_NAME,
         is_active: true,
-        risk_factor: RISK_FACTOR(),
+        risk_factor: RISK_FACTOR_1(),
         quorum: SYNTHETIC_QUORUM,
     }
 }

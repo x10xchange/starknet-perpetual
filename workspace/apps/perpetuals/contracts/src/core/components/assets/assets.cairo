@@ -2,6 +2,7 @@
 pub(crate) mod AssetsComponent {
     use contracts_commons::errors::{assert_with_byte_array, panic_with_felt};
     use contracts_commons::math::Abs;
+    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use perpetuals::core::components::assets::errors::{
@@ -155,6 +156,18 @@ pub(crate) mod AssetsComponent {
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> Price {
             self.synthetic_timely_data.entry(synthetic_id).price.read()
+        }
+
+        fn _get_risk_factor(
+            self: @ComponentState<TContractState>, asset_id: AssetId,
+        ) -> FixedTwoDecimal {
+            if self._is_collateral(:asset_id) {
+                Zero::zero()
+            } else if self._is_synthetic(:asset_id) {
+                self._get_synthetic_config(asset_id).risk_factor
+            } else {
+                panic_with_felt(ASSET_NOT_EXISTS)
+            }
         }
 
         fn _is_main_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {

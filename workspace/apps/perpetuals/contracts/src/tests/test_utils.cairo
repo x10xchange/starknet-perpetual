@@ -113,7 +113,7 @@ pub fn generate_collateral(token_state: @TokenState) -> (CollateralConfig, Colla
             address: *token_state.address,
             quantum: COLLATERAL_QUANTUM,
             is_active: true,
-            risk_factor: RISK_FACTOR(),
+            risk_factor: Zero::zero(),
             quorum: COLLATERAL_QUORUM,
         },
         COLLATERAL_TIMELY_DATA(),

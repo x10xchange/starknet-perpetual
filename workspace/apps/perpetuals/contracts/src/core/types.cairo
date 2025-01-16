@@ -9,6 +9,7 @@ pub(crate) mod set_position_owner;
 pub mod set_public_key;
 pub mod transfer;
 pub mod withdraw;
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
@@ -36,6 +37,7 @@ pub struct AssetEntry {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
+    pub risk_factor: FixedTwoDecimal,
 }
 
 #[derive(Copy, Default, Drop, Serde)]
@@ -44,6 +46,7 @@ pub struct AssetDiffEntry {
     pub before: Balance,
     pub after: Balance,
     pub price: Price,
+    pub risk_factor: FixedTwoDecimal,
 }
 
 pub type PositionDiff = Span<AssetDiffEntry>;

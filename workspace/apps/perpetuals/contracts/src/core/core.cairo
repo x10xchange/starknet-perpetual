@@ -545,7 +545,15 @@ pub mod Core {
             let after = before.sub(amount);
             balance.write(after);
             let price = self.assets._get_collateral_price(:collateral_id);
-            let position_diff = array![AssetDiffEntry { id: collateral_id, before, after, price }]
+            let position_diff = array![
+                AssetDiffEntry {
+                    id: collateral_id,
+                    before,
+                    after,
+                    price,
+                    risk_factor: self.assets._get_risk_factor(asset_id: collateral_id),
+                },
+            ]
                 .span();
 
             let value_risk_calculator_dispatcher = self.value_risk_calculator_dispatcher.read();
@@ -760,6 +768,7 @@ pub mod Core {
                             balance: self
                                 ._get_provisional_balance(:position_id, asset_id: collateral_id),
                             price: self.assets._get_collateral_price(:collateral_id),
+                            risk_factor: self.assets._get_risk_factor(asset_id: collateral_id),
                         },
                     );
 
@@ -781,6 +790,7 @@ pub mod Core {
                             balance: self
                                 ._get_provisional_balance(:position_id, asset_id: synthetic_id),
                             price: self.assets._get_synthetic_price(:synthetic_id),
+                            risk_factor: self.assets._get_risk_factor(asset_id: synthetic_id),
                         },
                     );
 
@@ -1043,6 +1053,7 @@ pub mod Core {
                 before: fee_balance,
                 after: fee_balance.sub(actual_fee),
                 price: fee_price,
+                risk_factor: self.assets._get_risk_factor(asset_id: fee_asset_id),
             };
 
             // Quote asset.
@@ -1066,6 +1077,7 @@ pub mod Core {
                         before: quote_balance,
                         after: quote_balance.add(actual_amount_quote),
                         price: quote_price,
+                        risk_factor: self.assets._get_risk_factor(asset_id: quote_asset_id),
                     };
             }
 
@@ -1087,6 +1099,7 @@ pub mod Core {
                         before: base_balance,
                         after: base_balance.add(actual_amount_base),
                         price: self.assets._get_asset_price(asset_id: base_asset_id),
+                        risk_factor: self.assets._get_risk_factor(asset_id: base_asset_id),
                     };
             }
 

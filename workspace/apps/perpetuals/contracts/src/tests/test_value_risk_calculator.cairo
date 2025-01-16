@@ -19,11 +19,6 @@ fn CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
 fn INITIALIZED_CONTRACT_STATE() -> ValueRiskCalculator::ContractState {
     let mut state = CONTRACT_STATE();
     ValueRiskCalculator::constructor(ref state);
-    state.set_risk_factor_for_asset(SYNTHETIC_ASSET_ID_1(), RISK_FACTOR_1());
-    state.set_risk_factor_for_asset(SYNTHETIC_ASSET_ID_2(), RISK_FACTOR_2());
-    state.set_risk_factor_for_asset(SYNTHETIC_ASSET_ID_3(), RISK_FACTOR_3());
-    state.set_risk_factor_for_asset(SYNTHETIC_ASSET_ID_4(), RISK_FACTOR_4());
-    state.set_risk_factor_for_asset(SYNTHETIC_ASSET_ID_5(), RISK_FACTOR_5());
     state
 }
 
@@ -45,7 +40,10 @@ fn test_calculate_position_tvtr_change_basic_case() {
     let mut state = INITIALIZED_CONTRACT_STATE();
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_1(), balance: BalanceTrait::new(value: 60), price: PRICE_1(),
+        id: SYNTHETIC_ASSET_ID_1(),
+        balance: BalanceTrait::new(value: 60),
+        price: PRICE_1(),
+        risk_factor: RISK_FACTOR_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
@@ -55,6 +53,7 @@ fn test_calculate_position_tvtr_change_basic_case() {
         before: asset_entry.balance,
         after: BalanceTrait::new(value: 80),
         price: asset_entry.price,
+        risk_factor: RISK_FACTOR_1(),
     };
     let position_diff = array![asset_diff_entry].span();
 
@@ -88,7 +87,10 @@ fn test_calculate_position_tvtr_change_negative_balance() {
 
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_1(), balance: BalanceTrait::new(value: -60), price: PRICE_1(),
+        id: SYNTHETIC_ASSET_ID_1(),
+        balance: BalanceTrait::new(value: -60),
+        price: PRICE_1(),
+        risk_factor: RISK_FACTOR_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
@@ -98,6 +100,7 @@ fn test_calculate_position_tvtr_change_negative_balance() {
         before: asset_entry.balance,
         after: BalanceTrait::new(value: 20),
         price: asset_entry.price,
+        risk_factor: RISK_FACTOR_1(),
     };
     let position_diff = array![asset_diff_entry].span();
 
@@ -130,19 +133,34 @@ fn test_calculate_position_tvtr_change_multiple_assets() {
 
     // Create a position with multiple asset entries.
     let asset_entry_1 = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_1(), balance: BalanceTrait::new(value: 60), price: PRICE_1(),
+        id: SYNTHETIC_ASSET_ID_1(),
+        balance: BalanceTrait::new(value: 60),
+        price: PRICE_1(),
+        risk_factor: RISK_FACTOR_1(),
     };
     let asset_entry_2 = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_2(), balance: BalanceTrait::new(value: 40), price: PRICE_2(),
+        id: SYNTHETIC_ASSET_ID_2(),
+        balance: BalanceTrait::new(value: 40),
+        price: PRICE_2(),
+        risk_factor: RISK_FACTOR_2(),
     };
     let asset_entry_3 = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_3(), balance: BalanceTrait::new(value: 20), price: PRICE_3(),
+        id: SYNTHETIC_ASSET_ID_3(),
+        balance: BalanceTrait::new(value: 20),
+        price: PRICE_3(),
+        risk_factor: RISK_FACTOR_3(),
     };
     let asset_entry_4 = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_4(), balance: BalanceTrait::new(value: 10), price: PRICE_4(),
+        id: SYNTHETIC_ASSET_ID_4(),
+        balance: BalanceTrait::new(value: 10),
+        price: PRICE_4(),
+        risk_factor: RISK_FACTOR_4(),
     };
     let asset_entry_5 = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_5(), balance: BalanceTrait::new(value: 5), price: PRICE_5(),
+        id: SYNTHETIC_ASSET_ID_5(),
+        balance: BalanceTrait::new(value: 5),
+        price: PRICE_5(),
+        risk_factor: RISK_FACTOR_5(),
     };
     let position_data = PositionData {
         asset_entries: array![
@@ -157,12 +175,14 @@ fn test_calculate_position_tvtr_change_multiple_assets() {
         before: asset_entry_1.balance,
         after: BalanceTrait::new(value: 80),
         price: asset_entry_1.price,
+        risk_factor: RISK_FACTOR_1(),
     };
     let asset_diff_entry_2 = AssetDiffEntry {
         id: asset_entry_2.id,
         before: asset_entry_2.balance,
         after: BalanceTrait::new(value: 60),
         price: asset_entry_2.price,
+        risk_factor: RISK_FACTOR_2(),
     };
     let position_diff = array![asset_diff_entry_1, asset_diff_entry_2].span();
 
@@ -206,7 +226,10 @@ fn test_calculate_position_tvtr_empty_diff() {
 
     // Create a position with a single asset entry.
     let asset_entry = AssetEntry {
-        id: SYNTHETIC_ASSET_ID_1(), balance: BalanceTrait::new(value: 60), price: PRICE_1(),
+        id: SYNTHETIC_ASSET_ID_1(),
+        balance: BalanceTrait::new(value: 60),
+        price: PRICE_1(),
+        risk_factor: RISK_FACTOR_1(),
     };
     let position_data = PositionData { asset_entries: array![asset_entry].span() };
 
