@@ -21,7 +21,7 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
+        APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED, INVALID_FUNDING_TICK_LEN,
         INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, NO_OWNER_ACCOUNT,
@@ -42,7 +42,7 @@ pub mod Core {
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
-        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionId, Signature,
+        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId, Signature,
     };
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
@@ -535,11 +535,8 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
-            let position_data = self._get_position_data(:position_id);
-            let balance = position.collateral_assets.entry(collateral_id).balance;
-            let before = balance.read();
+            let before = self._get_provisional_balance(:position_id, asset_id: collateral_id);
             let after = before.sub(amount);
-            balance.write(after);
             let price = self.assets._get_collateral_price(:collateral_id);
             let position_diff = array![
                 AssetDiffEntry {
@@ -551,14 +548,17 @@ pub mod Core {
                 },
             ]
                 .span();
+            let position_data = self._get_position_data(:position_id);
 
-            let value_risk_calculator_dispatcher = self.value_risk_calculator_dispatcher.read();
-            let position_change_result = value_risk_calculator_dispatcher
+            let position_change_result = self
+                .value_risk_calculator_dispatcher
+                .read()
                 .evaluate_position_change(position: position_data, :position_diff);
             assert(
                 position_change_result.position_state_after_change == PositionState::Healthy,
                 POSITION_UNHEALTHY,
             );
+            self._apply_diff(:position_id, :position_diff);
         }
 
         /// Funding tick is called by the operator to update the funding index of all synthetic
@@ -794,6 +794,17 @@ pub mod Core {
             };
         }
 
+        fn _apply_diff(
+            ref self: ContractState, position_id: PositionId, position_diff: PositionDiff,
+        ) {
+            for diff in position_diff {
+                let asset_id = *diff.id;
+                let balance = self._get_provisional_balance(:position_id, asset_id: asset_id);
+                assert(*diff.before == balance, APPLY_DIFF_MISMATCH);
+                self._apply_funding_and_set_balance(:position_id, :asset_id, balance: *diff.after);
+            }
+        }
+
 
         fn _get_position_data(self: @ContractState, position_id: PositionId) -> PositionData {
             let mut asset_entries = array![];
@@ -834,63 +845,6 @@ pub mod Core {
                 !have_same_sign(a: order.quote.amount, b: order.base.amount),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
-        }
-
-        fn _execute_orders(
-            ref self: ContractState,
-            order_a: Order,
-            order_b: Order,
-            actual_amount_base_a: i64,
-            actual_amount_quote_a: i64,
-            actual_fee_a: i64,
-            actual_fee_b: i64,
-        ) {
-            // Handle fees.
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_a.position_id,
-                    asset_id: order_a.fee.asset_id,
-                    diff: (-actual_fee_a).into(),
-                );
-
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_b.position_id,
-                    asset_id: order_b.fee.asset_id,
-                    diff: (-actual_fee_b).into(),
-                );
-
-            // Update base assets.
-
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_a.position_id,
-                    asset_id: order_a.base.asset_id,
-                    diff: actual_amount_base_a.into(),
-                );
-
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_b.position_id,
-                    asset_id: order_b.base.asset_id,
-                    diff: (-actual_amount_base_a).into(),
-                );
-
-            // Update quote assets.
-
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_a.position_id,
-                    asset_id: order_a.quote.asset_id,
-                    diff: actual_amount_quote_a.into(),
-                );
-
-            self
-                .apply_funding_and_update_balance(
-                    position_id: order_b.position_id,
-                    asset_id: order_b.quote.asset_id,
-                    diff: (-actual_amount_quote_a).into(),
-                );
         }
 
         fn _validate_deposit(
@@ -956,7 +910,7 @@ pub mod Core {
                 );
 
             self
-                ._execute_orders(
+                ._execute_trade(
                     order_a: liquidated_order,
                     order_b: liquidator_order,
                     actual_amount_base_a: actual_amount_base_liquidated,
@@ -1037,12 +991,7 @@ pub mod Core {
             // fee asset.
             let fee_asset_id = order.fee.asset_id;
             let fee_price = self.assets._get_asset_price(asset_id: fee_asset_id);
-            let fee_balance = self
-                ._get_position(position_id)
-                .collateral_assets
-                .entry(fee_asset_id)
-                .balance
-                .read();
+            let fee_balance = self._get_provisional_balance(:position_id, asset_id: fee_asset_id);
 
             let mut fee_diff = AssetDiffEntry {
                 id: fee_asset_id,
@@ -1057,16 +1006,11 @@ pub mod Core {
             let mut quote_diff: AssetDiffEntry = Default::default();
 
             if quote_asset_id == fee_asset_id {
-                fee_diff.after.add(actual_amount_quote);
+                fee_diff.after += actual_amount_quote.into();
             } else {
                 let quote_price = self.assets._get_collateral_price(collateral_id: quote_asset_id);
                 let quote_balance = self
-                    ._get_position(position_id)
-                    .collateral_assets
-                    .entry(quote_asset_id)
-                    .balance
-                    .read();
-
+                    ._get_provisional_balance(:position_id, asset_id: quote_asset_id);
                 quote_diff =
                     AssetDiffEntry {
                         id: quote_asset_id,
@@ -1082,13 +1026,12 @@ pub mod Core {
             let mut base_diff: AssetDiffEntry = Default::default();
 
             if base_asset_id == fee_asset_id {
-                fee_diff.after.add(actual_amount_base);
+                fee_diff.after += actual_amount_base.into();
             } else if base_asset_id == quote_asset_id {
-                quote_diff.after.add(actual_amount_base);
+                quote_diff.after += actual_amount_base.into();
             } else {
                 let base_balance = self
-                    ._get_position_asset_balance(:position_id, asset_id: base_asset_id);
-
+                    ._get_provisional_balance(position_id, asset_id: base_asset_id);
                 base_diff =
                     AssetDiffEntry {
                         id: base_asset_id,
@@ -1136,16 +1079,8 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_a,
                     actual_fee: actual_fee_b,
                 );
-
-            self
-                ._execute_orders(
-                    :order_a,
-                    :order_b,
-                    :actual_amount_base_a,
-                    :actual_amount_quote_a,
-                    :actual_fee_a,
-                    :actual_fee_b,
-                );
+            self._apply_diff(position_id: order_a.position_id, position_diff: asset_diff_entries_a);
+            self._apply_diff(position_id: order_b.position_id, position_diff: asset_diff_entries_b);
 
             /// Validations - Fundamentals:
             self

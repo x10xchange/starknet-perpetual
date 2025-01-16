@@ -27,6 +27,7 @@ pub const POSITION_UNHEALTHY: felt252 = 'POSITION_UNHEALTHY';
 pub const SET_POSITION_OWNER_EXPIRED: felt252 = 'SET_POSITION_OWNER_EXPIRED';
 pub const SET_PUBLIC_KEY_EXPIRED: felt252 = 'SET_PUBLIC_KEY_EXPIRED';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
+pub const APPLY_DIFF_MISMATCH: felt252 = 'APPLY_DIFF_MISMATCH';
 
 pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)

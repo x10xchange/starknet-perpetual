@@ -1,3 +1,4 @@
+use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::math::Abs;
@@ -71,11 +72,12 @@ fn init_position(
 ) {
     let position = state.positions.entry(user.position_id);
     position.owner_public_key.write(user.key_pair.public_key);
-    let collateral_asset_balance = position
-        .collateral_assets
-        .entry(*cfg.collateral_cfg.asset_id)
-        .balance;
-    collateral_asset_balance.write(COLLATERAL_BALANCE_AMOUNT.into());
+    state
+        ._apply_funding_and_set_balance(
+            position_id: user.position_id,
+            asset_id: *cfg.collateral_cfg.asset_id,
+            balance: COLLATERAL_BALANCE_AMOUNT.into(),
+        );
     position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
 }
 
@@ -275,24 +277,17 @@ fn test_successful_trade() {
         );
 
     // Check:
-    let position_a = state.positions.entry(user_a.position_id);
-    let position_b = state.positions.entry(user_b.position_id);
-
-    let user_a_collateral_balance = position_a
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let user_a_synthetic_balance = position_a.synthetic_assets.entry(synthetic_id).balance.read();
+    let user_a_collateral_balance = state
+        ._get_provisional_balance(position_id: user_a.position_id, asset_id: collateral_id);
+    let user_a_synthetic_balance = state
+        ._get_provisional_balance(position_id: user_a.position_id, asset_id: synthetic_id);
     assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
     assert_eq!(user_a_synthetic_balance, (BASE).into());
 
-    let user_b_collateral_balance = position_b
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let user_b_synthetic_balance = position_b.synthetic_assets.entry(synthetic_id).balance.read();
+    let user_b_collateral_balance = state
+        ._get_provisional_balance(position_id: user_b.position_id, asset_id: collateral_id);
+    let user_b_synthetic_balance = state
+        ._get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
     assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
 }
