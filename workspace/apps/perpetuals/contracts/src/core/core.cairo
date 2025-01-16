@@ -180,9 +180,9 @@ pub mod Core {
                 );
         }
 
-        /// Process deposit a collateral amount from the 'depositing_address' to a given position.
-        /// If the position is new (i.e., has no owner_public_key), the owner_public_key and
-        /// owner_account are set.
+        /// Process a deposit of a collateral amount from the 'depositing_address' to a given
+        /// position. If the position is new (i.e., has no owner_public_key), the owner_public_key
+        /// and owner_account are set.
         ///
         /// Validations:
         /// - Only the operator can call this function.
