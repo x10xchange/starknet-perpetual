@@ -182,6 +182,27 @@ pub mod Core {
                 );
         }
 
+        /// Process deposit a collateral amount from the 'depositing_address' to a given position.
+        /// If the position is new (i.e., has no owner_public_key), the owner_public_key and
+        /// owner_account are set.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The `expiration` time has not passed.
+        /// - The collateral asset exists in the system.
+        /// - The collateral asset is active.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - [The prices of all assets in the system are valid](`_validate_prices`).
+        /// - The deposit message has not been fulfilled.
+        /// - A fact was registered for the deposit message.
+        /// - If position exists, validate the owner_public_key and owner_account are the same.
+        ///
+        /// Execution:
+        /// - Transfer the collateral `amount` to the position from the pending deposits.
+        /// - Update the position's collateral balance.
+        /// - Mark the deposit message as fulfilled.
         fn process_deposit(
             ref self: ContractState,
             operator_nonce: felt252,
