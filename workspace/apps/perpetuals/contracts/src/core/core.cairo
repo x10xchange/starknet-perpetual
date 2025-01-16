@@ -166,11 +166,7 @@ pub mod Core {
             self.fact_registry.write(key: msg_hash, value: Time::now());
             let collateral_amount = deposit_args.collateral.amount;
             let asset_id = deposit_args.collateral.asset_id;
-            self
-                .pending_deposits
-                .write(
-                    key: asset_id, value: self.pending_deposits.read(asset_id) + collateral_amount,
-                );
+            self.pending_deposits.entry(asset_id).add_and_write(collateral_amount);
             let collateral_cfg = self.assets._get_collateral_config(collateral_id: asset_id);
             let quantum = collateral_cfg.quantum;
             assert(collateral_amount > 0, INVALID_NON_POSITIVE_AMOUNT);
