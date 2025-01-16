@@ -25,7 +25,8 @@ pub mod Core {
         INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, NO_OWNER_ACCOUNT,
         OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT,
-        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
+        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
@@ -274,6 +275,30 @@ pub mod Core {
             self._register_fact(:signature, position_id: message.position_id, :message);
         }
 
+        /// Executes a liquidate of a user position with liquidator order.
+        ///
+        /// Validations:
+        /// - Common user flow validations are performed.
+        /// - Validates signatures for liquidator order using the public keys of it owner.
+        /// - Ensures the fee amounts are positive.
+        /// - Validates that the base and quote asset types match between the liquidator and
+        /// liquidated orders.
+        /// - Verifies the signs of amounts:
+        ///   - Ensures the sign of amounts in each order is consistent.
+        ///   - Ensures the signs between liquidated order and liquidator order amount are opposite.
+        /// - Ensures the liquidator order fulfillment amount do not exceed its limit.
+        /// - Validates that the fee ratio does not increase.
+        /// - Ensures the base-to-quote amount ratio does not decrease.
+        /// - Validates liqudated position is liquidatable.
+        ///
+        /// Execution:
+        /// - Apply funding to both positions.
+        /// - Subtract the fees from each position's collateral.
+        /// - Add the fees to the `fee_position`.
+        /// - Update orders' position, based on `actual_amount_base`.
+        /// - Adjust collateral balances.
+        /// - Perform fundamental validation for both positions after the trade.
+        /// - Update liquidator order fulfillment.
         fn liquidate(
             ref self: ContractState,
             operator_nonce: felt252,
@@ -334,7 +359,16 @@ pub mod Core {
                     actual_fee_b: actual_liquidator_fee,
                     :now,
                 );
-            // TODO: Execute liquidation.
+
+            /// Execution:
+            self
+                ._execute_liquidate(
+                    :liquidated_order,
+                    :liquidator_order,
+                    :actual_amount_base_liquidated,
+                    :actual_amount_quote_liquidated,
+                    :actual_liquidator_fee,
+                );
         }
 
         /// Sets the owner of a position to a new account owner.
@@ -891,6 +925,59 @@ pub mod Core {
             );
         }
 
+        fn _execute_liquidate(
+            ref self: ContractState,
+            liquidated_order: Order,
+            liquidator_order: Order,
+            actual_amount_base_liquidated: i64,
+            actual_amount_quote_liquidated: i64,
+            actual_liquidator_fee: i64,
+        ) {
+            let liquidated_position_data = self._get_position_data(liquidated_order.position_id);
+            let liquidated_asset_diff_entries = self
+                ._create_asset_diff_entries_from_order(
+                    order: liquidated_order,
+                    actual_amount_base: actual_amount_base_liquidated,
+                    actual_amount_quote: actual_amount_quote_liquidated,
+                    actual_fee: liquidated_order.fee.amount,
+                );
+
+            let liquidator_position_data = self._get_position_data(liquidator_order.position_id);
+            let liquidator_asset_diff_entries = self
+                ._create_asset_diff_entries_from_order(
+                    order: liquidator_order,
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -actual_amount_base_liquidated,
+                    actual_amount_quote: -actual_amount_quote_liquidated,
+                    actual_fee: actual_liquidator_fee,
+                );
+
+            self
+                ._execute_orders(
+                    order_a: liquidated_order,
+                    order_b: liquidator_order,
+                    actual_amount_base_a: actual_amount_base_liquidated,
+                    actual_amount_quote_a: actual_amount_quote_liquidated,
+                    actual_fee_a: liquidated_order.fee.amount,
+                    actual_fee_b: actual_liquidator_fee,
+                );
+
+            /// Validations - Fundamentals:
+            self
+                ._validate_liquidated_position(
+                    position_id: liquidated_order.position_id,
+                    position_data: liquidated_position_data,
+                    asset_diff_entries: liquidated_asset_diff_entries,
+                );
+            self
+                ._validate_position_is_healthy_or_healthier(
+                    position_id: liquidator_order.position_id,
+                    position_data: liquidator_position_data,
+                    asset_diff_entries: liquidator_asset_diff_entries,
+                );
+        }
+
+
         fn _validate_orders(
             ref self: ContractState,
             order_a: Order,
@@ -1076,6 +1163,29 @@ pub mod Core {
                 self._get_position(:position_id).collateral_assets.entry(asset_id).balance.read()
             } else {
                 self._get_position(:position_id).synthetic_assets.entry(asset_id).balance.read()
+            }
+        }
+
+        fn _validate_liquidated_position(
+            self: @ContractState,
+            position_id: PositionId,
+            position_data: PositionData,
+            asset_diff_entries: Span<AssetDiffEntry>,
+        ) {
+            let position_change_result = self
+                .value_risk_calculator_dispatcher
+                .read()
+                .evaluate_position_change(position_data, asset_diff_entries);
+
+            assert(
+                position_change_result.position_state_before_change == PositionState::Liquidatable,
+                POSITION_IS_NOT_LIQUIDATABLE,
+            );
+
+            // None means the position is empty; transitioning from liquidatable to empty is
+            // allowed.
+            if let Option::Some(change_effects) = position_change_result.change_effects {
+                assert(change_effects.is_healthier, POSITION_IS_NOT_HEALTHIER);
             }
         }
 
