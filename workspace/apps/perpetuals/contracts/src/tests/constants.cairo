@@ -76,9 +76,9 @@ pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
 
 
 /// 1 day in seconds.
-pub const PRICE_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
+pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 /// 1 day in seconds.
-pub const FUNDING_VALIDATION_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
+pub const MAX_FUNDING_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1_000_000;

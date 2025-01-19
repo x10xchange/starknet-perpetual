@@ -7,7 +7,7 @@ use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct TransferArgs {
-    pub sender: PositionId,
+    pub position_id: PositionId,
     pub recipient: PositionId,
     pub salt: felt252,
     pub expiration: Timestamp,
@@ -19,7 +19,7 @@ pub struct TransferArgs {
 
 /// selector!(
 ///   "\"TransferArgs\"(
-///    \"sender\":\"PositionId\",
+///    \"position_id\":\"PositionId\",
 ///    \"recipient\":\"PositionId\",
 ///    \"salt\":\"felt\",
 ///    \"expiration\":\"Timestamp\",
@@ -42,7 +42,7 @@ pub struct TransferArgs {
 ///    )"
 /// );
 const TRANSFER_ARGS_TYPE_HASH: felt252 =
-    0x295744ddc78fc1d31c140d9a418978d269dac230225a9279fc154de3ab2e0f3;
+    0x3f91379916b830a3e6c709a5ed7c3446351194546ec013f646a36323909bd59;
 
 impl StructHashImpl of StructHash<TransferArgs> {
     fn hash_struct(self: @TransferArgs) -> felt252 {
@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn test_transfer_type_hash() {
         let expected = selector!(
-            "\"TransferArgs\"(\"sender\":\"PositionId\",\"recipient\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient_public_key\":\"felt\",\"recipient_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"TransferArgs\"(\"position_id\":\"PositionId\",\"recipient\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient_public_key\":\"felt\",\"recipient_account\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
         );
         assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
     }

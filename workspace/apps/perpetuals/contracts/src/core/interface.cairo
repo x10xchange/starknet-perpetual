@@ -16,7 +16,7 @@ pub trait ICore<TContractState> {
     fn liquidate(
         ref self: TContractState,
         operator_nonce: u64,
-        signature_liquidator: Signature,
+        liquidator_signature: Signature,
         liquidated_position_id: PositionId,
         liquidator_order: Order,
         actual_amount_base_liquidated: i64,

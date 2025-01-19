@@ -37,15 +37,15 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
     state
         .assets
         .initialize(
-            price_validation_interval: *cfg.price_validation_interval,
-            funding_validation_interval: *cfg.funding_validation_interval,
+            max_price_interval: *cfg.max_price_interval,
+            max_funding_interval: *cfg.max_funding_interval,
             max_funding_rate: *cfg.max_funding_rate,
         );
     // Collateral asset configs.
     let (collateral_config, collateral_timely_data) = generate_collateral(:token_state);
     state
         .assets
-        .collateral_configs
+        .collateral_config
         .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
     state.assets.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
     state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
@@ -53,7 +53,7 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
     // Synthetic asset configs.
     state
         .assets
-        .synthetic_configs
+        .synthetic_config
         .write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
     state.assets.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
     state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
@@ -97,8 +97,8 @@ fn initialized_contract_state() -> Core::ContractState {
         ref state,
         governance_admin: GOVERNANCE_ADMIN(),
         value_risk_calculator: deploy_value_risk_calculator_contract(),
-        price_validation_interval: PRICE_VALIDATION_INTERVAL,
-        funding_validation_interval: FUNDING_VALIDATION_INTERVAL,
+        max_price_interval: MAX_PRICE_INTERVAL,
+        max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
     );
     state
@@ -108,8 +108,8 @@ fn initialized_contract_state() -> Core::ContractState {
 fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(state.assets.get_price_validation_interval(), PRICE_VALIDATION_INTERVAL);
-    assert_eq!(state.assets.get_funding_validation_interval(), FUNDING_VALIDATION_INTERVAL);
+    assert_eq!(state.assets.get_price_validation_interval(), MAX_PRICE_INTERVAL);
+    assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
 }
 
@@ -471,7 +471,7 @@ fn test_successful_liquidate() {
         salt: liquidator.salt_counter,
     };
 
-    let signature_liquidator = liquidator
+    let liquidator_signature = liquidator
         .sign_message(order_liquidator.get_message_hash(liquidator.key_pair.public_key));
 
     // Test:
@@ -480,7 +480,7 @@ fn test_successful_liquidate() {
     state
         .liquidate(
             :operator_nonce,
-            :signature_liquidator,
+            :liquidator_signature,
             liquidated_position_id: liquidated.position_id,
             liquidator_order: order_liquidator,
             actual_amount_base_liquidated: BASE,

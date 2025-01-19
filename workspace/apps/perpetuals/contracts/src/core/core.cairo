@@ -139,8 +139,8 @@ pub mod Core {
         ref self: ContractState,
         governance_admin: ContractAddress,
         value_risk_calculator: ContractAddress,
-        price_validation_interval: TimeDelta,
-        funding_validation_interval: TimeDelta,
+        max_price_interval: TimeDelta,
+        max_funding_interval: TimeDelta,
         max_funding_rate: u32,
     ) {
         self.roles.initialize(:governance_admin);
@@ -148,11 +148,7 @@ pub mod Core {
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
-        self
-            .assets
-            .initialize(
-                :price_validation_interval, :funding_validation_interval, :max_funding_rate,
-            );
+        self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
     }
 
     #[abi(embed_v0)]
@@ -239,7 +235,7 @@ pub mod Core {
         }
 
         fn transfer_request(ref self: ContractState, signature: Signature, message: TransferArgs) {
-            self._register_fact(:signature, position_id: message.sender, :message);
+            self._register_fact(:signature, position_id: message.position_id, :message);
         }
 
         // TODO: talk about this flow
@@ -297,7 +293,7 @@ pub mod Core {
         fn liquidate(
             ref self: ContractState,
             operator_nonce: u64,
-            signature_liquidator: Signature,
+            liquidator_signature: Signature,
             liquidated_position_id: PositionId,
             liquidator_order: Order,
             actual_amount_base_liquidated: i64,
@@ -315,7 +311,7 @@ pub mod Core {
                 ._generate_message_hash_with_public_key(message: liquidator_order);
             liquidator_position
                 ._validate_stark_signature(
-                    msg_hash: liquidator_msg_hash, signature: signature_liquidator,
+                    msg_hash: liquidator_msg_hash, signature: liquidator_signature,
                 );
 
             // Validate and update fulfilments.

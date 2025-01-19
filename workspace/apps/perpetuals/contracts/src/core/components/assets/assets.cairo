@@ -26,14 +26,14 @@ pub(crate) mod AssetsComponent {
     pub struct Storage {
         /// 32-bit fixed-point number with a 32-bit fractional part.
         max_funding_rate: u32,
-        price_validation_interval: TimeDelta,
-        funding_validation_interval: TimeDelta,
+        max_price_interval: TimeDelta,
+        max_funding_interval: TimeDelta,
         // Updates each price validation.
         pub last_price_validation: Timestamp,
         // Updates every funding tick.
         pub last_funding_tick: Timestamp,
-        pub collateral_configs: Map<AssetId, Option<CollateralConfig>>,
-        pub synthetic_configs: Map<AssetId, Option<SyntheticConfig>>,
+        pub collateral_config: Map<AssetId, Option<CollateralConfig>>,
+        pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
         pub collateral_timely_data_head: Option<AssetId>,
         pub collateral_timely_data: Map<AssetId, CollateralTimelyData>,
         num_of_active_synthetic_assets: usize,
@@ -50,10 +50,10 @@ pub(crate) mod AssetsComponent {
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
         fn get_price_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
-            self.price_validation_interval.read()
+            self.max_price_interval.read()
         }
         fn get_funding_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
-            self.funding_validation_interval.read()
+            self.max_funding_interval.read()
         }
         fn get_max_funding_rate(self: @ComponentState<TContractState>) -> u32 {
             self.max_funding_rate.read()
@@ -66,12 +66,12 @@ pub(crate) mod AssetsComponent {
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
-            price_validation_interval: TimeDelta,
-            funding_validation_interval: TimeDelta,
+            max_price_interval: TimeDelta,
+            max_funding_interval: TimeDelta,
             max_funding_rate: u32,
         ) {
-            self.price_validation_interval.write(price_validation_interval);
-            self.funding_validation_interval.write(funding_validation_interval);
+            self.max_price_interval.write(max_price_interval);
+            self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
         }
 
@@ -133,7 +133,7 @@ pub(crate) mod AssetsComponent {
         fn _get_collateral_config(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> CollateralConfig {
-            self.collateral_configs.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
+            self.collateral_config.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
         }
 
         fn _get_collateral_price(
@@ -149,7 +149,7 @@ pub(crate) mod AssetsComponent {
         fn _get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
-            self.synthetic_configs.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
+            self.synthetic_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
 
         fn _get_synthetic_price(
@@ -183,20 +183,20 @@ pub(crate) mod AssetsComponent {
 
 
         fn _is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
-            self.collateral_configs.read(asset_id).is_some()
+            self.collateral_config.read(asset_id).is_some()
         }
 
         fn _is_synthetic(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
-            self.synthetic_configs.read(asset_id).is_some()
+            self.synthetic_config.read(asset_id).is_some()
         }
 
         fn _validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
-            let base_collateral_config = self.collateral_configs.read(asset_id);
+            let base_collateral_config = self.collateral_config.read(asset_id);
             let is_base_collateral_active = match base_collateral_config {
                 Option::Some(config) => config.is_active,
                 Option::None => false,
             };
-            let base_synthetic_config = self.synthetic_configs.read(asset_id);
+            let base_synthetic_config = self.synthetic_config.read(asset_id);
             let is_base_synthetic_active = match base_synthetic_config {
                 Option::Some(config) => config.is_active,
                 Option::None => false,
@@ -210,7 +210,7 @@ pub(crate) mod AssetsComponent {
         fn _validate_assets_integrity(ref self: ComponentState<TContractState>, now: Timestamp) {
             // Funding validation.
             assert(
-                now.sub(self.last_funding_tick.read()) < self.funding_validation_interval.read(),
+                now.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),
                 FUNDING_EXPIRED,
             );
             // Price validation.
@@ -226,28 +226,26 @@ pub(crate) mod AssetsComponent {
         }
 
         fn _validate_collateral_prices(
-            self: @ComponentState<TContractState>,
-            now: Timestamp,
-            price_validation_interval: TimeDelta,
+            self: @ComponentState<TContractState>, now: Timestamp, max_price_interval: TimeDelta,
         ) {
             let mut asset_id_opt = self.collateral_timely_data_head.read();
             while let Option::Some(asset_id) = asset_id_opt {
                 let collateral_timely_data = self.collateral_timely_data.read(asset_id);
                 assert(
-                    now.sub(collateral_timely_data.last_price_update) < price_validation_interval,
+                    now.sub(collateral_timely_data.last_price_update) < max_price_interval,
                     COLLATERAL_EXPIRED_PRICE,
                 );
                 asset_id_opt = collateral_timely_data.next;
             };
         }
 
-        /// If `price_validation_interval` has passed since `last_price_validation`, validate
+        /// If `max_price_interval` has passed since `last_price_validation`, validate
         /// synthetic and collateral prices and update `last_price_validation` to current time.
         fn _validate_prices(ref self: ComponentState<TContractState>, now: Timestamp) {
-            let price_validation_interval = self.price_validation_interval.read();
-            if now.sub(self.last_price_validation.read()) >= price_validation_interval {
-                self._validate_synthetic_prices(now, price_validation_interval);
-                self._validate_collateral_prices(now, price_validation_interval);
+            let max_price_interval = self.max_price_interval.read();
+            if now.sub(self.last_price_validation.read()) >= max_price_interval {
+                self._validate_synthetic_prices(now, max_price_interval);
+                self._validate_collateral_prices(now, max_price_interval);
                 self.last_price_validation.write(now);
             }
         }
@@ -259,15 +257,13 @@ pub(crate) mod AssetsComponent {
         }
 
         fn _validate_synthetic_prices(
-            self: @ComponentState<TContractState>,
-            now: Timestamp,
-            price_validation_interval: TimeDelta,
+            self: @ComponentState<TContractState>, now: Timestamp, max_price_interval: TimeDelta,
         ) {
             let mut asset_id_opt = self.synthetic_timely_data_head.read();
             while let Option::Some(asset_id) = asset_id_opt {
                 let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
                 assert(
-                    now.sub(synthetic_timely_data.last_price_update) < price_validation_interval,
+                    now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
                     SYNTHETIC_EXPIRED_PRICE,
                 );
                 asset_id_opt = synthetic_timely_data.next;

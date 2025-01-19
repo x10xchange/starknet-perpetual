@@ -26,8 +26,8 @@ fn setup_state(
     let mut state = initialized_component_state();
     state
         .initialize(
-            price_validation_interval: *cfg.price_validation_interval,
-            funding_validation_interval: *cfg.funding_validation_interval,
+            max_price_interval: *cfg.max_price_interval,
+            max_funding_interval: *cfg.max_funding_interval,
             max_funding_rate: *cfg.max_funding_rate,
         );
     add_colateral(ref :state, :cfg, :token_state);
@@ -47,7 +47,7 @@ fn add_colateral(
     token_state: @TokenState,
 ) {
     let (collateral_config, mut collateral_timely_data) = generate_collateral(:token_state);
-    state.collateral_configs.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+    state.collateral_config.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
     state.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
     state.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
 }
@@ -57,7 +57,7 @@ fn add_synthetic(
 ) {
     state.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
     state.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
-    state.synthetic_configs.write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
+    state.synthetic_config.write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
 }
 
 #[test]
@@ -66,10 +66,7 @@ fn test_validate_collateral_prices() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     // Call the function
-    state
-        ._validate_collateral_prices(
-            now: Time::now(), price_validation_interval: PRICE_VALIDATION_INTERVAL,
-        );
+    state._validate_collateral_prices(now: Time::now(), max_price_interval: MAX_PRICE_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -80,10 +77,10 @@ fn test_validate_collateral_prices_expired() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     // Set the block timestamp to be after the price validation interval
-    let now = Time::now().add(PRICE_VALIDATION_INTERVAL);
+    let now = Time::now().add(MAX_PRICE_INTERVAL);
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_collateral_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state._validate_collateral_prices(:now, max_price_interval: MAX_PRICE_INTERVAL);
 }
 
 #[test]
@@ -91,10 +88,7 @@ fn test_validate_synthetic_prices() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    state
-        ._validate_synthetic_prices(
-            now: Time::now(), price_validation_interval: PRICE_VALIDATION_INTERVAL,
-        );
+    state._validate_synthetic_prices(now: Time::now(), max_price_interval: MAX_PRICE_INTERVAL);
     // If no assertion error is thrown, the test passes
 }
 
@@ -105,10 +99,10 @@ fn test_validate_synthetic_prices_expired() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     // Set the block timestamp to be after the price validation interval
-    let now = Time::now().add(PRICE_VALIDATION_INTERVAL);
+    let now = Time::now().add(MAX_PRICE_INTERVAL);
     start_cheat_block_timestamp_global(block_timestamp: now.into());
     // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_synthetic_prices(:now, price_validation_interval: PRICE_VALIDATION_INTERVAL);
+    state._validate_synthetic_prices(:now, max_price_interval: MAX_PRICE_INTERVAL);
 }
 
 #[test]
