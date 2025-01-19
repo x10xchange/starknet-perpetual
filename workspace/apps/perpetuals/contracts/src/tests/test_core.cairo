@@ -11,10 +11,11 @@ use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
-use perpetuals::core::types::AssetAmount;
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::withdraw::WithdrawArgs;
+use perpetuals::core::types::{AssetAmount, PositionId};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
     PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
@@ -64,12 +65,7 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
     state
 }
 
-fn init_position(
-    cfg: @PerpetualsInitConfig,
-    ref state: Core::ContractState,
-    user: User,
-    token_state: @TokenState,
-) {
+fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
     let position = state.positions.entry(user.position_id);
     position.owner_public_key.write(user.key_pair.public_key);
     state
@@ -79,6 +75,20 @@ fn init_position(
             balance: COLLATERAL_BALANCE_AMOUNT.into(),
         );
     position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+}
+
+fn add_synthetic(
+    ref state: Core::ContractState, asset_id: AssetId, position_id: PositionId, balance: i64,
+) {
+    let position = state.positions.entry(position_id);
+    match position.synthetic_assets_head.read() {
+        Option::Some(head) => {
+            position.synthetic_assets_head.write(Option::Some(asset_id));
+            position.synthetic_assets.entry(asset_id).next.write(Option::Some(head));
+        },
+        Option::None => position.synthetic_assets_head.write(Option::Some(asset_id)),
+    }
+    position.synthetic_assets.entry(asset_id).balance.write(balance.into());
 }
 
 fn initialized_contract_state() -> Core::ContractState {
@@ -113,7 +123,7 @@ fn test_successful_withdraw() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
-    init_position(cfg: @cfg, ref :state, :user, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, :user);
 
     // Setup parameters:
     let mut expiration = Time::now();
@@ -148,7 +158,7 @@ fn test_successful_deposit() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
-    init_position(cfg: @cfg, ref :state, :user, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, :user);
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -217,7 +227,7 @@ fn test_successful_trade() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
 
     let mut user_a = Default::default();
-    init_position(cfg: @cfg, ref :state, user: user_a, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, user: user_a);
 
     let mut user_b = User {
         position_id: POSITION_ID_2,
@@ -225,7 +235,7 @@ fn test_successful_trade() {
         key_pair: KEY_PAIR_2(),
         ..Default::default(),
     };
-    init_position(cfg: @cfg, ref :state, user: user_b, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
     let BASE = 10;
@@ -302,7 +312,7 @@ fn test_invalid_trade_non_positve_fee() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
 
     let mut user = Default::default();
-    init_position(cfg: @cfg, ref :state, user: user, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, user: user);
 
     // Test params:
     let BASE = 10;
@@ -354,7 +364,7 @@ fn test_invalid_trade_same_base_signs() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
 
     let mut user_a = Default::default();
-    init_position(cfg: @cfg, ref :state, user: user_a, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, user: user_a);
 
     let mut user_b = User {
         position_id: POSITION_ID_2,
@@ -362,7 +372,7 @@ fn test_invalid_trade_same_base_signs() {
         key_pair: KEY_PAIR_2(),
         ..Default::default(),
     };
-    init_position(cfg: @cfg, ref :state, user: user_b, token_state: @token_state);
+    init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
     let BASE = 10;
@@ -413,4 +423,91 @@ fn test_invalid_trade_same_base_signs() {
             actual_fee_a: FEE,
             actual_fee_b: FEE,
         );
+}
+
+#[test]
+fn test_successful_liquidate() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let mut liquidator = Default::default();
+    init_position(cfg: @cfg, ref :state, user: liquidator);
+
+    let mut liquidated = User {
+        position_id: POSITION_ID_2,
+        address: POSITION_OWNER_2(),
+        key_pair: KEY_PAIR_2(),
+        ..Default::default(),
+    };
+    init_position(cfg: @cfg, ref :state, user: liquidated);
+    add_synthetic(
+        ref :state,
+        asset_id: cfg.synthetic_cfg.asset_id,
+        position_id: liquidated.position_id,
+        balance: -SYNTHETIC_BALANCE_AMOUNT,
+    );
+
+    // Test params:
+    let BASE = 10;
+    let QUOTE = -5;
+    let FEE = 1;
+
+    // Setup parameters:
+    let mut expiration = Time::now();
+    expiration += Time::days(1);
+    let operator_nonce = state.nonce();
+
+    let collateral_id = cfg.collateral_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.asset_id;
+
+    let order_liquidator = Order {
+        position_id: liquidator.position_id,
+        base: AssetAmount { asset_id: synthetic_id, amount: -BASE },
+        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
+        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        expiration,
+        salt: liquidator.salt_counter,
+    };
+
+    let signature_liquidator = liquidator
+        .sign_message(order_liquidator.get_message_hash(liquidator.key_pair.public_key));
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+
+    state
+        .liquidate(
+            :operator_nonce,
+            :signature_liquidator,
+            liquidated_position_id: liquidated.position_id,
+            liquidator_order: order_liquidator,
+            actual_amount_base_liquidated: BASE,
+            actual_amount_quote_liquidated: QUOTE,
+            actual_liquidator_fee: FEE,
+            insurance_fund_fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        );
+
+    // Check:
+    let position_a = state.positions.entry(liquidated.position_id);
+    let position_b = state.positions.entry(liquidator.position_id);
+
+    let user_a_collateral_balance = position_a
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let user_a_synthetic_balance = position_a.synthetic_assets.entry(synthetic_id).balance.read();
+    assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
+    assert_eq!(user_a_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+
+    let user_b_collateral_balance = position_b
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let user_b_synthetic_balance = position_b.synthetic_assets.entry(synthetic_id).balance.read();
+    assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
+    assert_eq!(user_b_synthetic_balance, (-BASE).into());
 }
