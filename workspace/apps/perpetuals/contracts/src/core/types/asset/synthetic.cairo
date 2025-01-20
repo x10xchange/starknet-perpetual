@@ -17,7 +17,6 @@ pub struct SyntheticConfig {
     pub quorum: u8,
     // Smallest unit of a synthetic asset in the system.
     pub resolution: u64,
-    // TODO: Oracels
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]

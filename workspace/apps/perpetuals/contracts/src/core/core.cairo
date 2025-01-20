@@ -20,23 +20,26 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
+    use perpetuals::core::components::request_approvals::RequestApprovalsComponent;
+    use perpetuals::core::components::request_approvals::interface::IRequestApprovals;
     use perpetuals::core::errors::{
-        APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
-        DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED, INVALID_FUNDING_TICK_LEN,
-        INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
-        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
-        POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
-        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
+        APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
+        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
+        INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH,
+        OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER,
+        POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
+    use perpetuals::core::types::asset::collateral::CollateralAsset;
+    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::{FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
-    use perpetuals::core::types::position::{Position, PositionTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::transfer::TransferArgs;
@@ -44,12 +47,12 @@ pub mod Core {
     use perpetuals::core::types::{
         AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId, Signature,
     };
+    use perpetuals::core::utils::{validate_expiration, validate_stark_signature};
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
     };
     use starknet::storage::{
-        Map, Mutable, StorageMapReadAccess, StorageMapWriteAccess, StoragePath, StoragePathEntry,
-        StoragePointerReadAccess,
+        Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
@@ -60,6 +63,9 @@ pub mod Core {
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
+    component!(
+        path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
+    );
 
     impl NonceImpl = NonceComponent::NonceImpl<ContractState>;
     impl NonceComponentInternalImpl = NonceComponent::InternalImpl<ContractState>;
@@ -90,8 +96,24 @@ pub mod Core {
         }
     }
 
+    #[starknet::storage_node]
+    pub struct Position {
+        version: u8,
+        pub owner_account: ContractAddress,
+        pub owner_public_key: felt252,
+        pub collateral_assets_head: Option<AssetId>,
+        pub collateral_assets: Map<AssetId, CollateralAsset>,
+        pub synthetic_assets_head: Option<AssetId>,
+        pub synthetic_assets: Map<AssetId, SyntheticAsset>,
+    }
+
     #[storage]
     struct Storage {
+        pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
+        pending_deposits: Map<AssetId, i64>,
+        // Message hash to fulfilled amount.
+        fulfillment: Map<felt252, i64>,
+        pub positions: Map<PositionId, Position>,
         // --- Components ---
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
@@ -107,12 +129,8 @@ pub mod Core {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
-        pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
-        pub fact_registry: Map<felt252, Timestamp>,
-        pending_deposits: Map<AssetId, i64>,
-        // Message hash to fulfilled amount.
-        fulfillment: Map<felt252, i64>,
-        pub positions: Map<PositionId, Position>,
+        #[substorage(v0)]
+        pub request_approvals: RequestApprovalsComponent::Storage,
     }
 
     #[event]
@@ -132,6 +150,8 @@ pub mod Core {
         SRC5Event: SRC5Component::Event,
         #[flat]
         AssetsEvent: AssetsComponent::Event,
+        #[flat]
+        RequestApprovalsEvent: RequestApprovalsComponent::Event,
     }
 
     #[constructor]
@@ -158,8 +178,15 @@ pub mod Core {
 
         fn deposit(ref self: ContractState, deposit_args: DepositArgs) {
             let caller_address = get_caller_address();
-            let msg_hash = deposit_args.get_message_hash(signer: caller_address);
-            self.fact_registry.write(key: msg_hash, value: Time::now());
+            let position = self._get_position(position_id: deposit_args.position_id);
+            self
+                .request_approvals
+                .register_approval(
+                    owner_account: position.owner_account.read(),
+                    public_key: position.owner_public_key.read(),
+                    signature: array![].span(),
+                    hash: deposit_args.get_message_hash(signer: position.owner_public_key.read()),
+                );
             let collateral_amount = deposit_args.collateral.amount;
             let asset_id = deposit_args.collateral.asset_id;
             self.pending_deposits.entry(asset_id).add_and_write(collateral_amount);
@@ -231,11 +258,27 @@ pub mod Core {
         }
 
         fn withdraw_request(ref self: ContractState, signature: Signature, message: WithdrawArgs) {
-            self._register_fact(:signature, position_id: message.position_id, :message);
+            let position = self._get_position(position_id: message.position_id);
+            self
+                .request_approvals
+                .register_approval(
+                    owner_account: position.owner_account.read(),
+                    public_key: position.owner_public_key.read(),
+                    :signature,
+                    hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                );
         }
 
         fn transfer_request(ref self: ContractState, signature: Signature, message: TransferArgs) {
-            self._register_fact(:signature, position_id: message.position_id, :message);
+            let position = self._get_position(position_id: message.position_id);
+            self
+                .request_approvals
+                .register_approval(
+                    owner_account: position.owner_account.read(),
+                    public_key: position.owner_public_key.read(),
+                    :signature,
+                    hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                );
         }
 
         // TODO: talk about this flow
@@ -255,15 +298,23 @@ pub mod Core {
             let position = self._get_position(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
-            let hash = message.get_message_hash(signer: owner_account);
-            self._use_fact(:hash);
+            let hash = message.get_message_hash(signer: message.new_public_key);
+            self.request_approvals.consume_approved_request(:hash);
             position.owner_public_key.write(message.new_public_key);
         }
 
         fn set_public_key_request(
             ref self: ContractState, signature: Signature, message: SetPublicKeyArgs,
         ) {
-            self._register_fact(:signature, position_id: message.position_id, :message);
+            let position = self._get_position(position_id: message.position_id);
+            self
+                .request_approvals
+                .register_approval(
+                    owner_account: position.owner_account.read(),
+                    public_key: position.owner_public_key.read(),
+                    :signature,
+                    hash: message.get_message_hash(signer: message.new_public_key),
+                );
         }
 
         /// Executes a liquidate of a user position with liquidator order.
@@ -301,18 +352,20 @@ pub mod Core {
             actual_liquidator_fee: i64,
             insurance_fund_fee: AssetAmount,
         ) {
-            /// Validations:
             let now = Time::now();
+            /// Validations:
             self._validate_operator_flow(:operator_nonce, :now);
 
             // Signatures validation:
             let liquidator_position = self._get_position(position_id: liquidator_order.position_id);
-            let liquidator_msg_hash = liquidator_position
-                ._generate_message_hash_with_public_key(message: liquidator_order);
-            liquidator_position
-                ._validate_stark_signature(
-                    msg_hash: liquidator_msg_hash, signature: liquidator_signature,
-                );
+            let liquidator_public_key = liquidator_position.owner_public_key.read();
+            let liquidator_msg_hash = liquidator_order
+                .get_message_hash(signer: liquidator_public_key);
+            validate_stark_signature(
+                public_key: liquidator_public_key,
+                msg_hash: liquidator_msg_hash,
+                signature: liquidator_signature,
+            );
 
             // Validate and update fulfilments.
             self
@@ -348,7 +401,6 @@ pub mod Core {
                     actual_amount_quote_a: actual_amount_quote_liquidated,
                     actual_fee_a: insurance_fund_fee.amount,
                     actual_fee_b: actual_liquidator_fee,
-                    :now,
                 );
 
             /// Execution:
@@ -384,11 +436,11 @@ pub mod Core {
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_ACCOUNT);
-            position
-                ._validate_stark_signature(
-                    msg_hash: position._generate_message_hash_with_public_key(:message),
-                    signature: signature,
-                );
+            validate_stark_signature(
+                public_key: position.owner_public_key.read(),
+                msg_hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                signature: signature,
+            );
             position.owner_account.write(message.new_account_owner);
         }
 
@@ -425,21 +477,26 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
         ) {
-            /// Validations:
-
             let now = Time::now();
+            self._validate_operator_flow(:operator_nonce, :now);
+            /// Validations:
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
-
-            self._validate_operator_flow(:operator_nonce, :now);
-
             // Signatures validation:
             let position_a = self._get_position(position_id: position_id_a);
             let position_b = self._get_position(position_id: position_id_b);
-            let hash_a = position_a._generate_message_hash_with_public_key(message: order_a);
-            position_a._validate_stark_signature(msg_hash: hash_a, signature: signature_a);
-            let hash_b = position_b._generate_message_hash_with_public_key(message: order_b);
-            position_b._validate_stark_signature(msg_hash: hash_b, signature: signature_b);
+            let hash_a = order_a.get_message_hash(signer: position_a.owner_public_key.read());
+            validate_stark_signature(
+                public_key: position_a.owner_public_key.read(),
+                msg_hash: hash_a,
+                signature: signature_a,
+            );
+            let hash_b = order_b.get_message_hash(signer: position_b.owner_public_key.read());
+            validate_stark_signature(
+                public_key: position_b.owner_public_key.read(),
+                msg_hash: hash_b,
+                signature: signature_b,
+            );
 
             // Validate and update fulfillments.
             self
@@ -467,7 +524,6 @@ pub mod Core {
                     :actual_amount_quote_a,
                     :actual_fee_a,
                     :actual_fee_b,
-                    :now,
                 );
 
             /// Execution:
@@ -508,20 +564,13 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = message.collateral.amount;
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            assert(now < message.expiration, WITHDRAW_EXPIRED);
+            validate_expiration(expiration: message.expiration, err: WITHDRAW_EXPIRED);
             let collateral_id = message.collateral.asset_id;
             let collateral_cfg = self.assets._validate_collateral_active(:collateral_id);
             let position_id = message.position_id;
             let position = self._get_position(:position_id);
-            let hash = position._generate_message_hash_with_owner_account_or_public_key(:message);
-            self._use_fact(:hash);
-
-            // Equivalent to `fulfillment` being zero.
-            self
-                ._update_fulfillment(
-                    :position_id, :hash, order_amount: amount, actual_amount: amount,
-                );
-
+            let hash = message.get_message_hash(signer: position.owner_public_key.read());
+            self.request_approvals.consume_approved_request(:hash);
             /// Execution - Withdraw:
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher
@@ -607,12 +656,6 @@ pub mod Core {
         fn _consume_operator_nonce(ref self: ContractState, operator_nonce: u64) {
             self.roles.only_operator();
             self.nonce.use_checked_nonce(nonce: operator_nonce);
-        }
-
-        fn _use_fact(ref self: ContractState, hash: felt252) {
-            let fact = self.fact_registry.entry(hash);
-            assert(fact.read().is_non_zero(), FACT_NOT_REGISTERED);
-            fact.write(Zero::zero());
         }
 
         fn _update_fulfillment(
@@ -857,18 +900,13 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = deposit_args.collateral.amount;
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            assert(now < deposit_args.expiration, DEPOSIT_EXPIRED);
+            validate_expiration(expiration: deposit_args.expiration, err: DEPOSIT_EXPIRED);
             self
                 .assets
                 ._validate_collateral_active(collateral_id: deposit_args.collateral.asset_id);
 
-            let hash = deposit_args.get_message_hash(signer: depositing_address);
-            let position_id = deposit_args.position_id;
-            self
-                ._update_fulfillment(
-                    :position_id, :hash, order_amount: amount, actual_amount: amount,
-                );
-            self._use_fact(:hash);
+            let hash = deposit_args.get_message_hash(signer: deposit_args.owner_public_key);
+            self.request_approvals.consume_approved_request(:hash);
         }
 
         fn _validate_funding_tick(
@@ -943,8 +981,8 @@ pub mod Core {
             actual_amount_quote_a: i64,
             actual_fee_a: i64,
             actual_fee_b: i64,
-            now: Timestamp,
         ) {
+            let now = Time::now();
             self._validate_order(order: order_a, :now);
             self._validate_order(order: order_b, :now);
 
@@ -1153,24 +1191,6 @@ pub mod Core {
                 position_is_healthier || position_is_healthy,
                 position_not_healthy_nor_healthier(position_id),
             );
-        }
-
-        fn _register_fact<
-            T, +OffchainMessageHash<T, ContractAddress>, +OffchainMessageHash<T, felt252>, +Drop<T>,
-        >(
-            ref self: ContractState, signature: Signature, position_id: PositionId, message: T,
-        ) {
-            let position = self._get_position(position_id);
-            let msg_hash = position
-                ._generate_message_hash_with_owner_account_or_public_key(:message);
-            if position.owner_account.read().is_non_zero() {
-                assert(
-                    position.owner_account.read() == get_caller_address(),
-                    CALLER_IS_NOT_OWNER_ACCOUNT,
-                );
-            }
-            position._validate_stark_signature(:msg_hash, :signature);
-            self.fact_registry.write(key: msg_hash, value: Time::now());
         }
     }
 }

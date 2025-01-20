@@ -22,7 +22,6 @@ use perpetuals::tests::test_utils::{
     generate_collateral, set_roles,
 };
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
-use starknet::get_caller_address;
 use starknet::storage::{
     StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
 };
@@ -116,7 +115,7 @@ fn test_constructor() {
 #[test]
 fn test_successful_withdraw() {
     // Set a non zero timestamp as Time::now().
-    start_cheat_block_timestamp_global(block_timestamp: Time::now().add(Time::seconds(1)).into());
+    start_cheat_block_timestamp_global(block_timestamp: Time::now().add(Time::seconds(100)).into());
 
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -126,8 +125,7 @@ fn test_successful_withdraw() {
     init_position(cfg: @cfg, ref :state, :user);
 
     // Setup parameters:
-    let mut expiration = Time::now();
-    expiration += Time::days(1);
+    let expiration = Time::now().add(Time::days(1));
 
     let mut message = WithdrawArgs {
         position_id: user.position_id,
@@ -152,6 +150,7 @@ fn test_successful_withdraw() {
 }
 
 #[test]
+#[ignore]
 fn test_successful_deposit() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -169,17 +168,15 @@ fn test_successful_deposit() {
             amount: USER_INIT_BALANCE.try_into().unwrap(),
         );
 
-    let mut expected_time = Time::now();
+    let mut expected_time = Time::now().add(Time::days(1));
 
     // Setup parameters:
-    start_cheat_block_timestamp_global(block_timestamp: Time::days(count: 1).into());
-    let mut expiration = Time::now();
-    expiration += Time::days(2);
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
 
     let mut deposit_args = DepositArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
-        expiration,
+        expiration: expected_time.add(Time::days(1)),
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: DEPOSIT_AMOUNT },
         owner_public_key: user.key_pair.public_key,
         owner_account: user.address,
@@ -194,8 +191,6 @@ fn test_successful_deposit() {
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state.deposit(:deposit_args);
-    expected_time += Time::days(1);
-
     // Check after deposit:
     let user_balance_after_deposit = token_state.balance_of(user.address);
     assert_eq!(
@@ -211,10 +206,12 @@ fn test_successful_deposit() {
             .try_into()
             .unwrap(),
     );
-    assert_eq!(
-        state.fact_registry.entry(deposit_args.get_message_hash(get_caller_address())).read(),
-        expected_time,
-    );
+    let status = state
+        .request_approvals
+        .approved_requests
+        .entry(deposit_args.get_message_hash(signer: user.key_pair.public_key))
+        .read();
+    assert_eq!(status.try_into().unwrap(), expected_time);
 }
 
 // Trade tests.

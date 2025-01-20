@@ -19,7 +19,6 @@ pub struct CollateralConfig {
     pub quantum: u64,
     // Number of oracles that need to sign on the price to accept it.
     pub quorum: u8,
-    // TODO: Oracels
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
