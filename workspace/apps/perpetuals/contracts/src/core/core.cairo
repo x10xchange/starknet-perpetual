@@ -23,14 +23,15 @@ pub mod Core {
     use perpetuals::core::components::request_approvals::RequestApprovalsComponent;
     use perpetuals::core::components::request_approvals::interface::IRequestApprovals;
     use perpetuals::core::errors::{
-        APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
-        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
-        INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
-        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH,
-        OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER,
-        POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED,
-        SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        position_not_healthy_nor_healthier, trade_order_expired_err,
+        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
+        DIFFERENT_QUOTE_ASSET_IDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
+        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+        INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT,
+        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
+        POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
+        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED,
+        WITHDRAW_EXPIRED, fulfillment_exceeded_err, position_not_healthy_nor_healthier,
+        trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::collateral::CollateralAsset;
@@ -283,6 +284,12 @@ pub mod Core {
                     :signature,
                     hash: transfer_args.get_message_hash(signer: position.owner_public_key.read()),
                 );
+        }
+
+        fn transfer(ref self: ContractState, operator_nonce: u64, transfer_args: TransferArgs) {
+            let now = Time::now();
+            self._validate_transfer(:operator_nonce, :now, :transfer_args);
+            // TODO(Tomer-StarkWare): Implement the transfer logic.
         }
 
         // TODO: talk about this flow
@@ -546,8 +553,6 @@ pub mod Core {
                     :actual_fee_b,
                 );
         }
-
-        fn transfer(self: @ContractState) {}
 
         /// Withdraw collateral `amount` from the a position to `recipient`.
         ///
@@ -1200,6 +1205,40 @@ pub mod Core {
                 position_is_healthier || position_is_healthy,
                 position_not_healthy_nor_healthier(position_id),
             );
+        }
+
+        fn _validate_transfer(
+            ref self: ContractState,
+            operator_nonce: u64,
+            now: Timestamp,
+            transfer_args: TransferArgs,
+        ) {
+            self._validate_operator_flow(:operator_nonce, :now);
+
+            // Check positions.
+            self._get_position(position_id: transfer_args.recipient);
+            let position = self._get_position(position_id: transfer_args.position_id);
+
+            // Validate collateral.
+            self
+                .assets
+                ._validate_collateral_active(collateral_id: transfer_args.collateral.asset_id);
+            assert(transfer_args.collateral.amount > 0, INVALID_TRANSFER_AMOUNT);
+            let sender_collateral_amount = position
+                .collateral_assets
+                .entry(transfer_args.collateral.asset_id)
+                .balance;
+            assert(
+                sender_collateral_amount.read().into() >= transfer_args.collateral.amount,
+                AMOUNT_TOO_LARGE,
+            );
+
+            // Validate expiration.
+            assert(now < transfer_args.expiration, TRANSFER_EXPIRED);
+
+            // Validate the message.
+            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
+            self.request_approvals.consume_approved_request(:hash);
         }
     }
 }

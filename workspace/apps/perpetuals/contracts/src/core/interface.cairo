@@ -30,6 +30,7 @@ pub trait ICore<TContractState> {
         signature: Signature,
         set_position_owner_args: SetPositionOwnerArgs,
     );
+    fn transfer(ref self: TContractState, operator_nonce: u64, transfer_args: TransferArgs);
     fn process_deposit(
         ref self: TContractState,
         operator_nonce: u64,
@@ -48,7 +49,6 @@ pub trait ICore<TContractState> {
         actual_fee_a: i64,
         actual_fee_b: i64,
     );
-    fn transfer(self: @TContractState);
     fn transfer_request(
         ref self: TContractState, signature: Signature, transfer_args: TransferArgs,
     );
