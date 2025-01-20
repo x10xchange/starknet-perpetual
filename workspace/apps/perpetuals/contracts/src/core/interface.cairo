@@ -28,7 +28,7 @@ pub trait ICore<TContractState> {
         ref self: TContractState,
         operator_nonce: u64,
         signature: Signature,
-        message: SetPositionOwnerArgs,
+        set_position_owner_args: SetPositionOwnerArgs,
     );
     fn process_deposit(
         ref self: TContractState,
@@ -49,13 +49,19 @@ pub trait ICore<TContractState> {
         actual_fee_b: i64,
     );
     fn transfer(self: @TContractState);
-    fn transfer_request(ref self: TContractState, signature: Signature, message: TransferArgs);
-    fn set_public_key(ref self: TContractState, operator_nonce: u64, message: SetPublicKeyArgs);
-    fn set_public_key_request(
-        ref self: TContractState, signature: Signature, message: SetPublicKeyArgs,
+    fn transfer_request(
+        ref self: TContractState, signature: Signature, transfer_args: TransferArgs,
     );
-    fn withdraw(ref self: TContractState, operator_nonce: u64, message: WithdrawArgs);
-    fn withdraw_request(ref self: TContractState, signature: Signature, message: WithdrawArgs);
+    fn set_public_key(
+        ref self: TContractState, operator_nonce: u64, set_public_key_args: SetPublicKeyArgs,
+    );
+    fn set_public_key_request(
+        ref self: TContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
+    );
+    fn withdraw(ref self: TContractState, operator_nonce: u64, withdraw_args: WithdrawArgs);
+    fn withdraw_request(
+        ref self: TContractState, signature: Signature, withdraw_args: WithdrawArgs,
+    );
 
     // Funding
     fn funding_tick(

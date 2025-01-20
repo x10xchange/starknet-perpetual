@@ -257,27 +257,31 @@ pub mod Core {
             self.pending_deposits.entry(collateral_id).sub_and_write(amount);
         }
 
-        fn withdraw_request(ref self: ContractState, signature: Signature, message: WithdrawArgs) {
-            let position = self._get_position(position_id: message.position_id);
+        fn withdraw_request(
+            ref self: ContractState, signature: Signature, withdraw_args: WithdrawArgs,
+        ) {
+            let position = self._get_position(position_id: withdraw_args.position_id);
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                    hash: withdraw_args.get_message_hash(signer: position.owner_public_key.read()),
                 );
         }
 
-        fn transfer_request(ref self: ContractState, signature: Signature, message: TransferArgs) {
-            let position = self._get_position(position_id: message.position_id);
+        fn transfer_request(
+            ref self: ContractState, signature: Signature, transfer_args: TransferArgs,
+        ) {
+            let position = self._get_position(position_id: transfer_args.position_id);
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                    hash: transfer_args.get_message_hash(signer: position.owner_public_key.read()),
                 );
         }
 
@@ -290,30 +294,34 @@ pub mod Core {
         /// - The expiration time has not passed.
         /// - The position has an owner account.
         /// - The request has been registered.
-        fn set_public_key(ref self: ContractState, operator_nonce: u64, message: SetPublicKeyArgs) {
+        fn set_public_key(
+            ref self: ContractState, operator_nonce: u64, set_public_key_args: SetPublicKeyArgs,
+        ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
-            assert(message.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
-            let position_id = message.position_id;
+            assert(set_public_key_args.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
+            let position_id = set_public_key_args.position_id;
             let position = self._get_position(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
-            let hash = message.get_message_hash(signer: message.new_public_key);
+            let hash = set_public_key_args
+                .get_message_hash(signer: set_public_key_args.new_public_key);
             self.request_approvals.consume_approved_request(:hash);
-            position.owner_public_key.write(message.new_public_key);
+            position.owner_public_key.write(set_public_key_args.new_public_key);
         }
 
         fn set_public_key_request(
-            ref self: ContractState, signature: Signature, message: SetPublicKeyArgs,
+            ref self: ContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
         ) {
-            let position = self._get_position(position_id: message.position_id);
+            let position = self._get_position(position_id: set_public_key_args.position_id);
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: message.get_message_hash(signer: message.new_public_key),
+                    hash: set_public_key_args
+                        .get_message_hash(signer: set_public_key_args.new_public_key),
                 );
         }
 
@@ -427,21 +435,22 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             signature: Signature,
-            message: SetPositionOwnerArgs,
+            set_position_owner_args: SetPositionOwnerArgs,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             let now = Time::now();
-            assert(message.expiration > now, SET_POSITION_OWNER_EXPIRED);
-            let position_id = message.position_id;
+            assert(set_position_owner_args.expiration > now, SET_POSITION_OWNER_EXPIRED);
+            let position_id = set_position_owner_args.position_id;
             let position = self._get_position(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_ACCOUNT);
             validate_stark_signature(
                 public_key: position.owner_public_key.read(),
-                msg_hash: message.get_message_hash(signer: position.owner_public_key.read()),
+                msg_hash: set_position_owner_args
+                    .get_message_hash(signer: position.owner_public_key.read()),
                 signature: signature,
             );
-            position.owner_account.write(message.new_account_owner);
+            position.owner_account.write(set_position_owner_args.new_account_owner);
         }
 
         /// Executes a trade between two orders (Order A and Order B).
@@ -559,23 +568,23 @@ pub mod Core {
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
-        fn withdraw(ref self: ContractState, operator_nonce: u64, message: WithdrawArgs) {
+        fn withdraw(ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs) {
             let now = Time::now();
             self._validate_operator_flow(:operator_nonce, :now);
-            let amount = message.collateral.amount;
+            let amount = withdraw_args.collateral.amount;
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            validate_expiration(expiration: message.expiration, err: WITHDRAW_EXPIRED);
-            let collateral_id = message.collateral.asset_id;
+            validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
+            let collateral_id = withdraw_args.collateral.asset_id;
             let collateral_cfg = self.assets._validate_collateral_active(:collateral_id);
-            let position_id = message.position_id;
+            let position_id = withdraw_args.position_id;
             let position = self._get_position(:position_id);
-            let hash = message.get_message_hash(signer: position.owner_public_key.read());
+            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             /// Execution - Withdraw:
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher
                 .transfer(
-                    recipient: message.recipient,
+                    recipient: withdraw_args.recipient,
                     amount: (collateral_cfg.quantum * amount.abs()).into(),
                 );
 

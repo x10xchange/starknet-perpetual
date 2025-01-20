@@ -127,20 +127,20 @@ fn test_successful_withdraw() {
     // Setup parameters:
     let expiration = Time::now().add(Time::days(1));
 
-    let mut message = WithdrawArgs {
+    let mut withdraw_args = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: user.address,
     };
-    let signature = user.sign_message(message.get_message_hash(user.key_pair.public_key));
+    let signature = user.sign_message(withdraw_args.get_message_hash(user.key_pair.public_key));
     let operator_nonce = state.nonce();
 
     // Test:
-    state.withdraw_request(:signature, :message);
+    state.withdraw_request(:signature, :withdraw_args);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.withdraw(:operator_nonce, :message);
+    state.withdraw(:operator_nonce, :withdraw_args);
 
     // Check:
     let user_balance = token_state.balance_of(user.address);
