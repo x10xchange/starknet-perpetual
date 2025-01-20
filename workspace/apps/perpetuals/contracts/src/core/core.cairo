@@ -24,10 +24,10 @@ pub mod Core {
         APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FACT_NOT_REGISTERED, INVALID_FUNDING_TICK_LEN,
         INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, NO_OWNER_ACCOUNT,
-        OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH, POSITION_HAS_ACCOUNT,
-        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
+        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
+        POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
+        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
@@ -824,7 +824,11 @@ pub mod Core {
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
             // Positive fee check.
-            assert(0 <= order.fee.amount, INVALID_NEGATIVE_FEE);
+            assert(order.fee.amount >= 0, INVALID_NEGATIVE_FEE);
+
+            // Non-zero amount check.
+            assert(order.base.amount != 0, INVALID_ZERO_AMOUNT);
+            assert(order.quote.amount != 0, INVALID_ZERO_AMOUNT);
 
             // Expiration check.
             assert_with_byte_array(
