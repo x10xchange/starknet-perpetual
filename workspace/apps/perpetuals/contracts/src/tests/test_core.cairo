@@ -76,6 +76,14 @@ fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, use
     position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
 }
 
+fn init_position_with_owner(
+    cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User,
+) {
+    init_position(cfg, ref :state, :user);
+    let position = state.positions.entry(user.position_id);
+    position.owner_account.write(user.address);
+}
+
 fn add_synthetic(
     ref state: Core::ContractState, asset_id: AssetId, position_id: PositionId, balance: i64,
 ) {
@@ -168,9 +176,8 @@ fn test_successful_deposit() {
             amount: USER_INIT_BALANCE.try_into().unwrap(),
         );
 
-    let mut expected_time = Time::now().add(Time::days(1));
-
     // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
 
     let mut deposit_args = DepositArgs {
@@ -191,6 +198,7 @@ fn test_successful_deposit() {
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state.deposit(:deposit_args);
+
     // Check after deposit:
     let user_balance_after_deposit = token_state.balance_of(user.address);
     assert_eq!(
@@ -420,6 +428,84 @@ fn test_invalid_trade_same_base_signs() {
             actual_fee_a: FEE,
             actual_fee_b: FEE,
         );
+}
+
+#[test]
+fn test_successful_withdraw_request_with_public_key() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let recipient = User {
+        position_id: POSITION_ID_2,
+        address: POSITION_OWNER_2(),
+        key_pair: KEY_PAIR_2(),
+        ..Default::default(),
+    };
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let mut withdraw_args = WithdrawArgs {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
+        recipient: recipient.address,
+    };
+    let msg_hash = withdraw_args.get_message_hash(signer: user.key_pair.public_key);
+    let signature = user.sign_message(message: msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.withdraw_request(:signature, :withdraw_args);
+
+    // Check:
+    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    assert_eq!(status.try_into().unwrap(), expected_time);
+}
+
+#[test]
+fn test_successful_withdraw_request_with_owner() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+    let recipient = User {
+        position_id: POSITION_ID_2,
+        address: POSITION_OWNER_2(),
+        key_pair: KEY_PAIR_2(),
+        ..Default::default(),
+    };
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let mut withdraw_args = WithdrawArgs {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
+        recipient: recipient.address,
+    };
+    let msg_hash = withdraw_args.get_message_hash(signer: user.key_pair.public_key);
+    let signature = user.sign_message(message: msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.withdraw_request(:signature, :withdraw_args);
+
+    // Check:
+    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    assert_eq!(status.try_into().unwrap(), expected_time);
 }
 
 #[test]

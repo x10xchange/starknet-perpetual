@@ -3,6 +3,7 @@ use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_c
 use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
+use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::core::types::asset::AssetId;
@@ -51,7 +52,7 @@ impl UserDefault of Default<User> {
     fn default() -> User {
         User {
             position_id: POSITION_ID_1,
-            address: POSITION_OWNER_1(),
+            address: deploy_account(key_pair: KEY_PAIR_1()),
             key_pair: KEY_PAIR_1(),
             salt_counter: Zero::zero(),
         }
@@ -207,6 +208,14 @@ pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConf
     );
     state.register_operator(account: *cfg.operator);
 }
+
+fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
+    let calldata = array![key_pair.public_key];
+    let account_address = declare_and_deploy("AccountUpgradeable", calldata);
+
+    account_address
+}
+
 
 pub(crate) fn deploy_value_risk_calculator_contract() -> ContractAddress {
     declare_and_deploy("ValueRiskCalculator", array![])
