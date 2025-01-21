@@ -185,8 +185,6 @@ fn test_successful_deposit() {
         salt: user.salt_counter,
         expiration: expected_time.add(Time::days(1)),
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: DEPOSIT_AMOUNT },
-        owner_public_key: user.key_pair.public_key,
-        owner_account: user.address,
     };
 
     // Check before deposit:

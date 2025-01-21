@@ -25,13 +25,12 @@ pub mod Core {
     use perpetuals::core::errors::{
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_TRADE_QUOTE_AMOUNT_SIGN,
-        INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT,
-        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_DOES_NOT_MATCH, OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
-        POSITION_HAS_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
-        POSITION_UNHEALTHY, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED,
-        WITHDRAW_EXPIRED, fulfillment_exceeded_err, position_not_healthy_nor_healthier,
-        trade_order_expired_err,
+        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_ACCOUNT,
+        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::collateral::CollateralAsset;
@@ -204,9 +203,23 @@ pub mod Core {
                 );
         }
 
-        /// Process a deposit of a collateral amount from the 'depositing_address' to a given
-        /// position. If the position is new (i.e., has no owner_public_key), the owner_public_key
-        /// and owner_account are set.
+        fn new_position(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            owner_public_key: felt252,
+            owner_account: ContractAddress,
+        ) {
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+            let mut position = self.positions.entry(position_id);
+            assert(position.owner_public_key.read().is_zero(), POSITION_ALREADY_EXISTS);
+            assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
+            self.positions.entry(position_id).owner_public_key.write(owner_public_key);
+            self.positions.entry(position_id).owner_account.write(owner_account);
+        }
+
+        /// Process deposit a collateral amount from the 'depositing_address' to a given position.
         ///
         /// Validations:
         /// - Only the operator can call this function.
@@ -233,22 +246,6 @@ pub mod Core {
         ) {
             self._validate_deposit(:operator_nonce, :depositing_address, :deposit_args);
             let position_id = deposit_args.position_id;
-            let position = self._get_position(:position_id);
-            /// Position with no owner_public_key is considered as a new position. Then we set the
-            /// owner_public_key and owner_account. Otherwise, we check that they match.
-            if position.owner_public_key.read().is_zero() {
-                position.owner_public_key.write(deposit_args.owner_public_key);
-                position.owner_account.write(deposit_args.owner_account);
-            } else {
-                assert(
-                    position.owner_public_key.read() == deposit_args.owner_public_key,
-                    OWNER_PUBLIC_KEY_DOES_NOT_MATCH,
-                );
-                assert(
-                    position.owner_account.read() == deposit_args.owner_account,
-                    OWNER_ACCOUNT_DOES_NOT_MATCH,
-                );
-            }
             let collateral_id = deposit_args.collateral.asset_id;
             let amount = deposit_args.collateral.amount;
             self
@@ -795,6 +792,8 @@ pub mod Core {
         }
 
 
+        /// Returns the position at the given `position_id`.
+        /// The function asserts that the position exists and has a non-zero owner public key.
         fn _get_position(
             ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
@@ -802,6 +801,12 @@ pub mod Core {
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
             position
         }
+
+        fn _validate_position_exists(ref self: ContractState, position_id: PositionId) {
+            let mut position = self.positions.entry(position_id);
+            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+        }
+
 
         fn _collect_position_collaterals(
             self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
@@ -910,6 +915,7 @@ pub mod Core {
             depositing_address: ContractAddress,
             deposit_args: DepositArgs,
         ) {
+            self._validate_position_exists(position_id: deposit_args.position_id);
             let now = Time::now();
             self._validate_operator_flow(:operator_nonce, :now);
             let amount = deposit_args.collateral.amount;
@@ -919,7 +925,7 @@ pub mod Core {
                 .assets
                 ._validate_collateral_active(collateral_id: deposit_args.collateral.asset_id);
 
-            let hash = deposit_args.get_message_hash(signer: deposit_args.owner_public_key);
+            let hash = deposit_args.get_message_hash(signer: depositing_address);
             self.request_approvals.consume_approved_request(:hash);
         }
 

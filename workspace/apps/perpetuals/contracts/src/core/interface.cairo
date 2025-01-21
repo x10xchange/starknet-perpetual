@@ -31,6 +31,13 @@ pub trait ICore<TContractState> {
         set_position_owner_args: SetPositionOwnerArgs,
     );
     fn transfer(ref self: TContractState, operator_nonce: u64, transfer_args: TransferArgs);
+    fn new_position(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        owner_public_key: felt252,
+        owner_account: ContractAddress,
+    );
     fn process_deposit(
         ref self: TContractState,
         operator_nonce: u64,
