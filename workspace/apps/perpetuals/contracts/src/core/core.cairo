@@ -24,8 +24,8 @@ pub mod Core {
     use perpetuals::core::components::request_approvals::interface::IRequestApprovals;
     use perpetuals::core::errors::{
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
-        DIFFERENT_QUOTE_ASSET_IDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
+        DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN,
+        INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
         INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_ACCOUNT,
         POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
@@ -571,24 +571,26 @@ pub mod Core {
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
         fn withdraw(ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs) {
-            let now = Time::now();
-            self._validate_operator_flow(:operator_nonce, :now);
-            let amount = withdraw_args.collateral.amount;
-            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
+            self._validate_withdraw(:operator_nonce, :withdraw_args);
+
             let collateral_id = withdraw_args.collateral.asset_id;
-            let collateral_cfg = self.assets._validate_collateral_active(:collateral_id);
+            let amount = withdraw_args.collateral.amount;
             let position_id = withdraw_args.position_id;
-            let position = self._get_position(:position_id);
-            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
-            self.request_approvals.consume_approved_request(:hash);
+
             /// Execution - Withdraw:
+            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
             let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
             erc20_dispatcher
                 .transfer(
                     recipient: withdraw_args.recipient,
                     amount: (collateral_cfg.quantum * amount.abs()).into(),
                 );
+
+            /// Validation - Not withdrawing from pending deposits:
+            let pending_deposits = self.pending_deposits.read(collateral_id);
+            let onchain_pending_deposits = (pending_deposits.abs() * collateral_cfg.quantum).into();
+            let erc20_balance = erc20_dispatcher.balance_of(get_contract_address());
+            assert(erc20_balance >= onchain_pending_deposits, INSUFFICIENT_FUNDS);
 
             /// Validations - Fundamentals:
             let before = self._get_provisional_balance(:position_id, asset_id: collateral_id);
@@ -926,6 +928,22 @@ pub mod Core {
                 ._validate_collateral_active(collateral_id: deposit_args.collateral.asset_id);
 
             let hash = deposit_args.get_message_hash(signer: depositing_address);
+            self.request_approvals.consume_approved_request(:hash);
+        }
+
+        fn _validate_withdraw(
+            ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs,
+        ) {
+            let now = Time::now();
+            self._validate_operator_flow(:operator_nonce, :now);
+            let amount = withdraw_args.collateral.amount;
+            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
+            validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
+            let collateral_id = withdraw_args.collateral.asset_id;
+            self.assets._validate_collateral_active(:collateral_id);
+            let position_id = withdraw_args.position_id;
+            let position = self._get_position(:position_id);
+            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
         }
 
