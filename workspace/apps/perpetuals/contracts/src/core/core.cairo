@@ -966,7 +966,8 @@ pub mod Core {
             actual_amount_quote_liquidated: i64,
             actual_liquidator_fee: i64,
         ) {
-            let liquidated_position_data = self._get_position_data(liquidated_order.position_id);
+            let liquidated_position_id = liquidated_order.position_id;
+            let liquidated_position_data = self._get_position_data(liquidated_position_id);
             let liquidated_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: liquidated_order,
@@ -975,7 +976,8 @@ pub mod Core {
                     actual_fee: liquidated_order.fee.amount,
                 );
 
-            let liquidator_position_data = self._get_position_data(liquidator_order.position_id);
+            let liquidator_position_id = liquidator_order.position_id;
+            let liquidator_position_data = self._get_position_data(liquidator_position_id);
             let liquidator_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: liquidator_order,
@@ -984,27 +986,27 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_liquidated,
                     actual_fee: actual_liquidator_fee,
                 );
-
             self
-                ._execute_trade(
-                    order_a: liquidated_order,
-                    order_b: liquidator_order,
-                    actual_amount_base_a: actual_amount_base_liquidated,
-                    actual_amount_quote_a: actual_amount_quote_liquidated,
-                    actual_fee_a: liquidated_order.fee.amount,
-                    actual_fee_b: actual_liquidator_fee,
+                ._apply_diff(
+                    position_id: liquidated_position_id,
+                    position_diff: liquidated_asset_diff_entries,
+                );
+            self
+                ._apply_diff(
+                    position_id: liquidator_position_id,
+                    position_diff: liquidator_asset_diff_entries,
                 );
 
             /// Validations - Fundamentals:
             self
                 ._validate_liquidated_position(
-                    position_id: liquidated_order.position_id,
+                    position_id: liquidated_position_id,
                     position_data: liquidated_position_data,
                     asset_diff_entries: liquidated_asset_diff_entries,
                 );
             self
                 ._validate_position_is_healthy_or_healthier(
-                    position_id: liquidator_order.position_id,
+                    position_id: liquidator_position_id,
                     position_data: liquidator_position_data,
                     asset_diff_entries: liquidator_asset_diff_entries,
                 );
