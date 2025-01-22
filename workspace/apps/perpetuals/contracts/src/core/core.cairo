@@ -32,6 +32,7 @@ pub mod Core {
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
     };
+    use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::collateral::CollateralAsset;
     use perpetuals::core::types::asset::synthetic::SyntheticAsset;
@@ -51,6 +52,7 @@ pub mod Core {
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
     };
+    use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
@@ -152,6 +154,19 @@ pub mod Core {
         AssetsEvent: AssetsComponent::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
+        NewPosition: events::NewPosition,
+        Deposit: events::Deposit,
+        DepositCanceled: events::DepositCanceled,
+        DepositProcessed: events::DepositProcessed,
+        WithdrawRequest: events::WithdrawRequest,
+        Withdraw: events::Withdraw,
+        Trade: events::Trade,
+        Liquidate: events::Liquidate,
+        TrasferRequest: events::TrasferRequest,
+        Trasfer: events::Trasfer,
+        SetOwnerAccount: events::SetOwnerAccount,
+        SetPublicKeyRequest: events::SetPublicKeyRequest,
+        SetPublicKey: events::SetPublicKey,
     }
 
     #[constructor]
@@ -217,6 +232,14 @@ pub mod Core {
             assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
             self.positions.entry(position_id).owner_public_key.write(owner_public_key);
             self.positions.entry(position_id).owner_account.write(owner_account);
+            self
+                .emit(
+                    events::NewPosition {
+                        position_id: position_id,
+                        owner_public_key: owner_public_key,
+                        owner_account: owner_account,
+                    },
+                );
         }
 
         /// Process deposit a collateral amount from the 'depositing_address' to a given position.
@@ -259,13 +282,25 @@ pub mod Core {
             ref self: ContractState, signature: Signature, withdraw_args: WithdrawArgs,
         ) {
             let position = self._get_position(position_id: withdraw_args.position_id);
+            let withdraw_request_hash = withdraw_args
+                .get_message_hash(signer: position.owner_public_key.read());
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: withdraw_args.get_message_hash(signer: position.owner_public_key.read()),
+                    hash: withdraw_request_hash,
+                );
+            self
+                .emit(
+                    events::WithdrawRequest {
+                        position_id: withdraw_args.position_id,
+                        recipient: withdraw_args.recipient,
+                        collateral: withdraw_args.collateral,
+                        expiration: withdraw_args.expiration,
+                        withdraw_request_hash: withdraw_request_hash,
+                    },
                 );
         }
 
@@ -273,13 +308,23 @@ pub mod Core {
             ref self: ContractState, signature: Signature, transfer_args: TransferArgs,
         ) {
             let position = self._get_position(position_id: transfer_args.position_id);
+            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: transfer_args.get_message_hash(signer: position.owner_public_key.read()),
+                    :hash,
+                );
+            self
+                .emit(
+                    events::TrasferRequest {
+                        position_id: transfer_args.position_id,
+                        receipient: transfer_args.recipient,
+                        expiration: transfer_args.expiration,
+                        transfer_request_hash: hash,
+                    },
                 );
         }
 
@@ -287,6 +332,18 @@ pub mod Core {
             let now = Time::now();
             self._validate_transfer(:operator_nonce, :now, :transfer_args);
             // TODO(Tomer-StarkWare): Implement the transfer logic.
+            let position = self._get_position(position_id: transfer_args.position_id);
+            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
+            self.request_approvals.consume_approved_request(:hash);
+            self
+                .emit(
+                    events::Trasfer {
+                        position_id: transfer_args.position_id,
+                        receipient: transfer_args.recipient,
+                        expiration: transfer_args.expiration,
+                        transfer_request_hash: hash,
+                    },
+                );
         }
 
         // TODO: talk about this flow
@@ -312,20 +369,40 @@ pub mod Core {
                 .get_message_hash(signer: set_public_key_args.new_public_key);
             self.request_approvals.consume_approved_request(:hash);
             position.owner_public_key.write(set_public_key_args.new_public_key);
+            self
+                .emit(
+                    events::SetPublicKey {
+                        position_id,
+                        new_public_key: set_public_key_args.new_public_key,
+                        expiration: set_public_key_args.expiration,
+                        set_public_key_request_hash: hash,
+                    },
+                );
         }
 
         fn set_public_key_request(
             ref self: ContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
         ) {
-            let position = self._get_position(position_id: set_public_key_args.position_id);
+            let position_id = set_public_key_args.position_id;
+            let position = self._get_position(:position_id);
+            let hash = set_public_key_args
+                .get_message_hash(signer: set_public_key_args.new_public_key);
             self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: set_public_key_args
-                        .get_message_hash(signer: set_public_key_args.new_public_key),
+                    :hash,
+                );
+            self
+                .emit(
+                    events::SetPublicKeyRequest {
+                        position_id,
+                        new_public_key: set_public_key_args.new_public_key,
+                        expiration: set_public_key_args.expiration,
+                        set_public_key_request_hash: hash,
+                    },
                 );
         }
 
@@ -371,11 +448,11 @@ pub mod Core {
             // Signatures validation:
             let liquidator_position = self._get_position(position_id: liquidator_order.position_id);
             let liquidator_public_key = liquidator_position.owner_public_key.read();
-            let liquidator_msg_hash = liquidator_order
+            let liquidator_order_hash = liquidator_order
                 .get_message_hash(signer: liquidator_public_key);
             validate_stark_signature(
                 public_key: liquidator_public_key,
-                msg_hash: liquidator_msg_hash,
+                msg_hash: liquidator_order_hash,
                 signature: liquidator_signature,
             );
 
@@ -383,7 +460,7 @@ pub mod Core {
             self
                 ._update_fulfillment(
                     position_id: liquidator_order.position_id,
-                    hash: liquidator_msg_hash,
+                    hash: liquidator_order_hash,
                     order_amount: liquidator_order.base.amount,
                     // Passing the negative of actual amounts to `liquidator_order` as it is linked
                     // to liquidated_order.
@@ -424,6 +501,21 @@ pub mod Core {
                     :actual_amount_quote_liquidated,
                     :actual_liquidator_fee,
                 );
+            self
+                .emit(
+                    events::Liquidate {
+                        liquidated_position_id,
+                        liquidator_order_position_id: liquidator_order.position_id,
+                        liquidator_order_base: liquidator_order.base,
+                        liquidator_order_quote: liquidator_order.quote,
+                        liquidator_order_fee: liquidator_order.fee,
+                        actual_amount_base_liquidated,
+                        actual_amount_quote_liquidated,
+                        actual_liquidator_fee,
+                        insurance_fund_fee,
+                        liquidator_order_hash: liquidator_order_hash,
+                    },
+                );
         }
 
         /// Sets the owner of a position to a new account owner.
@@ -448,13 +540,22 @@ pub mod Core {
             let position_id = set_position_owner_args.position_id;
             let position = self._get_position(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_ACCOUNT);
+            let public_key = position.owner_public_key.read();
             validate_stark_signature(
-                public_key: position.owner_public_key.read(),
-                msg_hash: set_position_owner_args
-                    .get_message_hash(signer: position.owner_public_key.read()),
+                :public_key,
+                msg_hash: set_position_owner_args.get_message_hash(signer: public_key),
                 signature: signature,
             );
             position.owner_account.write(set_position_owner_args.new_account_owner);
+            self
+                .emit(
+                    events::SetOwnerAccount {
+                        position_id: position_id,
+                        public_key,
+                        new_position_owner: set_position_owner_args.new_account_owner,
+                        expiration: set_position_owner_args.expiration,
+                    },
+                );
         }
 
         /// Executes a trade between two orders (Order A and Order B).
@@ -549,6 +650,25 @@ pub mod Core {
                     :actual_fee_a,
                     :actual_fee_b,
                 );
+            self
+                .emit(
+                    events::Trade {
+                        order_a_position_id: order_a.position_id,
+                        order_a_base: order_a.base,
+                        order_a_quote: order_a.quote,
+                        fee_a: order_a.fee,
+                        order_b_position_id: order_b.position_id,
+                        order_b_base: order_b.base,
+                        order_b_quote: order_b.quote,
+                        fee_b: order_b.fee,
+                        actual_amount_base_a,
+                        actual_amount_quote_a,
+                        actual_fee_a,
+                        actual_fee_b,
+                        order_a_hash: hash_a,
+                        order_b_hash: hash_b,
+                    },
+                );
         }
 
         /// Withdraw collateral `amount` from the a position to `recipient`.
@@ -617,6 +737,19 @@ pub mod Core {
                 POSITION_UNHEALTHY,
             );
             self._apply_diff(:position_id, :position_diff);
+            let position = self._get_position(:position_id);
+            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
+            self.request_approvals.consume_approved_request(:hash);
+            self
+                .emit(
+                    events::Withdraw {
+                        position_id: withdraw_args.position_id,
+                        recipient: withdraw_args.recipient,
+                        collateral: withdraw_args.collateral,
+                        expiration: withdraw_args.expiration,
+                        withdraw_request_hash: hash,
+                    },
+                );
         }
 
         /// Funding tick is called by the operator to update the funding index of all synthetic
@@ -941,10 +1074,6 @@ pub mod Core {
             validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
             let collateral_id = withdraw_args.collateral.asset_id;
             self.assets._validate_collateral_active(:collateral_id);
-            let position_id = withdraw_args.position_id;
-            let position = self._get_position(:position_id);
-            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
-            self.request_approvals.consume_approved_request(:hash);
         }
 
         fn _validate_funding_tick(
@@ -1242,8 +1371,8 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
 
             // Check positions.
-            self._get_position(position_id: transfer_args.recipient);
             let position = self._get_position(position_id: transfer_args.position_id);
+            self._get_position(position_id: transfer_args.recipient);
 
             // Validate collateral.
             self
@@ -1261,10 +1390,6 @@ pub mod Core {
 
             // Validate expiration.
             assert(now < transfer_args.expiration, TRANSFER_EXPIRED);
-
-            // Validate the message.
-            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
-            self.request_approvals.consume_approved_request(:hash);
         }
     }
 }

@@ -4,7 +4,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::price::{Price, PriceMulTrait};
 
-#[derive(Copy, Drop, starknet::Store, Serde)]
+#[derive(Copy, Debug, Drop, PartialEq, starknet::Store, Serde)]
 pub struct FundingIndex {
     /// Signed 64-bit fixed-point number:
     /// 1 sign bit, 31-bits integer part, 32-bits fractional part.

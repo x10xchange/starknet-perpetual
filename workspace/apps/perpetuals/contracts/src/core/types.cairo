@@ -15,12 +15,12 @@ use perpetuals::core::types::price::Price;
 
 pub type Signature = Span<felt252>;
 
-#[derive(Copy, Debug, Drop, Hash, Serde)]
+#[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct PositionId {
     pub value: u32,
 }
 
-#[derive(Copy, Drop, Hash, Serde)]
+#[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct AssetAmount {
     pub asset_id: AssetId,
     pub amount: i64,

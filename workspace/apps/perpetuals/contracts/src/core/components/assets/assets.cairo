@@ -10,6 +10,7 @@ pub(crate) mod AssetsComponent {
         COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
         SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
     };
+    use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
@@ -43,7 +44,10 @@ pub(crate) mod AssetsComponent {
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
-    pub enum Event {}
+    pub enum Event {
+        FundingTick: events::FundingTick,
+        PriceTick: events::PriceTick,
+    }
 
     #[embeddable_as(AssetsImpl)]
     impl Assets<
@@ -118,6 +122,12 @@ pub(crate) mod AssetsComponent {
                 err: invalid_funding_tick_err(:synthetic_id),
             );
             synthetic_timely_data.funding_index.write(new_funding_index);
+            self
+                .emit(
+                    events::FundingTick {
+                        asset_id: synthetic_id, funding_index: new_funding_index,
+                    },
+                );
         }
 
         fn _get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
