@@ -27,7 +27,7 @@ pub mod Core {
         DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN,
         INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
-        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_ACCOUNT,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
         POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
@@ -39,7 +39,7 @@ pub mod Core {
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::deposit::DepositArgs;
-    use perpetuals::core::types::funding::{FundingIndexMulTrait, FundingTick};
+    use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
@@ -193,7 +193,7 @@ pub mod Core {
 
         fn deposit(ref self: ContractState, deposit_args: DepositArgs) {
             let caller_address = get_caller_address();
-            let position = self._get_position(position_id: deposit_args.position_id);
+            let position = self._get_position_mut(position_id: deposit_args.position_id);
             self
                 .request_approvals
                 .register_approval(
@@ -281,7 +281,7 @@ pub mod Core {
         fn withdraw_request(
             ref self: ContractState, signature: Signature, withdraw_args: WithdrawArgs,
         ) {
-            let position = self._get_position(position_id: withdraw_args.position_id);
+            let position = self._get_position_const(position_id: withdraw_args.position_id);
             let withdraw_request_hash = withdraw_args
                 .get_message_hash(signer: position.owner_public_key.read());
             self
@@ -307,7 +307,7 @@ pub mod Core {
         fn transfer_request(
             ref self: ContractState, signature: Signature, transfer_args: TransferArgs,
         ) {
-            let position = self._get_position(position_id: transfer_args.position_id);
+            let position = self._get_position_const(position_id: transfer_args.position_id);
             let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
             self
                 .request_approvals
@@ -332,7 +332,7 @@ pub mod Core {
             let now = Time::now();
             self._validate_transfer(:operator_nonce, :now, :transfer_args);
             // TODO(Tomer-StarkWare): Implement the transfer logic.
-            let position = self._get_position(position_id: transfer_args.position_id);
+            let position = self._get_position_const(position_id: transfer_args.position_id);
             let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
@@ -362,7 +362,7 @@ pub mod Core {
             self._consume_operator_nonce(:operator_nonce);
             assert(set_public_key_args.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
             let position_id = set_public_key_args.position_id;
-            let position = self._get_position(:position_id);
+            let position = self._get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
             let hash = set_public_key_args
@@ -384,7 +384,7 @@ pub mod Core {
             ref self: ContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
         ) {
             let position_id = set_public_key_args.position_id;
-            let position = self._get_position(:position_id);
+            let position = self._get_position_const(:position_id);
             let hash = set_public_key_args
                 .get_message_hash(signer: set_public_key_args.new_public_key);
             self
@@ -446,7 +446,8 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
 
             // Signatures validation:
-            let liquidator_position = self._get_position(position_id: liquidator_order.position_id);
+            let liquidator_position = self
+                ._get_position_const(position_id: liquidator_order.position_id);
             let liquidator_public_key = liquidator_position.owner_public_key.read();
             let liquidator_order_hash = liquidator_order
                 .get_message_hash(signer: liquidator_public_key);
@@ -456,7 +457,7 @@ pub mod Core {
                 signature: liquidator_signature,
             );
 
-            // Validate and update fulfilments.
+            // Validate and update fulfilment.
             self
                 ._update_fulfillment(
                     position_id: liquidator_order.position_id,
@@ -538,8 +539,8 @@ pub mod Core {
             let now = Time::now();
             assert(set_position_owner_args.expiration > now, SET_POSITION_OWNER_EXPIRED);
             let position_id = set_position_owner_args.position_id;
-            let position = self._get_position(:position_id);
-            assert(position.owner_account.read().is_zero(), POSITION_HAS_ACCOUNT);
+            let position = self._get_position_mut(:position_id);
+            assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
             let public_key = position.owner_public_key.read();
             validate_stark_signature(
                 :public_key,
@@ -597,8 +598,8 @@ pub mod Core {
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
             // Signatures validation:
-            let position_a = self._get_position(position_id: position_id_a);
-            let position_b = self._get_position(position_id: position_id_b);
+            let position_a = self._get_position_const(position_id: position_id_a);
+            let position_b = self._get_position_const(position_id: position_id_b);
             let hash_a = order_a.get_message_hash(signer: position_a.owner_public_key.read());
             validate_stark_signature(
                 public_key: position_a.owner_public_key.read(),
@@ -737,7 +738,7 @@ pub mod Core {
                 POSITION_UNHEALTHY,
             );
             self._apply_diff(:position_id, :position_diff);
-            let position = self._get_position(:position_id);
+            let position = self._get_position_const(:position_id);
             let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
@@ -823,10 +824,15 @@ pub mod Core {
         fn _get_provisional_balance(
             self: @ContractState, position_id: PositionId, asset_id: AssetId,
         ) -> Balance {
-            if self.assets._is_main_collateral(:asset_id) {
+            if self.assets._is_collateral(:asset_id) {
                 self._get_provisional_main_collateral_balance(:position_id)
             } else {
-                self.positions.entry(position_id).synthetic_assets.entry(asset_id).balance.read()
+                self
+                    ._get_position_const(:position_id)
+                    .synthetic_assets
+                    .entry(asset_id)
+                    .balance
+                    .read()
             }
         }
 
@@ -836,8 +842,8 @@ pub mod Core {
         fn _apply_funding_and_set_balance(
             ref self: ContractState, position_id: PositionId, asset_id: AssetId, balance: Balance,
         ) {
-            let mut position = self._get_position(:position_id);
-            if self.assets._is_main_collateral(:asset_id) {
+            let mut position = self._get_position_mut(:position_id);
+            if self.assets._is_collateral(:asset_id) {
                 position.collateral_assets.entry(asset_id).balance.write(balance);
             } else {
                 self
@@ -857,28 +863,28 @@ pub mod Core {
                 );
         }
 
+        /// Returns the main collateral balance of a position while taking into account the funding
+        /// of all synthetic assets in the position.
         fn _get_provisional_main_collateral_balance(
             self: @ContractState, position_id: PositionId,
         ) -> Balance {
-            let position = self.positions.entry(position_id);
+            let position = self._get_position_const(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
                 .entry(self.assets._get_main_collateral_asset_id())
                 .balance
                 .read();
             let mut asset_id_opt = position.synthetic_assets_head.read();
-
             while let Option::Some(synthetic_id) = asset_id_opt {
-                let synthetic_asset = position.synthetic_assets.read(synthetic_id);
-                let balance = synthetic_asset.balance;
-                let funding = synthetic_asset.funding_index;
-                let global_funding = self
+                let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+                let curr_funding_index = self
                     .assets
                     .synthetic_timely_data
                     .read(synthetic_id)
                     .funding_index;
-                main_collateral_balance += (global_funding - funding).mul(balance);
-                asset_id_opt = synthetic_asset.next;
+                let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
+                main_collateral_balance += funding;
+                asset_id_opt = synthetic_asset.next.read();
             };
             main_collateral_balance
         }
@@ -911,25 +917,48 @@ pub mod Core {
             synthetic_id: AssetId,
             balance: Balance,
         ) {
-            let position = self._get_position(:position_id);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-            let funding = synthetic_asset.funding_index.read();
-            let global_funding = self.assets.synthetic_timely_data.read(synthetic_id).funding_index;
-            let synthetic_balance = synthetic_asset.balance.read();
-
-            position
+            let position = self._get_position_mut(:position_id);
+            let mut main_collateral_balance = position
                 .collateral_assets
                 .entry(self.assets._get_main_collateral_asset_id())
-                .balance
-                .add_and_write((global_funding - funding).mul(synthetic_balance));
+                .balance;
+            let curr_funding_index = self
+                .assets
+                .synthetic_timely_data
+                .read(synthetic_id)
+                .funding_index;
+            let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+            main_collateral_balance.add_and_write(funding);
             synthetic_asset.balance.write(balance);
-            synthetic_asset.funding_index.write(global_funding);
+            synthetic_asset.funding_index.write(curr_funding_index);
+        }
+
+        fn _calc_funding(
+            self: @ContractState,
+            position_id: PositionId,
+            synthetic_id: AssetId,
+            curr_funding_index: FundingIndex,
+        ) -> Balance {
+            let position = self._get_position_const(:position_id);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+            let synthetic_balance = synthetic_asset.balance.read();
+            let cached_funding_index = synthetic_asset.funding_index.read();
+            (curr_funding_index - cached_funding_index).mul(synthetic_balance)
+        }
+
+        fn _get_position_const(
+            self: @ContractState, position_id: PositionId,
+        ) -> StoragePath<Position> {
+            let position = self.positions.entry(position_id);
+            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            position
         }
 
 
         /// Returns the position at the given `position_id`.
         /// The function asserts that the position exists and has a non-zero owner public key.
-        fn _get_position(
+        fn _get_position_mut(
             ref self: ContractState, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
             let mut position = self.positions.entry(position_id);
@@ -937,16 +966,15 @@ pub mod Core {
             position
         }
 
-        fn _validate_position_exists(ref self: ContractState, position_id: PositionId) {
-            let mut position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+        fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
+            self._get_position_const(:position_id);
         }
 
 
         fn _collect_position_collaterals(
             self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
         ) {
-            let position = self.positions.entry(position_id);
+            let position = self._get_position_const(:position_id);
             let mut asset_id_opt = position.collateral_assets_head.read();
             while let Option::Some(collateral_id) = asset_id_opt {
                 let collateral_asset = position.collateral_assets.read(collateral_id);
@@ -968,7 +996,7 @@ pub mod Core {
         fn _collect_position_synthetics(
             self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
         ) {
-            let position = self.positions.entry(position_id);
+            let position = self._get_position_const(:position_id);
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_asset = position.synthetic_assets.read(synthetic_id);
@@ -1001,7 +1029,7 @@ pub mod Core {
 
         fn _get_position_data(self: @ContractState, position_id: PositionId) -> PositionData {
             let mut asset_entries = array![];
-            let position = self.positions.entry(position_id);
+            let position = self._get_position_const(position_id);
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
             self._collect_position_collaterals(ref :asset_entries, :position_id);
             self._collect_position_synthetics(ref :asset_entries, :position_id);
@@ -1304,16 +1332,6 @@ pub mod Core {
                 );
         }
 
-        fn _get_position_asset_balance(
-            ref self: ContractState, position_id: PositionId, asset_id: AssetId,
-        ) -> Balance {
-            if self.assets._is_collateral(:asset_id) {
-                self._get_position(:position_id).collateral_assets.entry(asset_id).balance.read()
-            } else {
-                self._get_position(:position_id).synthetic_assets.entry(asset_id).balance.read()
-            }
-        }
-
         fn _validate_liquidated_position(
             self: @ContractState,
             position_id: PositionId,
@@ -1371,8 +1389,8 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce, :now);
 
             // Check positions.
-            let position = self._get_position(position_id: transfer_args.position_id);
-            self._get_position(position_id: transfer_args.recipient);
+            self._validate_position_exists(position_id: transfer_args.recipient);
+            let position = self._get_position_const(position_id: transfer_args.position_id);
 
             // Validate collateral.
             self

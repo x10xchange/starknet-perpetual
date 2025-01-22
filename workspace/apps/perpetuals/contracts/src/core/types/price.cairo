@@ -2,10 +2,10 @@ use core::num::traits::Zero;
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 
 // 2^28
-pub const TWO_POW_28: u64 = 268435456;
+pub const TWO_POW_28: u64 = 0x10000000;
 
 // 2^56
-const LIMIT: u64 = 72057594037927936;
+const LIMIT: u64 = 0x100000000000000;
 
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Price {

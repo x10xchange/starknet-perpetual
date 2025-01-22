@@ -180,18 +180,12 @@ pub(crate) mod AssetsComponent {
             }
         }
 
-        fn _is_main_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
-            if let Option::Some(main_collateral) = self.collateral_timely_data_head.read() {
-                return main_collateral == asset_id;
-            }
-            false
-        }
-
+        /// The main collateral asset is the only collateral asset in the system.
         fn _get_main_collateral_asset_id(self: @ComponentState<TContractState>) -> AssetId {
             self.collateral_timely_data_head.read().expect(COLLATERAL_NOT_EXISTS)
         }
 
-
+        // The system has only the main collateral asset.
         fn _is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
             self.collateral_config.read(asset_id).is_some()
         }
@@ -229,10 +223,8 @@ pub(crate) mod AssetsComponent {
 
         fn _validate_collateral_active(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) -> CollateralConfig {
-            let cfg = self._get_collateral_config(collateral_id);
-            assert(cfg.is_active, COLLATERAL_NOT_ACTIVE);
-            cfg
+        ) {
+            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
         }
 
         fn _validate_collateral_prices(
