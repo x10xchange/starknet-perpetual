@@ -620,8 +620,6 @@ fn test_successful_transfer_request_using_public_key() {
         salt: user.salt_counter,
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
-        recipient_public_key: recipient.key_pair.public_key,
-        recipient_account: recipient.address,
     };
     let msg_hash = transfer_args.get_message_hash(signer: user.key_pair.public_key);
     let signature = user.sign_message(msg_hash);
@@ -661,8 +659,6 @@ fn test_successful_transfer_request_with_owner() {
         salt: user.salt_counter,
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
-        recipient_public_key: recipient.key_pair.public_key,
-        recipient_account: recipient.address,
     };
     let msg_hash = transfer_args.get_message_hash(signer: user.key_pair.public_key);
     let signature = user.sign_message(message: msg_hash);
