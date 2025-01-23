@@ -790,7 +790,39 @@ pub mod Core {
         }
 
         // Configuration
-        fn add_asset(self: @ContractState) {}
+
+        /// Add asset is called by the operator to add a new synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The system nonce must be valid.
+        /// - The asset is not already exists.
+        /// - The risk factor is less or equal to 100.
+        ///
+        /// Execution:
+        /// - Add new entry to synthetic_config.
+        ///     - Set the asset as in-active.
+        /// - Add a new entry at the beginning of synthetic_timely_data
+        ///     - Set the price to zero.
+        ///     - Set the funding index to zero.
+        ///     - Set the `last_price_update` to zero.
+        fn add_synthetic_asset(
+            ref self: ContractState,
+            operator_nonce: u64,
+            asset_id: AssetId,
+            name: felt252,
+            risk_factor: u8,
+            quorum: u8,
+            resolution: u64,
+        ) {
+            // Validations:
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+
+            // Execution:
+            self.assets.add_synthetic_asset(:asset_id, :name, :risk_factor, :quorum, :resolution);
+        }
         fn add_oracle(self: @ContractState) {}
         fn add_oracle_to_asset(self: @ContractState) {}
         fn remove_oracle(self: @ContractState) {}

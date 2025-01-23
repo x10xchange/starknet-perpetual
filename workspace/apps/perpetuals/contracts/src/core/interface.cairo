@@ -78,7 +78,15 @@ pub trait ICore<TContractState> {
     );
 
     // Configuration
-    fn add_asset(self: @TContractState);
+    fn add_synthetic_asset(
+        ref self: TContractState,
+        operator_nonce: u64,
+        asset_id: AssetId,
+        name: felt252,
+        risk_factor: u8,
+        quorum: u8,
+        resolution: u64,
+    );
     fn add_oracle(self: @TContractState);
     fn add_oracle_to_asset(self: @TContractState);
     fn remove_oracle(self: @TContractState);

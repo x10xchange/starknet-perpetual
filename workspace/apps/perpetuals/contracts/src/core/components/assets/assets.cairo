@@ -2,19 +2,21 @@
 pub(crate) mod AssetsComponent {
     use contracts_commons::errors::{assert_with_byte_array, panic_with_felt};
     use contracts_commons::math::Abs;
-    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
+    use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::Zero;
     use perpetuals::core::components::assets::errors::{
-        ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_EXPIRED_PRICE, COLLATERAL_NOT_ACTIVE,
-        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
+        ASSET_ALREADY_EXISTS, ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_EXPIRED_PRICE,
+        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
-    use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+    use perpetuals::core::types::asset::synthetic::{
+        SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
+    };
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, funding_rate_calc};
     use perpetuals::core::types::price::Price;
     use starknet::storage::{
@@ -77,6 +79,50 @@ pub(crate) mod AssetsComponent {
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
+        }
+
+        fn add_synthetic_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            name: felt252,
+            risk_factor: u8,
+            quorum: u8,
+            resolution: u64,
+        ) {
+            assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+
+            self
+                .synthetic_config
+                .entry(asset_id)
+                .write(
+                    Option::Some(
+                        SyntheticConfig {
+                            version: SYNTHETIC_VERSION,
+                            name,
+                            // It'll be active in the next price tick.
+                            is_active: false,
+                            // It validates the range of the risk factor.
+                            risk_factor: FixedTwoDecimalTrait::new(risk_factor),
+                            quorum,
+                            resolution,
+                        },
+                    ),
+                );
+
+            self
+                .synthetic_timely_data
+                .entry(asset_id)
+                .write(
+                    SyntheticTimelyData {
+                        version: SYNTHETIC_VERSION,
+                        next: self.synthetic_timely_data_head.read(),
+                        // These fields will be updated in the next price tick.
+                        price: Zero::zero(),
+                        last_price_update: Zero::zero(),
+                        funding_index: Zero::zero(),
+                    },
+                );
+            self.synthetic_timely_data_head.write(Option::Some(asset_id));
         }
 
         fn _execute_funding_tick(
@@ -265,10 +311,14 @@ pub(crate) mod AssetsComponent {
             let mut asset_id_opt = self.synthetic_timely_data_head.read();
             while let Option::Some(asset_id) = asset_id_opt {
                 let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
-                assert(
-                    now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
-                    SYNTHETIC_EXPIRED_PRICE,
-                );
+                // In case of a new asset, `last_price_update` is zero. Don't validate the price
+                // since it has not been set yet.
+                if synthetic_timely_data.last_price_update != Zero::zero() {
+                    assert(
+                        now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
+                        SYNTHETIC_EXPIRED_PRICE,
+                    );
+                }
                 asset_id_opt = synthetic_timely_data.next;
             };
         }

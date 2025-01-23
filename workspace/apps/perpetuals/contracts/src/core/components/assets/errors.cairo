@@ -1,5 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 
+pub const ASSET_ALREADY_EXISTS: felt252 = 'ASSET_ALREADY_EXISTS';
 pub const ASSET_NOT_EXISTS: felt252 = 'ASSET_NOT_EXISTS';
 pub const BASE_ASSET_NOT_ACTIVE: felt252 = 'BASE_ASSET_NOT_ACTIVE';
 pub const COLLATERAL_EXPIRED_PRICE: felt252 = 'COLLATERAL_EXPIRED_PRICE';

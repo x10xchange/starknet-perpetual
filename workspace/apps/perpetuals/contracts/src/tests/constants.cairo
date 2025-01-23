@@ -71,7 +71,8 @@ pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
     SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
         price: PRICE_1(),
-        last_price_update: Time::now(),
+        // Pass non default timestamp.
+        last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
         funding_index: Zero::zero(),
         next: Option::None,
     }
