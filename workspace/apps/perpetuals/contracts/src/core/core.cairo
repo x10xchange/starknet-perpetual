@@ -92,6 +92,9 @@ pub mod Core {
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
 
+    pub const FEE_POSITION: PositionId = PositionId { value: 0 };
+    pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
+
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {
         fn name() -> felt252 {
@@ -181,6 +184,10 @@ pub mod Core {
         max_price_interval: TimeDelta,
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
+        fee_position_owner_account: ContractAddress,
+        fee_position_owner_public_key: felt252,
+        insurance_fund_position_owner_account: ContractAddress,
+        insurance_fund_position_owner_public_key: felt252,
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.upgrade_delay.write(Zero::zero());
@@ -189,6 +196,22 @@ pub mod Core {
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
         self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
         self.deposits.initialize();
+
+        // Create fee positions.
+
+        self.positions.entry(FEE_POSITION).owner_account.write(fee_position_owner_account);
+        self.positions.entry(FEE_POSITION).owner_public_key.write(fee_position_owner_public_key);
+
+        self
+            .positions
+            .entry(INSURANCE_FUND_POSITION)
+            .owner_account
+            .write(insurance_fund_position_owner_account);
+        self
+            .positions
+            .entry(INSURANCE_FUND_POSITION)
+            .owner_public_key
+            .write(insurance_fund_position_owner_public_key);
     }
 
     #[abi(embed_v0)]
@@ -1128,6 +1151,22 @@ pub mod Core {
                     position_diff: liquidator_asset_diff_entries,
                 );
 
+            // Update fee positions.
+            self
+                .positions
+                .entry(INSURANCE_FUND_POSITION)
+                .collateral_assets
+                .entry(liquidated_order.fee.asset_id)
+                .balance
+                .add_and_write(liquidated_order.fee.amount.into());
+            self
+                .positions
+                .entry(FEE_POSITION)
+                .collateral_assets
+                .entry(liquidator_order.fee.asset_id)
+                .balance
+                .add_and_write(actual_liquidator_fee.into());
+
             /// Validations - Fundamentals:
             self
                 ._validate_liquidated_position(
@@ -1290,6 +1329,22 @@ pub mod Core {
                 );
             self._apply_diff(position_id: order_a.position_id, position_diff: asset_diff_entries_a);
             self._apply_diff(position_id: order_b.position_id, position_diff: asset_diff_entries_b);
+
+            // Update fee positions.
+            self
+                .positions
+                .entry(FEE_POSITION)
+                .collateral_assets
+                .entry(order_a.fee.asset_id)
+                .balance
+                .add_and_write(actual_fee_a.into());
+            self
+                .positions
+                .entry(FEE_POSITION)
+                .collateral_assets
+                .entry(order_b.fee.asset_id)
+                .balance
+                .add_and_write(actual_fee_b.into());
 
             /// Validations - Fundamentals:
             self

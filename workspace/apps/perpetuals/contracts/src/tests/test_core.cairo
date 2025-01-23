@@ -117,6 +117,10 @@ fn initialized_contract_state() -> Core::ContractState {
         max_price_interval: MAX_PRICE_INTERVAL,
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
+        fee_position_owner_account: OPERATOR(),
+        fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
+        insurance_fund_position_owner_account: OPERATOR(),
+        insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
     );
     state
 }
@@ -128,6 +132,18 @@ fn test_constructor() {
     assert_eq!(state.assets.get_price_validation_interval(), MAX_PRICE_INTERVAL);
     assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
+
+    assert_eq!(state.positions.entry(Core::FEE_POSITION).owner_account.read(), OPERATOR());
+    assert_eq!(
+        state.positions.entry(Core::FEE_POSITION).owner_public_key.read(), OPERATOR_PUBLIC_KEY(),
+    );
+    assert_eq!(
+        state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_account.read(), OPERATOR(),
+    );
+    assert_eq!(
+        state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_public_key.read(),
+        OPERATOR_PUBLIC_KEY(),
+    );
 }
 
 #[test]
@@ -326,6 +342,10 @@ fn test_successful_trade() {
         ._get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
     assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
+
+    let fee_position_balance = state
+        ._get_provisional_balance(position_id: Core::FEE_POSITION, asset_id: collateral_id);
+    assert_eq!(fee_position_balance, (FEE + FEE).into());
 }
 
 // TODO: Add all the illegal trade cases once safe dispatcher is supported.
@@ -558,7 +578,8 @@ fn test_successful_liquidate() {
     // Test params:
     let BASE = 10;
     let QUOTE = -5;
-    let FEE = 1;
+    let INSURANCE_FEE = 1;
+    let FEE = 2;
 
     // Setup parameters:
     let mut expiration = Time::now();
@@ -592,30 +613,50 @@ fn test_successful_liquidate() {
             actual_amount_base_liquidated: BASE,
             actual_amount_quote_liquidated: QUOTE,
             actual_liquidator_fee: FEE,
-            insurance_fund_fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+            insurance_fund_fee: AssetAmount { asset_id: collateral_id, amount: INSURANCE_FEE },
         );
 
     // Check:
-    let position_a = state.positions.entry(liquidated.position_id);
-    let position_b = state.positions.entry(liquidator.position_id);
+    let liquidated_position = state.positions.entry(liquidated.position_id);
+    let liquidator_position = state.positions.entry(liquidator.position_id);
 
-    let user_a_collateral_balance = position_a
+    let liquidated_collateral_balance = liquidated_position
         .collateral_assets
         .entry(collateral_id)
         .balance
         .read();
-    let user_a_synthetic_balance = position_a.synthetic_assets.entry(synthetic_id).balance.read();
-    assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
-    assert_eq!(user_a_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+    let liquidated_synthetic_balance = liquidated_position
+        .synthetic_assets
+        .entry(synthetic_id)
+        .balance
+        .read();
+    assert_eq!(
+        liquidated_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - INSURANCE_FEE + QUOTE).into(),
+    );
+    assert_eq!(liquidated_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
-    let user_b_collateral_balance = position_b
+    let liquidator_collateral_balance = liquidator_position
         .collateral_assets
         .entry(collateral_id)
         .balance
         .read();
-    let user_b_synthetic_balance = position_b.synthetic_assets.entry(synthetic_id).balance.read();
-    assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
-    assert_eq!(user_b_synthetic_balance, (-BASE).into());
+    let liquidator_synthetic_balance = liquidator_position
+        .synthetic_assets
+        .entry(synthetic_id)
+        .balance
+        .read();
+    assert_eq!(liquidator_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
+    assert_eq!(liquidator_synthetic_balance, (-BASE).into());
+
+    let fee_position_balance = state
+        ._get_provisional_balance(position_id: Core::FEE_POSITION, asset_id: collateral_id);
+    assert_eq!(fee_position_balance, FEE.into());
+
+    let insurance_position_balance = state
+        ._get_provisional_balance(
+            position_id: Core::INSURANCE_FUND_POSITION, asset_id: collateral_id,
+        );
+    assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
 }
 
 #[test]

@@ -15,6 +15,9 @@ use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::{ContractAddress, contract_address_const};
 
 
+pub fn OPERATOR_PUBLIC_KEY() -> felt252 {
+    StarkCurveKeyPairImpl::from_secret_key('OPERATOR_PRIVATE_KEY').public_key
+}
 pub fn KEY_PAIR_1() -> KeyPair<felt252, felt252> {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_1')
 }
@@ -94,8 +97,8 @@ pub const SYNTHETIC_BALANCE_AMOUNT: i64 = 2000;
 pub const CONTRACT_INIT_BALANCE: u64 = 1_000_000_000;
 pub const USER_INIT_BALANCE: u64 = 100_000_000;
 
-pub const POSITION_ID_1: PositionId = PositionId { value: 1 };
-pub const POSITION_ID_2: PositionId = PositionId { value: 2 };
+pub const POSITION_ID_1: PositionId = PositionId { value: 2 };
+pub const POSITION_ID_2: PositionId = PositionId { value: 3 };
 
 /// Assets IDs
 pub fn COLLATERAL_ASSET_ID() -> AssetId {
