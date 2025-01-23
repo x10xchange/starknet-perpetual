@@ -1,4 +1,4 @@
-use perpetuals::core::types::deposit::DepositArgs;
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
@@ -12,7 +12,6 @@ use starknet::ContractAddress;
 pub trait ICore<TContractState> {
     // Flows
     fn deleverage(self: @TContractState);
-    fn deposit(ref self: TContractState, deposit_args: DepositArgs);
     fn liquidate(
         ref self: TContractState,
         operator_nonce: u64,
@@ -41,8 +40,11 @@ pub trait ICore<TContractState> {
     fn process_deposit(
         ref self: TContractState,
         operator_nonce: u64,
-        depositing_address: ContractAddress,
-        deposit_args: DepositArgs,
+        depositor: ContractAddress,
+        collateral_id: AssetId,
+        amount: i64,
+        position_id: PositionId,
+        salt: felt252,
     );
     fn trade(
         ref self: TContractState,

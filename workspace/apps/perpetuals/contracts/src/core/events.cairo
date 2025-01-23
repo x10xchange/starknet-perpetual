@@ -13,42 +13,6 @@ pub struct NewPosition {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct Deposit {
-    #[key]
-    pub position_id: PositionId,
-    #[key]
-    pub depositing_address: ContractAddress,
-    pub collateral: AssetAmount,
-    pub expiration: Timestamp,
-    #[key]
-    pub deposit_request_hash: felt252,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct DepositCanceled {
-    #[key]
-    pub position_id: PositionId,
-    #[key]
-    pub depositing_address: ContractAddress,
-    pub collateral: AssetAmount,
-    pub expiration: Timestamp,
-    #[key]
-    pub deposit_request_hash: felt252,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct DepositProcessed {
-    #[key]
-    pub position_id: PositionId,
-    #[key]
-    pub depositing_address: ContractAddress,
-    pub collateral: AssetAmount,
-    pub expiration: Timestamp,
-    #[key]
-    pub deposit_request_hash: felt252,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct WithdrawRequest {
     #[key]
     pub position_id: PositionId,

@@ -46,7 +46,9 @@ fn add_colateral(
     cfg: @PerpetualsInitConfig,
     token_state: @TokenState,
 ) {
-    let (collateral_config, mut collateral_timely_data) = generate_collateral(:token_state);
+    let (collateral_config, mut collateral_timely_data) = generate_collateral(
+        cfg.collateral_cfg, :token_state,
+    );
     state.collateral_config.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
     state.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
     state.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));

@@ -211,7 +211,8 @@ pub(crate) mod AssetsComponent {
         /// Validates assets integrity prerequisites:
         /// - Funding interval validation.
         /// - Prices validation.
-        fn _validate_assets_integrity(ref self: ComponentState<TContractState>, now: Timestamp) {
+        fn _validate_assets_integrity(ref self: ComponentState<TContractState>) {
+            let now = Time::now();
             // Funding validation.
             assert(
                 now.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),

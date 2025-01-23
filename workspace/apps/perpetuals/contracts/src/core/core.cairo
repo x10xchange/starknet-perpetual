@@ -1,5 +1,7 @@
 #[starknet::contract]
 pub mod Core {
+    use contracts_commons::components::deposit::Deposit;
+    use contracts_commons::components::deposit::Deposit::InternalTrait as DepositInternal;
     use contracts_commons::components::nonce::NonceComponent;
     use contracts_commons::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use contracts_commons::components::pausable::PausableComponent;
@@ -11,7 +13,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use contracts_commons::utils::{AddToStorage, SubFromStorage};
+    use contracts_commons::utils::{AddToStorage, validate_expiration, validate_stark_signature};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -21,16 +23,16 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::request_approvals::RequestApprovalsComponent;
-    use perpetuals::core::components::request_approvals::interface::IRequestApprovals;
+    use perpetuals::core::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use perpetuals::core::errors::{
-        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DEPOSIT_EXPIRED, DIFFERENT_BASE_ASSET_IDS,
-        DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN,
-        INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
+        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
+        INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
+        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
         INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
         POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, position_not_healthy_nor_healthier, trade_order_expired_err,
+        fulfillment_exceeded_err, order_expired_err, position_not_healthy_nor_healthier,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -38,7 +40,6 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::SyntheticAsset;
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
-    use perpetuals::core::types::deposit::DepositArgs;
     use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
@@ -48,7 +49,6 @@ pub mod Core {
     use perpetuals::core::types::{
         AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId, Signature,
     };
-    use perpetuals::core::utils::{validate_expiration, validate_stark_signature};
     use perpetuals::value_risk_calculator::interface::{
         IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
     };
@@ -56,7 +56,7 @@ pub mod Core {
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::{ContractAddress, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NonceComponent, storage: nonce, event: NonceEvent);
@@ -65,12 +65,16 @@ pub mod Core {
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
+    component!(path: Deposit, storage: deposits, event: DepositEvent);
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
 
     impl NonceImpl = NonceComponent::NonceImpl<ContractState>;
     impl NonceComponentInternalImpl = NonceComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl DepositImpl = Deposit::DepositImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
@@ -112,7 +116,6 @@ pub mod Core {
     #[storage]
     struct Storage {
         pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
-        pending_deposits: Map<AssetId, i64>,
         // Message hash to fulfilled amount.
         fulfillment: Map<felt252, i64>,
         pub positions: Map<PositionId, Position>,
@@ -131,6 +134,8 @@ pub mod Core {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
+        #[substorage(v0)]
+        pub deposits: Deposit::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
     }
@@ -153,11 +158,10 @@ pub mod Core {
         #[flat]
         AssetsEvent: AssetsComponent::Event,
         #[flat]
+        DepositEvent: Deposit::Event,
+        #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         NewPosition: events::NewPosition,
-        Deposit: events::Deposit,
-        DepositCanceled: events::DepositCanceled,
-        DepositProcessed: events::DepositProcessed,
         WithdrawRequest: events::WithdrawRequest,
         Withdraw: events::Withdraw,
         Trade: events::Trade,
@@ -184,39 +188,13 @@ pub mod Core {
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
         self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
+        self.deposits.initialize();
     }
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
         // Flows
         fn deleverage(self: @ContractState) {}
-
-        fn deposit(ref self: ContractState, deposit_args: DepositArgs) {
-            let caller_address = get_caller_address();
-            let position = self._get_position_mut(position_id: deposit_args.position_id);
-            self
-                .request_approvals
-                .register_approval(
-                    owner_account: position.owner_account.read(),
-                    public_key: position.owner_public_key.read(),
-                    signature: array![].span(),
-                    hash: deposit_args.get_message_hash(signer: position.owner_public_key.read()),
-                );
-            let collateral_amount = deposit_args.collateral.amount;
-            let asset_id = deposit_args.collateral.asset_id;
-            self.pending_deposits.entry(asset_id).add_and_write(collateral_amount);
-            let collateral_cfg = self.assets._get_collateral_config(collateral_id: asset_id);
-            let quantum = collateral_cfg.quantum;
-            assert(collateral_amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            let amount = collateral_amount.abs() * quantum;
-            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
-            erc20_dispatcher
-                .transfer_from(
-                    sender: caller_address,
-                    recipient: get_contract_address(),
-                    amount: amount.into(),
-                );
-        }
 
         fn new_position(
             ref self: ContractState,
@@ -264,18 +242,26 @@ pub mod Core {
         fn process_deposit(
             ref self: ContractState,
             operator_nonce: u64,
-            depositing_address: ContractAddress,
-            deposit_args: DepositArgs,
+            depositor: ContractAddress,
+            collateral_id: AssetId,
+            amount: i64,
+            position_id: PositionId,
+            salt: felt252,
         ) {
-            self._validate_deposit(:operator_nonce, :depositing_address, :deposit_args);
-            let position_id = deposit_args.position_id;
-            let collateral_id = deposit_args.collateral.asset_id;
-            let amount = deposit_args.collateral.amount;
+            self._validate_deposit(:operator_nonce, :position_id, :collateral_id, :amount);
+            self
+                .deposits
+                .process_deposit(
+                    :depositor,
+                    asset_id: collateral_id.into(),
+                    quantized_amount: amount,
+                    beneficiary: position_id.into(),
+                    :salt,
+                );
             self
                 .apply_funding_and_update_balance(
-                    position_id: position_id, asset_id: collateral_id, diff: amount.into(),
+                    :position_id, asset_id: collateral_id, diff: amount.into(),
                 );
-            self.pending_deposits.entry(collateral_id).sub_and_write(amount);
         }
 
         fn withdraw_request(
@@ -441,9 +427,8 @@ pub mod Core {
             actual_liquidator_fee: i64,
             insurance_fund_fee: AssetAmount,
         ) {
-            let now = Time::now();
             /// Validations:
-            self._validate_operator_flow(:operator_nonce, :now);
+            self._validate_operator_flow(:operator_nonce);
 
             // Signatures validation:
             let liquidator_position = self
@@ -592,8 +577,7 @@ pub mod Core {
             actual_fee_a: i64,
             actual_fee_b: i64,
         ) {
-            let now = Time::now();
-            self._validate_operator_flow(:operator_nonce, :now);
+            self._validate_operator_flow(:operator_nonce);
             /// Validations:
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
@@ -700,17 +684,17 @@ pub mod Core {
 
             /// Execution - Withdraw:
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
-            let erc20_dispatcher = IERC20Dispatcher { contract_address: collateral_cfg.address };
-            erc20_dispatcher
+            let token_contract = IERC20Dispatcher { contract_address: collateral_cfg.address };
+            token_contract
                 .transfer(
                     recipient: withdraw_args.recipient,
                     amount: (collateral_cfg.quantum * amount.abs()).into(),
                 );
 
             /// Validation - Not withdrawing from pending deposits:
-            let pending_deposits = self.pending_deposits.read(collateral_id);
+            let pending_deposits = self.deposits.pending_deposits.read(collateral_id.into());
             let onchain_pending_deposits = (pending_deposits.abs() * collateral_cfg.quantum).into();
-            let erc20_balance = erc20_dispatcher.balance_of(get_contract_address());
+            let erc20_balance = token_contract.balance_of(get_contract_address());
             assert(erc20_balance >= onchain_pending_deposits, INSUFFICIENT_FUNDS);
 
             /// Validations - Fundamentals:
@@ -1041,10 +1025,10 @@ pub mod Core {
         /// - Caller has operator role.
         /// - Operator nonce is valid.
         /// - Assets integrity [_validate_assets_integrity].
-        fn _validate_operator_flow(ref self: ContractState, operator_nonce: u64, now: Timestamp) {
+        fn _validate_operator_flow(ref self: ContractState, operator_nonce: u64) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
-            self.assets._validate_assets_integrity(:now);
+            self.assets._validate_assets_integrity();
         }
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
@@ -1056,9 +1040,7 @@ pub mod Core {
             assert(order.quote.amount != 0, INVALID_ZERO_AMOUNT);
 
             // Expiration check.
-            assert_with_byte_array(
-                now < order.expiration, trade_order_expired_err(order.position_id),
-            );
+            assert_with_byte_array(now < order.expiration, order_expired_err(order.position_id));
 
             // Assets check.
             self.assets._validate_collateral_active(collateral_id: order.fee.asset_id);
@@ -1075,28 +1057,20 @@ pub mod Core {
         fn _validate_deposit(
             ref self: ContractState,
             operator_nonce: u64,
-            depositing_address: ContractAddress,
-            deposit_args: DepositArgs,
+            position_id: PositionId,
+            collateral_id: AssetId,
+            amount: i64,
         ) {
-            self._validate_position_exists(position_id: deposit_args.position_id);
-            let now = Time::now();
-            self._validate_operator_flow(:operator_nonce, :now);
-            let amount = deposit_args.collateral.amount;
+            self._validate_position_exists(:position_id);
+            self._validate_operator_flow(:operator_nonce);
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            validate_expiration(expiration: deposit_args.expiration, err: DEPOSIT_EXPIRED);
-            self
-                .assets
-                ._validate_collateral_active(collateral_id: deposit_args.collateral.asset_id);
-
-            let hash = deposit_args.get_message_hash(signer: depositing_address);
-            self.request_approvals.consume_approved_request(:hash);
+            self.assets._validate_collateral_active(:collateral_id);
         }
 
         fn _validate_withdraw(
             ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs,
         ) {
-            let now = Time::now();
-            self._validate_operator_flow(:operator_nonce, :now);
+            self._validate_operator_flow(:operator_nonce);
             let amount = withdraw_args.collateral.amount;
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
             validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
@@ -1386,7 +1360,7 @@ pub mod Core {
             now: Timestamp,
             transfer_args: TransferArgs,
         ) {
-            self._validate_operator_flow(:operator_nonce, :now);
+            self._validate_operator_flow(:operator_nonce);
 
             // Check positions.
             self._validate_position_exists(position_id: transfer_args.recipient);

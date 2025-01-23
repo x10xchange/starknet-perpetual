@@ -1,18 +1,19 @@
 use Core::InternalCoreFunctionsTrait;
+use contracts_commons::components::deposit::Deposit::InternalTrait;
+use contracts_commons::components::deposit::interface::IDeposit;
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::Time;
-use core::num::traits::Zero;
 use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::interface::IAssets;
+use perpetuals::core::components::request_approvals::interface::RequestStatus;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::deposit::DepositArgs;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -42,14 +43,22 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
             max_funding_rate: *cfg.max_funding_rate,
         );
     // Collateral asset configs.
-    let (collateral_config, collateral_timely_data) = generate_collateral(:token_state);
+    let (collateral_config, collateral_timely_data) = generate_collateral(
+        collateral_cfg: cfg.collateral_cfg, :token_state,
+    );
     state
         .assets
         .collateral_config
         .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
     state.assets.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
     state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
-
+    state
+        .deposits
+        .register_token(
+            asset_id: (*cfg.collateral_cfg.asset_id).into(),
+            token_address: *token_state.address,
+            quantum: *cfg.collateral_cfg.quantum,
+        );
     // Synthetic asset configs.
     state
         .assets
@@ -146,6 +155,9 @@ fn test_successful_withdraw() {
     let signature = user.sign_message(withdraw_args.get_message_hash(user.key_pair.public_key));
     let operator_nonce = state.nonce();
 
+    let contract_state_balance = token_state.balance_of(test_address());
+    assert_eq!(contract_state_balance, CONTRACT_INIT_BALANCE.into());
+
     // Test:
     state.withdraw_request(:signature, :withdraw_args);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -153,13 +165,13 @@ fn test_successful_withdraw() {
 
     // Check:
     let user_balance = token_state.balance_of(user.address);
-    assert_eq!(user_balance, (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM).into());
+    let onchain_amount = (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM);
+    assert_eq!(user_balance, onchain_amount.into());
     let contract_state_balance = token_state.balance_of(test_address());
-    assert_eq!(contract_state_balance, Zero::zero());
+    assert_eq!(contract_state_balance, (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
 }
 
 #[test]
-#[ignore]
 fn test_successful_deposit() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -174,19 +186,12 @@ fn test_successful_deposit() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: USER_INIT_BALANCE.try_into().unwrap(),
+            amount: (DEPOSIT_AMOUNT.abs() * cfg.collateral_cfg.quantum).into(),
         );
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
-
-    let mut deposit_args = DepositArgs {
-        position_id: user.position_id,
-        salt: user.salt_counter,
-        expiration: expected_time.add(Time::days(1)),
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: DEPOSIT_AMOUNT },
-    };
 
     // Check before deposit:
     let user_balance_before_deposit = token_state.balance_of(user.address);
@@ -196,7 +201,13 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.deposit(:deposit_args);
+    state
+        .deposit(
+            asset_id: cfg.collateral_cfg.asset_id.into(),
+            quantized_amount: (DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.try_into().unwrap()),
+            beneficiary: user.position_id.value,
+            salt: user.salt_counter,
+        );
 
     // Check after deposit:
     let user_balance_after_deposit = token_state.balance_of(user.address);
@@ -214,9 +225,20 @@ fn test_successful_deposit() {
             .unwrap(),
     );
     let status = state
-        .request_approvals
-        .approved_requests
-        .entry(deposit_args.get_message_hash(signer: user.key_pair.public_key))
+        .deposits
+        .registered_deposits
+        .entry(
+            state
+                .deposits
+                .deposit_hash(
+                    signer: user.address,
+                    asset_id: cfg.collateral_cfg.asset_id.into(),
+                    quantized_amount: (DEPOSIT_AMOUNT
+                        * cfg.collateral_cfg.quantum.try_into().unwrap()),
+                    beneficiary: user.position_id.value,
+                    salt: user.salt_counter,
+                ),
+        )
         .read();
     assert_eq!(status.try_into().unwrap(), expected_time);
 }
@@ -445,9 +467,10 @@ fn test_successful_withdraw_request_with_public_key() {
     };
 
     // Setup parameters:
-    let expected_time = Time::now().add(delta: Time::days(1));
-    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
-    let expiration = expected_time.add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+    let expiration = Time::now().add(delta: Time::days(1));
 
     let mut withdraw_args = WithdrawArgs {
         position_id: user.position_id,
@@ -465,7 +488,7 @@ fn test_successful_withdraw_request_with_public_key() {
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status.try_into().unwrap(), expected_time);
+    assert_eq!(status, RequestStatus::PENDING);
 }
 
 #[test]
@@ -484,9 +507,10 @@ fn test_successful_withdraw_request_with_owner() {
     };
 
     // Setup parameters:
-    let expected_time = Time::now().add(delta: Time::days(1));
-    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
-    let expiration = expected_time.add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+    let expiration = Time::now().add(delta: Time::days(1));
 
     let mut withdraw_args = WithdrawArgs {
         position_id: user.position_id,
@@ -504,7 +528,7 @@ fn test_successful_withdraw_request_with_owner() {
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status.try_into().unwrap(), expected_time);
+    assert_eq!(status, RequestStatus::PENDING);
 }
 
 #[test]
@@ -630,7 +654,7 @@ fn test_successful_transfer_request_using_public_key() {
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status.try_into().unwrap(), expected_time);
+    assert_eq!(status, RequestStatus::PENDING);
 }
 
 #[test]
@@ -669,6 +693,6 @@ fn test_successful_transfer_request_with_owner() {
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status.try_into().unwrap(), expected_time);
+    assert_eq!(status, RequestStatus::PENDING);
 }
 

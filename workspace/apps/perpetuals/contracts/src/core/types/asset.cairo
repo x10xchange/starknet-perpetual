@@ -19,6 +19,18 @@ pub impl AssetIdImpl of AssetIdTrait {
     }
 }
 
+pub impl FeltIntoAssetId of Into<felt252, AssetId> {
+    fn into(self: felt252) -> AssetId {
+        AssetId { value: self }
+    }
+}
+
+pub impl AssetIdIntoFelt of Into<AssetId, felt252> {
+    fn into(self: AssetId) -> felt252 {
+        self.value
+    }
+}
+
 impl AssetIdZero of Zero<AssetId> {
     fn zero() -> AssetId {
         AssetId { value: 0 }

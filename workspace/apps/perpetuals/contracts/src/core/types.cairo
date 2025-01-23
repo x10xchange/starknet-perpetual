@@ -1,6 +1,5 @@
 pub mod asset;
 pub mod balance;
-pub mod deposit;
 pub mod funding;
 pub(crate) mod order;
 pub mod price;
@@ -19,6 +18,19 @@ pub type Signature = Span<felt252>;
 pub struct PositionId {
     pub value: u32,
 }
+
+pub impl U32IntoPositionId of Into<u32, PositionId> {
+    fn into(self: u32) -> PositionId {
+        PositionId { value: self }
+    }
+}
+
+pub impl PositionIdIntoU32 of Into<PositionId, u32> {
+    fn into(self: PositionId) -> u32 {
+        self.value
+    }
+}
+
 
 #[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct AssetAmount {

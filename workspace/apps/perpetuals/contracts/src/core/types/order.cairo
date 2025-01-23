@@ -1,5 +1,6 @@
 use contracts_commons::math::have_same_sign;
 use contracts_commons::types::time::time::Timestamp;
+use contracts_commons::utils::validate_ratio;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
@@ -8,7 +9,6 @@ use perpetuals::core::errors::{
     trade_illegal_base_to_quote_ratio_err, trade_illegal_fee_to_quote_ratio_err,
 };
 use perpetuals::core::types::{AssetAmount, PositionId};
-use perpetuals::core::utils::validate_ratio;
 
 pub const VERSION: u8 = 0;
 

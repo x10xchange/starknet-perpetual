@@ -1,7 +1,6 @@
 use perpetuals::core::types::PositionId;
 
 pub const AMOUNT_TOO_LARGE: felt252 = 'AMOUNT_TOO_LARGE';
-pub const DEPOSIT_EXPIRED: felt252 = 'DEPOSIT_EXPIRED';
 pub const TRANSFER_EXPIRED: felt252 = 'TRANSFER_EXPIRED';
 pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
 pub const DIFFERENT_QUOTE_ASSET_IDS: felt252 = 'DIFFERENT_QUOTE_ASSET_IDS';
@@ -12,7 +11,6 @@ pub const INVALID_NON_POSITIVE_AMOUNT: felt252 = 'INVALID_NON_POSITIVE_AMOUNT';
 pub const INVALID_OWNER_SIGNATURE: felt252 = 'INVALID_ACCOUNT_OWNER_SIGNATURE';
 pub const INVALID_POSITION: felt252 = 'INVALID_POSITION';
 pub const INVALID_PUBLIC_KEY: felt252 = 'INVALID_PUBLIC_KEY';
-pub const INVALID_STARK_SIGNATURE: felt252 = 'INVALID_STARK_KEY_SIGNATURE';
 pub const INVALID_TRADE_ACTUAL_BASE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_BASE_SIGN';
 pub const INVALID_TRADE_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_QUOTE_SIGN';
 pub const INVALID_TRADE_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_QUOTE_AMOUNT_SIGN';
@@ -46,7 +44,7 @@ pub fn trade_illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArra
     format!("TRADE_ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }
 
-pub fn trade_order_expired_err(position_id: PositionId) -> ByteArray {
-    format!("TRADE_ORDER_EXPIRED position_id: {:?}", position_id)
+pub fn order_expired_err(position_id: PositionId) -> ByteArray {
+    format!("ORDER_EXPIRED position_id: {:?}", position_id)
 }
 

@@ -1,5 +1,6 @@
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::TimeDelta;
 use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -88,6 +89,10 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     owner: COLLATERAL_OWNER(),
                 },
                 asset_id: COLLATERAL_ASSET_ID(),
+                version: COLLATERAL_VERSION,
+                quantum: COLLATERAL_QUANTUM,
+                risk_factor: Zero::zero(),
+                quorum: COLLATERAL_QUORUM,
             },
             synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID_1() },
         }
@@ -99,6 +104,10 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
 pub struct CollateralCfg {
     pub token_cfg: TokenConfig,
     pub asset_id: AssetId,
+    pub version: u8,
+    pub quantum: u64,
+    pub risk_factor: FixedTwoDecimal,
+    pub quorum: u8,
 }
 
 /// The 'SyntheticCfg' struct represents a synthetic asset config with an associated asset id.
@@ -107,15 +116,17 @@ pub struct SyntheticCfg {
     pub asset_id: AssetId,
 }
 
-pub fn generate_collateral(token_state: @TokenState) -> (CollateralConfig, CollateralTimelyData) {
+pub fn generate_collateral(
+    collateral_cfg: @CollateralCfg, token_state: @TokenState,
+) -> (CollateralConfig, CollateralTimelyData) {
     (
         CollateralConfig {
-            version: COLLATERAL_VERSION,
+            version: *collateral_cfg.version,
             address: *token_state.address,
-            quantum: COLLATERAL_QUANTUM,
+            quantum: *collateral_cfg.quantum,
             is_active: true,
-            risk_factor: Zero::zero(),
-            quorum: COLLATERAL_QUORUM,
+            risk_factor: *collateral_cfg.risk_factor,
+            quorum: *collateral_cfg.quorum,
         },
         COLLATERAL_TIMELY_DATA(),
     )
