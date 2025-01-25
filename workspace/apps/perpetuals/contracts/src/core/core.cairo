@@ -42,7 +42,7 @@ pub mod Core {
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
-    use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
+    use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -288,10 +288,16 @@ pub mod Core {
         }
 
         fn withdraw_request(
-            ref self: ContractState, signature: Signature, withdraw_args: WithdrawArgs,
+            ref self: ContractState,
+            signature: Signature,
+            position_id: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
+            recipient: ContractAddress,
         ) {
-            let position = self._get_position_const(position_id: withdraw_args.position_id);
-            let withdraw_request_hash = withdraw_args
+            let position = self._get_position_const(:position_id);
+            let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
                 .get_message_hash(signer: position.owner_public_key.read());
             self
                 .request_approvals
@@ -299,25 +305,28 @@ pub mod Core {
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    hash: withdraw_request_hash,
+                    :hash,
                 );
             self
                 .emit(
                     events::WithdrawRequest {
-                        position_id: withdraw_args.position_id,
-                        recipient: withdraw_args.recipient,
-                        collateral: withdraw_args.collateral,
-                        expiration: withdraw_args.expiration,
-                        withdraw_request_hash: withdraw_request_hash,
+                        position_id, recipient, collateral, expiration, withdraw_request_hash: hash,
                     },
                 );
         }
 
         fn transfer_request(
-            ref self: ContractState, signature: Signature, transfer_args: TransferArgs,
+            ref self: ContractState,
+            signature: Signature,
+            position_id: PositionId,
+            recipient: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
         ) {
-            let position = self._get_position_const(position_id: transfer_args.position_id);
-            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
+            let position = self._get_position_const(:position_id);
+            let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
+                .get_message_hash(signer: position.owner_public_key.read());
             self
                 .request_approvals
                 .register_approval(
@@ -329,28 +338,33 @@ pub mod Core {
             self
                 .emit(
                     events::TrasferRequest {
-                        position_id: transfer_args.position_id,
-                        receipient: transfer_args.recipient,
-                        expiration: transfer_args.expiration,
-                        transfer_request_hash: hash,
+                        position_id, recipient, expiration, transfer_request_hash: hash,
                     },
                 );
         }
 
-        fn transfer(ref self: ContractState, operator_nonce: u64, transfer_args: TransferArgs) {
-            let now = Time::now();
-            self._validate_transfer(:operator_nonce, :now, :transfer_args);
+        fn transfer(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            recipient: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
+        ) {
+            self
+                ._validate_transfer(
+                    :operator_nonce, :position_id, :recipient, :salt, :expiration, :collateral,
+                );
             // TODO(Tomer-StarkWare): Implement the transfer logic.
-            let position = self._get_position_const(position_id: transfer_args.position_id);
-            let hash = transfer_args.get_message_hash(signer: position.owner_public_key.read());
+            let position = self._get_position_const(:position_id);
+            let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
+                .get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
                 .emit(
                     events::Trasfer {
-                        position_id: transfer_args.position_id,
-                        receipient: transfer_args.recipient,
-                        expiration: transfer_args.expiration,
-                        transfer_request_hash: hash,
+                        position_id, recipient, expiration, transfer_request_hash: hash,
                     },
                 );
         }
@@ -365,37 +379,43 @@ pub mod Core {
         /// - The position has an owner account.
         /// - The request has been registered.
         fn set_public_key(
-            ref self: ContractState, operator_nonce: u64, set_public_key_args: SetPublicKeyArgs,
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            expiration: Timestamp,
+            new_public_key: felt252,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
-            assert(set_public_key_args.expiration > Time::now(), SET_PUBLIC_KEY_EXPIRED);
-            let position_id = set_public_key_args.position_id;
+            validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self._get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
-            let hash = set_public_key_args
-                .get_message_hash(signer: set_public_key_args.new_public_key);
+            let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
+                .get_message_hash(signer: new_public_key);
             self.request_approvals.consume_approved_request(:hash);
-            position.owner_public_key.write(set_public_key_args.new_public_key);
+            position.owner_public_key.write(new_public_key);
             self
                 .emit(
                     events::SetPublicKey {
                         position_id,
-                        new_public_key: set_public_key_args.new_public_key,
-                        expiration: set_public_key_args.expiration,
+                        new_public_key: new_public_key,
+                        expiration: expiration,
                         set_public_key_request_hash: hash,
                     },
                 );
         }
 
         fn set_public_key_request(
-            ref self: ContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
+            ref self: ContractState,
+            signature: Signature,
+            position_id: PositionId,
+            expiration: Timestamp,
+            new_public_key: felt252,
         ) {
-            let position_id = set_public_key_args.position_id;
             let position = self._get_position_const(:position_id);
-            let hash = set_public_key_args
-                .get_message_hash(signer: set_public_key_args.new_public_key);
+            let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
+                .get_message_hash(signer: new_public_key);
             self
                 .request_approvals
                 .register_approval(
@@ -408,8 +428,9 @@ pub mod Core {
                 .emit(
                     events::SetPublicKeyRequest {
                         position_id,
-                        new_public_key: set_public_key_args.new_public_key,
-                        expiration: set_public_key_args.expiration,
+                        new_public_key: SetPublicKeyArgs { position_id, expiration, new_public_key }
+                            .new_public_key,
+                        expiration: expiration,
                         set_public_key_request_hash: hash,
                     },
                 );
@@ -448,7 +469,7 @@ pub mod Core {
             actual_amount_base_liquidated: i64,
             actual_amount_quote_liquidated: i64,
             actual_liquidator_fee: i64,
-            insurance_fund_fee: AssetAmount,
+            fee: AssetAmount,
         ) {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
@@ -485,7 +506,7 @@ pub mod Core {
                     asset_id: liquidator_order.quote.asset_id,
                     amount: actual_amount_quote_liquidated,
                 },
-                fee: insurance_fund_fee,
+                fee,
                 // Dummy values needed to initialize the struct and pass validation.
                 ..liquidator_order,
             };
@@ -497,7 +518,7 @@ pub mod Core {
                     order_b: liquidator_order,
                     actual_amount_base_a: actual_amount_base_liquidated,
                     actual_amount_quote_a: actual_amount_quote_liquidated,
-                    actual_fee_a: insurance_fund_fee.amount,
+                    actual_fee_a: fee.amount,
                     actual_fee_b: actual_liquidator_fee,
                 );
 
@@ -521,7 +542,7 @@ pub mod Core {
                         actual_amount_base_liquidated,
                         actual_amount_quote_liquidated,
                         actual_liquidator_fee,
-                        insurance_fund_fee,
+                        insurance_fund_fee: fee,
                         liquidator_order_hash: liquidator_order_hash,
                     },
                 );
@@ -536,33 +557,36 @@ pub mod Core {
         /// - The expiration time has not passed.
         /// - The position has no account owner.
         /// - The signature is valid.
-        fn set_position_owner(
+        fn set_owner_account(
             ref self: ContractState,
             operator_nonce: u64,
             signature: Signature,
-            set_position_owner_args: SetPositionOwnerArgs,
+            position_id: PositionId,
+            public_key: felt252,
+            new_account_owner: ContractAddress,
+            expiration: Timestamp,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
-            let now = Time::now();
-            assert(set_position_owner_args.expiration > now, SET_POSITION_OWNER_EXPIRED);
-            let position_id = set_position_owner_args.position_id;
+            validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self._get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
-            let public_key = position.owner_public_key.read();
+            let hash = SetOwnerAccountArgs {
+                position_id, public_key, new_account_owner, expiration,
+            }
+                .get_message_hash(signer: position.owner_public_key.read());
             validate_stark_signature(
-                :public_key,
-                msg_hash: set_position_owner_args.get_message_hash(signer: public_key),
-                signature: signature,
+                public_key: position.owner_public_key.read(), msg_hash: hash, signature: signature,
             );
-            position.owner_account.write(set_position_owner_args.new_account_owner);
+            position.owner_account.write(new_account_owner);
             self
                 .emit(
                     events::SetOwnerAccount {
                         position_id: position_id,
                         public_key,
-                        new_position_owner: set_position_owner_args.new_account_owner,
-                        expiration: set_position_owner_args.expiration,
+                        new_position_owner: new_account_owner,
+                        expiration: expiration,
+                        set_owner_account_hash: hash,
                     },
                 );
         }
@@ -698,21 +722,28 @@ pub mod Core {
         /// - Transfer the collateral `amount` to the `recipient`.
         /// - Update the position's collateral balance.
         /// - Mark the withdrawal message as fulfilled.
-        fn withdraw(ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs) {
-            self._validate_withdraw(:operator_nonce, :withdraw_args);
+        fn withdraw(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
+            recipient: ContractAddress,
+        ) {
+            self
+                ._validate_withdraw(
+                    :operator_nonce, :position_id, :salt, :expiration, :collateral, :recipient,
+                );
 
-            let collateral_id = withdraw_args.collateral.asset_id;
-            let amount = withdraw_args.collateral.amount;
-            let position_id = withdraw_args.position_id;
+            let collateral_id = collateral.asset_id;
+            let amount = collateral.amount;
 
             /// Execution - Withdraw:
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
             let token_contract = IERC20Dispatcher { contract_address: collateral_cfg.address };
             token_contract
-                .transfer(
-                    recipient: withdraw_args.recipient,
-                    amount: (collateral_cfg.quantum * amount.abs()).into(),
-                );
+                .transfer(:recipient, amount: (collateral_cfg.quantum * amount.abs()).into());
 
             /// Validation - Not withdrawing from pending deposits:
             let pending_deposits = self.deposits.pending_deposits.read(collateral_id.into());
@@ -746,16 +777,13 @@ pub mod Core {
             );
             self._apply_diff(:position_id, :position_diff);
             let position = self._get_position_const(:position_id);
-            let hash = withdraw_args.get_message_hash(signer: position.owner_public_key.read());
+            let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
+                .get_message_hash(signer: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
                 .emit(
                     events::Withdraw {
-                        position_id: withdraw_args.position_id,
-                        recipient: withdraw_args.recipient,
-                        collateral: withdraw_args.collateral,
-                        expiration: withdraw_args.expiration,
-                        withdraw_request_hash: hash,
+                        position_id, recipient, collateral, expiration, withdraw_request_hash: hash,
                     },
                 );
         }
@@ -1123,13 +1151,19 @@ pub mod Core {
         }
 
         fn _validate_withdraw(
-            ref self: ContractState, operator_nonce: u64, withdraw_args: WithdrawArgs,
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
+            recipient: ContractAddress,
         ) {
             self._validate_operator_flow(:operator_nonce);
-            let amount = withdraw_args.collateral.amount;
+            let amount = collateral.amount;
             assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
-            validate_expiration(expiration: withdraw_args.expiration, err: WITHDRAW_EXPIRED);
-            let collateral_id = withdraw_args.collateral.asset_id;
+            validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
+            let collateral_id = collateral.asset_id;
             self.assets._validate_collateral_active(:collateral_id);
         }
 
@@ -1444,31 +1478,26 @@ pub mod Core {
         fn _validate_transfer(
             ref self: ContractState,
             operator_nonce: u64,
-            now: Timestamp,
-            transfer_args: TransferArgs,
+            position_id: PositionId,
+            recipient: PositionId,
+            salt: felt252,
+            expiration: Timestamp,
+            collateral: AssetAmount,
         ) {
             self._validate_operator_flow(:operator_nonce);
 
             // Check positions.
-            self._validate_position_exists(position_id: transfer_args.recipient);
-            let position = self._get_position_const(position_id: transfer_args.position_id);
+            self._validate_position_exists(position_id: recipient);
 
             // Validate collateral.
-            self
-                .assets
-                ._validate_collateral_active(collateral_id: transfer_args.collateral.asset_id);
-            assert(transfer_args.collateral.amount > 0, INVALID_TRANSFER_AMOUNT);
-            let sender_collateral_amount = position
-                .collateral_assets
-                .entry(transfer_args.collateral.asset_id)
-                .balance;
-            assert(
-                sender_collateral_amount.read().into() >= transfer_args.collateral.amount,
-                AMOUNT_TOO_LARGE,
-            );
+            self.assets._validate_collateral_active(collateral_id: collateral.asset_id);
+            assert(collateral.amount > 0, INVALID_TRANSFER_AMOUNT);
+            let sender_collateral_amount = self
+                ._get_provisional_main_collateral_balance(:position_id);
+            assert(sender_collateral_amount.into() >= collateral.amount, AMOUNT_TOO_LARGE);
 
             // Validate expiration.
-            assert(now < transfer_args.expiration, TRANSFER_EXPIRED);
+            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
         }
     }
 }

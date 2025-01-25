@@ -175,10 +175,25 @@ fn test_successful_withdraw() {
     assert_eq!(contract_state_balance, CONTRACT_INIT_BALANCE.into());
 
     // Test:
-    state.withdraw_request(:signature, :withdraw_args);
+    state
+        .withdraw_request(
+            :signature,
+            position_id: withdraw_args.position_id,
+            salt: withdraw_args.salt,
+            expiration: withdraw_args.expiration,
+            collateral: withdraw_args.collateral,
+            recipient: withdraw_args.recipient,
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.withdraw(:operator_nonce, :withdraw_args);
-
+    state
+        .withdraw(
+            :operator_nonce,
+            position_id: withdraw_args.position_id,
+            salt: withdraw_args.salt,
+            expiration: withdraw_args.expiration,
+            collateral: withdraw_args.collateral,
+            recipient: withdraw_args.recipient,
+        );
     // Check:
     let user_balance = token_state.balance_of(user.address);
     let onchain_amount = (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM);
@@ -504,7 +519,15 @@ fn test_successful_withdraw_request_with_public_key() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.withdraw_request(:signature, :withdraw_args);
+    state
+        .withdraw_request(
+            :signature,
+            position_id: withdraw_args.position_id,
+            salt: withdraw_args.salt,
+            expiration: withdraw_args.expiration,
+            collateral: withdraw_args.collateral,
+            recipient: withdraw_args.recipient,
+        );
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
@@ -544,7 +567,15 @@ fn test_successful_withdraw_request_with_owner() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.withdraw_request(:signature, :withdraw_args);
+    state
+        .withdraw_request(
+            :signature,
+            position_id: withdraw_args.position_id,
+            salt: withdraw_args.salt,
+            expiration: withdraw_args.expiration,
+            collateral: withdraw_args.collateral,
+            recipient: withdraw_args.recipient,
+        );
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
@@ -613,7 +644,7 @@ fn test_successful_liquidate() {
             actual_amount_base_liquidated: BASE,
             actual_amount_quote_liquidated: QUOTE,
             actual_liquidator_fee: FEE,
-            insurance_fund_fee: AssetAmount { asset_id: collateral_id, amount: INSURANCE_FEE },
+            fee: AssetAmount { asset_id: collateral_id, amount: INSURANCE_FEE },
         );
 
     // Check:
@@ -691,7 +722,15 @@ fn test_successful_transfer_request_using_public_key() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.transfer_request(:signature, :transfer_args);
+    state
+        .transfer_request(
+            :signature,
+            position_id: transfer_args.position_id,
+            recipient: transfer_args.recipient,
+            salt: transfer_args.salt,
+            expiration: transfer_args.expiration,
+            collateral: transfer_args.collateral,
+        );
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();
@@ -730,7 +769,15 @@ fn test_successful_transfer_request_with_owner() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state.transfer_request(:signature, :transfer_args);
+    state
+        .transfer_request(
+            :signature,
+            position_id: transfer_args.position_id,
+            recipient: transfer_args.recipient,
+            salt: transfer_args.salt,
+            expiration: transfer_args.expiration,
+            collateral: transfer_args.collateral,
+        );
 
     // Check:
     let status = state.request_approvals.approved_requests.entry(msg_hash).read();

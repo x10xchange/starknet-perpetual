@@ -3,7 +3,7 @@ pub mod balance;
 pub mod funding;
 pub(crate) mod order;
 pub mod price;
-pub(crate) mod set_position_owner;
+pub(crate) mod set_owner_account;
 pub mod set_public_key;
 pub mod transfer;
 pub mod withdraw;

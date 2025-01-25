@@ -1,10 +1,7 @@
+use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
-use perpetuals::core::types::set_position_owner::SetPositionOwnerArgs;
-use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-use perpetuals::core::types::transfer::TransferArgs;
-use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId, Signature};
 use starknet::ContractAddress;
 
@@ -21,15 +18,26 @@ pub trait ICore<TContractState> {
         actual_amount_base_liquidated: i64,
         actual_amount_quote_liquidated: i64,
         actual_liquidator_fee: i64,
-        insurance_fund_fee: AssetAmount,
+        fee: AssetAmount,
     );
-    fn set_position_owner(
+    fn set_owner_account(
         ref self: TContractState,
         operator_nonce: u64,
         signature: Signature,
-        set_position_owner_args: SetPositionOwnerArgs,
+        position_id: PositionId,
+        public_key: felt252,
+        new_account_owner: ContractAddress,
+        expiration: Timestamp,
     );
-    fn transfer(ref self: TContractState, operator_nonce: u64, transfer_args: TransferArgs);
+    fn transfer(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        recipient: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+    );
     fn new_position(
         ref self: TContractState,
         operator_nonce: u64,
@@ -59,17 +67,45 @@ pub trait ICore<TContractState> {
         actual_fee_b: i64,
     );
     fn transfer_request(
-        ref self: TContractState, signature: Signature, transfer_args: TransferArgs,
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        recipient: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
     );
     fn set_public_key(
-        ref self: TContractState, operator_nonce: u64, set_public_key_args: SetPublicKeyArgs,
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        expiration: Timestamp,
+        new_public_key: felt252,
     );
     fn set_public_key_request(
-        ref self: TContractState, signature: Signature, set_public_key_args: SetPublicKeyArgs,
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        expiration: Timestamp,
+        new_public_key: felt252,
     );
-    fn withdraw(ref self: TContractState, operator_nonce: u64, withdraw_args: WithdrawArgs);
+    fn withdraw(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+        recipient: ContractAddress,
+    );
     fn withdraw_request(
-        ref self: TContractState, signature: Signature, withdraw_args: WithdrawArgs,
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+        recipient: ContractAddress,
     );
 
     // Funding

@@ -6,7 +6,7 @@ use perpetuals::core::types::PositionId;
 use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
-pub struct SetPositionOwnerArgs {
+pub struct SetOwnerAccountArgs {
     pub position_id: PositionId,
     pub public_key: felt252,
     pub new_account_owner: ContractAddress,
@@ -15,7 +15,7 @@ pub struct SetPositionOwnerArgs {
 
 
 /// selector!(
-///   "\"SetPositionOwnerArgs\"(
+///   "\"SetOwnerAccountArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"public_key\":\"felt\",
 ///    \"new_account_owner\":\"ContractAddress\",
@@ -29,10 +29,10 @@ pub struct SetPositionOwnerArgs {
 ///    )
 /// );
 const SET_POSITION_OWNER_ARGS_HASH: felt252 =
-    0x258b0889c9db6c6c5ca263705f480e3f240ce5955fc78d2e0e853230a120b2c;
+    0x1015a2f2e38a330c931e7e8af30b630d21c0399752f94f9a2766534fe795c53;
 
-impl StructHashImpl of StructHash<SetPositionOwnerArgs> {
-    fn hash_struct(self: @SetPositionOwnerArgs) -> felt252 {
+impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
+    fn hash_struct(self: @SetOwnerAccountArgs) -> felt252 {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(SET_POSITION_OWNER_ARGS_HASH).update_with(*self).finalize()
     }
@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_set_position_owner_type_hash() {
         let expected = selector!(
-            "\"SetPositionOwnerArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_account_owner\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_account_owner\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(SET_POSITION_OWNER_ARGS_HASH, expected);
     }

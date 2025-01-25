@@ -80,7 +80,7 @@ pub struct TrasferRequest {
     #[key]
     pub position_id: PositionId,
     #[key]
-    pub receipient: PositionId,
+    pub recipient: PositionId,
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,
@@ -91,7 +91,7 @@ pub struct Trasfer {
     #[key]
     pub position_id: PositionId,
     #[key]
-    pub receipient: PositionId,
+    pub recipient: PositionId,
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,
@@ -106,6 +106,7 @@ pub struct SetOwnerAccount {
     #[key]
     pub new_position_owner: ContractAddress,
     pub expiration: Timestamp,
+    pub set_owner_account_hash: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
