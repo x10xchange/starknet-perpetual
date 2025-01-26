@@ -514,7 +514,7 @@ fn test_successful_withdraw_request_with_public_key() {
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: recipient.address,
     };
-    let msg_hash = withdraw_args.get_message_hash(signer: user.key_pair.public_key);
+    let msg_hash = withdraw_args.get_message_hash(public_key: user.key_pair.public_key);
     let signature = user.sign_message(message: msg_hash);
 
     // Test:
@@ -562,7 +562,7 @@ fn test_successful_withdraw_request_with_owner() {
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: recipient.address,
     };
-    let msg_hash = withdraw_args.get_message_hash(signer: user.key_pair.public_key);
+    let msg_hash = withdraw_args.get_message_hash(public_key: user.key_pair.public_key);
     let signature = user.sign_message(message: msg_hash);
 
     // Test:
@@ -717,7 +717,7 @@ fn test_successful_transfer_request_using_public_key() {
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
     };
-    let msg_hash = transfer_args.get_message_hash(signer: user.key_pair.public_key);
+    let msg_hash = transfer_args.get_message_hash(public_key: user.key_pair.public_key);
     let signature = user.sign_message(msg_hash);
 
     // Test:
@@ -764,7 +764,7 @@ fn test_successful_transfer_request_with_owner() {
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
     };
-    let msg_hash = transfer_args.get_message_hash(signer: user.key_pair.public_key);
+    let msg_hash = transfer_args.get_message_hash(public_key: user.key_pair.public_key);
     let signature = user.sign_message(message: msg_hash);
 
     // Test:

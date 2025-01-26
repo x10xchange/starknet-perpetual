@@ -298,7 +298,7 @@ pub mod Core {
         ) {
             let position = self._get_position_const(:position_id);
             let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
-                .get_message_hash(signer: position.owner_public_key.read());
+                .get_message_hash(public_key: position.owner_public_key.read());
             self
                 .request_approvals
                 .register_approval(
@@ -326,7 +326,7 @@ pub mod Core {
         ) {
             let position = self._get_position_const(:position_id);
             let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
-                .get_message_hash(signer: position.owner_public_key.read());
+                .get_message_hash(public_key: position.owner_public_key.read());
             self
                 .request_approvals
                 .register_approval(
@@ -359,7 +359,7 @@ pub mod Core {
             // TODO(Tomer-StarkWare): Implement the transfer logic.
             let position = self._get_position_const(:position_id);
             let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
-                .get_message_hash(signer: position.owner_public_key.read());
+                .get_message_hash(public_key: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
                 .emit(
@@ -392,7 +392,7 @@ pub mod Core {
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
             let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
-                .get_message_hash(signer: new_public_key);
+                .get_message_hash(public_key: new_public_key);
             self.request_approvals.consume_approved_request(:hash);
             position.owner_public_key.write(new_public_key);
             self
@@ -415,7 +415,7 @@ pub mod Core {
         ) {
             let position = self._get_position_const(:position_id);
             let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
-                .get_message_hash(signer: new_public_key);
+                .get_message_hash(public_key: new_public_key);
             self
                 .request_approvals
                 .register_approval(
@@ -479,7 +479,7 @@ pub mod Core {
                 ._get_position_const(position_id: liquidator_order.position_id);
             let liquidator_public_key = liquidator_position.owner_public_key.read();
             let liquidator_order_hash = liquidator_order
-                .get_message_hash(signer: liquidator_public_key);
+                .get_message_hash(public_key: liquidator_public_key);
             validate_stark_signature(
                 public_key: liquidator_public_key,
                 msg_hash: liquidator_order_hash,
@@ -574,7 +574,7 @@ pub mod Core {
             let hash = SetOwnerAccountArgs {
                 position_id, public_key, new_account_owner, expiration,
             }
-                .get_message_hash(signer: position.owner_public_key.read());
+                .get_message_hash(public_key: position.owner_public_key.read());
             validate_stark_signature(
                 public_key: position.owner_public_key.read(), msg_hash: hash, signature: signature,
             );
@@ -631,13 +631,13 @@ pub mod Core {
             // Signatures validation:
             let position_a = self._get_position_const(position_id: position_id_a);
             let position_b = self._get_position_const(position_id: position_id_b);
-            let hash_a = order_a.get_message_hash(signer: position_a.owner_public_key.read());
+            let hash_a = order_a.get_message_hash(public_key: position_a.owner_public_key.read());
             validate_stark_signature(
                 public_key: position_a.owner_public_key.read(),
                 msg_hash: hash_a,
                 signature: signature_a,
             );
-            let hash_b = order_b.get_message_hash(signer: position_b.owner_public_key.read());
+            let hash_b = order_b.get_message_hash(public_key: position_b.owner_public_key.read());
             validate_stark_signature(
                 public_key: position_b.owner_public_key.read(),
                 msg_hash: hash_b,
@@ -778,7 +778,7 @@ pub mod Core {
             self._apply_diff(:position_id, :position_diff);
             let position = self._get_position_const(:position_id);
             let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
-                .get_message_hash(signer: position.owner_public_key.read());
+                .get_message_hash(public_key: position.owner_public_key.read());
             self.request_approvals.consume_approved_request(:hash);
             self
                 .emit(
