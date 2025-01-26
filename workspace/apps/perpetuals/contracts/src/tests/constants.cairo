@@ -49,7 +49,7 @@ pub fn OPERATOR() -> ContractAddress {
 pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
     CollateralTimelyData {
         version: COLLATERAL_VERSION,
-        price: PRICE_1(),
+        price: PRICE(),
         last_price_update: Time::now(),
         next: Option::None,
     }
@@ -62,7 +62,7 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
         resolution: SYNTHETIC_RESOLUTION,
         name: SYNTHETIC_NAME,
         is_active: true,
-        risk_factor: RISK_FACTOR_1(),
+        risk_factor: RISK_FACTOR(),
         quorum: SYNTHETIC_QUORUM,
     }
 }
@@ -70,7 +70,7 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
 pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
     SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE_1(),
+        price: PRICE(),
         // Pass non default timestamp.
         last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
         funding_index: Zero::zero(),
@@ -106,52 +106,17 @@ pub const POSITION_ID_2: PositionId = PositionId { value: 3 };
 pub fn COLLATERAL_ASSET_ID() -> AssetId {
     AssetIdTrait::new(value: selector!("COLLATERAL_ASSET_ID"))
 }
-pub fn SYNTHETIC_ASSET_ID_1() -> AssetId {
+pub fn SYNTHETIC_ASSET_ID() -> AssetId {
     AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_1"))
-}
-pub fn SYNTHETIC_ASSET_ID_2() -> AssetId {
-    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_2"))
-}
-pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
-    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
-}
-pub fn SYNTHETIC_ASSET_ID_4() -> AssetId {
-    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_4"))
-}
-pub fn SYNTHETIC_ASSET_ID_5() -> AssetId {
-    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_5"))
 }
 
 /// Risk factors
-pub fn RISK_FACTOR_1() -> FixedTwoDecimal {
+pub fn RISK_FACTOR() -> FixedTwoDecimal {
     FixedTwoDecimalTrait::new(50)
 }
-pub fn RISK_FACTOR_2() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
-pub fn RISK_FACTOR_3() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
-pub fn RISK_FACTOR_4() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
-pub fn RISK_FACTOR_5() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
+
 /// Prices
-pub fn PRICE_1() -> Price {
-    PriceTrait::new(900 * TWO_POW_28)
-}
-pub fn PRICE_2() -> Price {
-    PriceTrait::new(900 * TWO_POW_28)
-}
-pub fn PRICE_3() -> Price {
-    PriceTrait::new(900 * TWO_POW_28)
-}
-pub fn PRICE_4() -> Price {
-    PriceTrait::new(900 * TWO_POW_28)
-}
-pub fn PRICE_5() -> Price {
+pub fn PRICE() -> Price {
     PriceTrait::new(900 * TWO_POW_28)
 }
 

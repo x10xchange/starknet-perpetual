@@ -20,8 +20,7 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
-    PerpetualsInitConfig, User, UserTrait, deploy_value_risk_calculator_contract,
-    generate_collateral, set_roles,
+    PerpetualsInitConfig, User, UserTrait, generate_collateral, set_roles,
 };
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
@@ -114,7 +113,6 @@ fn initialized_contract_state() -> Core::ContractState {
         ref state,
         governance_admin: GOVERNANCE_ADMIN(),
         upgrade_delay: UPGRADE_DELAY,
-        value_risk_calculator: deploy_value_risk_calculator_contract(),
         max_price_interval: MAX_PRICE_INTERVAL,
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,

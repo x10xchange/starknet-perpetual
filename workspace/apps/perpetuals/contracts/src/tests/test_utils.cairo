@@ -13,16 +13,15 @@ use perpetuals::core::types::asset::collateral::{
 };
 use perpetuals::core::types::{PositionId, Signature};
 use perpetuals::tests::constants::*;
-use perpetuals::value_risk_calculator::interface::IValueRiskCalculatorDispatcher;
 use snforge_std::signature::KeyPair;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
 
+
 #[derive(Drop, Copy)]
-pub struct CoreConfig {
-    pub tv_tr_calculator: ContractAddress,
-}
+pub struct CoreConfig {}
+
 
 /// The `CoreState` struct represents the state of the Core contract.
 /// It includes the contract address
@@ -72,6 +71,22 @@ pub(crate) struct PerpetualsInitConfig {
     pub synthetic_cfg: SyntheticCfg,
 }
 
+#[generate_trait]
+pub impl CoreImpl of CoreTrait {
+    fn deploy(self: CoreConfig) -> CoreState {
+        let mut calldata = array![];
+        let core_contract = snforge_std::declare("Core").unwrap().contract_class();
+        let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
+        let core = CoreState { address: core_contract_address };
+        core
+    }
+
+    fn dispatcher(self: CoreState) -> ICoreDispatcher {
+        ICoreDispatcher { contract_address: self.address }
+    }
+}
+
+
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
     fn default() -> PerpetualsInitConfig {
         PerpetualsInitConfig {
@@ -94,7 +109,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 risk_factor: Zero::zero(),
                 quorum: COLLATERAL_QUORUM,
             },
-            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID_1() },
+            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID() },
         }
     }
 }
@@ -132,52 +147,6 @@ pub fn generate_collateral(
     )
 }
 
-#[generate_trait]
-pub impl CoreImpl of CoreTrait {
-    fn deploy(self: CoreConfig) -> CoreState {
-        let mut calldata = array![];
-        self.tv_tr_calculator.serialize(ref calldata);
-        let core_contract = snforge_std::declare("Core").unwrap().contract_class();
-        let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
-        let core = CoreState { address: core_contract_address };
-        core
-    }
-
-    fn dispatcher(self: CoreState) -> ICoreDispatcher {
-        ICoreDispatcher { contract_address: self.address }
-    }
-}
-
-#[derive(Drop, Copy)]
-pub struct ValueRiskCalculatorConfig {}
-
-/// The `CoreState` struct represents the state of the Core contract.
-/// It includes the contract address
-#[derive(Drop, Copy)]
-pub struct ValueRiskCalculatorState {
-    pub address: ContractAddress,
-}
-
-#[generate_trait]
-pub impl ValueRiskCalculatorImpl of ValueRiskCalculatorTrait {
-    fn deploy(self: ValueRiskCalculatorConfig) -> ValueRiskCalculatorState {
-        let mut calldata = array![];
-        let tv_tr_calculator_contract = snforge_std::declare("ValueRiskCalculator")
-            .unwrap()
-            .contract_class();
-        let (tv_tr_calculator_contract_address, _) = tv_tr_calculator_contract
-            .deploy(@calldata)
-            .unwrap();
-        let tv_tr_calculator = ValueRiskCalculatorState {
-            address: tv_tr_calculator_contract_address,
-        };
-        tv_tr_calculator
-    }
-
-    fn dispatcher(self: ValueRiskCalculatorState) -> IValueRiskCalculatorDispatcher {
-        IValueRiskCalculatorDispatcher { contract_address: self.address }
-    }
-}
 
 /// The `SystemConfig` struct represents the configuration settings for the entire system.
 /// It includes configurations for the token, core,
@@ -185,7 +154,6 @@ pub impl ValueRiskCalculatorImpl of ValueRiskCalculatorTrait {
 struct SystemConfig {
     pub token: TokenConfig,
     pub core: CoreConfig,
-    pub tv_tr_calculator: ValueRiskCalculatorConfig,
 }
 
 /// The `SystemState` struct represents the state of the entire system.
@@ -195,7 +163,6 @@ struct SystemConfig {
 pub struct SystemState {
     pub token: TokenState,
     pub core: CoreState,
-    pub tv_tr_calculator: ValueRiskCalculatorState,
 }
 
 #[generate_trait]
@@ -203,11 +170,11 @@ pub impl SystemImpl of SystemTrait {
     /// Deploys the system configuration and returns the system state.
     fn deploy(self: SystemConfig) -> SystemState {
         let token = self.token.deploy();
-        let tv_tr_calculator = self.tv_tr_calculator.deploy();
         let core = self.core.deploy();
-        SystemState { token, core, tv_tr_calculator }
+        SystemState { token, core }
     }
 }
+
 
 pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
     cheat_caller_address_once(
@@ -225,9 +192,4 @@ fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
     let account_address = declare_and_deploy("AccountUpgradeable", calldata);
 
     account_address
-}
-
-
-pub(crate) fn deploy_value_risk_calculator_contract() -> ContractAddress {
-    declare_and_deploy("ValueRiskCalculator", array![])
 }

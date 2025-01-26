@@ -49,9 +49,7 @@ pub mod Core {
     use perpetuals::core::types::{
         AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId, Signature,
     };
-    use perpetuals::value_risk_calculator::interface::{
-        IValueRiskCalculatorDispatcher, IValueRiskCalculatorDispatcherTrait, PositionState,
-    };
+    use perpetuals::core::value_risk_calculator::{PositionState, evaluate_position_change};
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
@@ -118,7 +116,6 @@ pub mod Core {
 
     #[storage]
     struct Storage {
-        pub value_risk_calculator_dispatcher: IValueRiskCalculatorDispatcher,
         // Message hash to fulfilled amount.
         fulfillment: Map<felt252, i64>,
         pub positions: Map<PositionId, Position>,
@@ -181,7 +178,6 @@ pub mod Core {
         ref self: ContractState,
         governance_admin: ContractAddress,
         upgrade_delay: u64,
-        value_risk_calculator: ContractAddress,
         max_price_interval: TimeDelta,
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
@@ -192,9 +188,6 @@ pub mod Core {
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.upgrade_delay.write(upgrade_delay);
-        self
-            .value_risk_calculator_dispatcher
-            .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
         self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
         self.deposits.initialize();
         // Create fee positions.
@@ -768,10 +761,9 @@ pub mod Core {
                 .span();
             let position_data = self._get_position_data(:position_id);
 
-            let position_change_result = self
-                .value_risk_calculator_dispatcher
-                .read()
-                .evaluate_position_change(position: position_data, :position_diff);
+            let position_change_result = evaluate_position_change(
+                position: position_data, :position_diff,
+            );
             assert(
                 position_change_result.position_state_after_change == PositionState::Healthy,
                 POSITION_UNHEALTHY,
@@ -1475,10 +1467,9 @@ pub mod Core {
             position_data: PositionData,
             asset_diff_entries: Span<AssetDiffEntry>,
         ) {
-            let position_change_result = self
-                .value_risk_calculator_dispatcher
-                .read()
-                .evaluate_position_change(position_data, asset_diff_entries);
+            let position_change_result = evaluate_position_change(
+                position_data, asset_diff_entries,
+            );
 
             assert(
                 position_change_result.position_state_before_change == PositionState::Liquidatable,
@@ -1498,10 +1489,9 @@ pub mod Core {
             position_data: PositionData,
             asset_diff_entries: Span<AssetDiffEntry>,
         ) {
-            let position_change_result = self
-                .value_risk_calculator_dispatcher
-                .read()
-                .evaluate_position_change(position_data, asset_diff_entries);
+            let position_change_result = evaluate_position_change(
+                position_data, asset_diff_entries,
+            );
 
             let position_is_healthier = if let Option::Some(change_effects) = position_change_result
                 .change_effects {
