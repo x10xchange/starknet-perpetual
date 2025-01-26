@@ -1,16 +1,16 @@
+use contracts_commons::components::request_approvals::errors;
 use core::panic_with_felt252;
 use core::starknet::storage_access::StorePacking;
-use perpetuals::core::components::request_approvals::errors;
 
 
 #[starknet::interface]
 pub trait IRequestApprovals<TContractState> {
     /// Returns the status of a request.
-    fn get_request_status(self: @TContractState, hash: felt252) -> RequestStatus;
+    fn get_request_status(self: @TContractState, request_hash: felt252) -> RequestStatus;
 }
 
 #[derive(Debug, Drop, PartialEq, Serde)]
-pub(crate) enum RequestStatus {
+pub enum RequestStatus {
     NON_EXIST,
     DONE,
     PENDING,

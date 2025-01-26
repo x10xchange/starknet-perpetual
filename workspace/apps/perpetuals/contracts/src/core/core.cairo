@@ -7,6 +7,8 @@ pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
+    use contracts_commons::components::request_approvals::RequestApprovalsComponent;
+    use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
     use contracts_commons::errors::assert_with_byte_array;
@@ -22,8 +24,6 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-    use perpetuals::core::components::request_approvals::RequestApprovalsComponent;
-    use perpetuals::core::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use perpetuals::core::errors::{
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
         INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
@@ -296,15 +296,13 @@ pub mod Core {
             recipient: ContractAddress,
         ) {
             let position = self._get_position_const(:position_id);
-            let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
-                .get_message_hash(public_key: position.owner_public_key.read());
-            self
+            let hash = self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    :hash,
+                    args: WithdrawArgs { position_id, salt, expiration, collateral, recipient },
                 );
             self
                 .emit(
@@ -324,15 +322,13 @@ pub mod Core {
             collateral: AssetAmount,
         ) {
             let position = self._get_position_const(:position_id);
-            let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
-                .get_message_hash(public_key: position.owner_public_key.read());
-            self
+            let hash = self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    :hash,
+                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
                 );
             self
                 .emit(
@@ -357,9 +353,12 @@ pub mod Core {
                 );
             // TODO(Tomer-StarkWare): Implement the transfer logic.
             let position = self._get_position_const(:position_id);
-            let hash = TransferArgs { position_id, recipient, salt, expiration, collateral }
-                .get_message_hash(public_key: position.owner_public_key.read());
-            self.request_approvals.consume_approved_request(:hash);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
+                    public_key: position.owner_public_key.read(),
+                );
             self
                 .emit(
                     events::Trasfer {
@@ -390,9 +389,12 @@ pub mod Core {
             let position = self._get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
-            let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
-                .get_message_hash(public_key: new_public_key);
-            self.request_approvals.consume_approved_request(:hash);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: SetPublicKeyArgs { position_id, expiration, new_public_key },
+                    public_key: position.owner_public_key.read(),
+                );
             position.owner_public_key.write(new_public_key);
             self
                 .emit(
@@ -413,15 +415,13 @@ pub mod Core {
             new_public_key: felt252,
         ) {
             let position = self._get_position_const(:position_id);
-            let hash = SetPublicKeyArgs { position_id, expiration, new_public_key }
-                .get_message_hash(public_key: new_public_key);
-            self
+            let hash = self
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    :hash,
+                    args: SetPublicKeyArgs { position_id, expiration, new_public_key },
                 );
             self
                 .emit(
@@ -778,9 +778,12 @@ pub mod Core {
             );
             self._apply_diff(:position_id, :position_diff);
             let position = self._get_position_const(:position_id);
-            let hash = WithdrawArgs { position_id, salt, expiration, collateral, recipient }
-                .get_message_hash(public_key: position.owner_public_key.read());
-            self.request_approvals.consume_approved_request(:hash);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: WithdrawArgs { position_id, salt, expiration, collateral, recipient },
+                    public_key: position.owner_public_key.read(),
+                );
             self
                 .emit(
                     events::Withdraw {

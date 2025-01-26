@@ -2,6 +2,7 @@ use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::deposit::Deposit::InternalTrait;
 use contracts_commons::components::deposit::interface::IDeposit;
 use contracts_commons::components::nonce::interface::INonce;
+use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
@@ -9,7 +10,6 @@ use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_ca
 use contracts_commons::types::time::time::Time;
 use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::interface::IAssets;
-use perpetuals::core::components::request_approvals::interface::RequestStatus;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;

@@ -1,12 +1,14 @@
 #[starknet::component]
 pub(crate) mod RequestApprovalsComponent {
-    use contracts_commons::utils::validate_stark_signature;
-    use core::num::traits::Zero;
-    use perpetuals::core::components::request_approvals::errors;
-    use perpetuals::core::components::request_approvals::interface::{
+    use contracts_commons::components::request_approvals::errors;
+    use contracts_commons::components::request_approvals::interface::{
         IRequestApprovals, RequestStatus,
     };
-    use perpetuals::core::types::Signature;
+    use contracts_commons::errors::panic_with_felt;
+    use contracts_commons::message_hash::OffchainMessageHash;
+    use contracts_commons::utils::validate_stark_signature;
+    use core::num::traits::Zero;
+    use openzeppelin::utils::snip12::StructHash;
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use starknet::{ContractAddress, get_caller_address};
 
@@ -24,9 +26,9 @@ pub(crate) mod RequestApprovalsComponent {
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of IRequestApprovals<ComponentState<TContractState>> {
         fn get_request_status(
-            self: @ComponentState<TContractState>, hash: felt252,
+            self: @ComponentState<TContractState>, request_hash: felt252,
         ) -> RequestStatus {
-            self.get_request_status_internal(:hash)
+            self.get_request_status_internal(:request_hash)
         }
     }
 
@@ -40,22 +42,24 @@ pub(crate) mod RequestApprovalsComponent {
         /// The approval is signed with the public key.
         /// The signature is verified with the hash of the request.
         /// The request is stored with a status of PENDING.
-        fn register_approval(
+        fn register_approval<T, +StructHash<T>, +OffchainMessageHash<T>, +Drop<T>>(
             ref self: ComponentState<TContractState>,
             owner_account: ContractAddress,
             public_key: felt252,
-            signature: Signature,
-            hash: felt252,
-        ) {
+            signature: Span<felt252>,
+            args: T,
+        ) -> felt252 {
+            let request_hash = args.get_message_hash(:public_key);
             assert(
-                self.get_request_status_internal(:hash) == RequestStatus::NON_EXIST,
+                self.get_request_status_internal(:request_hash) == RequestStatus::NON_EXIST,
                 errors::APPROVAL_ALREADY_REGISTERED,
             );
             if owner_account.is_non_zero() {
                 assert(owner_account == get_caller_address(), errors::CALLER_IS_NOT_OWNER_ACCOUNT);
             }
-            validate_stark_signature(:public_key, msg_hash: hash, :signature);
-            self.approved_requests.write(key: hash, value: RequestStatus::PENDING);
+            validate_stark_signature(:public_key, msg_hash: request_hash, :signature);
+            self.approved_requests.write(key: request_hash, value: RequestStatus::PENDING);
+            request_hash
         }
 
         /// Consumes an approved request.
@@ -64,17 +68,25 @@ pub(crate) mod RequestApprovalsComponent {
         /// Validations:
         /// The request must be registered with PENDING state.
         /// The request must not be in the DONE state.
-        fn consume_approved_request(ref self: ComponentState<TContractState>, hash: felt252) {
-            let request_status = self.get_request_status_internal(:hash);
-            assert(request_status == RequestStatus::PENDING, errors::APPROVAL_NOT_REGISTERED);
-            self.approved_requests.write(hash, RequestStatus::DONE);
+        fn consume_approved_request<T, +StructHash<T>, +OffchainMessageHash<T>, +Drop<T>>(
+            ref self: ComponentState<TContractState>, args: T, public_key: felt252,
+        ) -> felt252 {
+            let request_hash = args.get_message_hash(:public_key);
+            let request_status = self.get_request_status_internal(:request_hash);
+            match request_status {
+                RequestStatus::NON_EXIST => panic_with_felt(errors::APPROVAL_NOT_REGISTERED),
+                RequestStatus::DONE => panic_with_felt(errors::REQUEST_ALREADY_DONE),
+                RequestStatus::PENDING => {},
+            };
+            self.approved_requests.write(request_hash, RequestStatus::DONE);
+            request_hash
         }
 
 
         fn get_request_status_internal(
-            self: @ComponentState<TContractState>, hash: felt252,
+            self: @ComponentState<TContractState>, request_hash: felt252,
         ) -> RequestStatus {
-            self.approved_requests.read(hash)
+            self.approved_requests.read(request_hash)
         }
     }
 }
