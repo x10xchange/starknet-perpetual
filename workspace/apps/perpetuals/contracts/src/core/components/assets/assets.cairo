@@ -4,21 +4,24 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::math::Abs;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use core::num::traits::Zero;
+    use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
-        ASSET_ALREADY_EXISTS, ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_EXPIRED_PRICE,
-        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE,
-        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
+        ASSET_ALREADY_EXISTS, ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_NOT_ACTIVE,
+        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTimelyData};
+    use perpetuals::core::types::asset::collateral::{
+        CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+    };
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, funding_rate_calc};
     use perpetuals::core::types::price::Price;
+    use starknet::ContractAddress;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -80,6 +83,48 @@ pub(crate) mod AssetsComponent {
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
         }
+
+
+        fn add_collateral(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            token_address: ContractAddress,
+            risk_factor: FixedTwoDecimal,
+            quantum: u64,
+            quorum: u8,
+        ) {
+            assert(self.collateral_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+
+            self
+                .collateral_config
+                .entry(asset_id)
+                .write(
+                    Option::Some(
+                        CollateralConfig {
+                            version: COLLATERAL_VERSION,
+                            token_address,
+                            is_active: true,
+                            risk_factor: Zero::zero(),
+                            quantum,
+                            quorum,
+                        },
+                    ),
+                );
+
+            self
+                .collateral_timely_data
+                .entry(asset_id)
+                .write(
+                    CollateralTimelyData {
+                        version: COLLATERAL_VERSION,
+                        next: self.collateral_timely_data_head.read(),
+                        price: One::one(),
+                        last_price_update: Zero::zero(),
+                    },
+                );
+            self.collateral_timely_data_head.write(Option::Some(asset_id));
+        }
+
 
         fn add_synthetic_asset(
             ref self: ComponentState<TContractState>,
@@ -274,27 +319,12 @@ pub(crate) mod AssetsComponent {
             assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
         }
 
-        fn _validate_collateral_prices(
-            self: @ComponentState<TContractState>, now: Timestamp, max_price_interval: TimeDelta,
-        ) {
-            let mut asset_id_opt = self.collateral_timely_data_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                let collateral_timely_data = self.collateral_timely_data.read(asset_id);
-                assert(
-                    now.sub(collateral_timely_data.last_price_update) < max_price_interval,
-                    COLLATERAL_EXPIRED_PRICE,
-                );
-                asset_id_opt = collateral_timely_data.next;
-            };
-        }
-
         /// If `max_price_interval` has passed since `last_price_validation`, validate
         /// synthetic and collateral prices and update `last_price_validation` to current time.
         fn _validate_prices(ref self: ComponentState<TContractState>, now: Timestamp) {
             let max_price_interval = self.max_price_interval.read();
             if now.sub(self.last_price_validation.read()) >= max_price_interval {
                 self._validate_synthetic_prices(now, max_price_interval);
-                self._validate_collateral_prices(now, max_price_interval);
                 self.last_price_validation.write(now);
             }
         }

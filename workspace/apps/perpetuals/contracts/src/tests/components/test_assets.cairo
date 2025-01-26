@@ -63,29 +63,6 @@ fn add_synthetic(
 }
 
 #[test]
-fn test_validate_collateral_prices() {
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    // Call the function
-    state._validate_collateral_prices(now: Time::now(), max_price_interval: MAX_PRICE_INTERVAL);
-    // If no assertion error is thrown, the test passes
-}
-
-#[test]
-#[should_panic(expected: 'COLLATERAL_EXPIRED_PRICE')]
-fn test_validate_collateral_prices_expired() {
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    // Set the block timestamp to be after the price validation interval
-    let now = Time::now().add(MAX_PRICE_INTERVAL);
-    start_cheat_block_timestamp_global(block_timestamp: now.into());
-    // Call the function, should panic with EXPIRED_PRICE error
-    state._validate_collateral_prices(:now, max_price_interval: MAX_PRICE_INTERVAL);
-}
-
-#[test]
 fn test_validate_synthetic_prices() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();

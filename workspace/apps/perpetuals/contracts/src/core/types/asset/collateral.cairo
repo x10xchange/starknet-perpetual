@@ -11,7 +11,7 @@ pub const VERSION: u8 = 0;
 pub struct CollateralConfig {
     pub version: u8,
     // Collateral ERC20 contract address
-    pub address: ContractAddress,
+    pub token_address: ContractAddress,
     // Configurable
     pub is_active: bool,
     pub risk_factor: FixedTwoDecimal,

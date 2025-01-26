@@ -1,4 +1,4 @@
-use core::num::traits::Zero;
+use core::num::traits::{One, Zero};
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 
 // 2^28
@@ -112,6 +112,20 @@ pub impl PriceZeroImpl of Zero<Price> {
 
     fn is_non_zero(self: @Price) -> bool {
         self.value.is_non_zero()
+    }
+}
+
+pub impl PriceOneImpl of One<Price> {
+    fn one() -> Price {
+        Price { value: TWO_POW_28 }
+    }
+
+    fn is_one(self: @Price) -> bool {
+        *self.value == TWO_POW_28
+    }
+
+    fn is_non_one(self: @Price) -> bool {
+        !self.value.is_one()
     }
 }
 

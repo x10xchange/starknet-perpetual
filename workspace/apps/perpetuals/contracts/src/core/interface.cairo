@@ -123,6 +123,9 @@ pub trait ICore<TContractState> {
         quorum: u8,
         resolution: u64,
     );
+    fn register_collateral(
+        ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
+    );
     fn add_oracle(self: @TContractState);
     fn add_oracle_to_asset(self: @TContractState);
     fn remove_oracle(self: @TContractState);

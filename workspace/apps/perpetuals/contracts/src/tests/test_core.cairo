@@ -113,6 +113,7 @@ fn initialized_contract_state() -> Core::ContractState {
     Core::constructor(
         ref state,
         governance_admin: GOVERNANCE_ADMIN(),
+        upgrade_delay: UPGRADE_DELAY,
         value_risk_calculator: deploy_value_risk_calculator_contract(),
         max_price_interval: MAX_PRICE_INTERVAL,
         max_funding_interval: MAX_FUNDING_INTERVAL,
@@ -129,7 +130,7 @@ fn initialized_contract_state() -> Core::ContractState {
 fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(state.assets.get_price_validation_interval(), MAX_PRICE_INTERVAL);
+    assert_eq!(state.replaceability.upgrade_delay.read(), UPGRADE_DELAY);
     assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
 

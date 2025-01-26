@@ -79,6 +79,7 @@ pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
 }
 
 
+pub const UPGRADE_DELAY: u64 = 5_u64;
 /// 1 day in seconds.
 pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
 /// 1 day in seconds.

@@ -122,7 +122,7 @@ pub fn generate_collateral(
     (
         CollateralConfig {
             version: *collateral_cfg.version,
-            address: *token_state.address,
+            token_address: *token_state.address,
             quantum: *collateral_cfg.quantum,
             is_active: true,
             risk_factor: *collateral_cfg.risk_factor,

@@ -130,7 +130,7 @@ pub mod Core {
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
-        replaceability: ReplaceabilityComponent::Storage,
+        pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
@@ -180,6 +180,7 @@ pub mod Core {
     pub fn constructor(
         ref self: ContractState,
         governance_admin: ContractAddress,
+        upgrade_delay: u64,
         value_risk_calculator: ContractAddress,
         max_price_interval: TimeDelta,
         max_funding_interval: TimeDelta,
@@ -190,15 +191,13 @@ pub mod Core {
         insurance_fund_position_owner_public_key: felt252,
     ) {
         self.roles.initialize(:governance_admin);
-        self.replaceability.upgrade_delay.write(Zero::zero());
+        self.replaceability.upgrade_delay.write(upgrade_delay);
         self
             .value_risk_calculator_dispatcher
             .write(IValueRiskCalculatorDispatcher { contract_address: value_risk_calculator });
         self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
         self.deposits.initialize();
-
         // Create fee positions.
-
         self.positions.entry(FEE_POSITION).owner_account.write(fee_position_owner_account);
         self.positions.entry(FEE_POSITION).owner_public_key.write(fee_position_owner_public_key);
 
@@ -741,7 +740,9 @@ pub mod Core {
 
             /// Execution - Withdraw:
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
-            let token_contract = IERC20Dispatcher { contract_address: collateral_cfg.address };
+            let token_contract = IERC20Dispatcher {
+                contract_address: collateral_cfg.token_address,
+            };
             token_contract
                 .transfer(:recipient, amount: (collateral_cfg.quantum * amount.abs()).into());
 
@@ -851,6 +852,44 @@ pub mod Core {
             // Execution:
             self.assets.add_synthetic_asset(:asset_id, :name, :risk_factor, :quorum, :resolution);
         }
+
+        /// Add collateral asset is called by the operator to add a new collateral asset.
+        /// We only have one collateral asset.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The asset is not already exists.
+        ///
+        /// Execution:
+        /// - Adds a new entry to collateral_config.
+        /// - Adds a new entry at the beginning of collateral_timely_data
+        ///     - Sets the price to TWO_POW_28.
+        ///     - Sets the `last_price_update` to zero.
+        ///     - Sets the risk factor to zero.
+        ///     - Sets the quorum to zero.
+        /// - Registers the token to depositis component.
+        fn register_collateral(
+            ref self: ContractState,
+            asset_id: AssetId,
+            token_address: ContractAddress,
+            quantum: u64,
+        ) {
+            // Validations:
+            self.roles.only_app_governor();
+
+            // Execution:
+            self
+                .assets
+                .add_collateral(
+                    :asset_id,
+                    :token_address,
+                    risk_factor: Zero::zero(),
+                    :quantum,
+                    quorum: Zero::zero(),
+                );
+            self.deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum)
+        }
+
         fn add_oracle(self: @ContractState) {}
         fn add_oracle_to_asset(self: @ContractState) {}
         fn remove_oracle(self: @ContractState) {}
