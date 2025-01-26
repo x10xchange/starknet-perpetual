@@ -1,5 +1,5 @@
 use core::num::traits::{One, Zero};
-use perpetuals::core::types::balance::{Balance, BalanceTrait};
+use perpetuals::core::types::balance::Balance;
 
 // 2^28
 pub const TWO_POW_28: u64 = 0x10000000;
@@ -132,7 +132,9 @@ pub impl PriceOneImpl of One<Price> {
 #[cfg(test)]
 mod tests {
     use core::num::traits::Zero;
+    use perpetuals::core::types::balance::BalanceTrait;
     use super::*;
+
 
     #[test]
     fn test_new_price() {
