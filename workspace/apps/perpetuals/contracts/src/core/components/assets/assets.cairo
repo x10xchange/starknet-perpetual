@@ -6,9 +6,10 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
-        ASSET_ALREADY_EXISTS, ASSET_NOT_EXISTS, BASE_ASSET_NOT_ACTIVE, COLLATERAL_NOT_ACTIVE,
-        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, invalid_funding_tick_err,
+        ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
+        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, NOT_COLLATERAL, NOT_SYNTHETIC,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        invalid_funding_tick_err,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -240,7 +241,11 @@ pub(crate) mod AssetsComponent {
         fn _get_collateral_price(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> Price {
-            self.collateral_timely_data.entry(collateral_id).price.read()
+            if self._is_collateral(asset_id: collateral_id) {
+                self.collateral_timely_data.entry(collateral_id).price.read()
+            } else {
+                panic_with_felt(NOT_COLLATERAL)
+            }
         }
 
         fn _get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
@@ -256,18 +261,32 @@ pub(crate) mod AssetsComponent {
         fn _get_synthetic_price(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> Price {
-            self.synthetic_timely_data.entry(synthetic_id).price.read()
+            if self._is_synthetic(asset_id: synthetic_id) {
+                self.synthetic_timely_data.entry(synthetic_id).price.read()
+            } else {
+                panic_with_felt(NOT_SYNTHETIC)
+            }
         }
 
         fn _get_risk_factor(
             self: @ComponentState<TContractState>, asset_id: AssetId,
         ) -> FixedTwoDecimal {
             if self._is_collateral(:asset_id) {
-                Zero::zero()
+                self._get_collateral_config(collateral_id: asset_id).risk_factor
             } else if self._is_synthetic(:asset_id) {
-                self._get_synthetic_config(asset_id).risk_factor
+                self._get_synthetic_config(synthetic_id: asset_id).risk_factor
             } else {
                 panic_with_felt(ASSET_NOT_EXISTS)
+            }
+        }
+
+        fn _get_funding_index(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> FundingIndex {
+            if self._is_synthetic(asset_id: synthetic_id) {
+                self.synthetic_timely_data.entry(synthetic_id).funding_index.read()
+            } else {
+                panic_with_felt(NOT_SYNTHETIC)
             }
         }
 
@@ -286,17 +305,17 @@ pub(crate) mod AssetsComponent {
         }
 
         fn _validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
-            let base_collateral_config = self.collateral_config.read(asset_id);
-            let is_base_collateral_active = match base_collateral_config {
+            let collateral_config = self.collateral_config.read(asset_id);
+            let is_collateral_active = match collateral_config {
                 Option::Some(config) => config.is_active,
                 Option::None => false,
             };
-            let base_synthetic_config = self.synthetic_config.read(asset_id);
-            let is_base_synthetic_active = match base_synthetic_config {
+            let synthetic_config = self.synthetic_config.read(asset_id);
+            let is_synthetic_active = match synthetic_config {
                 Option::Some(config) => config.is_active,
                 Option::None => false,
             };
-            assert(is_base_collateral_active || is_base_synthetic_active, BASE_ASSET_NOT_ACTIVE);
+            assert(is_collateral_active || is_synthetic_active, ASSET_NOT_ACTIVE);
         }
 
         /// Validates assets integrity prerequisites:

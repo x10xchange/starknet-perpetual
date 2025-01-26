@@ -729,7 +729,6 @@ pub mod Core {
                 );
 
             let collateral_id = collateral.asset_id;
-            let amount = collateral.amount;
 
             /// Execution - Withdraw:
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
@@ -737,7 +736,9 @@ pub mod Core {
                 contract_address: collateral_cfg.token_address,
             };
             token_contract
-                .transfer(:recipient, amount: (collateral_cfg.quantum * amount.abs()).into());
+                .transfer(
+                    :recipient, amount: (collateral_cfg.quantum * collateral.amount.abs()).into(),
+                );
 
             /// Validation - Not withdrawing from pending deposits:
             let pending_deposits = self.deposits.pending_deposits.read(collateral_id.into());
@@ -746,8 +747,8 @@ pub mod Core {
             assert(erc20_balance >= onchain_pending_deposits, INSUFFICIENT_FUNDS);
 
             /// Validations - Fundamentals:
-            let before = self._get_provisional_balance(:position_id, asset_id: collateral_id);
-            let after = before.sub(amount);
+            let before = self._get_provisional_main_collateral_balance(:position_id);
+            let after = before.sub(collateral.amount);
             let price = self.assets._get_collateral_price(:collateral_id);
             let position_diff = array![
                 AssetDiffEntry {
@@ -943,8 +944,8 @@ pub mod Core {
         fn _apply_funding_and_set_balance(
             ref self: ContractState, position_id: PositionId, asset_id: AssetId, balance: Balance,
         ) {
-            let mut position = self._get_position_mut(:position_id);
             if self.assets._is_collateral(:asset_id) {
+                let mut position = self._get_position_mut(:position_id);
                 position.collateral_assets.entry(asset_id).balance.write(balance);
             } else {
                 self
@@ -957,7 +958,7 @@ pub mod Core {
         fn apply_funding_and_update_balance(
             ref self: ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
         ) {
-            let current_balance = self._get_provisional_balance(:position_id, asset_id: asset_id);
+            let current_balance = self._get_provisional_balance(:position_id, :asset_id);
             self
                 ._apply_funding_and_set_balance(
                     :position_id, :asset_id, balance: current_balance + diff,
@@ -978,11 +979,7 @@ pub mod Core {
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-                let curr_funding_index = self
-                    .assets
-                    .synthetic_timely_data
-                    .read(synthetic_id)
-                    .funding_index;
+                let curr_funding_index = self.assets._get_funding_index(:synthetic_id);
                 let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
                 main_collateral_balance += funding;
                 asset_id_opt = synthetic_asset.next.read();
@@ -1023,11 +1020,7 @@ pub mod Core {
                 .collateral_assets
                 .entry(self.assets._get_main_collateral_asset_id())
                 .balance;
-            let curr_funding_index = self
-                .assets
-                .synthetic_timely_data
-                .read(synthetic_id)
-                .funding_index;
+            let curr_funding_index = self.assets._get_funding_index(:synthetic_id);
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
             let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             main_collateral_balance.add_and_write(funding);
@@ -1071,26 +1064,26 @@ pub mod Core {
             self._get_position_const(:position_id);
         }
 
-
-        fn _collect_position_collaterals(
+        /// We only have one collateral asset.
+        fn _collect_position_collateral(
             self: @ContractState, ref asset_entries: Array<AssetEntry>, position_id: PositionId,
         ) {
             let position = self._get_position_const(:position_id);
             let mut asset_id_opt = position.collateral_assets_head.read();
-            while let Option::Some(collateral_id) = asset_id_opt {
-                let collateral_asset = position.collateral_assets.read(collateral_id);
-                asset_entries
-                    .append(
-                        AssetEntry {
-                            id: collateral_id,
-                            balance: self
-                                ._get_provisional_balance(:position_id, asset_id: collateral_id),
-                            price: self.assets._get_collateral_price(:collateral_id),
-                            risk_factor: self.assets._get_risk_factor(asset_id: collateral_id),
-                        },
-                    );
 
-                asset_id_opt = collateral_asset.next;
+            if let Option::Some(collateral_id) = asset_id_opt {
+                let balance = self._get_provisional_main_collateral_balance(:position_id);
+                if balance.is_non_zero() {
+                    asset_entries
+                        .append(
+                            AssetEntry {
+                                id: collateral_id,
+                                balance,
+                                price: self.assets._get_collateral_price(:collateral_id),
+                                risk_factor: self.assets._get_risk_factor(asset_id: collateral_id),
+                            },
+                        );
+                }
             };
         }
 
@@ -1101,17 +1094,18 @@ pub mod Core {
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_asset = position.synthetic_assets.read(synthetic_id);
-                asset_entries
-                    .append(
-                        AssetEntry {
-                            id: synthetic_id,
-                            balance: self
-                                ._get_provisional_balance(:position_id, asset_id: synthetic_id),
-                            price: self.assets._get_synthetic_price(:synthetic_id),
-                            risk_factor: self.assets._get_risk_factor(asset_id: synthetic_id),
-                        },
-                    );
-
+                let balance = self._get_provisional_balance(:position_id, asset_id: synthetic_id);
+                if balance.is_non_zero() {
+                    asset_entries
+                        .append(
+                            AssetEntry {
+                                id: synthetic_id,
+                                balance,
+                                price: self.assets._get_synthetic_price(:synthetic_id),
+                                risk_factor: self.assets._get_risk_factor(asset_id: synthetic_id),
+                            },
+                        );
+                }
                 asset_id_opt = synthetic_asset.next;
             };
         }
@@ -1121,7 +1115,7 @@ pub mod Core {
         ) {
             for diff in position_diff {
                 let asset_id = *diff.id;
-                let balance = self._get_provisional_balance(:position_id, asset_id: asset_id);
+                let balance = self._get_provisional_balance(:position_id, :asset_id);
                 assert(*diff.before == balance, APPLY_DIFF_MISMATCH);
                 self._apply_funding_and_set_balance(:position_id, :asset_id, balance: *diff.after);
             }
@@ -1132,7 +1126,7 @@ pub mod Core {
             let mut asset_entries = array![];
             let position = self._get_position_const(position_id);
             assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
-            self._collect_position_collaterals(ref :asset_entries, :position_id);
+            self._collect_position_collateral(ref :asset_entries, :position_id);
             self._collect_position_synthetics(ref :asset_entries, :position_id);
             PositionData { asset_entries: asset_entries.span() }
         }
