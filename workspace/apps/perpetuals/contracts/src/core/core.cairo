@@ -30,9 +30,9 @@ pub mod Core {
         INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
         INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
-        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, POSITION_UNHEALTHY,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err, position_not_healthy_nor_healthier,
+        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err, position_not_healthy_nor_healthier,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -68,6 +68,7 @@ pub mod Core {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
 
+    #[abi(embed_v0)]
     impl NonceImpl = NonceComponent::NonceImpl<ContractState>;
     impl NonceComponentInternalImpl = NonceComponent::InternalImpl<ContractState>;
 
@@ -793,7 +794,7 @@ pub mod Core {
         ///    - Update the previous asset id to the current funding tick asset id.
         /// - Update the last funding tick time.
         fn funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
+            ref self: ContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
         ) {
             self._validate_funding_tick(:funding_ticks, :operator_nonce);
             self.assets._execute_funding_tick(:funding_ticks);
@@ -1007,8 +1008,8 @@ pub mod Core {
                 .balance;
             let curr_funding_index = self.assets._get_funding_index(:synthetic_id);
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             main_collateral_balance.add_and_write(funding);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             synthetic_asset.balance.write(balance);
             synthetic_asset.funding_index.write(curr_funding_index);
         }

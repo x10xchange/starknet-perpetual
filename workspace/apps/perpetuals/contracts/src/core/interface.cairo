@@ -110,7 +110,7 @@ pub trait ICore<TContractState> {
 
     // Funding
     fn funding_tick(
-        ref self: TContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
     );
 
     // Configuration
