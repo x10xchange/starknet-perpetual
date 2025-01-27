@@ -330,7 +330,6 @@ pub mod Core {
                     },
                 );
         }
-
         fn transfer(
             ref self: ContractState,
             operator_nonce: u64,
@@ -344,20 +343,7 @@ pub mod Core {
                 ._validate_transfer(
                     :operator_nonce, :position_id, :recipient, :salt, :expiration, :collateral,
                 );
-            // TODO(Tomer-StarkWare): Implement the transfer logic.
-            let position = self._get_position_const(:position_id);
-            let hash = self
-                .request_approvals
-                .consume_approved_request(
-                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
-                    public_key: position.owner_public_key.read(),
-                );
-            self
-                .emit(
-                    events::Trasfer {
-                        position_id, recipient, expiration, transfer_request_hash: hash,
-                    },
-                );
+            self._execute_transfer(:position_id, :recipient, :collateral);
         }
 
         // TODO: talk about this flow
@@ -762,13 +748,12 @@ pub mod Core {
                 .span();
             let position_data = self._get_position_data(:position_id);
 
-            let position_change_result = evaluate_position_change(
-                position: position_data, :position_diff,
-            );
-            assert(
-                position_change_result.position_state_after_change == PositionState::Healthy,
-                POSITION_UNHEALTHY,
-            );
+            self
+                ._validate_position_is_healthy_or_healthier(
+                    position_id: position_id,
+                    position_data: position_data,
+                    asset_diff_entries: position_diff,
+                );
             self._apply_diff(:position_id, :position_diff);
             let position = self._get_position_const(:position_id);
             let hash = self
@@ -1524,6 +1509,56 @@ pub mod Core {
 
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+        }
+
+        fn _create_asset_diff_entry(
+            ref self: ContractState, asset_id: AssetId, position_id: PositionId, amount: i64,
+        ) -> AssetDiffEntry {
+            let position_asset_balance = self._get_provisional_balance(:position_id, :asset_id);
+            AssetDiffEntry {
+                id: asset_id,
+                before: position_asset_balance,
+                after: position_asset_balance.add(amount),
+                price: self.assets._get_collateral_price(collateral_id: asset_id),
+                risk_factor: self.assets._get_risk_factor(:asset_id),
+            }
+        }
+
+        fn _execute_transfer(
+            ref self: ContractState,
+            position_id: PositionId,
+            recipient: PositionId,
+            collateral: AssetAmount,
+        ) {
+            // Parameters
+            let sender_position_data = self._get_position_data(position_id);
+            let asset_diff_entry_sender = self
+                ._create_asset_diff_entry(
+                    asset_id: collateral.asset_id, :position_id, amount: -collateral.amount,
+                );
+            let asset_diff_entry_recipient = self
+                ._create_asset_diff_entry(
+                    asset_id: collateral.asset_id,
+                    position_id: recipient,
+                    amount: collateral.amount,
+                );
+
+            // Execute transfer
+            self._apply_diff(:position_id, position_diff: array![asset_diff_entry_sender].span());
+
+            self
+                ._apply_diff(
+                    position_id: recipient,
+                    position_diff: array![asset_diff_entry_recipient].span(),
+                );
+
+            /// Validations - Fundamentals:
+            self
+                ._validate_position_is_healthy_or_healthier(
+                    :position_id,
+                    position_data: sender_position_data,
+                    asset_diff_entries: array![asset_diff_entry_sender].span(),
+                );
         }
     }
 }
