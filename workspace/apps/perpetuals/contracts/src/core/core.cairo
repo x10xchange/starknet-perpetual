@@ -386,7 +386,7 @@ pub mod Core {
                 .request_approvals
                 .consume_approved_request(
                     args: SetPublicKeyArgs { position_id, expiration, new_public_key },
-                    public_key: position.owner_public_key.read(),
+                    public_key: new_public_key,
                 );
             position.owner_public_key.write(new_public_key);
             self
@@ -412,7 +412,7 @@ pub mod Core {
                 .request_approvals
                 .register_approval(
                     owner_account: position.owner_account.read(),
-                    public_key: position.owner_public_key.read(),
+                    public_key: new_public_key,
                     :signature,
                     args: SetPublicKeyArgs { position_id, expiration, new_public_key },
                 );
