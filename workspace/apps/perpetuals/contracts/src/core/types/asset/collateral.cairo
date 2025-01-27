@@ -5,7 +5,7 @@ use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 
-pub const VERSION: u8 = 0;
+pub const VERSION: u8 = 1;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralConfig {

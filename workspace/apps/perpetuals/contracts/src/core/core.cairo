@@ -36,8 +36,10 @@ pub mod Core {
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::asset::collateral::CollateralAsset;
-    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+    use perpetuals::core::types::asset::collateral::{
+        CollateralAsset, VERSION as COLLATERAL_VERSION,
+    };
+    use perpetuals::core::types::asset::synthetic::{SyntheticAsset, VERSION as SYNTHETIC_VERSION};
     use perpetuals::core::types::asset::{AssetId, AssetIdImpl};
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait, FundingTick};
@@ -103,6 +105,8 @@ pub mod Core {
             VERSION
         }
     }
+
+    pub const POSITION_VERSION: u8 = 1;
 
     #[starknet::storage_node]
     pub struct Position {
@@ -224,6 +228,7 @@ pub mod Core {
             let mut position = self.positions.entry(position_id);
             assert(position.owner_public_key.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
+            self.positions.entry(position_id).version.write(POSITION_VERSION);
             self.positions.entry(position_id).owner_public_key.write(owner_public_key);
             self.positions.entry(position_id).owner_account.write(owner_account);
             self
@@ -932,6 +937,7 @@ pub mod Core {
         ) {
             if self.assets._is_collateral(:asset_id) {
                 let mut position = self._get_position_mut(:position_id);
+                self._update_collateral_in_position(position, collateral_id: asset_id);
                 position.collateral_assets.entry(asset_id).balance.write(balance);
             } else {
                 self
@@ -1010,8 +1016,37 @@ pub mod Core {
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
             main_collateral_balance.add_and_write(funding);
             let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+
+            self._update_synthetic_in_position(:position, :synthetic_id);
             synthetic_asset.balance.write(balance);
             synthetic_asset.funding_index.write(curr_funding_index);
+        }
+
+
+        fn _update_collateral_in_position(
+            ref self: ContractState,
+            position: StoragePath<Mutable<Position>>,
+            collateral_id: AssetId,
+        ) {
+            let collateral_entry = position.collateral_assets.entry(collateral_id);
+            if (collateral_entry.version.read().is_zero()) {
+                collateral_entry.version.write(COLLATERAL_VERSION);
+                collateral_entry.next.write(position.collateral_assets_head.read());
+                position.collateral_assets_head.write(Option::Some(collateral_id));
+            }
+        }
+
+        fn _update_synthetic_in_position(
+            ref self: ContractState,
+            position: StoragePath<Mutable<Position>>,
+            synthetic_id: AssetId,
+        ) {
+            let synthetic_entry = position.synthetic_assets.entry(synthetic_id);
+            if (synthetic_entry.version.read().is_zero()) {
+                synthetic_entry.version.write(SYNTHETIC_VERSION);
+                synthetic_entry.next.write(position.synthetic_assets_head.read());
+                position.synthetic_assets_head.write(Option::Some(synthetic_id));
+            }
         }
 
         fn _calc_funding(
