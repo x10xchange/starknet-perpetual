@@ -116,7 +116,6 @@ pub trait ICore<TContractState> {
     // Configuration
     fn add_synthetic_asset(
         ref self: TContractState,
-        operator_nonce: u64,
         asset_id: AssetId,
         name: felt252,
         risk_factor: u8,

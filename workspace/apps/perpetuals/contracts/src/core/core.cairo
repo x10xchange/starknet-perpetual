@@ -810,9 +810,7 @@ pub mod Core {
         /// Add asset is called by the operator to add a new synthetic asset.
         ///
         /// Validations:
-        /// - Only the operator can call this function.
-        /// - The contract must not be paused.
-        /// - The system nonce must be valid.
+        /// - Only the app_governor can call this function.
         /// - The asset is not already exists.
         /// - The risk factor is less or equal to 100.
         ///
@@ -825,7 +823,6 @@ pub mod Core {
         ///     - Set the `last_price_update` to zero.
         fn add_synthetic_asset(
             ref self: ContractState,
-            operator_nonce: u64,
             asset_id: AssetId,
             name: felt252,
             risk_factor: u8,
@@ -833,8 +830,7 @@ pub mod Core {
             resolution: u64,
         ) {
             // Validations:
-            self.pausable.assert_not_paused();
-            self._consume_operator_nonce(:operator_nonce);
+            self.roles.only_app_governor();
 
             // Execution:
             self.assets.add_synthetic_asset(:asset_id, :name, :risk_factor, :quorum, :resolution);
