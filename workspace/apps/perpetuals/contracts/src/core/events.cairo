@@ -81,6 +81,7 @@ pub struct TrasferRequest {
     pub position_id: PositionId,
     #[key]
     pub recipient: PositionId,
+    pub collateral: AssetAmount,
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,
@@ -92,6 +93,7 @@ pub struct Trasfer {
     pub position_id: PositionId,
     #[key]
     pub recipient: PositionId,
+    pub collateral: AssetAmount,
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,

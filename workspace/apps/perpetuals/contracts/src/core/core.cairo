@@ -336,7 +336,7 @@ pub mod Core {
             self
                 .emit(
                     events::TrasferRequest {
-                        position_id, recipient, expiration, transfer_request_hash: hash,
+                        position_id, recipient, collateral, expiration, transfer_request_hash: hash,
                     },
                 );
         }
@@ -349,11 +349,24 @@ pub mod Core {
             expiration: Timestamp,
             collateral: AssetAmount,
         ) {
+            let position = self._get_position_const(:position_id);
             self
                 ._validate_transfer(
                     :operator_nonce, :position_id, :recipient, :salt, :expiration, :collateral,
                 );
             self._execute_transfer(:position_id, :recipient, :collateral);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
+                    public_key: position.owner_public_key.read(),
+                );
+            self
+                .emit(
+                    events::Trasfer {
+                        position_id, recipient, collateral, expiration, transfer_request_hash: hash,
+                    },
+                );
         }
 
         // TODO: talk about this flow
