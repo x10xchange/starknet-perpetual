@@ -7,18 +7,13 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
-    // Flows
-    fn deleverage(self: @TContractState);
-    fn liquidate(
+    // Position Flows
+    fn new_position(
         ref self: TContractState,
         operator_nonce: u64,
-        liquidator_signature: Signature,
-        liquidated_position_id: PositionId,
-        liquidator_order: Order,
-        actual_amount_base_liquidated: i64,
-        actual_amount_quote_liquidated: i64,
-        actual_liquidator_fee: i64,
-        fee: AssetAmount,
+        position_id: PositionId,
+        owner_public_key: felt252,
+        owner_account: ContractAddress,
     );
     fn set_owner_account(
         ref self: TContractState,
@@ -29,21 +24,19 @@ pub trait ICore<TContractState> {
         new_account_owner: ContractAddress,
         expiration: Timestamp,
     );
-    fn transfer(
+    fn set_public_key_request(
         ref self: TContractState,
-        operator_nonce: u64,
+        signature: Signature,
         position_id: PositionId,
-        recipient: PositionId,
-        salt: felt252,
         expiration: Timestamp,
-        collateral: AssetAmount,
+        new_public_key: felt252,
     );
-    fn new_position(
+    fn set_public_key(
         ref self: TContractState,
         operator_nonce: u64,
         position_id: PositionId,
-        owner_public_key: felt252,
-        owner_account: ContractAddress,
+        expiration: Timestamp,
+        new_public_key: felt252,
     );
     fn process_deposit(
         ref self: TContractState,
@@ -53,6 +46,42 @@ pub trait ICore<TContractState> {
         amount: i64,
         position_id: PositionId,
         salt: felt252,
+    );
+    fn withdraw_request(
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+        recipient: ContractAddress,
+    );
+    fn withdraw(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+        recipient: ContractAddress,
+    );
+    fn transfer_request(
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        recipient: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
+    );
+    fn transfer(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        recipient: PositionId,
+        salt: felt252,
+        expiration: Timestamp,
+        collateral: AssetAmount,
     );
     fn trade(
         ref self: TContractState,
@@ -66,54 +95,22 @@ pub trait ICore<TContractState> {
         actual_fee_a: i64,
         actual_fee_b: i64,
     );
-    fn transfer_request(
-        ref self: TContractState,
-        signature: Signature,
-        position_id: PositionId,
-        recipient: PositionId,
-        salt: felt252,
-        expiration: Timestamp,
-        collateral: AssetAmount,
-    );
-    fn set_public_key(
+    fn liquidate(
         ref self: TContractState,
         operator_nonce: u64,
-        position_id: PositionId,
-        expiration: Timestamp,
-        new_public_key: felt252,
+        liquidator_signature: Signature,
+        liquidated_position_id: PositionId,
+        liquidator_order: Order,
+        actual_amount_base_liquidated: i64,
+        actual_amount_quote_liquidated: i64,
+        actual_liquidator_fee: i64,
+        fee: AssetAmount,
     );
-    fn set_public_key_request(
-        ref self: TContractState,
-        signature: Signature,
-        position_id: PositionId,
-        expiration: Timestamp,
-        new_public_key: felt252,
+    fn deleverage(ref self: TContractState);
+    // Asset Flows
+    fn register_collateral(
+        ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
     );
-    fn withdraw(
-        ref self: TContractState,
-        operator_nonce: u64,
-        position_id: PositionId,
-        salt: felt252,
-        expiration: Timestamp,
-        collateral: AssetAmount,
-        recipient: ContractAddress,
-    );
-    fn withdraw_request(
-        ref self: TContractState,
-        signature: Signature,
-        position_id: PositionId,
-        salt: felt252,
-        expiration: Timestamp,
-        collateral: AssetAmount,
-        recipient: ContractAddress,
-    );
-
-    // Funding
-    fn funding_tick(
-        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
-    );
-
-    // Configuration
     fn add_synthetic_asset(
         ref self: TContractState,
         asset_id: AssetId,
@@ -122,10 +119,12 @@ pub trait ICore<TContractState> {
         quorum: u8,
         resolution: u64,
     );
-    fn register_collateral(
-        ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
-    );
     fn add_oracle_to_asset(ref self: TContractState);
     fn remove_oracle_from_asset(ref self: TContractState);
     fn update_asset_quorum(ref self: TContractState);
+    // Ticks
+    fn funding_tick(
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
+    );
+    fn price_tick(ref self: TContractState);
 }

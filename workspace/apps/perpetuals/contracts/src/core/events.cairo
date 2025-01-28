@@ -76,7 +76,7 @@ pub struct Liquidate {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct TrasferRequest {
+pub struct TransferRequest {
     #[key]
     pub position_id: PositionId,
     #[key]
@@ -88,7 +88,7 @@ pub struct TrasferRequest {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct Trasfer {
+pub struct Transfer {
     #[key]
     pub position_id: PositionId,
     #[key]
