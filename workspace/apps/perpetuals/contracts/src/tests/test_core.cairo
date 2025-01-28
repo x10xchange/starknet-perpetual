@@ -7,14 +7,19 @@ use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
 use contracts_commons::types::time::time::Time;
+use contracts_commons::types::time::time::Timestamp;
+use core::num::traits::Zero;
 use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::order::Order;
+use perpetuals::core::types::price::Price;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId};
@@ -26,6 +31,8 @@ use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
     StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
 };
+
+// Utils.
 
 fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()
@@ -124,6 +131,86 @@ fn initialized_contract_state() -> Core::ContractState {
     state
 }
 
+fn check_synthetic_config(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    name: felt252,
+    is_active: bool,
+    risk_factor: u8,
+    quorum: u8,
+    resolution: u64,
+) {
+    let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
+    assert_eq!(synthetic_config.name, name);
+    assert_eq!(synthetic_config.is_active, is_active);
+    assert_eq!(synthetic_config.risk_factor, FixedTwoDecimalTrait::new(risk_factor));
+    assert_eq!(synthetic_config.quorum, quorum);
+    assert_eq!(synthetic_config.resolution, resolution);
+}
+
+fn check_synthetic_timely_data(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    price: Price,
+    last_price_update: Timestamp,
+    funding_index: FundingIndex,
+) {
+    let synthetic_timely_data = state.assets.synthetic_timely_data.entry(synthetic_id).read();
+    assert_eq!(synthetic_timely_data.price, price);
+    assert_eq!(synthetic_timely_data.last_price_update, last_price_update);
+    assert_eq!(synthetic_timely_data.funding_index, funding_index);
+}
+
+fn is_asset_in_synthetic_timely_data_list(
+    state: @Core::ContractState, synthetic_id: AssetId,
+) -> bool {
+    let mut flag = false;
+
+    let mut current_asset_id_opt = state.assets.synthetic_timely_data_head.read();
+    while let Option::Some(current_asset_id) = current_asset_id_opt {
+        if current_asset_id == synthetic_id {
+            flag = true;
+            break;
+        }
+
+        current_asset_id_opt = state
+            .assets
+            .synthetic_timely_data
+            .entry(current_asset_id)
+            .next
+            .read();
+    };
+    flag
+}
+
+fn check_synthetic_asset(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    name: felt252,
+    is_active: bool,
+    risk_factor: u8,
+    quorum: u8,
+    resolution: u64,
+    price: Price,
+    last_price_update: Timestamp,
+    funding_index: FundingIndex,
+) {
+    check_synthetic_config(
+        :state, :synthetic_id, :name, is_active: false, :risk_factor, :quorum, :resolution,
+    );
+    check_synthetic_timely_data(
+        :state,
+        :synthetic_id,
+        price: Zero::zero(),
+        last_price_update: Zero::zero(),
+        funding_index: Zero::zero(),
+    );
+    // Check the synthetic_timely_data list.
+    assert!(is_asset_in_synthetic_timely_data_list(:state, :synthetic_id));
+}
+
+// Tests.
+
 #[test]
 fn test_constructor() {
     let mut state = initialized_contract_state();
@@ -143,6 +230,96 @@ fn test_constructor() {
         state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_public_key.read(),
         OPERATOR_PUBLIC_KEY(),
     );
+}
+
+// Add synthetic asset tests.
+
+#[test]
+fn test_successful_add_synthetic_asset() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    // Setup test parameters:
+    let synthetic_id_1 = SYNTHETIC_ASSET_ID_2();
+    let synthetic_id_2 = SYNTHETIC_ASSET_ID_3();
+    let name_1 = 'SYNTHETIC_NAME_1';
+    let name_2 = 'SYNTHETIC_NAME_2';
+    let risk_factor_1 = 10;
+    let risk_factor_2 = 20;
+    let quorum_1 = 1_u8;
+    let quorum_2 = 2_u8;
+    let resolution_1 = 1_000_000_000;
+    let resolution_2 = 2_000_000_000;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_synthetic_asset(
+            asset_id: synthetic_id_1,
+            name: name_1,
+            risk_factor: risk_factor_1,
+            quorum: quorum_1,
+            resolution: resolution_1,
+        );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_synthetic_asset(
+            asset_id: synthetic_id_2,
+            name: name_2,
+            risk_factor: risk_factor_2,
+            quorum: quorum_2,
+            resolution: resolution_2,
+        );
+
+    // Check:
+    check_synthetic_asset(
+        state: @state,
+        synthetic_id: synthetic_id_1,
+        name: name_1,
+        is_active: false,
+        risk_factor: risk_factor_1,
+        quorum: quorum_1,
+        resolution: resolution_1,
+        price: Zero::zero(),
+        last_price_update: Zero::zero(),
+        funding_index: Zero::zero(),
+    );
+    check_synthetic_asset(
+        state: @state,
+        synthetic_id: synthetic_id_2,
+        name: name_2,
+        is_active: false,
+        risk_factor: risk_factor_2,
+        quorum: quorum_2,
+        resolution: resolution_2,
+        price: Zero::zero(),
+        last_price_update: Zero::zero(),
+        funding_index: Zero::zero(),
+    );
+}
+
+#[test]
+#[should_panic(expected: 'ASSET_ALREADY_EXISTS')]
+fn test_add_synthetic_asset_existed_asset() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_synthetic_asset(
+            // Setup state already added `SYNTHETIC_ASSET_ID_1`.
+            asset_id: SYNTHETIC_ASSET_ID_1(),
+            name: Zero::zero(),
+            risk_factor: Zero::zero(),
+            quorum: Zero::zero(),
+            resolution: Zero::zero(),
+        );
 }
 
 #[test]

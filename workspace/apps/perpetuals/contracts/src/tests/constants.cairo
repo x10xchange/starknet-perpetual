@@ -42,6 +42,9 @@ pub fn GOVERNANCE_ADMIN() -> ContractAddress {
 pub fn APP_ROLE_ADMIN() -> ContractAddress {
     contract_address_const::<'APP_ROLE_ADMIN'>()
 }
+pub fn APP_GOVERNOR() -> ContractAddress {
+    contract_address_const::<'APP_GOVERNOR'>()
+}
 pub fn OPERATOR() -> ContractAddress {
     contract_address_const::<'OPERATOR'>()
 }
@@ -106,8 +109,14 @@ pub const POSITION_ID_2: PositionId = PositionId { value: 3 };
 pub fn COLLATERAL_ASSET_ID() -> AssetId {
     AssetIdTrait::new(value: selector!("COLLATERAL_ASSET_ID"))
 }
-pub fn SYNTHETIC_ASSET_ID() -> AssetId {
+pub fn SYNTHETIC_ASSET_ID_1() -> AssetId {
     AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_1"))
+}
+pub fn SYNTHETIC_ASSET_ID_2() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_2"))
+}
+pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
+    AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
 }
 
 /// Risk factors

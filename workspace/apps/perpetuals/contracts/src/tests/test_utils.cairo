@@ -63,6 +63,7 @@ impl UserDefault of Default<User> {
 pub(crate) struct PerpetualsInitConfig {
     pub governance_admin: ContractAddress,
     pub app_role_admin: ContractAddress,
+    pub app_governor: ContractAddress,
     pub operator: ContractAddress,
     pub max_funding_interval: TimeDelta,
     pub max_price_interval: TimeDelta,
@@ -92,6 +93,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
         PerpetualsInitConfig {
             governance_admin: GOVERNANCE_ADMIN(),
             app_role_admin: APP_ROLE_ADMIN(),
+            app_governor: APP_GOVERNOR(),
             operator: OPERATOR(),
             max_funding_interval: MAX_FUNDING_INTERVAL,
             max_price_interval: MAX_PRICE_INTERVAL,
@@ -109,7 +111,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 risk_factor: Zero::zero(),
                 quorum: COLLATERAL_QUORUM,
             },
-            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID() },
+            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID_1() },
         }
     }
 }
@@ -181,6 +183,10 @@ pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConf
         contract_address: test_address(), caller_address: *cfg.governance_admin,
     );
     state.register_app_role_admin(account: *cfg.app_role_admin);
+    cheat_caller_address_once(
+        contract_address: test_address(), caller_address: *cfg.app_role_admin,
+    );
+    state.register_app_governor(account: *cfg.app_governor);
     cheat_caller_address_once(
         contract_address: test_address(), caller_address: *cfg.app_role_admin,
     );
