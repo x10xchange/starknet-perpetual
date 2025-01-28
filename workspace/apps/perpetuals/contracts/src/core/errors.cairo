@@ -1,4 +1,6 @@
 use perpetuals::core::types::PositionId;
+use perpetuals::core::types::asset::AssetId;
+
 
 pub const AMOUNT_TOO_LARGE: felt252 = 'AMOUNT_TOO_LARGE';
 pub const TRANSFER_EXPIRED: felt252 = 'TRANSFER_EXPIRED';
@@ -32,6 +34,14 @@ pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)
 }
 
+pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {
+    format!("INVALID_FUNDING_RATE synthetic_id: {:?}", synthetic_id)
+}
+
+pub fn order_expired_err(position_id: PositionId) -> ByteArray {
+    format!("ORDER_EXPIRED position_id: {:?}", position_id)
+}
+
 pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
     format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
 }
@@ -43,8 +53,3 @@ pub fn trade_illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArr
 pub fn trade_illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
     format!("TRADE_ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }
-
-pub fn order_expired_err(position_id: PositionId) -> ByteArray {
-    format!("ORDER_EXPIRED position_id: {:?}", position_id)
-}
-

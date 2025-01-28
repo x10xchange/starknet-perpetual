@@ -125,11 +125,7 @@ pub trait ICore<TContractState> {
     fn register_collateral(
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
     );
-    fn add_oracle(self: @TContractState);
-    fn add_oracle_to_asset(self: @TContractState);
-    fn remove_oracle(self: @TContractState);
-    fn remove_oracle_from_asset(self: @TContractState);
-    fn update_asset_price(self: @TContractState) {}
-    fn update_max_funding_rate(self: @TContractState);
-    fn update_oracle_identifiers(self: @TContractState);
+    fn add_oracle_to_asset(ref self: TContractState);
+    fn remove_oracle_from_asset(ref self: TContractState);
+    fn update_asset_quorum(ref self: TContractState);
 }

@@ -78,6 +78,10 @@ pub mod Core {
     impl DepositImpl = Deposit::DepositImpl<ContractState>;
 
     #[abi(embed_v0)]
+    impl RequestApprovalsImpl =
+        RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
+
+    #[abi(embed_v0)]
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
 
     #[abi(embed_v0)]
@@ -400,6 +404,7 @@ pub mod Core {
             new_public_key: felt252,
         ) {
             let position = self._get_position_const(:position_id);
+            assert(position.owner_account.read().is_non_zero(), NO_OWNER_ACCOUNT);
             let hash = self
                 .request_approvals
                 .register_approval(
@@ -412,8 +417,7 @@ pub mod Core {
                 .emit(
                     events::SetPublicKeyRequest {
                         position_id,
-                        new_public_key: SetPublicKeyArgs { position_id, expiration, new_public_key }
-                            .new_public_key,
+                        new_public_key,
                         expiration: expiration,
                         set_public_key_request_hash: hash,
                     },
@@ -742,7 +746,7 @@ pub mod Core {
             let before = self._get_provisional_main_collateral_balance(:position_id);
             let after = before.sub(collateral.amount);
             let price = self.assets._get_collateral_price(:collateral_id);
-            let position_diff = array![
+            let asset_diff_entries = array![
                 AssetDiffEntry {
                     id: collateral_id,
                     before,
@@ -756,11 +760,9 @@ pub mod Core {
 
             self
                 ._validate_position_is_healthy_or_healthier(
-                    position_id: position_id,
-                    position_data: position_data,
-                    asset_diff_entries: position_diff,
+                    :position_id, :position_data, :asset_diff_entries,
                 );
-            self._apply_diff(:position_id, :position_diff);
+            self._apply_diff(:position_id, :asset_diff_entries);
             let position = self._get_position_const(:position_id);
             let hash = self
                 .request_approvals
@@ -873,13 +875,9 @@ pub mod Core {
             self.deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum)
         }
 
-        fn add_oracle(self: @ContractState) {}
-        fn add_oracle_to_asset(self: @ContractState) {}
-        fn remove_oracle(self: @ContractState) {}
-        fn remove_oracle_from_asset(self: @ContractState) {}
-        fn update_asset_price(self: @ContractState) {}
-        fn update_max_funding_rate(self: @ContractState) {}
-        fn update_oracle_identifiers(self: @ContractState) {}
+        fn add_oracle_to_asset(ref self: ContractState) {}
+        fn remove_oracle_from_asset(ref self: ContractState) {}
+        fn update_asset_quorum(ref self: ContractState) {}
     }
 
     #[generate_trait]
@@ -966,11 +964,10 @@ pub mod Core {
                 .read();
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
-                let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
                 let curr_funding_index = self.assets._get_funding_index(:synthetic_id);
                 let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
                 main_collateral_balance += funding;
-                asset_id_opt = synthetic_asset.next.read();
+                asset_id_opt = position.synthetic_assets.entry(synthetic_id).next.read();
             };
             main_collateral_balance
         }
@@ -1011,9 +1008,8 @@ pub mod Core {
             let curr_funding_index = self.assets._get_funding_index(:synthetic_id);
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
             main_collateral_balance.add_and_write(funding);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-
             self._update_synthetic_in_position(:position, :synthetic_id);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             synthetic_asset.balance.write(balance);
             synthetic_asset.funding_index.write(curr_funding_index);
         }
@@ -1054,8 +1050,8 @@ pub mod Core {
             let position = self._get_position_const(:position_id);
             let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             let synthetic_balance = synthetic_asset.balance.read();
-            let cached_funding_index = synthetic_asset.funding_index.read();
-            (curr_funding_index - cached_funding_index).mul(synthetic_balance)
+            let last_funding_index = synthetic_asset.funding_index.read();
+            (curr_funding_index - last_funding_index).mul(synthetic_balance)
         }
 
         fn _get_position_const(
@@ -1128,9 +1124,9 @@ pub mod Core {
         }
 
         fn _apply_diff(
-            ref self: ContractState, position_id: PositionId, position_diff: PositionDiff,
+            ref self: ContractState, position_id: PositionId, asset_diff_entries: PositionDiff,
         ) {
-            for diff in position_diff {
+            for diff in asset_diff_entries {
                 let asset_id = *diff.id;
                 let balance = self._get_provisional_balance(:position_id, :asset_id);
                 assert(*diff.before == balance, APPLY_DIFF_MISMATCH);
@@ -1254,12 +1250,12 @@ pub mod Core {
             self
                 ._apply_diff(
                     position_id: liquidated_position_id,
-                    position_diff: liquidated_asset_diff_entries,
+                    asset_diff_entries: liquidated_asset_diff_entries,
                 );
             self
                 ._apply_diff(
                     position_id: liquidator_position_id,
-                    position_diff: liquidator_asset_diff_entries,
+                    asset_diff_entries: liquidator_asset_diff_entries,
                 );
 
             // Update fee positions.
@@ -1438,8 +1434,14 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_a,
                     actual_fee: actual_fee_b,
                 );
-            self._apply_diff(position_id: order_a.position_id, position_diff: asset_diff_entries_a);
-            self._apply_diff(position_id: order_b.position_id, position_diff: asset_diff_entries_b);
+            self
+                ._apply_diff(
+                    position_id: order_a.position_id, asset_diff_entries: asset_diff_entries_a,
+                );
+            self
+                ._apply_diff(
+                    position_id: order_b.position_id, asset_diff_entries: asset_diff_entries_b,
+                );
 
             // Update fee positions.
             self
@@ -1576,12 +1578,15 @@ pub mod Core {
                 );
 
             // Execute transfer
-            self._apply_diff(:position_id, position_diff: array![asset_diff_entry_sender].span());
+            self
+                ._apply_diff(
+                    :position_id, asset_diff_entries: array![asset_diff_entry_sender].span(),
+                );
 
             self
                 ._apply_diff(
                     position_id: recipient,
-                    position_diff: array![asset_diff_entry_recipient].span(),
+                    asset_diff_entries: array![asset_diff_entry_recipient].span(),
                 );
 
             /// Validations - Fundamentals:

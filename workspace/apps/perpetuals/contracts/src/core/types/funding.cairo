@@ -1,5 +1,7 @@
 use contracts_commons::constants::TWO_POW_32;
+use contracts_commons::errors::assert_with_byte_array;
 use core::num::traits::zero::Zero;
+use perpetuals::core::errors::invalid_funding_rate_err;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::price::{Price, PriceMulTrait};
@@ -56,11 +58,23 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
     }
 }
 
-/// Calculate the funding rate using the following formula:
+/// Validates the funding rate using the following formula:
 /// `max_funding_rate * time_diff * synthetic_price / 2^32`.
-pub fn funding_rate_calc(max_funding_rate: u32, time_diff: u64, synthetic_price: Price) -> u128 {
-    synthetic_price.mul(rhs: max_funding_rate) * time_diff.into() / TWO_POW_32.into()
+pub fn validate_funding_rate(
+    synthetic_id: AssetId,
+    index_diff: u64,
+    max_funding_rate: u32,
+    time_diff: u64,
+    synthetic_price: Price,
+) {
+    assert_with_byte_array(
+        condition: index_diff.into() <= synthetic_price.mul(rhs: max_funding_rate)
+            * time_diff.into()
+            / TWO_POW_32.into(),
+        err: invalid_funding_rate_err(:synthetic_id),
+    );
 }
+
 
 #[cfg(test)]
 mod tests {

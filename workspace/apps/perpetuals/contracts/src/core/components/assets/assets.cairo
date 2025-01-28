@@ -1,15 +1,14 @@
 #[starknet::component]
 pub(crate) mod AssetsComponent {
-    use contracts_commons::errors::{assert_with_byte_array, panic_with_felt};
+    use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
-        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, NOT_COLLATERAL, NOT_SYNTHETIC,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        invalid_funding_tick_err,
+        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, NOT_COLLATERAL,
+        NOT_SYNTHETIC, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -20,7 +19,7 @@ pub(crate) mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
-    use perpetuals::core::types::funding::{FundingIndex, FundingTick, funding_rate_calc};
+    use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::Price;
     use starknet::ContractAddress;
     use starknet::storage::{
@@ -178,10 +177,7 @@ pub(crate) mod AssetsComponent {
             let mut prev_synthetic_id: AssetId = Zero::zero();
             for funding_tick in funding_ticks {
                 let synthetic_id = *funding_tick.asset_id;
-                assert_with_byte_array(
-                    condition: synthetic_id > prev_synthetic_id,
-                    err: invalid_funding_tick_err(:synthetic_id),
-                );
+                assert(synthetic_id > prev_synthetic_id, FUNDING_TICKS_NOT_SORTED);
                 self._validate_synthetic_active(:synthetic_id);
                 self
                     ._process_funding_tick(
@@ -198,22 +194,18 @@ pub(crate) mod AssetsComponent {
             new_funding_index: FundingIndex,
             synthetic_id: AssetId,
         ) {
-            let synthetic_timely_data = self.synthetic_timely_data.entry(synthetic_id);
-            let index_diff: i64 = (synthetic_timely_data.funding_index.read() - new_funding_index)
-                .into();
+            let last_funding_index = self._get_funding_index(:synthetic_id);
+            let index_diff: i64 = (last_funding_index - new_funding_index).into();
             let last_funding_tick = self.last_funding_tick.read();
             let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
-            assert_with_byte_array(
-                condition: index_diff
-                    .abs()
-                    .into() <= funding_rate_calc(
-                        max_funding_rate: self.max_funding_rate.read(),
-                        :time_diff,
-                        synthetic_price: synthetic_timely_data.price.read(),
-                    ),
-                err: invalid_funding_tick_err(:synthetic_id),
+            validate_funding_rate(
+                :synthetic_id,
+                index_diff: index_diff.abs(),
+                max_funding_rate: self.max_funding_rate.read(),
+                :time_diff,
+                synthetic_price: self._get_synthetic_price(:synthetic_id),
             );
-            synthetic_timely_data.funding_index.write(new_funding_index);
+            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(new_funding_index);
             self
                 .emit(
                     events::FundingTick {
