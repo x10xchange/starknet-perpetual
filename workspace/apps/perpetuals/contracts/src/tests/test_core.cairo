@@ -82,7 +82,7 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
 
 fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
     let position = state.positions.entry(user.position_id);
-    position.owner_public_key.write(user.key_pair.public_key);
+    position.owner_public_key.write(user.get_public_key());
     state
         ._apply_funding_and_set_balance(
             position_id: user.position_id,
@@ -344,7 +344,7 @@ fn test_successful_withdraw() {
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: user.address,
     };
-    let signature = user.sign_message(withdraw_args.get_message_hash(user.key_pair.public_key));
+    let signature = user.sign_message(withdraw_args.get_message_hash(user.get_public_key()));
     let operator_nonce = state.nonce();
 
     let contract_state_balance = token_state.balance_of(test_address());
@@ -462,12 +462,7 @@ fn test_successful_trade() {
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
 
-    let mut user_b = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let mut user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
@@ -500,8 +495,8 @@ fn test_successful_trade() {
         salt: user_b.salt_counter,
     };
 
-    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
-    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
+    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.get_public_key()));
+    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.get_public_key()));
     let operator_nonce = state.nonce();
 
     // Test:
@@ -572,7 +567,7 @@ fn test_invalid_trade_non_positve_fee() {
         salt: user.salt_counter,
     };
 
-    let signature = user.sign_message(order.get_message_hash(user.key_pair.public_key));
+    let signature = user.sign_message(order.get_message_hash(user.get_public_key()));
     let operator_nonce = state.nonce();
 
     // Test:
@@ -603,12 +598,7 @@ fn test_invalid_trade_same_base_signs() {
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
 
-    let mut user_b = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let mut user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
@@ -642,8 +632,8 @@ fn test_invalid_trade_same_base_signs() {
         salt: user_b.salt_counter,
     };
 
-    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.key_pair.public_key));
-    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.key_pair.public_key));
+    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.get_public_key()));
+    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.get_public_key()));
     let operator_nonce = state.nonce();
 
     // Test:
@@ -670,12 +660,7 @@ fn test_successful_withdraw_request_with_public_key() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let recipient = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
     // Setup parameters:
     start_cheat_block_timestamp_global(
@@ -690,7 +675,7 @@ fn test_successful_withdraw_request_with_public_key() {
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: recipient.address,
     };
-    let msg_hash = withdraw_args.get_message_hash(public_key: user.key_pair.public_key);
+    let msg_hash = withdraw_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
 
     // Test:
@@ -718,12 +703,7 @@ fn test_successful_withdraw_request_with_owner() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
-    let recipient = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
     // Setup parameters:
     start_cheat_block_timestamp_global(
@@ -738,7 +718,7 @@ fn test_successful_withdraw_request_with_owner() {
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: recipient.address,
     };
-    let msg_hash = withdraw_args.get_message_hash(public_key: user.key_pair.public_key);
+    let msg_hash = withdraw_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
 
     // Test:
@@ -768,12 +748,7 @@ fn test_successful_liquidate() {
     let mut liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
 
-    let mut liquidated = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let mut liquidated = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: liquidated);
     add_synthetic(
         ref :state,
@@ -806,7 +781,7 @@ fn test_successful_liquidate() {
     };
 
     let liquidator_signature = liquidator
-        .sign_message(order_liquidator.get_message_hash(liquidator.key_pair.public_key));
+        .sign_message(order_liquidator.get_message_hash(liquidator.get_public_key()));
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -874,12 +849,7 @@ fn test_successful_transfer_request_using_public_key() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let mut recipient = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
@@ -893,7 +863,7 @@ fn test_successful_transfer_request_using_public_key() {
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
     };
-    let msg_hash = transfer_args.get_message_hash(public_key: user.key_pair.public_key);
+    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(msg_hash);
 
     // Test:
@@ -920,12 +890,7 @@ fn test_successful_transfer_request_with_owner() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
-    let mut recipient = User {
-        position_id: POSITION_ID_2,
-        address: POSITION_OWNER_2(),
-        key_pair: KEY_PAIR_2(),
-        ..Default::default(),
-    };
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
     // Setup parameters:
@@ -940,7 +905,7 @@ fn test_successful_transfer_request_with_owner() {
         expiration,
         collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
     };
-    let msg_hash = transfer_args.get_message_hash(public_key: user.key_pair.public_key);
+    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
 
     // Test:

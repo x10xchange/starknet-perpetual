@@ -2,7 +2,12 @@ use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::TimeDelta;
+use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
+use core::poseidon::PoseidonTrait;
+use openzeppelin::presets::interfaces::{
+    AccountUpgradeableABIDispatcher, AccountUpgradeableABIDispatcherTrait,
+};
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::core::Core;
@@ -36,8 +41,19 @@ pub struct CoreState {
 pub struct User {
     pub position_id: PositionId,
     pub address: ContractAddress,
-    pub key_pair: KeyPair<felt252, felt252>,
+    key_pair: KeyPair<felt252, felt252>,
     pub salt_counter: felt252,
+}
+
+pub fn get_accept_ownership_hash(
+    account_address: ContractAddress, current_public_key: felt252, new_key_pair: StarkKeyPair,
+) -> felt252 {
+    PoseidonTrait::new()
+        .update_with('StarkNet Message')
+        .update_with('accept_ownership')
+        .update_with(account_address)
+        .update_with(current_public_key)
+        .finalize()
 }
 
 #[generate_trait]
@@ -46,16 +62,30 @@ pub impl UserImpl of UserTrait {
         let (r, s) = self.key_pair.sign(message).unwrap();
         array![r, s].span()
     }
+    fn set_public_key(ref self: User, new_key_pair: KeyPair<felt252, felt252>) {
+        let msg_hash = get_accept_ownership_hash(
+            self.address, self.key_pair.public_key, new_key_pair,
+        );
+        let dispatcher = AccountUpgradeableABIDispatcher { contract_address: self.address };
+        cheat_caller_address_once(contract_address: self.address, caller_address: self.address);
+        dispatcher
+            .set_public_key(
+                new_public_key: KEY_PAIR_2().public_key, signature: self.sign_message(msg_hash),
+            );
+        self.key_pair = new_key_pair;
+    }
+    fn get_public_key(self: @User) -> felt252 {
+        *self.key_pair.public_key
+    }
+    fn new(position_id: PositionId, key_pair: KeyPair<felt252, felt252>) -> User {
+        User {
+            position_id, address: deploy_account(:key_pair), key_pair, salt_counter: Zero::zero(),
+        }
+    }
 }
-
 impl UserDefault of Default<User> {
     fn default() -> User {
-        User {
-            position_id: POSITION_ID_1,
-            address: deploy_account(key_pair: KEY_PAIR_1()),
-            key_pair: KEY_PAIR_1(),
-            salt_counter: Zero::zero(),
-        }
+        UserTrait::new(position_id: POSITION_ID_1, key_pair: KEY_PAIR_1())
     }
 }
 
