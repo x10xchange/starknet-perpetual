@@ -214,6 +214,14 @@ pub(crate) mod AssetsComponent {
                 );
         }
 
+
+        fn set_price(
+            ref self: ComponentState<TContractState>, asset_id: AssetId, new_price: Price,
+        ) {
+            let entry = self.synthetic_timely_data.entry(asset_id);
+            entry.price.write(new_price);
+        }
+
         fn _get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
             if self._is_collateral(:asset_id) {
                 self._get_collateral_price(collateral_id: asset_id)
