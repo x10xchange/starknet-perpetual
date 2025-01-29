@@ -71,6 +71,7 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
         .write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
     state.assets.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
     state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
+    state.assets.num_of_active_synthetic_assets.write(1);
 
     // Fund the contract.
     (*token_state)
@@ -320,6 +321,42 @@ fn test_add_synthetic_asset_existed_asset() {
             resolution: Zero::zero(),
         );
 }
+
+// Deactivate synthetic asset tests.
+
+#[test]
+fn test_successful_deactivate_synthetic_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    // Setup parameters:
+    let synthetic_id = cfg.synthetic_cfg.asset_id;
+    assert!(state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state.deactivate_synthetic(:synthetic_id);
+
+    // Check:
+    assert!(!state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
+}
+
+#[test]
+#[should_panic(expected: 'SYNTHETIC_NOT_EXISTS')]
+fn test_deactivate_unexisted_synthetic_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    // Setup parameters:
+    let synthetic_id = SYNTHETIC_ASSET_ID_2();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state.deactivate_synthetic(:synthetic_id);
+}
+
 
 #[test]
 fn test_successful_withdraw() {
