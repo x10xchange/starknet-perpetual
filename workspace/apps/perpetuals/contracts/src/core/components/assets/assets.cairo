@@ -4,6 +4,7 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::math::Abs;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::utils::SubFromStorage;
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
@@ -42,7 +43,7 @@ pub(crate) mod AssetsComponent {
         pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
         pub collateral_timely_data_head: Option<AssetId>,
         pub collateral_timely_data: Map<AssetId, CollateralTimelyData>,
-        num_of_active_synthetic_assets: usize,
+        pub num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
     }
@@ -168,6 +169,15 @@ pub(crate) mod AssetsComponent {
                     },
                 );
             self.synthetic_timely_data_head.write(Option::Some(asset_id));
+        }
+
+        fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
+            let mut config = self._get_synthetic_config(:synthetic_id);
+            self._validate_synthetic_active(:synthetic_id);
+            config.is_active = false;
+            self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
+
+            self.num_of_active_synthetic_assets.sub_and_write(1);
         }
 
         fn _execute_funding_tick(

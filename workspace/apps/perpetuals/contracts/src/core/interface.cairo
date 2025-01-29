@@ -126,6 +126,7 @@ pub trait ICore<TContractState> {
         quorum: u8,
         resolution: u64,
     );
+    fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn add_oracle_to_asset(ref self: TContractState);
     fn remove_oracle_from_asset(ref self: TContractState);
     fn update_asset_quorum(ref self: TContractState);

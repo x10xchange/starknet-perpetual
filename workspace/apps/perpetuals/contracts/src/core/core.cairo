@@ -874,6 +874,24 @@ pub mod Core {
             self.assets.add_synthetic_asset(:asset_id, :name, :risk_factor, :quorum, :resolution);
         }
 
+        /// - Deactivate synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the app governor can call this function.
+        /// - The asset is already exists and active.
+        ///
+        /// Execution:
+        /// - Deactivate synthetic_config.
+        ///     - Set the asset as active = false.
+        /// - remove asset from `synthetic_timely_data` map
+        fn deactivate_synthetic(ref self: ContractState, synthetic_id: AssetId) {
+            /// Validations:
+            self.roles.only_app_governor();
+
+            /// Execution:
+            self.assets.deactivate_synthetic(:synthetic_id);
+        }
+
         fn add_oracle_to_asset(ref self: ContractState) {}
         fn remove_oracle_from_asset(ref self: ContractState) {}
         fn update_asset_quorum(ref self: ContractState) {}
