@@ -201,19 +201,15 @@ pub mod Core {
         self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
         self.deposits.initialize();
         // Create fee positions.
-        self.positions.entry(FEE_POSITION).owner_account.write(fee_position_owner_account);
-        self.positions.entry(FEE_POSITION).owner_public_key.write(fee_position_owner_public_key);
+        let fee_position = self.positions.entry(FEE_POSITION);
+        fee_position.version.write(POSITION_VERSION);
+        fee_position.owner_account.write(fee_position_owner_account);
+        fee_position.owner_public_key.write(fee_position_owner_public_key);
 
-        self
-            .positions
-            .entry(INSURANCE_FUND_POSITION)
-            .owner_account
-            .write(insurance_fund_position_owner_account);
-        self
-            .positions
-            .entry(INSURANCE_FUND_POSITION)
-            .owner_public_key
-            .write(insurance_fund_position_owner_public_key);
+        let insurance_fund_position = self.positions.entry(INSURANCE_FUND_POSITION);
+        insurance_fund_position.version.write(POSITION_VERSION);
+        insurance_fund_position.owner_account.write(insurance_fund_position_owner_account);
+        insurance_fund_position.owner_public_key.write(insurance_fund_position_owner_public_key);
     }
 
     #[abi(embed_v0)]
@@ -230,9 +226,9 @@ pub mod Core {
             let mut position = self.positions.entry(position_id);
             assert(position.owner_public_key.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
-            self.positions.entry(position_id).version.write(POSITION_VERSION);
-            self.positions.entry(position_id).owner_public_key.write(owner_public_key);
-            self.positions.entry(position_id).owner_account.write(owner_account);
+            position.version.write(POSITION_VERSION);
+            position.owner_public_key.write(owner_public_key);
+            position.owner_account.write(owner_account);
             self
                 .emit(
                     events::NewPosition {
