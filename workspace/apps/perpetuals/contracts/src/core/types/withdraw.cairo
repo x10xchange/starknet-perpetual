@@ -1,3 +1,4 @@
+use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
@@ -36,11 +37,11 @@ pub struct WithdrawArgs {
 ///    \"value\":\"felt\"
 ///    )"
 /// );
-const WITHDRAW_ARGS_TYPE_HASH: felt252 =
+const WITHDRAW_ARGS_TYPE_HASH: HashType =
     0x3ba0a952228788e50a6e418238b46842e5d070e7f381191adc65bade6b91c99;
 
 impl StructHashImpl of StructHash<WithdrawArgs> {
-    fn hash_struct(self: @WithdrawArgs) -> felt252 {
+    fn hash_struct(self: @WithdrawArgs) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(WITHDRAW_ARGS_TYPE_HASH).update_with(*self).finalize()
     }

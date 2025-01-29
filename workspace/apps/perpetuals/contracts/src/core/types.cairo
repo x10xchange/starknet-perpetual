@@ -12,8 +12,6 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 
-pub type Signature = Span<felt252>;
-
 #[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct PositionId {
     pub value: u32,

@@ -1,4 +1,5 @@
 use contracts_commons::types::time::time::Timestamp;
+use contracts_commons::types::{HashType, PublicKey};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
@@ -8,7 +9,7 @@ use starknet::ContractAddress;
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct SetOwnerAccountArgs {
     pub position_id: PositionId,
-    pub public_key: felt252,
+    pub public_key: PublicKey,
     pub new_account_owner: ContractAddress,
     pub expiration: Timestamp,
 }
@@ -28,11 +29,11 @@ pub struct SetOwnerAccountArgs {
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const SET_POSITION_OWNER_ARGS_HASH: felt252 =
+const SET_POSITION_OWNER_ARGS_HASH: HashType =
     0x1015a2f2e38a330c931e7e8af30b630d21c0399752f94f9a2766534fe795c53;
 
 impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
-    fn hash_struct(self: @SetOwnerAccountArgs) -> felt252 {
+    fn hash_struct(self: @SetOwnerAccountArgs) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(SET_POSITION_OWNER_ARGS_HASH).update_with(*self).finalize()
     }

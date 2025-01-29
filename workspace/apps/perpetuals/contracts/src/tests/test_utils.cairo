@@ -2,6 +2,7 @@ use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::TimeDelta;
+use contracts_commons::types::{HashType, PublicKey, Signature};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -12,13 +13,12 @@ use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::core::Core;
 use perpetuals::core::interface::ICoreDispatcher;
+use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
-use perpetuals::core::types::{PositionId, Signature};
 use perpetuals::tests::constants::*;
-use snforge_std::signature::KeyPair;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
@@ -41,13 +41,13 @@ pub struct CoreState {
 pub struct User {
     pub position_id: PositionId,
     pub address: ContractAddress,
-    key_pair: KeyPair<felt252, felt252>,
+    key_pair: StarkKeyPair,
     pub salt_counter: felt252,
 }
 
 pub fn get_accept_ownership_hash(
-    account_address: ContractAddress, current_public_key: felt252, new_key_pair: StarkKeyPair,
-) -> felt252 {
+    account_address: ContractAddress, current_public_key: PublicKey, new_key_pair: StarkKeyPair,
+) -> HashType {
     PoseidonTrait::new()
         .update_with('StarkNet Message')
         .update_with('accept_ownership')
@@ -62,7 +62,7 @@ pub impl UserImpl of UserTrait {
         let (r, s) = self.key_pair.sign(message).unwrap();
         array![r, s].span()
     }
-    fn set_public_key(ref self: User, new_key_pair: KeyPair<felt252, felt252>) {
+    fn set_public_key(ref self: User, new_key_pair: StarkKeyPair) {
         let msg_hash = get_accept_ownership_hash(
             self.address, self.key_pair.public_key, new_key_pair,
         );
@@ -77,7 +77,7 @@ pub impl UserImpl of UserTrait {
     fn get_public_key(self: @User) -> felt252 {
         *self.key_pair.public_key
     }
-    fn new(position_id: PositionId, key_pair: KeyPair<felt252, felt252>) -> User {
+    fn new(position_id: PositionId, key_pair: StarkKeyPair) -> User {
         User {
             position_id, address: deploy_account(:key_pair), key_pair, salt_counter: Zero::zero(),
         }

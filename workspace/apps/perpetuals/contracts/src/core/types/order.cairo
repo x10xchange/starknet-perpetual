@@ -1,4 +1,5 @@
 use contracts_commons::math::have_same_sign;
+use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use contracts_commons::utils::validate_ratio;
 use core::hash::{HashStateExTrait, HashStateTrait};
@@ -85,10 +86,10 @@ pub impl OrderImpl of OrderTrait {
 ///    )
 /// );
 
-const ORDER_TYPE_HASH: felt252 = 0x2bac1bd11aeb68b0d97408f089a43e23b5704a15b881de50d5c5776ecfc5fe0;
+const ORDER_TYPE_HASH: HashType = 0x2bac1bd11aeb68b0d97408f089a43e23b5704a15b881de50d5c5776ecfc5fe0;
 
 impl StructHashImpl of StructHash<Order> {
-    fn hash_struct(self: @Order) -> felt252 {
+    fn hash_struct(self: @Order) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(ORDER_TYPE_HASH).update_with(*self).finalize()
     }

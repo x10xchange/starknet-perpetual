@@ -1,8 +1,9 @@
 use contracts_commons::types::time::time::Timestamp;
+use contracts_commons::types::{PublicKey, Signature};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
-use perpetuals::core::types::{AssetAmount, PositionId, Signature};
+use perpetuals::core::types::{AssetAmount, PositionId};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -12,7 +13,7 @@ pub trait ICore<TContractState> {
         ref self: TContractState,
         operator_nonce: u64,
         position_id: PositionId,
-        owner_public_key: felt252,
+        owner_public_key: PublicKey,
         owner_account: ContractAddress,
     );
     fn set_owner_account(
@@ -20,7 +21,7 @@ pub trait ICore<TContractState> {
         operator_nonce: u64,
         signature: Signature,
         position_id: PositionId,
-        public_key: felt252,
+        public_key: PublicKey,
         new_account_owner: ContractAddress,
         expiration: Timestamp,
     );
@@ -29,14 +30,14 @@ pub trait ICore<TContractState> {
         signature: Signature,
         position_id: PositionId,
         expiration: Timestamp,
-        new_public_key: felt252,
+        new_public_key: PublicKey,
     );
     fn set_public_key(
         ref self: TContractState,
         operator_nonce: u64,
         position_id: PositionId,
         expiration: Timestamp,
-        new_public_key: felt252,
+        new_public_key: PublicKey,
     );
     fn process_deposit(
         ref self: TContractState,

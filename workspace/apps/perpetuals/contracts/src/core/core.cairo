@@ -15,6 +15,7 @@ pub mod Core {
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::types::{HashType, PublicKey, Signature};
     use contracts_commons::utils::{AddToStorage, validate_expiration, validate_stark_signature};
     use core::num::traits::Zero;
     use core::starknet::storage::StoragePointerWriteAccess;
@@ -49,7 +50,7 @@ pub mod Core {
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
-        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId, Signature,
+        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId,
     };
     use perpetuals::core::value_risk_calculator::{PositionState, evaluate_position_change};
     use starknet::event::EventEmitter;
@@ -116,7 +117,7 @@ pub mod Core {
     pub struct Position {
         version: u8,
         pub owner_account: ContractAddress,
-        pub owner_public_key: felt252,
+        pub owner_public_key: PublicKey,
         pub collateral_assets_head: Option<AssetId>,
         pub collateral_assets: Map<AssetId, CollateralAsset>,
         pub synthetic_assets_head: Option<AssetId>,
@@ -126,7 +127,7 @@ pub mod Core {
     #[storage]
     struct Storage {
         // Message hash to fulfilled amount.
-        fulfillment: Map<felt252, i64>,
+        fulfillment: Map<HashType, i64>,
         pub positions: Map<PositionId, Position>,
         // --- Components ---
         #[substorage(v0)]
@@ -191,9 +192,9 @@ pub mod Core {
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
         fee_position_owner_account: ContractAddress,
-        fee_position_owner_public_key: felt252,
+        fee_position_owner_public_key: PublicKey,
         insurance_fund_position_owner_account: ContractAddress,
-        insurance_fund_position_owner_public_key: felt252,
+        insurance_fund_position_owner_public_key: PublicKey,
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.upgrade_delay.write(upgrade_delay);
@@ -221,7 +222,7 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             position_id: PositionId,
-            owner_public_key: felt252,
+            owner_public_key: PublicKey,
             owner_account: ContractAddress,
         ) {
             self.pausable.assert_not_paused();
@@ -256,7 +257,7 @@ pub mod Core {
             operator_nonce: u64,
             signature: Signature,
             position_id: PositionId,
-            public_key: felt252,
+            public_key: PublicKey,
             new_account_owner: ContractAddress,
             expiration: Timestamp,
         ) {
@@ -290,7 +291,7 @@ pub mod Core {
             signature: Signature,
             position_id: PositionId,
             expiration: Timestamp,
-            new_public_key: felt252,
+            new_public_key: PublicKey,
         ) {
             let position = self._get_position_const(:position_id);
             assert(position.owner_account.read().is_non_zero(), NO_OWNER_ACCOUNT);
@@ -327,7 +328,7 @@ pub mod Core {
             operator_nonce: u64,
             position_id: PositionId,
             expiration: Timestamp,
-            new_public_key: felt252,
+            new_public_key: PublicKey,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
@@ -1368,7 +1369,7 @@ pub mod Core {
         fn _update_fulfillment(
             ref self: ContractState,
             position_id: PositionId,
-            hash: felt252,
+            hash: HashType,
             order_amount: i64,
             actual_amount: i64,
         ) {
@@ -1380,7 +1381,6 @@ pub mod Core {
             );
             fulfillment_entry.write(final_amount);
         }
-
 
         fn _update_collateral_in_position(
             ref self: ContractState,

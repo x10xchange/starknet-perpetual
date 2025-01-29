@@ -1,6 +1,7 @@
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::time::{Time, TimeDelta};
 use core::num::traits::Zero;
+use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::collateral::{
     CollateralTimelyData, VERSION as COLLATERAL_VERSION,
@@ -10,7 +11,6 @@ use perpetuals::core::types::asset::synthetic::{
 };
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
-use snforge_std::signature::KeyPair;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::{ContractAddress, contract_address_const};
 
@@ -18,10 +18,10 @@ use starknet::{ContractAddress, contract_address_const};
 pub fn OPERATOR_PUBLIC_KEY() -> felt252 {
     StarkCurveKeyPairImpl::from_secret_key('OPERATOR_PRIVATE_KEY').public_key
 }
-pub fn KEY_PAIR_1() -> KeyPair<felt252, felt252> {
+pub fn KEY_PAIR_1() -> StarkKeyPair {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_1')
 }
-pub fn KEY_PAIR_2() -> KeyPair<felt252, felt252> {
+pub fn KEY_PAIR_2() -> StarkKeyPair {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_2')
 }
 pub fn COLLATERAL_OWNER() -> ContractAddress nopanic {

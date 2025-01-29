@@ -1,3 +1,4 @@
+use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
@@ -36,11 +37,11 @@ pub struct TransferArgs {
 ///    \"value\":\"felt\"
 ///    )"
 /// );
-const TRANSFER_ARGS_TYPE_HASH: felt252 =
+const TRANSFER_ARGS_TYPE_HASH: HashType =
     0x345882384b2e2bd0da2a9aadd9cc9ef9c27c975d7d6d499eb9c0667d0452ed8;
 
 impl StructHashImpl of StructHash<TransferArgs> {
-    fn hash_struct(self: @TransferArgs) -> felt252 {
+    fn hash_struct(self: @TransferArgs) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(TRANSFER_ARGS_TYPE_HASH).update_with(*self).finalize()
     }
