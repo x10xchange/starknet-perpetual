@@ -106,7 +106,14 @@ pub trait ICore<TContractState> {
         actual_liquidator_fee: i64,
         fee: AssetAmount,
     );
-    fn deleverage(ref self: TContractState);
+    fn deleverage(
+        ref self: TContractState,
+        operator_nonce: u64,
+        delevereged_position: PositionId,
+        deleverager_position: PositionId,
+        delevereged_base_asset: AssetAmount,
+        delevereged_quote_asset: AssetAmount,
+    );
     // Asset Flows
     fn register_collateral(
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,

@@ -27,12 +27,12 @@ pub mod Core {
     use perpetuals::core::errors::{
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
         INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_POSITIVE_AMOUNT, INVALID_POSITION, INVALID_PUBLIC_KEY,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
-        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
-        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED,
-        SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        order_expired_err, position_not_healthy_nor_healthier,
+        INVALID_NON_POSITIVE_AMOUNT, INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION,
+        INVALID_PUBLIC_KEY, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
+        POSITION_HAS_OWNER_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, order_expired_err, position_not_healthy_nor_healthier,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -788,7 +788,25 @@ pub mod Core {
                 );
         }
 
-        fn deleverage(ref self: ContractState) {}
+        fn deleverage(
+            ref self: ContractState,
+            operator_nonce: u64,
+            delevereged_position: PositionId,
+            deleverager_position: PositionId,
+            delevereged_base_asset: AssetAmount,
+            delevereged_quote_asset: AssetAmount,
+        ) {
+            /// Validations:
+            self._validate_operator_flow(:operator_nonce);
+
+            self
+                ._validate_deleverage(
+                    :delevereged_position,
+                    :deleverager_position,
+                    :delevereged_base_asset,
+                    :delevereged_quote_asset,
+                )
+        }
 
         /// Add collateral asset is called by the operator to add a new collateral asset.
         /// We only have one collateral asset.
@@ -1532,6 +1550,35 @@ pub mod Core {
             assert(
                 !have_same_sign(a: order_a.quote.amount, b: order_b.quote.amount),
                 INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+            );
+        }
+
+        fn _validate_deleverage(
+            ref self: ContractState,
+            delevereged_position: PositionId,
+            deleverager_position: PositionId,
+            delevereged_base_asset: AssetAmount,
+            delevereged_quote_asset: AssetAmount,
+        ) {
+            let base_amount = delevereged_base_asset.amount;
+            let quote_amount = delevereged_quote_asset.amount;
+
+            // Non-zero amount check.
+            assert(base_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(quote_amount != 0, INVALID_ZERO_AMOUNT);
+
+            // Assets check.
+            self
+                .assets
+                ._validate_collateral_active(collateral_id: delevereged_quote_asset.asset_id);
+            assert(
+                self.assets._is_synthetic(asset_id: delevereged_base_asset.asset_id),
+                INVALID_NON_SYNTHETIC_ASSET,
+            );
+
+            // Sign Validation for amounts.
+            assert(
+                !have_same_sign(a: base_amount, b: quote_amount), INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
         }
 
