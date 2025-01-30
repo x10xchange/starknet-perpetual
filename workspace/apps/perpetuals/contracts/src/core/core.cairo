@@ -26,14 +26,15 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
-        INSUFFICIENT_FUNDS, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_POSITIVE_AMOUNT, INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION,
-        INVALID_PUBLIC_KEY, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
-        INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
-        POSITION_HAS_OWNER_ACCOUNT, POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err, position_not_healthy_nor_healthier,
+        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
+        DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
+        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
+        INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
+        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err, position_not_healthy_nor_healthier,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -57,7 +58,7 @@ pub mod Core {
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: NonceComponent, storage: nonce, event: NonceEvent);
@@ -298,7 +299,9 @@ pub mod Core {
             new_public_key: PublicKey,
         ) {
             let position = self._get_position_const(:position_id);
-            assert(position.owner_account.read().is_non_zero(), NO_OWNER_ACCOUNT);
+            assert(
+                position.owner_account.read() == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT,
+            );
             let hash = self
                 .request_approvals
                 .register_approval(

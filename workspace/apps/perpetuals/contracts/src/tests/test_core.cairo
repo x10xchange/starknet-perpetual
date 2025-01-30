@@ -19,6 +19,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::Price;
+use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId};
@@ -963,6 +964,40 @@ fn test_successful_transfer_request_with_owner() {
     assert_eq!(status, RequestStatus::PENDING);
 }
 
+#[test]
+fn test_successful_set_public_key_request() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+
+    user.set_public_key(KEY_PAIR_2());
+    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+
+    // Test change public key in perps:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    let mut set_public_key_args = SetPublicKeyArgs {
+        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+    };
+    let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(message: msg_hash);
+    state
+        .set_public_key_request(
+            :signature,
+            position_id: set_public_key_args.position_id,
+            expiration: set_public_key_args.expiration,
+            new_public_key: set_public_key_args.new_public_key,
+        );
+
+    // Check:
+    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    assert_eq!(status, RequestStatus::PENDING);
+}
 
 #[test]
 fn test_successful_transfer() {

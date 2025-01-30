@@ -1,8 +1,8 @@
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
+use contracts_commons::types::Signature;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::TimeDelta;
-use contracts_commons::types::{HashType, PublicKey, Signature};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -45,15 +45,17 @@ pub struct User {
     pub salt_counter: felt252,
 }
 
-pub fn get_accept_ownership_hash(
-    account_address: ContractAddress, current_public_key: PublicKey, new_key_pair: StarkKeyPair,
-) -> HashType {
-    PoseidonTrait::new()
+pub fn get_accept_ownership_signature(
+    account_address: ContractAddress, current_public_key: felt252, new_key_pair: StarkKeyPair,
+) -> Signature {
+    let msg_hash = PoseidonTrait::new()
         .update_with('StarkNet Message')
         .update_with('accept_ownership')
         .update_with(account_address)
         .update_with(current_public_key)
-        .finalize()
+        .finalize();
+    let (sig_r, sig_s) = new_key_pair.sign(msg_hash).unwrap();
+    array![sig_r, sig_s].span()
 }
 
 #[generate_trait]
@@ -63,15 +65,12 @@ pub impl UserImpl of UserTrait {
         array![r, s].span()
     }
     fn set_public_key(ref self: User, new_key_pair: StarkKeyPair) {
-        let msg_hash = get_accept_ownership_hash(
+        let signature = get_accept_ownership_signature(
             self.address, self.key_pair.public_key, new_key_pair,
         );
         let dispatcher = AccountUpgradeableABIDispatcher { contract_address: self.address };
         cheat_caller_address_once(contract_address: self.address, caller_address: self.address);
-        dispatcher
-            .set_public_key(
-                new_public_key: KEY_PAIR_2().public_key, signature: self.sign_message(msg_hash),
-            );
+        dispatcher.set_public_key(new_public_key: new_key_pair.public_key, :signature);
         self.key_pair = new_key_pair;
     }
     fn get_public_key(self: @User) -> felt252 {
