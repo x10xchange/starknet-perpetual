@@ -2,15 +2,16 @@
 pub(crate) mod AssetsComponent {
     use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
+    use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use contracts_commons::types::{PublicKey};
     use contracts_commons::utils::{AddToStorage, SubFromStorage};
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
-        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, NOT_COLLATERAL,
-        NOT_SYNTHETIC, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_ZERO_QUORUM,
+        NOT_COLLATERAL, NOT_SYNTHETIC, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -22,7 +23,7 @@ pub(crate) mod AssetsComponent {
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::{Price, PriceTick, TWO_POW_28};
+    use perpetuals::core::types::price::{Price, PriceTick};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -141,7 +142,7 @@ pub(crate) mod AssetsComponent {
             resolution: u64,
         ) {
             assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
-
+            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             self
                 .synthetic_config
                 .entry(asset_id)

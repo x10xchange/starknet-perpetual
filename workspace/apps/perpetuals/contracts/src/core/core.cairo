@@ -856,6 +856,7 @@ pub mod Core {
         /// - Only the app_governor can call this function.
         /// - The asset is not already exists.
         /// - The risk factor is less or equal to 100.
+        /// - The quorum is greater than 0.
         ///
         /// Execution:
         /// - Add new entry to synthetic_config.
