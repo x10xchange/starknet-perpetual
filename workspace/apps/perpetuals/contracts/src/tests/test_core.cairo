@@ -961,3 +961,63 @@ fn test_successful_transfer_request_with_owner() {
     assert_eq!(status, RequestStatus::PENDING);
 }
 
+
+#[test]
+fn test_successful_transfer() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let mut sender = Default::default();
+    init_position(cfg: @cfg, ref :state, user: sender);
+
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position(cfg: @cfg, ref :state, user: recipient);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+    let collateral_id = cfg.collateral_cfg.asset_id;
+    let operator_nonce = state.nonce();
+    let collateral = AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT };
+
+    let transfer_args = TransferArgs {
+        position_id: sender.position_id,
+        recipient: recipient.position_id,
+        salt: sender.salt_counter,
+        expiration: expiration,
+        collateral: collateral,
+    };
+
+    let sender_signature = sender
+        .sign_message(transfer_args.get_message_hash(sender.get_public_key()));
+    // Test:
+    state
+        .transfer_request(
+            signature: sender_signature,
+            position_id: transfer_args.position_id,
+            recipient: transfer_args.recipient,
+            salt: transfer_args.salt,
+            expiration: transfer_args.expiration,
+            collateral: transfer_args.collateral,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .transfer(
+            :operator_nonce,
+            position_id: transfer_args.position_id,
+            recipient: transfer_args.recipient,
+            salt: transfer_args.salt,
+            expiration: transfer_args.expiration,
+            collateral: transfer_args.collateral,
+        );
+
+    // Check:
+    let sender_collateral_balance = state
+        ._get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
+    assert_eq!(sender_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - TRANSFER_AMOUNT).into());
+
+    let recipient_collateral_balance = state
+        ._get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
+    assert_eq!(recipient_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + TRANSFER_AMOUNT).into());
+}
