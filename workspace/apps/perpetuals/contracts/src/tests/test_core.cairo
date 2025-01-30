@@ -370,7 +370,7 @@ fn test_successful_withdraw() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
+    let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
     // Setup parameters:
