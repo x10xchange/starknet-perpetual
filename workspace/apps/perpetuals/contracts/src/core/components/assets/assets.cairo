@@ -5,7 +5,7 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use contracts_commons::types::{PublicKey};
-    use contracts_commons::utils::SubFromStorage;
+    use contracts_commons::utils::{AddToStorage, SubFromStorage};
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
@@ -22,7 +22,7 @@ pub(crate) mod AssetsComponent {
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::Price;
+    use perpetuals::core::types::price::{Price, PriceTick, TWO_POW_28};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -230,12 +230,31 @@ pub(crate) mod AssetsComponent {
         }
 
 
-        fn set_price(
-            ref self: ComponentState<TContractState>, asset_id: AssetId, new_price: Price,
-        ) {
-            let entry = self.synthetic_timely_data.entry(asset_id);
-            entry.price.write(new_price);
+        fn set_price(ref self: ComponentState<TContractState>, asset_id: AssetId, price: Price) {
+            let now = Time::now();
+            let synthetic_timely_data = self.synthetic_timely_data.entry(asset_id);
+            synthetic_timely_data.price.write(price);
+            synthetic_timely_data.last_price_update.write(now);
+
+            let synthetic_config = self._get_synthetic_config(asset_id);
+            // If the asset is not active, it'll be activated.
+            if !synthetic_config.is_active {
+                // Activates the synthetic asset.
+                self.num_of_active_synthetic_assets.add_and_write(1);
+                self
+                    .synthetic_config
+                    .entry(asset_id)
+                    .write(Option::Some(SyntheticConfig { is_active: true, ..synthetic_config }));
+            }
         }
+
+        /// TODO : Impl
+        fn _validate_price_ticks(
+            self: @ComponentState<TContractState>,
+            asset_id: AssetId,
+            price: Price,
+            price_ticks: Span<PriceTick>,
+        ) {}
 
         fn _get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
             if self._is_collateral(:asset_id) {

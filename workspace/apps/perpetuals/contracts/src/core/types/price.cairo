@@ -1,3 +1,4 @@
+use contracts_commons::types::{PublicKey, Signature};
 use core::num::traits::{One, Zero};
 use perpetuals::core::types::balance::Balance;
 
@@ -30,6 +31,14 @@ pub fn validate_median_price(price_list: Span<Price>, target_price: Price) {
     };
     assert(2 * (lower_amount + equal_amount) >= price_list.len(), 'TARGET_PRICE_IS_NOT_MEDIAN');
     assert(2 * (higher_amount + equal_amount) >= price_list.len(), 'TARGET_PRICE_IS_NOT_MEDIAN');
+}
+
+#[derive(Copy, Debug, Drop, Serde)]
+pub struct PriceTick {
+    pub signature: Signature,
+    pub signer_public_key: PublicKey,
+    pub timestamp: u32,
+    pub price: u128,
 }
 
 fn mul<
