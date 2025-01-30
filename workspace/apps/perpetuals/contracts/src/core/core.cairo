@@ -902,7 +902,24 @@ pub mod Core {
         }
 
         fn add_oracle_to_asset(ref self: ContractState) {}
-        fn remove_oracle_from_asset(ref self: ContractState) {}
+
+        /// Remove oracle from a synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the app governor can call this function.
+        ///
+        /// Execution:
+        /// - Remove the oracle from the asset.
+        fn remove_oracle_from_asset(
+            ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
+        ) {
+            //  Validate the caller is the app governor.
+            self.roles.only_app_governor();
+
+            // Execution:
+            self.assets.oracels.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
+        }
+
         fn update_asset_quorum(ref self: ContractState) {}
 
 

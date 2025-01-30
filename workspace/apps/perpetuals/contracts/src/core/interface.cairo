@@ -129,7 +129,9 @@ pub trait ICore<TContractState> {
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn add_oracle_to_asset(ref self: TContractState);
-    fn remove_oracle_from_asset(ref self: TContractState);
+    fn remove_oracle_from_asset(
+        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
+    );
     fn update_asset_quorum(ref self: TContractState);
     // Ticks
     fn funding_tick(
