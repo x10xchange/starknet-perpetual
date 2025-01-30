@@ -46,6 +46,7 @@ fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::Co
             max_price_interval: *cfg.max_price_interval,
             max_funding_interval: *cfg.max_funding_interval,
             max_funding_rate: *cfg.max_funding_rate,
+            max_oracle_price_validity: *cfg.max_oracle_price_validity,
         );
     // Collateral asset configs.
     let (collateral_config, collateral_timely_data) = generate_collateral(
@@ -123,6 +124,7 @@ fn initialized_contract_state() -> Core::ContractState {
         max_price_interval: MAX_PRICE_INTERVAL,
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
+        max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
         fee_position_owner_account: OPERATOR(),
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
         insurance_fund_position_owner_account: OPERATOR(),

@@ -4,6 +4,7 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::math::Abs;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+    use contracts_commons::types::{PublicKey};
     use contracts_commons::utils::SubFromStorage;
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
@@ -46,6 +47,8 @@ pub(crate) mod AssetsComponent {
         pub num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        pub oracels: Map<AssetId, Map<PublicKey, felt252>>,
+        max_oracle_price_validity: TimeDelta,
     }
 
     #[event]
@@ -79,10 +82,12 @@ pub(crate) mod AssetsComponent {
             max_price_interval: TimeDelta,
             max_funding_interval: TimeDelta,
             max_funding_rate: u32,
+            max_oracle_price_validity: TimeDelta,
         ) {
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
+            self.max_oracle_price_validity.write(max_oracle_price_validity);
         }
 
 

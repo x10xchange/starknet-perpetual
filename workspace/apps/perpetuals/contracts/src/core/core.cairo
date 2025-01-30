@@ -191,6 +191,7 @@ pub mod Core {
         max_price_interval: TimeDelta,
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
+        max_oracle_price_validity: TimeDelta,
         fee_position_owner_account: ContractAddress,
         fee_position_owner_public_key: PublicKey,
         insurance_fund_position_owner_account: ContractAddress,
@@ -198,7 +199,14 @@ pub mod Core {
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.upgrade_delay.write(upgrade_delay);
-        self.assets.initialize(:max_price_interval, :max_funding_interval, :max_funding_rate);
+        self
+            .assets
+            .initialize(
+                :max_price_interval,
+                :max_funding_interval,
+                :max_funding_rate,
+                :max_oracle_price_validity,
+            );
         self.deposits.initialize();
         // Create fee positions.
         let fee_position = self.positions.entry(FEE_POSITION);

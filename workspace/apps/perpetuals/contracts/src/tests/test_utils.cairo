@@ -98,6 +98,7 @@ pub(crate) struct PerpetualsInitConfig {
     pub max_funding_interval: TimeDelta,
     pub max_price_interval: TimeDelta,
     pub max_funding_rate: u32,
+    pub max_oracle_price_validity: TimeDelta,
     pub collateral_cfg: CollateralCfg,
     pub synthetic_cfg: SyntheticCfg,
 }
@@ -128,6 +129,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             max_funding_interval: MAX_FUNDING_INTERVAL,
             max_price_interval: MAX_PRICE_INTERVAL,
             max_funding_rate: MAX_FUNDING_RATE,
+            max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
             collateral_cfg: CollateralCfg {
                 token_cfg: TokenConfig {
                     name: COLLATERAL_NAME(),

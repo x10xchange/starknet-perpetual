@@ -1,3 +1,4 @@
+use contracts_commons::constants::{DAY, MINUTE};
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::time::{Time, TimeDelta};
 use core::num::traits::Zero;
@@ -84,9 +85,11 @@ pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
 
 pub const UPGRADE_DELAY: u64 = 5_u64;
 /// 1 day in seconds.
-pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
+pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 /// 1 day in seconds.
-pub const MAX_FUNDING_INTERVAL: TimeDelta = TimeDelta { seconds: 86400 };
+pub const MAX_FUNDING_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
+/// 10 minutes in seconds.
+pub const MAX_ORACLE_PRICE_VALIDITY: TimeDelta = TimeDelta { seconds: 10 * MINUTE };
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1;

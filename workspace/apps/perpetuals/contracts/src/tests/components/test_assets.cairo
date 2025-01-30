@@ -29,6 +29,7 @@ fn setup_state(
             max_price_interval: *cfg.max_price_interval,
             max_funding_interval: *cfg.max_funding_interval,
             max_funding_rate: *cfg.max_funding_rate,
+            max_oracle_price_validity: *cfg.max_oracle_price_validity,
         );
     add_colateral(ref :state, :cfg, :token_state);
     // Synthetic asset configs.
