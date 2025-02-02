@@ -28,6 +28,16 @@ pub impl BalanceSubAssign of core::ops::SubAssign<Balance, Balance> {
     }
 }
 
+pub impl U128TryIntoBalance of TryInto<u128, Balance> {
+    fn try_into(self: u128) -> Option<Balance> {
+        if let Option::Some(value) = self.try_into() {
+            Option::Some(Balance { value })
+        } else {
+            Option::None
+        }
+    }
+}
+
 pub impl I64IntoBalance of Into<i64, Balance> {
     fn into(self: i64) -> Balance {
         Balance { value: self }

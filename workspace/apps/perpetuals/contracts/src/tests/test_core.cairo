@@ -1,6 +1,6 @@
 use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::deposit::Deposit::InternalTrait;
-use contracts_commons::components::deposit::interface::IDeposit;
+use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit};
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
@@ -432,7 +432,7 @@ fn test_successful_deposit() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: (DEPOSIT_AMOUNT.abs() * cfg.collateral_cfg.quantum).into(),
+            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
         );
 
     // Setup parameters:
@@ -450,7 +450,7 @@ fn test_successful_deposit() {
     state
         .deposit(
             asset_id: cfg.collateral_cfg.asset_id.into(),
-            quantized_amount: (DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.try_into().unwrap()),
+            quantized_amount: DEPOSIT_AMOUNT,
             beneficiary: user.position_id.value,
             salt: user.salt_counter,
         );
@@ -459,16 +459,12 @@ fn test_successful_deposit() {
     let user_balance_after_deposit = token_state.balance_of(user.address);
     assert_eq!(
         user_balance_after_deposit,
-        (USER_INIT_BALANCE - DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM)
-            .try_into()
-            .unwrap(),
+        (USER_INIT_BALANCE - DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into()).into(),
     );
     let contract_state_balance_after_deposit = token_state.balance_of(test_address());
     assert_eq!(
         contract_state_balance_after_deposit,
-        (CONTRACT_INIT_BALANCE + DEPOSIT_AMOUNT.try_into().unwrap() * COLLATERAL_QUANTUM)
-            .try_into()
-            .unwrap(),
+        (CONTRACT_INIT_BALANCE + DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into()).into(),
     );
     let status = state
         .deposits
@@ -479,14 +475,17 @@ fn test_successful_deposit() {
                 .deposit_hash(
                     signer: user.address,
                     asset_id: cfg.collateral_cfg.asset_id.into(),
-                    quantized_amount: (DEPOSIT_AMOUNT
-                        * cfg.collateral_cfg.quantum.try_into().unwrap()),
+                    quantized_amount: DEPOSIT_AMOUNT,
                     beneficiary: user.position_id.value,
                     salt: user.salt_counter,
                 ),
         )
         .read();
-    assert_eq!(status.try_into().unwrap(), expected_time);
+    if let DepositStatus::PENDING(timestamp) = status {
+        assert_eq!(timestamp, expected_time);
+    } else {
+        panic!("Deposit not found");
+    }
 }
 
 // Trade tests.

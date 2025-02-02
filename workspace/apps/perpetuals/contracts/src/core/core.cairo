@@ -39,8 +39,6 @@ pub mod Core {
         TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
         position_not_healthy_nor_healthier,
     };
-
-
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::collateral::{
@@ -391,11 +389,11 @@ pub mod Core {
             operator_nonce: u64,
             depositor: ContractAddress,
             collateral_id: AssetId,
-            amount: i64,
+            amount: u128,
             position_id: PositionId,
             salt: felt252,
         ) {
-            self._validate_deposit(:operator_nonce, :position_id, :collateral_id, :amount);
+            self._validate_deposit(:operator_nonce, :position_id, :collateral_id);
             self
                 .deposits
                 .process_deposit(
@@ -407,7 +405,9 @@ pub mod Core {
                 );
             self
                 .apply_funding_and_update_balance(
-                    :position_id, asset_id: collateral_id, diff: amount.into(),
+                    :position_id,
+                    asset_id: collateral_id,
+                    diff: amount.try_into().expect(AMOUNT_TOO_LARGE),
                 );
         }
 
@@ -477,16 +477,19 @@ pub mod Core {
             let token_contract = IERC20Dispatcher {
                 contract_address: collateral_cfg.token_address,
             };
-            token_contract
-                .transfer(
-                    :recipient, amount: (collateral_cfg.quantum * collateral.amount.abs()).into(),
-                );
-
             /// Validation - Not withdrawing from pending deposits:
-            let pending_deposits = self.deposits.pending_deposits.read(collateral_id.into());
-            let onchain_pending_deposits = (pending_deposits.abs() * collateral_cfg.quantum).into();
+            let pending_unquantized_amount = self
+                .deposits
+                .aggregate_pending_deposit
+                .read(collateral_id.into());
             let erc20_balance = token_contract.balance_of(get_contract_address());
-            assert(erc20_balance >= onchain_pending_deposits, INSUFFICIENT_FUNDS);
+            let withdraw_unquantized_amount = collateral_cfg.quantum * collateral.amount.abs();
+            assert(
+                erc20_balance >= withdraw_unquantized_amount.into()
+                    + pending_unquantized_amount.into(),
+                INSUFFICIENT_FUNDS,
+            );
+            token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             /// Validations - Fundamentals:
             let before = self._get_provisional_main_collateral_balance(:position_id);
@@ -1509,11 +1512,9 @@ pub mod Core {
             operator_nonce: u64,
             position_id: PositionId,
             collateral_id: AssetId,
-            amount: i64,
         ) {
             self._validate_position_exists(:position_id);
             self._validate_operator_flow(:operator_nonce);
-            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
             self.assets._validate_collateral_active(:collateral_id);
         }
 

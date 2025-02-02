@@ -44,7 +44,7 @@ pub trait ICore<TContractState> {
         operator_nonce: u64,
         depositor: ContractAddress,
         collateral_id: AssetId,
-        amount: i64,
+        amount: u128,
         position_id: PositionId,
         salt: felt252,
     );
