@@ -1,5 +1,6 @@
+use contracts_commons::constants::TEN_POW_12;
 use contracts_commons::types::{PublicKey, Signature};
-use core::num::traits::{One, Zero};
+use core::num::traits::{One, WideMul, Zero};
 use perpetuals::core::types::balance::Balance;
 
 // 2^28
@@ -83,6 +84,22 @@ pub impl PriceImp of PriceTrait {
 
     fn value(self: @Price) -> u64 {
         *self.value
+    }
+
+    fn convert(self: u128, resolution: u64) -> Price {
+        let mut converted_price = self.wide_mul(TWO_POW_28.into());
+        converted_price /= resolution.into();
+        converted_price /= TEN_POW_12.into();
+        converted_price.into()
+    }
+}
+
+
+impl U256IntoPrice of Into<u256, Price> {
+    fn into(self: u256) -> Price {
+        let value = self.try_into().expect('Value must be < 2^56');
+        assert(value < LIMIT, 'Value must be < 2^56');
+        Price { value }
     }
 }
 

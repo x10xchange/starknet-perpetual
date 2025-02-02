@@ -49,6 +49,7 @@ pub mod Core {
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait, FundingTick};
     use perpetuals::core::types::order::{Order, OrderTrait};
+    use perpetuals::core::types::price::{PriceTrait, SignedPrice};
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::transfer::TransferArgs;
@@ -984,7 +985,34 @@ pub mod Core {
             self.assets._execute_funding_tick(:funding_ticks);
         }
 
-        fn price_tick(ref self: ContractState) {}
+        /// Price tick for an asset to update the price of the asset.
+        ///
+        /// Validations:
+        /// - Contract is not paused
+        /// - Only the operator can call this function.
+        /// - Operator nonce is valid.
+        /// - Prices array is sorted according to the signer public key.
+        /// - The price is the median of the prices.
+        /// - The signeture is valid.
+        /// - The timestamp is valid(less than the max oracle price validity).
+        ///
+        /// Execution:
+        /// - Update the asset price.
+        ///     The updated price is: (price * 2^28)/ (resolution_factor * 10^12).
+        fn price_tick(
+            ref self: ContractState,
+            operator_nonce: u64,
+            asset_id: AssetId,
+            price: u128,
+            signed_prices: Span<SignedPrice>,
+        ) {
+            self.pausable.assert_not_paused();
+            self._consume_operator_nonce(:operator_nonce);
+            self.assets._validate_price_tick(:asset_id, :price, :signed_prices);
+            let synthetic_config = self.assets._get_synthetic_config(asset_id);
+            let converted_price = price.convert(resolution: synthetic_config.resolution);
+            self.assets.set_price(:asset_id, price: converted_price);
+        }
     }
 
     #[generate_trait]
