@@ -1,17 +1,19 @@
 #[starknet::component]
 pub(crate) mod AssetsComponent {
+    use contracts_commons::constants::TWO_POW_32;
     use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
+    use contracts_commons::span_utils::{validate_median, validate_range};
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-    use contracts_commons::utils::{AddToStorage, SubFromStorage};
+    use contracts_commons::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
     use core::num::traits::{One, Zero};
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
         COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_ZERO_QUORUM,
-        NOT_COLLATERAL, NOT_SYNTHETIC, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS,
+        NOT_COLLATERAL, NOT_SYNTHETIC, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -23,7 +25,7 @@ pub(crate) mod AssetsComponent {
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::{Price, PriceTick};
+    use perpetuals::core::types::price::{Price, SignedPrice};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -249,13 +251,67 @@ pub(crate) mod AssetsComponent {
             }
         }
 
-        /// TODO : Impl
-        fn _validate_price_ticks(
+        /// Validates a price tick.
+        /// - The signed prices must be sorted by the public key.
+        /// - The signed prices are signed by the oracles.
+        /// - The number of signed prices (i.e. signing oracles) must not be smaller than the
+        /// quorum.
+        /// - The signed price time must not be in the future, and must not lag more than
+        /// `max_oracle_price_validity`.
+        /// - The `price` is the median of the signed_prices.
+        fn _validate_price_tick(
             self: @ComponentState<TContractState>,
             asset_id: AssetId,
-            price: Price,
-            price_ticks: Span<PriceTick>,
-        ) {}
+            price: u128,
+            signed_prices: Span<SignedPrice>,
+        ) {
+            let asset_config = self._get_synthetic_config(asset_id);
+            assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
+
+            let mut prices: Array<u128> = array![];
+            let mut timestamps: Array<u64> = array![];
+
+            let mut previous_public_key_opt: Option<PublicKey> = Option::None;
+            for signed_price in signed_prices {
+                prices.append(*signed_price.price);
+                timestamps.append((*signed_price).timestamp.into());
+                self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
+
+                if let Option::Some(previous_public_key) = previous_public_key_opt {
+                    let prev: u256 = previous_public_key.into();
+                    let current: u256 = (*signed_price.signer_public_key).into();
+                    assert(prev < current, SIGNED_PRICES_UNSORTED);
+                }
+                previous_public_key_opt = Option::Some((*signed_price.signer_public_key));
+            };
+
+            validate_median(median: price, span: prices.span());
+            let now: u64 = Time::now().into();
+            let max_oracle_price_validity = self.max_oracle_price_validity.read();
+            // TODO: change validate_range to bool and check error here with informative error
+            // message
+            validate_range(
+                from: now - max_oracle_price_validity.into(), to: now, span: timestamps.span(),
+            );
+        }
+
+        fn _validate_oracle_signature(
+            self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
+        ) {
+            let packed_asset_oracle = self
+                .oracels
+                .entry(asset_id)
+                .read(signed_price.signer_public_key);
+            let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
+                + signed_price.timestamp.into();
+
+            let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
+            validate_stark_signature(
+                public_key: signed_price.signer_public_key,
+                :msg_hash,
+                signature: signed_price.signature,
+            );
+        }
 
         fn _get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
             if self._is_collateral(:asset_id) {

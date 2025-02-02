@@ -17,7 +17,7 @@ pub struct Price {
 
 
 #[derive(Copy, Debug, Drop, Serde)]
-pub struct PriceTick {
+pub struct SignedPrice {
     pub signature: Signature,
     pub signer_public_key: PublicKey,
     pub timestamp: u32,
