@@ -3,7 +3,7 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
     use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
-    use contracts_commons::span_utils::{validate_median, validate_range};
+    use contracts_commons::span_utils::{check_range, validate_median};
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
@@ -13,9 +13,9 @@ pub(crate) mod AssetsComponent {
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
-        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE,
-        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        INVALID_PRICE_TIMESTAMP, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
+        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -324,10 +324,11 @@ pub(crate) mod AssetsComponent {
             validate_median(median: price, span: prices.span());
             let now: u64 = Time::now().into();
             let max_oracle_price_validity = self.max_oracle_price_validity.read();
-            // TODO: change validate_range to bool and check error here with informative error
-            // message
-            validate_range(
-                from: now - max_oracle_price_validity.into(), to: now, span: timestamps.span(),
+            assert(
+                check_range(
+                    from: now - max_oracle_price_validity.into(), to: now, span: timestamps.span(),
+                ),
+                INVALID_PRICE_TIMESTAMP,
             );
         }
 
