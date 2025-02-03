@@ -57,6 +57,9 @@ pub(crate) mod AssetsComponent {
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
+        AddSynthetic: events::AddSynthetic,
+        AssetActivated: events::AssetActivated,
+        DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
     }
@@ -177,6 +180,7 @@ pub(crate) mod AssetsComponent {
                     },
                 );
             self.synthetic_timely_data_head.write(Option::Some(asset_id));
+            self.emit(events::AddSynthetic { asset_id, risk_factor, resolution, quorum });
         }
 
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
@@ -184,8 +188,8 @@ pub(crate) mod AssetsComponent {
             self._validate_synthetic_active(:synthetic_id);
             config.is_active = false;
             self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
-
             self.num_of_active_synthetic_assets.sub_and_write(1);
+            self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
         }
 
         fn _execute_funding_tick(
@@ -248,7 +252,9 @@ pub(crate) mod AssetsComponent {
                     .synthetic_config
                     .entry(asset_id)
                     .write(Option::Some(SyntheticConfig { is_active: true, ..synthetic_config }));
+                self.emit(events::AssetActivated { asset_id });
             }
+            self.emit(events::PriceTick { asset_id, price });
         }
 
         /// Validates a price tick.

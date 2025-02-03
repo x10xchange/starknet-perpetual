@@ -177,16 +177,17 @@ pub mod Core {
         DepositEvent: Deposit::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
-        NewPosition: events::NewPosition,
-        WithdrawRequest: events::WithdrawRequest,
-        Withdraw: events::Withdraw,
-        Trade: events::Trade,
+        AddOracle: events::AddOracle,
         Liquidate: events::Liquidate,
-        TransferRequest: events::TransferRequest,
-        Transfer: events::Transfer,
+        NewPosition: events::NewPosition,
         SetOwnerAccount: events::SetOwnerAccount,
-        SetPublicKeyRequest: events::SetPublicKeyRequest,
         SetPublicKey: events::SetPublicKey,
+        SetPublicKeyRequest: events::SetPublicKeyRequest,
+        Trade: events::Trade,
+        Transfer: events::Transfer,
+        TransferRequest: events::TransferRequest,
+        Withdraw: events::Withdraw,
+        WithdrawRequest: events::WithdrawRequest,
     }
 
     #[constructor]
@@ -950,6 +951,7 @@ pub mod Core {
             // Add the oracle to the asset.
             let shifted_asset_name = TWO_POW_40.into() * asset_name;
             oracle_inner_entry.write(shifted_asset_name + oracle_name);
+            self.emit(events::AddOracle { asset_id, oracle_public_key });
         }
 
         fn remove_oracle_from_asset(ref self: ContractState) {}
