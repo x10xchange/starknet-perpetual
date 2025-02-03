@@ -52,7 +52,7 @@ pub(crate) mod AssetsComponent {
         pub num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-        oracels: Map<AssetId, Map<PublicKey, felt252>>,
+        oracles: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
     }
 
@@ -147,7 +147,7 @@ pub(crate) mod AssetsComponent {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
-            let oracle_inner_entry = self.oracels.entry(asset_id).entry(oracle_public_key);
+            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
 
             // Validate the oracle does not exist.
             assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
@@ -336,7 +336,7 @@ pub(crate) mod AssetsComponent {
             self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
         ) {
             let packed_asset_oracle = self
-                .oracels
+                .oracles
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
             let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
