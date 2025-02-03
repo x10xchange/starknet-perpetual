@@ -32,9 +32,8 @@ pub mod Core {
         INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
         INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
-        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED,
-        SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        order_expired_err, position_not_healthy_nor_healthier,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -54,7 +53,9 @@ pub mod Core {
     use perpetuals::core::types::{
         AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId,
     };
-    use perpetuals::core::value_risk_calculator::{PositionState, evaluate_position_change};
+    use perpetuals::core::value_risk_calculator::{
+        validate_liquidated_position, validate_position_is_healthy_or_healthier,
+    };
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
@@ -505,10 +506,9 @@ pub mod Core {
                 .span();
             let position_data = self._get_position_data(:position_id);
 
-            self
-                ._validate_position_is_healthy_or_healthier(
-                    :position_id, :position_data, :asset_diff_entries,
-                );
+            validate_position_is_healthy_or_healthier(
+                :position_id, :position_data, :asset_diff_entries,
+            );
             self._apply_diff(:position_id, :asset_diff_entries);
             let position = self._get_position_const(:position_id);
             let hash = self
@@ -1245,18 +1245,16 @@ pub mod Core {
                 .add_and_write(actual_liquidator_fee.into());
 
             /// Validations - Fundamentals:
-            self
-                ._validate_liquidated_position(
-                    position_id: liquidated_position_id,
-                    position_data: liquidated_position_data,
-                    asset_diff_entries: liquidated_asset_diff_entries,
-                );
-            self
-                ._validate_position_is_healthy_or_healthier(
-                    position_id: liquidator_position_id,
-                    position_data: liquidator_position_data,
-                    asset_diff_entries: liquidator_asset_diff_entries,
-                );
+            validate_liquidated_position(
+                position_id: liquidated_position_id,
+                position_data: liquidated_position_data,
+                asset_diff_entries: liquidated_asset_diff_entries,
+            );
+            validate_position_is_healthy_or_healthier(
+                position_id: liquidator_position_id,
+                position_data: liquidator_position_data,
+                asset_diff_entries: liquidator_asset_diff_entries,
+            );
         }
 
         fn _execute_trade(
@@ -1312,18 +1310,16 @@ pub mod Core {
                 .add_and_write(actual_fee_b.into());
 
             /// Validations - Fundamentals:
-            self
-                ._validate_position_is_healthy_or_healthier(
-                    position_id: order_a.position_id,
-                    position_data: position_data_a,
-                    asset_diff_entries: asset_diff_entries_a,
-                );
-            self
-                ._validate_position_is_healthy_or_healthier(
-                    position_id: order_b.position_id,
-                    position_data: position_data_b,
-                    asset_diff_entries: asset_diff_entries_b,
-                );
+            validate_position_is_healthy_or_healthier(
+                position_id: order_a.position_id,
+                position_data: position_data_a,
+                asset_diff_entries: asset_diff_entries_a,
+            );
+            validate_position_is_healthy_or_healthier(
+                position_id: order_b.position_id,
+                position_data: position_data_b,
+                asset_diff_entries: asset_diff_entries_b,
+            );
         }
 
         fn _execute_transfer(
@@ -1358,12 +1354,11 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
-            self
-                ._validate_position_is_healthy_or_healthier(
-                    :position_id,
-                    position_data: sender_position_data,
-                    asset_diff_entries: array![asset_diff_entry_sender].span(),
-                );
+            validate_position_is_healthy_or_healthier(
+                :position_id,
+                position_data: sender_position_data,
+                asset_diff_entries: array![asset_diff_entry_sender].span(),
+            );
         }
 
         /// Returns the main collateral balance of a position while taking into account the funding
@@ -1570,28 +1565,6 @@ pub mod Core {
             );
         }
 
-        fn _validate_liquidated_position(
-            self: @ContractState,
-            position_id: PositionId,
-            position_data: PositionData,
-            asset_diff_entries: Span<AssetDiffEntry>,
-        ) {
-            let position_change_result = evaluate_position_change(
-                position_data, asset_diff_entries,
-            );
-
-            assert(
-                position_change_result.position_state_before_change == PositionState::Liquidatable,
-                POSITION_IS_NOT_LIQUIDATABLE,
-            );
-
-            // None means the position is empty; transitioning from liquidatable to empty is
-            // allowed.
-            if let Option::Some(change_effects) = position_change_result.change_effects {
-                assert(change_effects.is_healthier, POSITION_IS_NOT_HEALTHIER);
-            }
-        }
-
         fn _validate_orders(
             ref self: ContractState,
             order_a: Order,
@@ -1664,30 +1637,6 @@ pub mod Core {
 
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
             self._get_position_const(:position_id);
-        }
-
-        fn _validate_position_is_healthy_or_healthier(
-            self: @ContractState,
-            position_id: PositionId,
-            position_data: PositionData,
-            asset_diff_entries: Span<AssetDiffEntry>,
-        ) {
-            let position_change_result = evaluate_position_change(
-                position_data, asset_diff_entries,
-            );
-
-            let position_is_healthier = if let Option::Some(change_effects) = position_change_result
-                .change_effects {
-                change_effects.is_healthier
-            } else {
-                false
-            };
-            let position_is_healthy = position_change_result
-                .position_state_after_change == PositionState::Healthy;
-            assert_with_byte_array(
-                position_is_healthier || position_is_healthy,
-                position_not_healthy_nor_healthier(position_id),
-            );
         }
 
         fn _validate_transfer(

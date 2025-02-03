@@ -1,7 +1,14 @@
+use contracts_commons::errors::assert_with_byte_array;
+
 use contracts_commons::math::{Abs, FractionTrait};
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
+use perpetuals::core::errors::{
+    POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, position_not_healthy_nor_healthier,
+};
+use perpetuals::core::types::AssetDiffEntry;
 use perpetuals::core::types::price::PriceMulTrait;
-use perpetuals::core::types::{PositionData, PositionDiff};
+use perpetuals::core::types::{PositionData, PositionDiff, PositionId};
+
 
 #[derive(Drop, Debug, PartialEq, Serde)]
 pub enum PositionState {
@@ -98,6 +105,42 @@ pub fn evaluate_position_change(
         position_state_before_change: PositionStateTrait::new(tvtr.before),
         position_state_after_change: PositionStateTrait::new(tvtr.after),
         change_effects,
+    }
+}
+
+pub fn validate_position_is_healthy_or_healthier(
+    position_id: PositionId, position_data: PositionData, asset_diff_entries: Span<AssetDiffEntry>,
+) {
+    let position_change_result = evaluate_position_change(position_data, asset_diff_entries);
+
+    let position_is_healthier = if let Option::Some(change_effects) = position_change_result
+        .change_effects {
+        change_effects.is_healthier
+    } else {
+        false
+    };
+    let position_is_healthy = position_change_result
+        .position_state_after_change == PositionState::Healthy;
+    assert_with_byte_array(
+        position_is_healthier || position_is_healthy,
+        position_not_healthy_nor_healthier(position_id),
+    );
+}
+
+pub fn validate_liquidated_position(
+    position_id: PositionId, position_data: PositionData, asset_diff_entries: Span<AssetDiffEntry>,
+) {
+    let position_change_result = evaluate_position_change(position_data, asset_diff_entries);
+
+    assert(
+        position_change_result.position_state_before_change == PositionState::Liquidatable,
+        POSITION_IS_NOT_LIQUIDATABLE,
+    );
+
+    // None means the position is empty; transitioning from liquidatable to empty is
+    // allowed.
+    if let Option::Some(change_effects) = position_change_result.change_effects {
+        assert(change_effects.is_healthier, POSITION_IS_NOT_HEALTHIER);
     }
 }
 
