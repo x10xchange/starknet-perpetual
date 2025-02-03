@@ -1,6 +1,6 @@
 #[starknet::component]
 pub(crate) mod AssetsComponent {
-    use contracts_commons::constants::TWO_POW_32;
+    use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
     use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
     use contracts_commons::span_utils::{validate_median, validate_range};
@@ -9,11 +9,13 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use contracts_commons::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
     use core::num::traits::{One, Zero};
+    use core::panic_with_felt252;
     use perpetuals::core::components::assets::errors::{
-        ASSET_ALREADY_EXISTS, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE,
-        COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_ZERO_QUORUM,
-        NOT_COLLATERAL, NOT_SYNTHETIC, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
+        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
+        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
+        ORACLE_NAME_TOO_LONG, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -50,13 +52,14 @@ pub(crate) mod AssetsComponent {
         pub num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-        pub oracels: Map<AssetId, Map<PublicKey, felt252>>,
+        oracels: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
     }
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
+        AddOracle: events::AddOracle,
         AddSynthetic: events::AddSynthetic,
         AssetActivated: events::AssetActivated,
         DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
@@ -135,6 +138,35 @@ pub(crate) mod AssetsComponent {
                     },
                 );
             self.collateral_timely_data_head.write(Option::Some(asset_id));
+        }
+
+        fn add_oracle_to_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            oracle_public_key: PublicKey,
+            oracle_name: felt252,
+            asset_name: felt252,
+        ) {
+            let oracle_inner_entry = self.oracels.entry(asset_id).entry(oracle_public_key);
+
+            // Validate the oracle does not exist.
+            assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
+
+            const TWO_POW_40: u64 = 0x100_0000_0000;
+            // Validate the size of the oracle name.
+            if let Option::Some(oracle_name) = oracle_name.try_into() {
+                assert(oracle_name < TWO_POW_40, ORACLE_NAME_TOO_LONG);
+            } else {
+                panic_with_felt252(ORACLE_NAME_TOO_LONG);
+            }
+
+            // Validate the size of the asset name.
+            assert(asset_name.into() < TWO_POW_128, ASSET_NAME_TOO_LONG);
+
+            // Add the oracle to the asset.
+            let shifted_asset_name = TWO_POW_40.into() * asset_name;
+            oracle_inner_entry.write(shifted_asset_name + oracle_name);
+            self.emit(events::AddOracle { asset_id, oracle_public_key });
         }
 
 

@@ -1,24 +1,7 @@
 use contracts_commons::types::PublicKey;
 use contracts_commons::types::time::time::Timestamp;
-use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::{AssetAmount, PositionId};
 use starknet::ContractAddress;
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct AddOracle {
-    #[key]
-    pub asset_id: AssetId,
-    #[key]
-    pub oracle_public_key: PublicKey,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct RemoveOracle {
-    #[key]
-    pub asset_id: AssetId,
-    #[key]
-    pub oracle_public_key: PublicKey,
-}
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct NewPosition {

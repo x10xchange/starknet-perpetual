@@ -11,7 +11,6 @@ pub mod Core {
     use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
-    use contracts_commons::constants::TWO_POW_128;
     use contracts_commons::errors::assert_with_byte_array;
     use contracts_commons::math::{Abs, have_same_sign};
     use contracts_commons::message_hash::OffchainMessageHash;
@@ -19,7 +18,6 @@ pub mod Core {
     use contracts_commons::types::{HashType, PublicKey, Signature};
     use contracts_commons::utils::{AddToStorage, validate_expiration, validate_stark_signature};
     use core::num::traits::Zero;
-    use core::panic_with_felt252;
     use core::starknet::storage::StoragePointerWriteAccess;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
@@ -28,16 +26,15 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, ASSET_NAME_TOO_LONG, CALLER_IS_NOT_OWNER_ACCOUNT,
+        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
         DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
         INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
         INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
         INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
-        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
-        POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT, POSITION_IS_NOT_HEALTHIER,
-        POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
-        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
-        position_not_healthy_nor_healthier,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
+        POSITION_IS_NOT_HEALTHIER, POSITION_IS_NOT_LIQUIDATABLE, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err, position_not_healthy_nor_healthier,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -177,7 +174,6 @@ pub mod Core {
         DepositEvent: Deposit::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
-        AddOracle: events::AddOracle,
         Liquidate: events::Liquidate,
         NewPosition: events::NewPosition,
         SetOwnerAccount: events::SetOwnerAccount,
@@ -931,27 +927,9 @@ pub mod Core {
         ) {
             // Validate the caller is the app governor.
             self.roles.only_app_governor();
-
-            let oracle_inner_entry = self.assets.oracels.entry(asset_id).entry(oracle_public_key);
-
-            // Validate the oracle does not exist.
-            assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
-
-            const TWO_POW_40: u64 = 0x100_0000_0000;
-            // Validate the size of the oracle name.
-            if let Option::Some(oracle_name) = oracle_name.try_into() {
-                assert(oracle_name < TWO_POW_40, ORACLE_NAME_TOO_LONG);
-            } else {
-                panic_with_felt252(ORACLE_NAME_TOO_LONG);
-            };
-
-            // Validate the size of the asset name.
-            assert(asset_name.into() < TWO_POW_128, ASSET_NAME_TOO_LONG);
-
-            // Add the oracle to the asset.
-            let shifted_asset_name = TWO_POW_40.into() * asset_name;
-            oracle_inner_entry.write(shifted_asset_name + oracle_name);
-            self.emit(events::AddOracle { asset_id, oracle_public_key });
+            self
+                .assets
+                .add_oracle_to_asset(:asset_id, :oracle_public_key, :oracle_name, :asset_name);
         }
 
         fn remove_oracle_from_asset(ref self: ContractState) {}
