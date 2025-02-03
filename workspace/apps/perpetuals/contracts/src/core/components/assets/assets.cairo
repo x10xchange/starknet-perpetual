@@ -173,7 +173,6 @@ pub(crate) mod AssetsComponent {
         fn add_synthetic_asset(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
-            name: felt252,
             risk_factor: u8,
             quorum: u8,
             resolution: u64,
@@ -187,7 +186,6 @@ pub(crate) mod AssetsComponent {
                     Option::Some(
                         SyntheticConfig {
                             version: SYNTHETIC_VERSION,
-                            name,
                             // It'll be active in the next price tick.
                             is_active: false,
                             // It validates the range of the risk factor.

@@ -137,14 +137,12 @@ fn initialized_contract_state() -> Core::ContractState {
 fn check_synthetic_config(
     state: @Core::ContractState,
     synthetic_id: AssetId,
-    name: felt252,
     is_active: bool,
     risk_factor: u8,
     quorum: u8,
     resolution: u64,
 ) {
     let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
-    assert_eq!(synthetic_config.name, name);
     assert_eq!(synthetic_config.is_active, is_active);
     assert_eq!(synthetic_config.risk_factor, FixedTwoDecimalTrait::new(risk_factor));
     assert_eq!(synthetic_config.quorum, quorum);
@@ -189,7 +187,6 @@ fn is_asset_in_synthetic_timely_data_list(
 fn check_synthetic_asset(
     state: @Core::ContractState,
     synthetic_id: AssetId,
-    name: felt252,
     is_active: bool,
     risk_factor: u8,
     quorum: u8,
@@ -199,7 +196,7 @@ fn check_synthetic_asset(
     funding_index: FundingIndex,
 ) {
     check_synthetic_config(
-        :state, :synthetic_id, :name, is_active: false, :risk_factor, :quorum, :resolution,
+        :state, :synthetic_id, is_active: false, :risk_factor, :quorum, :resolution,
     );
     check_synthetic_timely_data(
         :state,
@@ -247,8 +244,6 @@ fn test_successful_add_synthetic_asset() {
     // Setup test parameters:
     let synthetic_id_1 = SYNTHETIC_ASSET_ID_2();
     let synthetic_id_2 = SYNTHETIC_ASSET_ID_3();
-    let name_1 = 'SYNTHETIC_NAME_1';
-    let name_2 = 'SYNTHETIC_NAME_2';
     let risk_factor_1 = 10;
     let risk_factor_2 = 20;
     let quorum_1 = 1_u8;
@@ -261,7 +256,6 @@ fn test_successful_add_synthetic_asset() {
     state
         .add_synthetic_asset(
             asset_id: synthetic_id_1,
-            name: name_1,
             risk_factor: risk_factor_1,
             quorum: quorum_1,
             resolution: resolution_1,
@@ -271,7 +265,6 @@ fn test_successful_add_synthetic_asset() {
     state
         .add_synthetic_asset(
             asset_id: synthetic_id_2,
-            name: name_2,
             risk_factor: risk_factor_2,
             quorum: quorum_2,
             resolution: resolution_2,
@@ -281,7 +274,6 @@ fn test_successful_add_synthetic_asset() {
     check_synthetic_asset(
         state: @state,
         synthetic_id: synthetic_id_1,
-        name: name_1,
         is_active: false,
         risk_factor: risk_factor_1,
         quorum: quorum_1,
@@ -293,7 +285,6 @@ fn test_successful_add_synthetic_asset() {
     check_synthetic_asset(
         state: @state,
         synthetic_id: synthetic_id_2,
-        name: name_2,
         is_active: false,
         risk_factor: risk_factor_2,
         quorum: quorum_2,
@@ -318,7 +309,6 @@ fn test_add_synthetic_asset_existed_asset() {
         .add_synthetic_asset(
             // Setup state already added `SYNTHETIC_ASSET_ID_1`.
             asset_id: SYNTHETIC_ASSET_ID_1(),
-            name: Zero::zero(),
             risk_factor: Zero::zero(),
             quorum: Zero::zero(),
             resolution: Zero::zero(),

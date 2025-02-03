@@ -878,7 +878,6 @@ pub mod Core {
         fn add_synthetic_asset(
             ref self: ContractState,
             asset_id: AssetId,
-            name: felt252,
             risk_factor: u8,
             quorum: u8,
             resolution: u64,
@@ -887,7 +886,7 @@ pub mod Core {
             self.roles.only_app_governor();
 
             // Execution:
-            self.assets.add_synthetic_asset(:asset_id, :name, :risk_factor, :quorum, :resolution);
+            self.assets.add_synthetic_asset(:asset_id, :risk_factor, :quorum, :resolution);
         }
 
         /// - Deactivate synthetic asset.

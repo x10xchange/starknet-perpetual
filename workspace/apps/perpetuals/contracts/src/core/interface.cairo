@@ -122,12 +122,7 @@ pub trait ICore<TContractState> {
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
     );
     fn add_synthetic_asset(
-        ref self: TContractState,
-        asset_id: AssetId,
-        name: felt252,
-        risk_factor: u8,
-        quorum: u8,
-        resolution: u64,
+        ref self: TContractState, asset_id: AssetId, risk_factor: u8, quorum: u8, resolution: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn add_oracle_to_asset(

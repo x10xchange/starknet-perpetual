@@ -64,7 +64,6 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
     SyntheticConfig {
         version: SYNTHETIC_VERSION,
         resolution: SYNTHETIC_RESOLUTION,
-        name: SYNTHETIC_NAME,
         is_active: true,
         risk_factor: RISK_FACTOR(),
         quorum: SYNTHETIC_QUORUM,
@@ -93,7 +92,6 @@ pub const MAX_ORACLE_PRICE_VALIDITY: TimeDelta = TimeDelta { seconds: 10 * MINUT
 pub const MAX_FUNDING_RATE: u32 = 5;
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1_000;
-pub const SYNTHETIC_NAME: felt252 = 'SYNTHETIC_NAME';
 pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION: u64 = 1_000_000_000;
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000_000_000;
