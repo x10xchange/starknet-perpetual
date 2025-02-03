@@ -1,4 +1,5 @@
 use contracts_commons::components::roles::interface::IRoles;
+use contracts_commons::constants::TWO_POW_32;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::Signature;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
@@ -18,6 +19,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
+use perpetuals::core::types::price::SignedPrice;
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
@@ -85,6 +87,32 @@ pub impl UserImpl of UserTrait {
 impl UserDefault of Default<User> {
     fn default() -> User {
         UserTrait::new(position_id: POSITION_ID_1, key_pair: KEY_PAIR_1())
+    }
+}
+
+/// The `Oracle` struct represents an oracle providing information about prices.
+#[derive(Drop, Copy)]
+pub struct Oracle {
+    pub oracle_name: felt252,
+    pub asset_name: felt252,
+    pub key_pair: StarkKeyPair,
+}
+
+#[generate_trait]
+pub impl OracleImpl of OracleTrait {
+    fn get_oracle_name_asset_name_concat(self: @Oracle) -> felt252 {
+        const TWO_POW_40: felt252 = 0x100_0000_0000;
+        *self.asset_name * TWO_POW_40 + *self.oracle_name
+    }
+    fn get_signed_price(self: Oracle, price: u128, timestamp: u32) -> SignedPrice {
+        let message = core::pedersen::pedersen(
+            self.get_oracle_name_asset_name_concat(),
+            (price * TWO_POW_32.into() + timestamp.into()).into(),
+        );
+        let (r, s) = self.key_pair.sign(message).unwrap();
+        SignedPrice {
+            signature: [r, s].span(), signer_public_key: self.key_pair.public_key, timestamp, price,
+        }
     }
 }
 

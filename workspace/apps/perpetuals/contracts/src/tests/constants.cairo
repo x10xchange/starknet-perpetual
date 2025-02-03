@@ -25,6 +25,9 @@ pub fn KEY_PAIR_1() -> StarkKeyPair {
 pub fn KEY_PAIR_2() -> StarkKeyPair {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_2')
 }
+pub fn KEY_PAIR_3() -> StarkKeyPair {
+    StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_3')
+}
 pub fn COLLATERAL_OWNER() -> ContractAddress nopanic {
     contract_address_const::<'COLLATERAL_OWNER'>()
 }

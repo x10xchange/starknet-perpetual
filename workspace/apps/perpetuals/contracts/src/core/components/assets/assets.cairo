@@ -341,7 +341,6 @@ pub(crate) mod AssetsComponent {
                 .read(signed_price.signer_public_key);
             let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
                 + signed_price.timestamp.into();
-
             let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
             validate_stark_signature(
                 public_key: signed_price.signer_public_key,

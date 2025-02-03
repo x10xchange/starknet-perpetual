@@ -4,6 +4,7 @@ use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit}
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
+use contracts_commons::constants::TEN_POW_12;
 use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
@@ -16,21 +17,24 @@ use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::asset::synthetic::SyntheticConfig;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::order::Order;
-use perpetuals::core::types::price::Price;
+use perpetuals::core::types::price::{Price, PriceTrait, SignedPrice};
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::types::{AssetAmount, PositionId};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
-    PerpetualsInitConfig, User, UserTrait, generate_collateral, set_roles,
+    Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, generate_collateral, set_roles,
 };
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
-    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
+    StoragePointerWriteAccess,
 };
+
 
 // Utils.
 
@@ -1046,4 +1050,362 @@ fn test_successful_transfer() {
     let recipient_collateral_balance = state
         ._get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
     assert_eq!(recipient_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + TRANSFER_AMOUNT).into());
+}
+
+#[test]
+fn test_price_tick_basic() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    state
+        .assets
+        .synthetic_config
+        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+    state.assets.num_of_active_synthetic_assets.write(Zero::zero());
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), Zero::zero());
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let price: u128 = TEN_POW_12.into();
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            :asset_id,
+            :price,
+            signed_prices: [
+                oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    let data = state.assets.synthetic_timely_data.read(asset_id);
+    assert_eq!(data.last_price_update, new_time);
+    assert_eq!(data.price, price.convert(:resolution));
+}
+
+#[test]
+fn test_price_tick_odd() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle2_name = 'ORCL2';
+    let oracle3_name = 'ORCL3';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let oracle2 = Oracle { oracle_name: oracle2_name, asset_name, key_pair: KEY_PAIR_2() };
+    let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle2.key_pair.public_key,
+            oracle_name: oracle2_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle3.key_pair.public_key,
+            oracle_name: oracle3_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    state
+        .assets
+        .synthetic_config
+        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+    state.assets.num_of_active_synthetic_assets.write(0);
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let price: u128 = TEN_POW_12.into();
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            :asset_id,
+            :price,
+            signed_prices: [
+                oracle2.get_signed_price(:price, timestamp: old_time.try_into().unwrap()),
+                oracle3.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
+                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
+            ]
+                .span(),
+        );
+    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    let data = state.assets.synthetic_timely_data.read(asset_id);
+    assert_eq!(data.last_price_update, new_time);
+    assert_eq!(data.price, price.convert(:resolution));
+}
+#[test]
+fn test_price_tick_even() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle3_name = 'ORCL3';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle3.key_pair.public_key,
+            oracle_name: oracle3_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    state
+        .assets
+        .synthetic_config
+        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+    state.assets.num_of_active_synthetic_assets.write(0);
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let price: u128 = TEN_POW_12.into();
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            :asset_id,
+            :price,
+            signed_prices: [
+                oracle3.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
+                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
+            ]
+                .span(),
+        );
+    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    let data = state.assets.synthetic_timely_data.read(asset_id);
+    assert_eq!(data.last_price_update, new_time);
+    assert_eq!(data.price, price.convert(:resolution));
+}
+
+#[test]
+#[should_panic(expected: 'QUORUM_NOT_REACHED')]
+fn test_price_tick_no_quorum() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: cfg.synthetic_cfg.asset_id,
+            price: Zero::zero(),
+            signed_prices: [].span(),
+        );
+}
+
+#[test]
+#[should_panic(expected: 'SIGNED_PRICES_UNSORTED')]
+fn test_price_tick_unsorted() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle2_name = 'ORCL2';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let oracle2 = Oracle { oracle_name: oracle2_name, asset_name, key_pair: KEY_PAIR_3() };
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle2.key_pair.public_key,
+            oracle_name: oracle2_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    state
+        .assets
+        .synthetic_config
+        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let price: u128 = TEN_POW_12.into();
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            :asset_id,
+            :price,
+            signed_prices: [
+                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
+                oracle2.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
+            ]
+                .span(),
+        );
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_PRICE_TIMESTAMP')]
+fn test_price_tick_old_oracle() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            :asset_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY + Time::seconds(1));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let price = 1000;
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: cfg.synthetic_cfg.asset_id,
+            :price,
+            signed_prices: [
+                oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+}
+
+#[test]
+/// This test numbers were taken from an example of a real price tick that was sent to StarkEx.
+fn test_price_tick_golden() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let asset_name = 'PENGUUSDMARK\x00\x00\x00\x00';
+    let oracle0_name = 'Stkai';
+    let oracle1_name = 'Stork';
+    let oracle2_name = 'StCrw';
+    let asset_id = cfg.synthetic_cfg.asset_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: asset_id,
+            oracle_public_key: 0x1f191d23b8825dcc3dba839b6a7155ea07ad0b42af76394097786aca0d9975c,
+            oracle_name: oracle0_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: asset_id,
+            oracle_public_key: 0xcc85afe4ca87f9628370c432c447e569a01dc96d160015c8039959db8521c4,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: asset_id,
+            oracle_public_key: 0x41dbe627aeab66504b837b3abd88ae2f58ba6d98ee7bbd7f226c4684d9e6225,
+            oracle_name: oracle2_name,
+            :asset_name,
+        );
+
+    let timestamp: u32 = 1737451956;
+    let price = 23953641840000000;
+    let signed_price0 = SignedPrice {
+        signature: [
+            0x23120d436ab1e115f883fd495206b80c9a9928f94df89c2bb63eb1997cc13d5,
+            0x21469ce0da02bf1a5897077b238f536f78427f946dafde2b79884cf10131e74,
+        ]
+            .span(),
+        signer_public_key: 0x1f191d23b8825dcc3dba839b6a7155ea07ad0b42af76394097786aca0d9975c,
+        timestamp,
+        price,
+    };
+    let signed_price1 = SignedPrice {
+        signature: [
+            0x6c4beab13946105513c157ca8498735af2c3ff0f75efe6e1d1747efcff8339f,
+            0x94619200c9b03a647f6f29df52d2291e866b43e57dc1a8200deb5219c87b14,
+        ]
+            .span(),
+        signer_public_key: 0xcc85afe4ca87f9628370c432c447e569a01dc96d160015c8039959db8521c4,
+        timestamp,
+        price,
+    };
+    let signed_price2 = SignedPrice {
+        signature: [
+            0x3aed46d0aff9d904faf5f76c2fb9f43c858e6f9e9c9bf99ca9fd4c1baa907b2,
+            0x58523be606a55c57aedd5e030a349a478a22132b84d6f77e1e348a4991f5c80,
+        ]
+            .span(),
+        signer_public_key: 0x41dbe627aeab66504b837b3abd88ae2f58ba6d98ee7bbd7f226c4684d9e6225,
+        timestamp,
+        price,
+    };
+    start_cheat_block_timestamp_global(block_timestamp: Timestamp { seconds: 1737451976 }.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    let operator_nonce = state.nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            :asset_id,
+            :price,
+            signed_prices: [signed_price1, signed_price0, signed_price2].span(),
+        );
+    let data = state.assets.synthetic_timely_data.read(asset_id);
+    assert_eq!(data.last_price_update, Time::now());
+    assert_eq!(data.price.value(), 6430);
 }
