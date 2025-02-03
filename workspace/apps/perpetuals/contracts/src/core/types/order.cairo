@@ -1,4 +1,4 @@
-use contracts_commons::math::have_same_sign;
+use contracts_commons::math::{Abs, have_same_sign};
 use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use contracts_commons::utils::validate_ratio;
@@ -45,18 +45,18 @@ pub impl OrderImpl of OrderTrait {
         // Validate the actual fee-to-amount ratio does not exceed the ordered fee-to-amount ratio.
         validate_ratio(
             n1: actual_fee,
-            d1: actual_amount_quote,
+            d1: actual_amount_quote.abs(),
             n2: order_amount_fee,
-            d2: order_amount_quote,
+            d2: order_amount_quote.abs(),
             err: trade_illegal_fee_to_quote_ratio_err(*self.position_id),
         );
 
         // Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
         validate_ratio(
             n1: order_amount_base,
-            d1: order_amount_quote,
+            d1: order_amount_quote.abs(),
             n2: actual_amount_base,
-            d2: actual_amount_quote,
+            d2: actual_amount_quote.abs(),
             err: trade_illegal_base_to_quote_ratio_err(*self.position_id),
         );
     }
