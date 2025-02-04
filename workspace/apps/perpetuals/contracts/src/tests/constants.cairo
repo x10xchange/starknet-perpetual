@@ -1,7 +1,7 @@
 use contracts_commons::constants::{DAY, MINUTE};
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::time::{Time, TimeDelta};
-use core::num::traits::Zero;
+use core::num::traits::{One, Zero};
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::collateral::{
@@ -56,7 +56,7 @@ pub fn OPERATOR() -> ContractAddress {
 pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
     CollateralTimelyData {
         version: COLLATERAL_VERSION,
-        price: PRICE(),
+        price: One::one(),
         last_price_update: Time::now(),
         next: Option::None,
     }
@@ -76,7 +76,7 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
 pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
     SyntheticTimelyData {
         version: SYNTHETIC_VERSION,
-        price: PRICE(),
+        price: SYNTHETIC_PRICE(),
         // Pass non default timestamp.
         last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
         funding_index: Zero::zero(),
@@ -102,7 +102,7 @@ pub const WITHDRAW_AMOUNT: i64 = 1000;
 pub const DEPOSIT_AMOUNT: u128 = 10;
 pub const TRANSFER_AMOUNT: i64 = 1000;
 pub const COLLATERAL_BALANCE_AMOUNT: i64 = 2000;
-pub const SYNTHETIC_BALANCE_AMOUNT: i64 = 2000;
+pub const SYNTHETIC_BALANCE_AMOUNT: i64 = 20;
 pub const CONTRACT_INIT_BALANCE: u128 = 1_000_000_000;
 pub const USER_INIT_BALANCE: u128 = 100_000_000;
 
@@ -129,8 +129,8 @@ pub fn RISK_FACTOR() -> FixedTwoDecimal {
 }
 
 /// Prices
-pub fn PRICE() -> Price {
-    PriceTrait::new(900 * TWO_POW_28)
+pub fn SYNTHETIC_PRICE() -> Price {
+    PriceTrait::new(100 * TWO_POW_28)
 }
 
 /// Assets' metadata

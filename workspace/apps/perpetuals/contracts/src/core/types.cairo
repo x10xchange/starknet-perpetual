@@ -49,7 +49,7 @@ pub struct AssetEntry {
     pub risk_factor: FixedTwoDecimal,
 }
 
-#[derive(Copy, Default, Drop, Serde)]
+#[derive(Copy, Debug, Default, Drop, Serde)]
 pub struct AssetDiffEntry {
     pub id: AssetId,
     pub before: Balance,
