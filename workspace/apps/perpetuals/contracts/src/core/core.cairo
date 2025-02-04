@@ -119,7 +119,7 @@ pub mod Core {
 
     #[starknet::storage_node]
     pub struct Position {
-        version: u8,
+        pub version: u8,
         pub owner_account: ContractAddress,
         pub owner_public_key: PublicKey,
         pub collateral_assets_head: Option<AssetId>,

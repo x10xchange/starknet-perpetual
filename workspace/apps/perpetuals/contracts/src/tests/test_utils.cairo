@@ -29,7 +29,6 @@ use perpetuals::core::types::asset::collateral::{
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::tests::constants::*;
-use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
@@ -449,4 +448,3 @@ pub fn check_synthetic_asset(
     // Check the synthetic_timely_data list.
     assert!(is_asset_in_synthetic_timely_data_list(:state, :synthetic_id));
 }
-

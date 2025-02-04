@@ -22,10 +22,12 @@ use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
+use perpetuals::tests::event_test_utils::assert_new_position_event_with_expected;
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic, check_synthetic_asset,
     init_position, init_position_with_owner, initialized_contract_state, setup_state,
 };
+use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
     StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -52,6 +54,38 @@ fn test_constructor() {
         state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_public_key.read(),
         OPERATOR_PUBLIC_KEY(),
     );
+}
+
+#[test]
+fn test_new_position() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
+
+    // Parameters:
+    let position_id = POSITION_ID_1;
+    let owner_public_key = KEY_PAIR_1().public_key;
+    let owner_account = POSITION_OWNER_1();
+
+    // Test.
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .new_position(
+            operator_nonce: state.nonce(), :position_id, :owner_public_key, :owner_account,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_new_position_event_with_expected(
+        spied_event: events[0], :position_id, :owner_public_key, :owner_account,
+    );
+
+    // Check.
+    assert_eq!(state.positions.entry(position_id).version.read(), Core::POSITION_VERSION);
+    assert_eq!(state.positions.entry(position_id).owner_public_key.read(), owner_public_key);
+    assert_eq!(state.positions.entry(position_id).owner_account.read(), owner_account);
 }
 
 // Add synthetic asset tests.
