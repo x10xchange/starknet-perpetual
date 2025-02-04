@@ -6,7 +6,7 @@ use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::errors::{
-    INVALID_TRADE_ACTUAL_BASE_SIGN, INVALID_TRADE_ACTUAL_QUOTE_SIGN,
+    INVALID_TRADE_ACTUAL_BASE_SIGN, INVALID_TRADE_ACTUAL_QUOTE_SIGN, INVALID_ZERO_AMOUNT,
     trade_illegal_base_to_quote_ratio_err, trade_illegal_fee_to_quote_ratio_err,
 };
 use perpetuals::core::types::{AssetAmount, PositionId};
@@ -31,6 +31,10 @@ pub impl OrderImpl of OrderTrait {
         let order_amount_base = *self.base.amount;
         let order_amount_quote = *self.quote.amount;
         let order_amount_fee = *self.fee.amount;
+
+        // Non-zero actual amount check.
+        assert(actual_amount_base != 0, INVALID_ZERO_AMOUNT);
+        assert(actual_amount_quote != 0, INVALID_ZERO_AMOUNT);
 
         // Sign Validation for amounts.
         assert(
