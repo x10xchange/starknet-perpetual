@@ -1,9 +1,14 @@
+use Core::InternalCoreFunctionsTrait;
+use contracts_commons::components::deposit::Deposit::InternalTrait;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::TWO_POW_32;
-use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
+use contracts_commons::test_utils::{
+    Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
+};
 use contracts_commons::types::Signature;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-use contracts_commons::types::time::time::TimeDelta;
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
+use contracts_commons::types::time::time::{TimeDelta, Timestamp};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -12,19 +17,28 @@ use openzeppelin::presets::interfaces::{
 };
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
+use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::core::Core;
+use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreDispatcher;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
-use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::funding::FundingIndex;
+use perpetuals::core::types::price::{Price, SignedPrice};
+use perpetuals::tests::constants::*;
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
+use starknet::storage::{
+    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+};
 
+
+// Structs
 
 #[derive(Drop, Copy)]
 pub struct CoreConfig {}
@@ -117,7 +131,7 @@ pub impl OracleImpl of OracleTrait {
 }
 
 #[derive(Drop)]
-pub(crate) struct PerpetualsInitConfig {
+pub struct PerpetualsInitConfig {
     pub governance_admin: ContractAddress,
     pub app_role_admin: ContractAddress,
     pub app_governor: ContractAddress,
@@ -192,23 +206,6 @@ pub struct SyntheticCfg {
     pub asset_id: AssetId,
 }
 
-pub fn generate_collateral(
-    collateral_cfg: @CollateralCfg, token_state: @TokenState,
-) -> (CollateralConfig, CollateralTimelyData) {
-    (
-        CollateralConfig {
-            version: *collateral_cfg.version,
-            token_address: *token_state.address,
-            quantum: *collateral_cfg.quantum,
-            is_active: true,
-            risk_factor: *collateral_cfg.risk_factor,
-            quorum: *collateral_cfg.quorum,
-        },
-        COLLATERAL_TIMELY_DATA(),
-    )
-}
-
-
 /// The `SystemConfig` struct represents the configuration settings for the entire system.
 /// It includes configurations for the token, core,
 #[derive(Drop)]
@@ -236,8 +233,13 @@ pub impl SystemImpl of SystemTrait {
     }
 }
 
+// Internal functions.
 
-pub(crate) fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
+fn CONTRACT_STATE() -> Core::ContractState {
+    Core::contract_state_for_testing()
+}
+
+fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
     cheat_caller_address_once(
         contract_address: test_address(), caller_address: *cfg.governance_admin,
     );
@@ -258,3 +260,193 @@ fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
 
     account_address
 }
+
+// Public functions.
+
+pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
+    let mut state = initialized_contract_state();
+    set_roles(ref :state, :cfg);
+    state
+        .assets
+        .initialize(
+            max_price_interval: *cfg.max_price_interval,
+            max_funding_interval: *cfg.max_funding_interval,
+            max_funding_rate: *cfg.max_funding_rate,
+            max_oracle_price_validity: *cfg.max_oracle_price_validity,
+        );
+    // Collateral asset configs.
+    let (collateral_config, collateral_timely_data) = generate_collateral(
+        collateral_cfg: cfg.collateral_cfg, :token_state,
+    );
+    state
+        .assets
+        .collateral_config
+        .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
+    state.assets.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
+    state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+    state
+        .deposits
+        .register_token(
+            asset_id: (*cfg.collateral_cfg.asset_id).into(),
+            token_address: *token_state.address,
+            quantum: *cfg.collateral_cfg.quantum,
+        );
+    // Synthetic asset configs.
+    state
+        .assets
+        .synthetic_config
+        .write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
+    state.assets.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
+    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
+    state.assets.num_of_active_synthetic_assets.write(1);
+
+    // Fund the contract.
+    (*token_state)
+        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    state
+}
+
+pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
+    let position = state.positions.entry(user.position_id);
+    position.owner_public_key.write(user.get_public_key());
+    state
+        ._apply_funding_and_set_balance(
+            position_id: user.position_id,
+            asset_id: *cfg.collateral_cfg.asset_id,
+            balance: COLLATERAL_BALANCE_AMOUNT.into(),
+        );
+    position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+}
+
+pub fn init_position_with_owner(
+    cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User,
+) {
+    init_position(cfg, ref :state, :user);
+    let position = state.positions.entry(user.position_id);
+    position.owner_account.write(user.address);
+}
+
+pub fn add_synthetic(
+    ref state: Core::ContractState, asset_id: AssetId, position_id: PositionId, balance: i64,
+) {
+    let position = state.positions.entry(position_id);
+    match position.synthetic_assets_head.read() {
+        Option::Some(head) => {
+            position.synthetic_assets_head.write(Option::Some(asset_id));
+            position.synthetic_assets.entry(asset_id).next.write(Option::Some(head));
+        },
+        Option::None => position.synthetic_assets_head.write(Option::Some(asset_id)),
+    }
+    position.synthetic_assets.entry(asset_id).balance.write(balance.into());
+}
+
+pub fn initialized_contract_state() -> Core::ContractState {
+    let mut state = CONTRACT_STATE();
+    Core::constructor(
+        ref state,
+        governance_admin: GOVERNANCE_ADMIN(),
+        upgrade_delay: UPGRADE_DELAY,
+        max_price_interval: MAX_PRICE_INTERVAL,
+        max_funding_interval: MAX_FUNDING_INTERVAL,
+        max_funding_rate: MAX_FUNDING_RATE,
+        max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
+        fee_position_owner_account: OPERATOR(),
+        fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
+        insurance_fund_position_owner_account: OPERATOR(),
+        insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
+    );
+    state
+}
+
+pub fn generate_collateral(
+    collateral_cfg: @CollateralCfg, token_state: @TokenState,
+) -> (CollateralConfig, CollateralTimelyData) {
+    (
+        CollateralConfig {
+            version: *collateral_cfg.version,
+            token_address: *token_state.address,
+            quantum: *collateral_cfg.quantum,
+            is_active: true,
+            risk_factor: *collateral_cfg.risk_factor,
+            quorum: *collateral_cfg.quorum,
+        },
+        COLLATERAL_TIMELY_DATA(),
+    )
+}
+
+pub fn check_synthetic_config(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    is_active: bool,
+    risk_factor: u8,
+    quorum: u8,
+    resolution: u64,
+) {
+    let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
+    assert_eq!(synthetic_config.is_active, is_active);
+    assert_eq!(synthetic_config.risk_factor, FixedTwoDecimalTrait::new(risk_factor));
+    assert_eq!(synthetic_config.quorum, quorum);
+    assert_eq!(synthetic_config.resolution, resolution);
+}
+
+pub fn check_synthetic_timely_data(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    price: Price,
+    last_price_update: Timestamp,
+    funding_index: FundingIndex,
+) {
+    let synthetic_timely_data = state.assets.synthetic_timely_data.entry(synthetic_id).read();
+    assert_eq!(synthetic_timely_data.price, price);
+    assert_eq!(synthetic_timely_data.last_price_update, last_price_update);
+    assert_eq!(synthetic_timely_data.funding_index, funding_index);
+}
+
+pub fn is_asset_in_synthetic_timely_data_list(
+    state: @Core::ContractState, synthetic_id: AssetId,
+) -> bool {
+    let mut flag = false;
+
+    let mut current_asset_id_opt = state.assets.synthetic_timely_data_head.read();
+    while let Option::Some(current_asset_id) = current_asset_id_opt {
+        if current_asset_id == synthetic_id {
+            flag = true;
+            break;
+        }
+
+        current_asset_id_opt = state
+            .assets
+            .synthetic_timely_data
+            .entry(current_asset_id)
+            .next
+            .read();
+    };
+    flag
+}
+
+pub fn check_synthetic_asset(
+    state: @Core::ContractState,
+    synthetic_id: AssetId,
+    is_active: bool,
+    risk_factor: u8,
+    quorum: u8,
+    resolution: u64,
+    price: Price,
+    last_price_update: Timestamp,
+    funding_index: FundingIndex,
+) {
+    check_synthetic_config(
+        :state, :synthetic_id, is_active: false, :risk_factor, :quorum, :resolution,
+    );
+    check_synthetic_timely_data(
+        :state,
+        :synthetic_id,
+        price: Zero::zero(),
+        last_price_update: Zero::zero(),
+        funding_index: Zero::zero(),
+    );
+    // Check the synthetic_timely_data list.
+    assert!(is_asset_in_synthetic_timely_data_list(:state, :synthetic_id));
+}
+
