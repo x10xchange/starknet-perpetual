@@ -441,7 +441,7 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state
+    let deposit_hash = state
         .deposit(
             asset_id: cfg.collateral_cfg.asset_id.into(),
             quantized_amount: DEPOSIT_AMOUNT,
@@ -460,21 +460,7 @@ fn test_successful_deposit() {
         contract_state_balance_after_deposit,
         (CONTRACT_INIT_BALANCE + DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into()).into(),
     );
-    let status = state
-        .deposits
-        .registered_deposits
-        .entry(
-            state
-                .deposits
-                .deposit_hash(
-                    signer: user.address,
-                    asset_id: cfg.collateral_cfg.asset_id.into(),
-                    quantized_amount: DEPOSIT_AMOUNT,
-                    beneficiary: user.position_id.value,
-                    salt: user.salt_counter,
-                ),
-        )
-        .read();
+    let status = state.deposits.registered_deposits.entry(deposit_hash).read();
     if let DepositStatus::PENDING(timestamp) = status {
         assert_eq!(timestamp, expected_time);
     } else {
