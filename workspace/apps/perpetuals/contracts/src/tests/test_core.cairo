@@ -295,9 +295,9 @@ fn test_successful_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let deposit_hash = state
         .deposit(
+            beneficiary: user.position_id.value,
             asset_id: cfg.collateral_cfg.asset_id.into(),
             quantized_amount: DEPOSIT_AMOUNT,
-            beneficiary: user.position_id.value,
             salt: user.salt_counter,
         );
 

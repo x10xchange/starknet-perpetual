@@ -387,9 +387,9 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             depositor: ContractAddress,
+            position_id: PositionId,
             collateral_id: AssetId,
             amount: u128,
-            position_id: PositionId,
             salt: felt252,
         ) {
             self._validate_deposit(:operator_nonce, :position_id, :collateral_id);
@@ -397,9 +397,9 @@ pub mod Core {
                 .deposits
                 .process_deposit(
                     :depositor,
+                    beneficiary: position_id.into(),
                     asset_id: collateral_id.into(),
                     quantized_amount: amount,
-                    beneficiary: position_id.into(),
                     :salt,
                 );
             self
