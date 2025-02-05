@@ -50,17 +50,19 @@ fn add_colateral(
     let (collateral_config, mut collateral_timely_data) = generate_collateral(
         cfg.collateral_cfg, :token_state,
     );
-    state.collateral_config.write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
-    state.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
-    state.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+    state
+        .collateral_config
+        .write(*cfg.collateral_cfg.collateral_id, Option::Some(collateral_config));
+    state.collateral_timely_data.write(*cfg.collateral_cfg.collateral_id, collateral_timely_data);
+    state.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.collateral_id));
 }
 
 fn add_synthetic(
     ref state: AssetsComponent::ComponentState<Core::ContractState>, cfg: @PerpetualsInitConfig,
 ) {
-    state.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
-    state.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
-    state.synthetic_config.write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
+    state.synthetic_timely_data.write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
+    state.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
+    state.synthetic_config.write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
 }
 
 #[test]
@@ -96,7 +98,7 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     state
         .synthetic_timely_data
-        .entry(cfg.synthetic_cfg.asset_id)
+        .entry(cfg.synthetic_cfg.synthetic_id)
         .last_price_update
         .write(Time::now());
     // Set the block timestamp to be after the price validation interval
@@ -115,8 +117,12 @@ fn test_validate_prices() {
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     // Update last price updates for assets
     let now = Time::now();
-    state.synthetic_timely_data.entry(cfg.synthetic_cfg.asset_id).last_price_update.write(now);
-    state.collateral_timely_data.entry(cfg.collateral_cfg.asset_id).last_price_update.write(now);
+    state.synthetic_timely_data.entry(cfg.synthetic_cfg.synthetic_id).last_price_update.write(now);
+    state
+        .collateral_timely_data
+        .entry(cfg.collateral_cfg.collateral_id)
+        .last_price_update
+        .write(now);
     state._validate_prices(:now);
     assert_eq!(state.last_price_validation.read(), new_time);
 }

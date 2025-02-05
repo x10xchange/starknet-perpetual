@@ -3,32 +3,31 @@ use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::types::{AssetAmount, PositionId};
+use perpetuals::core::types::PositionId;
+use perpetuals::core::types::asset::AssetId;
 use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct WithdrawArgs {
     pub position_id: PositionId,
     pub salt: felt252,
-    pub expiration: Timestamp,
-    pub collateral: AssetAmount,
+    pub collateral_id: AssetId,
+    pub amount: u64,
     pub recipient: ContractAddress,
+    pub expiration: Timestamp,
 }
 
 /// selector!(
 ///   "\"WithdrawArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"salt\":\"felt\",
-///    \"expiration\":\"Timestamp\",
-///    \"collateral\":\"AssetAmount\",
 ///    \"recipient\":\"ContractAddress\"
+///    \"collateral_id\":\"AssetId\",
+///    \"amount\":\"u64\",
+///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
-///    )"
-///    \"AssetAmount\"(
-///    \"asset_id\":\"AssetId\",
-///    \"amount\":\"i128\",
 ///    )"
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
@@ -38,7 +37,7 @@ pub struct WithdrawArgs {
 ///    )"
 /// );
 const WITHDRAW_ARGS_TYPE_HASH: HashType =
-    0x3ba0a952228788e50a6e418238b46842e5d070e7f381191adc65bade6b91c99;
+    0x37c3df1ba2eb3467001cbd2a4f75769284b49103ec57f4cbf6ce7a99b3e9c0c;
 
 impl StructHashImpl of StructHash<WithdrawArgs> {
     fn hash_struct(self: @WithdrawArgs) -> HashType {
@@ -54,7 +53,7 @@ mod tests {
     #[test]
     fn test_withdraw_type_hash() {
         let expected = selector!(
-            "\"WithdrawArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\",\"recipient\":\"ContractAddress\")\"PositionId\"(\"value\":\"felt\")\"AssetAmount\"(\"asset_id\":\"felt\",\"amount\":\"i128\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"WithdrawArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"recipient\":\"ContractAddress\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
         );
         assert_eq!(WITHDRAW_ARGS_TYPE_HASH, expected);
     }

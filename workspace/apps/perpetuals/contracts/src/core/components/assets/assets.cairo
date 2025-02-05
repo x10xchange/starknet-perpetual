@@ -300,7 +300,7 @@ pub(crate) mod AssetsComponent {
             synthetic_timely_data.price.write(price);
             synthetic_timely_data.last_price_update.write(now);
 
-            let synthetic_config = self._get_synthetic_config(asset_id);
+            let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
             // If the asset is not active, it'll be activated.
             if !synthetic_config.is_active {
                 // Activates the synthetic asset.
@@ -328,7 +328,7 @@ pub(crate) mod AssetsComponent {
             price: u128,
             signed_prices: Span<SignedPrice>,
         ) {
-            let asset_config = self._get_synthetic_config(asset_id);
+            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
             assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
 
             let mut prices: Array<u128> = array![];

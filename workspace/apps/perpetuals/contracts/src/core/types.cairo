@@ -29,13 +29,6 @@ pub impl PositionIdIntoU32 of Into<PositionId, u32> {
     }
 }
 
-
-#[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
-pub struct AssetAmount {
-    pub asset_id: AssetId,
-    pub amount: i64,
-}
-
 #[derive(Debug, Drop, Serde)]
 pub struct PositionData {
     pub asset_entries: Span<AssetEntry>,

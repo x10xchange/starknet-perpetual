@@ -51,7 +51,7 @@ pub mod Core {
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{
-        AssetAmount, AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId,
+        AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId,
     };
     use perpetuals::core::value_risk_calculator::{
         validate_liquidated_position, validate_position_is_healthy_or_healthier,
@@ -298,8 +298,8 @@ pub mod Core {
             ref self: ContractState,
             signature: Signature,
             position_id: PositionId,
-            expiration: Timestamp,
             new_public_key: PublicKey,
+            expiration: Timestamp,
         ) {
             let position = self._get_position_const(:position_id);
             assert(
@@ -337,8 +337,8 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             position_id: PositionId,
-            expiration: Timestamp,
             new_public_key: PublicKey,
+            expiration: Timestamp,
         ) {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
@@ -404,20 +404,19 @@ pub mod Core {
                 );
             self
                 .apply_funding_and_update_balance(
-                    :position_id,
-                    asset_id: collateral_id,
-                    diff: amount.try_into().expect(AMOUNT_TOO_LARGE),
+                    :position_id, asset_id: collateral_id, diff: amount.into(),
                 );
         }
 
         fn withdraw_request(
             ref self: ContractState,
             signature: Signature,
-            position_id: PositionId,
-            salt: felt252,
-            expiration: Timestamp,
-            collateral: AssetAmount,
             recipient: ContractAddress,
+            position_id: PositionId,
+            collateral_id: AssetId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
         ) {
             let position = self._get_position_const(:position_id);
             let hash = self
@@ -426,12 +425,19 @@ pub mod Core {
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    args: WithdrawArgs { position_id, salt, expiration, collateral, recipient },
+                    args: WithdrawArgs {
+                        position_id, salt, expiration, collateral_id, amount, recipient,
+                    },
                 );
             self
                 .emit(
                     events::WithdrawRequest {
-                        position_id, recipient, collateral, expiration, withdraw_request_hash: hash,
+                        position_id,
+                        recipient,
+                        collateral_id,
+                        amount,
+                        expiration,
+                        withdraw_request_hash: hash,
                     },
                 );
         }
@@ -458,18 +464,17 @@ pub mod Core {
         fn withdraw(
             ref self: ContractState,
             operator_nonce: u64,
-            position_id: PositionId,
-            salt: felt252,
-            expiration: Timestamp,
-            collateral: AssetAmount,
             recipient: ContractAddress,
+            position_id: PositionId,
+            collateral_id: AssetId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
         ) {
             self
                 ._validate_withdraw(
-                    :operator_nonce, :position_id, :salt, :expiration, :collateral, :recipient,
+                    :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
                 );
-
-            let collateral_id = collateral.asset_id;
 
             /// Execution - Withdraw:
             let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
@@ -482,7 +487,7 @@ pub mod Core {
                 .aggregate_pending_deposit
                 .read(collateral_id.into());
             let erc20_balance = token_contract.balance_of(get_contract_address());
-            let withdraw_unquantized_amount = collateral_cfg.quantum * collateral.amount.abs();
+            let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
             assert(
                 erc20_balance >= withdraw_unquantized_amount.into()
                     + pending_unquantized_amount.into(),
@@ -492,7 +497,7 @@ pub mod Core {
 
             /// Validations - Fundamentals:
             let before = self._get_provisional_main_collateral_balance(:position_id);
-            let after = before.sub(collateral.amount);
+            let after = before - amount.into();
             let price = self.assets._get_collateral_price(:collateral_id);
             let asset_diff_entries = array![
                 AssetDiffEntry {
@@ -514,13 +519,20 @@ pub mod Core {
             let hash = self
                 .request_approvals
                 .consume_approved_request(
-                    args: WithdrawArgs { position_id, salt, expiration, collateral, recipient },
+                    args: WithdrawArgs {
+                        position_id, salt, expiration, collateral_id, amount, recipient,
+                    },
                     public_key: position.owner_public_key.read(),
                 );
             self
                 .emit(
                     events::Withdraw {
-                        position_id, recipient, collateral, expiration, withdraw_request_hash: hash,
+                        position_id,
+                        recipient,
+                        collateral_id,
+                        amount,
+                        expiration,
+                        withdraw_request_hash: hash,
                     },
                 );
         }
@@ -528,11 +540,12 @@ pub mod Core {
         fn transfer_request(
             ref self: ContractState,
             signature: Signature,
-            position_id: PositionId,
             recipient: PositionId,
-            salt: felt252,
+            position_id: PositionId,
+            collateral_id: AssetId,
+            amount: u64,
             expiration: Timestamp,
-            collateral: AssetAmount,
+            salt: felt252,
         ) {
             let position = self._get_position_const(:position_id);
             let hash = self
@@ -541,40 +554,61 @@ pub mod Core {
                     owner_account: position.owner_account.read(),
                     public_key: position.owner_public_key.read(),
                     :signature,
-                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
+                    args: TransferArgs {
+                        position_id, recipient, salt, expiration, collateral_id, amount,
+                    },
                 );
             self
                 .emit(
                     events::TransferRequest {
-                        position_id, recipient, collateral, expiration, transfer_request_hash: hash,
+                        position_id,
+                        recipient,
+                        collateral_id,
+                        amount,
+                        expiration,
+                        transfer_request_hash: hash,
                     },
                 );
         }
         fn transfer(
             ref self: ContractState,
             operator_nonce: u64,
-            position_id: PositionId,
             recipient: PositionId,
-            salt: felt252,
+            position_id: PositionId,
+            collateral_id: AssetId,
+            amount: u64,
             expiration: Timestamp,
-            collateral: AssetAmount,
+            salt: felt252,
         ) {
             let position = self._get_position_const(:position_id);
             self
                 ._validate_transfer(
-                    :operator_nonce, :position_id, :recipient, :salt, :expiration, :collateral,
+                    :operator_nonce,
+                    :position_id,
+                    :recipient,
+                    :salt,
+                    :expiration,
+                    :collateral_id,
+                    :amount,
                 );
-            self._execute_transfer(:position_id, :recipient, :collateral);
+            self._execute_transfer(:position_id, :recipient, :collateral_id, :amount);
             let hash = self
                 .request_approvals
                 .consume_approved_request(
-                    args: TransferArgs { position_id, recipient, salt, expiration, collateral },
+                    args: TransferArgs {
+                        position_id, recipient, salt, expiration, collateral_id, amount,
+                    },
                     public_key: position.owner_public_key.read(),
                 );
             self
                 .emit(
                     events::Transfer {
-                        position_id, recipient, collateral, expiration, transfer_request_hash: hash,
+                        position_id,
+                        recipient,
+                        collateral_id,
+                        amount,
+                        expiration,
+                        transfer_request_hash: hash,
                     },
                 );
         }
@@ -609,8 +643,8 @@ pub mod Core {
             order_b: Order,
             actual_amount_base_a: i64,
             actual_amount_quote_a: i64,
-            actual_fee_a: i64,
-            actual_fee_b: i64,
+            actual_fee_a: u64,
+            actual_fee_b: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
             /// Validations:
@@ -637,14 +671,14 @@ pub mod Core {
                 ._update_fulfillment(
                     position_id: position_id_a,
                     hash: hash_a,
-                    order_amount: order_a.base.amount,
+                    order_amount: order_a.base_amount,
                     actual_amount: actual_amount_base_a,
                 );
             self
                 ._update_fulfillment(
                     position_id: position_id_b,
                     hash: hash_b,
-                    order_amount: order_b.base.amount,
+                    order_amount: order_b.base_amount,
                     // Passing the negative of actual amounts to `order_b` as it is linked to
                     // `order_a`.
                     actual_amount: -actual_amount_base_a,
@@ -674,13 +708,19 @@ pub mod Core {
                 .emit(
                     events::Trade {
                         order_a_position_id: order_a.position_id,
-                        order_a_base: order_a.base,
-                        order_a_quote: order_a.quote,
-                        fee_a: order_a.fee,
+                        order_a_base_asset_id: order_a.base_asset_id,
+                        order_a_base_amount: order_a.base_amount,
+                        order_a_quote_asset_id: order_a.quote_asset_id,
+                        order_a_quote_amount: order_a.quote_amount,
+                        fee_a_asset_id: order_a.fee_asset_id,
+                        fee_a_amount: order_a.fee_amount,
                         order_b_position_id: order_b.position_id,
-                        order_b_base: order_b.base,
-                        order_b_quote: order_b.quote,
-                        fee_b: order_b.fee,
+                        order_b_base_asset_id: order_b.base_asset_id,
+                        order_b_base_amount: order_b.base_amount,
+                        order_b_quote_asset_id: order_b.quote_asset_id,
+                        order_b_quote_amount: order_b.quote_amount,
+                        fee_b_asset_id: order_b.fee_asset_id,
+                        fee_b_amount: order_b.fee_amount,
                         actual_amount_base_a,
                         actual_amount_quote_a,
                         actual_fee_a,
@@ -723,8 +763,9 @@ pub mod Core {
             liquidator_order: Order,
             actual_amount_base_liquidated: i64,
             actual_amount_quote_liquidated: i64,
-            actual_liquidator_fee: i64,
-            fee: AssetAmount,
+            actual_liquidator_fee: u64,
+            fee_asset_id: AssetId,
+            fee_amount: u64,
         ) {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
@@ -746,7 +787,7 @@ pub mod Core {
                 ._update_fulfillment(
                     position_id: liquidator_order.position_id,
                     hash: liquidator_order_hash,
-                    order_amount: liquidator_order.base.amount,
+                    order_amount: liquidator_order.base_amount,
                     // Passing the negative of actual amounts to `liquidator_order` as it is linked
                     // to liquidated_order.
                     actual_amount: -actual_amount_base_liquidated,
@@ -754,14 +795,12 @@ pub mod Core {
 
             let liquidated_order = Order {
                 position_id: liquidated_position_id,
-                base: AssetAmount {
-                    asset_id: liquidator_order.base.asset_id, amount: actual_amount_base_liquidated,
-                },
-                quote: AssetAmount {
-                    asset_id: liquidator_order.quote.asset_id,
-                    amount: actual_amount_quote_liquidated,
-                },
-                fee,
+                base_asset_id: liquidator_order.base_asset_id,
+                base_amount: actual_amount_base_liquidated,
+                quote_asset_id: liquidator_order.quote_asset_id,
+                quote_amount: actual_amount_quote_liquidated,
+                fee_asset_id,
+                fee_amount,
                 // Dummy values needed to initialize the struct and pass validation.
                 ..liquidator_order,
             };
@@ -773,7 +812,7 @@ pub mod Core {
                     order_b: liquidator_order,
                     actual_amount_base_a: actual_amount_base_liquidated,
                     actual_amount_quote_a: actual_amount_quote_liquidated,
-                    actual_fee_a: fee.amount,
+                    actual_fee_a: fee_amount,
                     actual_fee_b: actual_liquidator_fee,
                 );
 
@@ -791,13 +830,17 @@ pub mod Core {
                     events::Liquidate {
                         liquidated_position_id,
                         liquidator_order_position_id: liquidator_order.position_id,
-                        liquidator_order_base: liquidator_order.base,
-                        liquidator_order_quote: liquidator_order.quote,
-                        liquidator_order_fee: liquidator_order.fee,
+                        liquidator_order_base_asset_id: liquidator_order.base_asset_id,
+                        liquidator_order_base_amount: liquidator_order.base_amount,
+                        liquidator_order_quote_asset_id: liquidator_order.quote_asset_id,
+                        liquidator_order_quote_amount: liquidator_order.quote_amount,
+                        liquidator_order_fee_asset_id: liquidator_order.fee_asset_id,
+                        liquidator_order_fee_amount: liquidator_order.fee_amount,
                         actual_amount_base_liquidated,
                         actual_amount_quote_liquidated,
                         actual_liquidator_fee,
-                        insurance_fund_fee: fee,
+                        insurance_fund_fee_asset_id: fee_asset_id,
+                        insurance_fund_fee_amount: fee_amount,
                         liquidator_order_hash: liquidator_order_hash,
                     },
                 );
@@ -808,8 +851,10 @@ pub mod Core {
             operator_nonce: u64,
             delevereged_position: PositionId,
             deleverager_position: PositionId,
-            delevereged_base_asset: AssetAmount,
-            delevereged_quote_asset: AssetAmount,
+            delevereged_base_asset_id: AssetId,
+            delevereged_base_amount: i64,
+            delevereged_quote_asset_id: AssetId,
+            delevereged_quote_amount: i64,
         ) {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
@@ -818,8 +863,10 @@ pub mod Core {
                 ._validate_deleverage(
                     :delevereged_position,
                     :deleverager_position,
-                    :delevereged_base_asset,
-                    :delevereged_quote_asset,
+                    :delevereged_base_asset_id,
+                    :delevereged_base_amount,
+                    :delevereged_quote_asset_id,
+                    :delevereged_quote_amount,
                 )
         }
 
@@ -995,7 +1042,7 @@ pub mod Core {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             self.assets._validate_price_tick(:asset_id, :price, :signed_prices);
-            let synthetic_config = self.assets._get_synthetic_config(asset_id);
+            let synthetic_config = self.assets._get_synthetic_config(synthetic_id: asset_id);
             let converted_price = price.convert(resolution: synthetic_config.resolution);
             self.assets.set_price(:asset_id, price: converted_price);
         }
@@ -1108,13 +1155,13 @@ pub mod Core {
         }
 
         fn _create_asset_diff_entry(
-            ref self: ContractState, asset_id: AssetId, position_id: PositionId, amount: i64,
+            ref self: ContractState, asset_id: AssetId, position_id: PositionId, amount: Balance,
         ) -> AssetDiffEntry {
             let position_asset_balance = self._get_provisional_balance(:position_id, :asset_id);
             AssetDiffEntry {
                 id: asset_id,
                 before: position_asset_balance,
-                after: position_asset_balance.add(amount),
+                after: position_asset_balance + amount,
                 price: self.assets._get_collateral_price(collateral_id: asset_id),
                 risk_factor: self.assets._get_risk_factor(:asset_id),
             }
@@ -1128,25 +1175,25 @@ pub mod Core {
             order: Order,
             actual_amount_base: i64,
             actual_amount_quote: i64,
-            actual_fee: i64,
+            actual_fee: u64,
         ) -> Span<AssetDiffEntry> {
             let position_id = order.position_id;
 
             // fee asset.
-            let fee_asset_id = order.fee.asset_id;
+            let fee_asset_id = order.fee_asset_id;
             let fee_price = self.assets._get_asset_price(asset_id: fee_asset_id);
             let fee_balance = self._get_provisional_balance(:position_id, asset_id: fee_asset_id);
 
             let mut fee_diff = AssetDiffEntry {
                 id: fee_asset_id,
                 before: fee_balance,
-                after: fee_balance.sub(actual_fee),
+                after: fee_balance - actual_fee.into(),
                 price: fee_price,
                 risk_factor: self.assets._get_risk_factor(asset_id: fee_asset_id),
             };
 
             // Quote asset.
-            let quote_asset_id = order.quote.asset_id;
+            let quote_asset_id = order.quote_asset_id;
             let mut quote_diff: AssetDiffEntry = Default::default();
 
             if quote_asset_id == fee_asset_id {
@@ -1166,7 +1213,7 @@ pub mod Core {
             }
 
             // Base asset.
-            let base_asset_id = order.base.asset_id;
+            let base_asset_id = order.base_asset_id;
             let mut base_diff: AssetDiffEntry = Default::default();
 
             if base_asset_id == fee_asset_id {
@@ -1202,7 +1249,7 @@ pub mod Core {
             liquidator_order: Order,
             actual_amount_base_liquidated: i64,
             actual_amount_quote_liquidated: i64,
-            actual_liquidator_fee: i64,
+            actual_liquidator_fee: u64,
         ) {
             let liquidated_position_id = liquidated_order.position_id;
             let liquidated_position_data = self._get_position_data(liquidated_position_id);
@@ -1211,7 +1258,7 @@ pub mod Core {
                     order: liquidated_order,
                     actual_amount_base: actual_amount_base_liquidated,
                     actual_amount_quote: actual_amount_quote_liquidated,
-                    actual_fee: liquidated_order.fee.amount,
+                    actual_fee: liquidated_order.fee_amount,
                 );
 
             let liquidator_position_id = liquidator_order.position_id;
@@ -1240,14 +1287,14 @@ pub mod Core {
                 .positions
                 .entry(INSURANCE_FUND_POSITION)
                 .collateral_assets
-                .entry(liquidated_order.fee.asset_id)
+                .entry(liquidated_order.fee_asset_id)
                 .balance
-                .add_and_write(liquidated_order.fee.amount.into());
+                .add_and_write(liquidated_order.fee_amount.into());
             self
                 .positions
                 .entry(FEE_POSITION)
                 .collateral_assets
-                .entry(liquidator_order.fee.asset_id)
+                .entry(liquidator_order.fee_asset_id)
                 .balance
                 .add_and_write(actual_liquidator_fee.into());
 
@@ -1270,8 +1317,8 @@ pub mod Core {
             order_b: Order,
             actual_amount_base_a: i64,
             actual_amount_quote_a: i64,
-            actual_fee_a: i64,
-            actual_fee_b: i64,
+            actual_fee_a: u64,
+            actual_fee_b: u64,
         ) {
             let position_data_a = self._get_position_data(order_a.position_id);
             let asset_diff_entries_a = self
@@ -1305,14 +1352,14 @@ pub mod Core {
                 .positions
                 .entry(FEE_POSITION)
                 .collateral_assets
-                .entry(order_a.fee.asset_id)
+                .entry(order_a.fee_asset_id)
                 .balance
                 .add_and_write(actual_fee_a.into());
             self
                 .positions
                 .entry(FEE_POSITION)
                 .collateral_assets
-                .entry(order_b.fee.asset_id)
+                .entry(order_b.fee_asset_id)
                 .balance
                 .add_and_write(actual_fee_b.into());
 
@@ -1333,19 +1380,18 @@ pub mod Core {
             ref self: ContractState,
             position_id: PositionId,
             recipient: PositionId,
-            collateral: AssetAmount,
+            collateral_id: AssetId,
+            amount: u64,
         ) {
             // Parameters
             let sender_position_data = self._get_position_data(position_id);
             let asset_diff_entry_sender = self
                 ._create_asset_diff_entry(
-                    asset_id: collateral.asset_id, :position_id, amount: -collateral.amount,
+                    asset_id: collateral_id, :position_id, amount: -(amount.into()),
                 );
             let asset_diff_entry_recipient = self
                 ._create_asset_diff_entry(
-                    asset_id: collateral.asset_id,
-                    position_id: recipient,
-                    amount: collateral.amount,
+                    asset_id: collateral_id, position_id: recipient, amount: amount.into(),
                 );
 
             // Execute transfer
@@ -1539,24 +1585,21 @@ pub mod Core {
         }
 
         fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
-            // Positive fee check.
-            assert(order.fee.amount >= 0, INVALID_NEGATIVE_FEE);
-
             // Non-zero amount check.
-            assert(order.base.amount != 0, INVALID_ZERO_AMOUNT);
-            assert(order.quote.amount != 0, INVALID_ZERO_AMOUNT);
+            assert(order.base_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(order.quote_amount != 0, INVALID_ZERO_AMOUNT);
 
             // Expiration check.
             assert_with_byte_array(now < order.expiration, order_expired_err(order.position_id));
 
             // Assets check.
-            self.assets._validate_collateral_active(collateral_id: order.fee.asset_id);
-            self.assets._validate_collateral_active(collateral_id: order.quote.asset_id);
-            self.assets._validate_asset_active(asset_id: order.base.asset_id);
+            self.assets._validate_collateral_active(collateral_id: order.fee_asset_id);
+            self.assets._validate_collateral_active(collateral_id: order.quote_asset_id);
+            self.assets._validate_asset_active(asset_id: order.base_asset_id);
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(a: order.quote.amount, b: order.base.amount),
+                !have_same_sign(a: order.quote_amount, b: order.base_amount),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
         }
@@ -1578,8 +1621,8 @@ pub mod Core {
             order_b: Order,
             actual_amount_base_a: i64,
             actual_amount_quote_a: i64,
-            actual_fee_a: i64,
-            actual_fee_b: i64,
+            actual_fee_a: u64,
+            actual_fee_b: u64,
         ) {
             let now = Time::now();
             self._validate_order(order: order_a, :now);
@@ -1603,72 +1646,68 @@ pub mod Core {
             assert(0 <= actual_fee_b, INVALID_NEGATIVE_FEE);
 
             // Types validation.
-            assert(order_a.quote.asset_id == order_b.quote.asset_id, DIFFERENT_QUOTE_ASSET_IDS);
-            assert(order_a.base.asset_id == order_b.base.asset_id, DIFFERENT_BASE_ASSET_IDS);
+            assert(order_a.quote_asset_id == order_b.quote_asset_id, DIFFERENT_QUOTE_ASSET_IDS);
+            assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(a: order_a.quote.amount, b: order_b.quote.amount),
+                !have_same_sign(a: order_a.quote_amount, b: order_b.quote_amount),
                 INVALID_TRADE_QUOTE_AMOUNT_SIGN,
             );
         }
 
         fn validate_deleverage_base_shrinks(
-            ref self: ContractState, position_id: PositionId, asset_amount: AssetAmount,
+            ref self: ContractState, position_id: PositionId, asset_id: AssetId, amount: i64,
         ) {
             let position_base_balance: i64 = self
-                ._get_provisional_balance(:position_id, asset_id: asset_amount.asset_id)
+                ._get_provisional_balance(:position_id, :asset_id)
                 .into();
 
             assert(
-                have_same_sign(a: asset_amount.amount, b: position_base_balance),
+                have_same_sign(a: amount, b: position_base_balance),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
-            assert(
-                asset_amount.amount.abs() <= position_base_balance.abs(),
-                INVALID_DELEVERAGE_BASE_CHANGE,
-            );
+            assert(amount.abs() <= position_base_balance.abs(), INVALID_DELEVERAGE_BASE_CHANGE);
         }
 
         fn _validate_deleverage(
             ref self: ContractState,
             delevereged_position: PositionId,
             deleverager_position: PositionId,
-            delevereged_base_asset: AssetAmount,
-            delevereged_quote_asset: AssetAmount,
+            delevereged_base_asset_id: AssetId,
+            delevereged_base_amount: i64,
+            delevereged_quote_asset_id: AssetId,
+            delevereged_quote_amount: i64,
         ) {
-            let base_amount = delevereged_base_asset.amount;
-            let quote_amount = delevereged_quote_asset.amount;
-
             // Non-zero amount check.
-            assert(base_amount != 0, INVALID_ZERO_AMOUNT);
-            assert(quote_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(delevereged_base_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(delevereged_quote_amount != 0, INVALID_ZERO_AMOUNT);
 
             // Assets check.
-            self
-                .assets
-                ._validate_collateral_active(collateral_id: delevereged_quote_asset.asset_id);
+            self.assets._validate_collateral_active(collateral_id: delevereged_quote_asset_id);
             assert(
-                self.assets._is_synthetic(asset_id: delevereged_base_asset.asset_id),
+                self.assets._is_synthetic(asset_id: delevereged_base_asset_id),
                 INVALID_NON_SYNTHETIC_ASSET,
             );
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(a: base_amount, b: quote_amount), INVALID_TRADE_WRONG_AMOUNT_SIGN,
+                !have_same_sign(a: delevereged_base_amount, b: delevereged_quote_amount),
+                INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
             self
                 .validate_deleverage_base_shrinks(
-                    position_id: delevereged_position, asset_amount: delevereged_base_asset,
+                    position_id: delevereged_position,
+                    asset_id: delevereged_base_asset_id,
+                    amount: delevereged_base_amount,
                 );
             self
                 .validate_deleverage_base_shrinks(
                     position_id: deleverager_position,
-                    asset_amount: AssetAmount {
-                        amount: -delevereged_base_asset.amount, ..delevereged_base_asset,
-                    },
+                    asset_id: delevereged_base_asset_id,
+                    amount: -delevereged_base_amount,
                 );
         }
 
@@ -1683,7 +1722,8 @@ pub mod Core {
             recipient: PositionId,
             salt: felt252,
             expiration: Timestamp,
-            collateral: AssetAmount,
+            collateral_id: AssetId,
+            amount: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
 
@@ -1691,11 +1731,11 @@ pub mod Core {
             self._validate_position_exists(position_id: recipient);
 
             // Validate collateral.
-            self.assets._validate_collateral_active(collateral_id: collateral.asset_id);
-            assert(collateral.amount > 0, INVALID_TRANSFER_AMOUNT);
+            self.assets._validate_collateral_active(:collateral_id);
+            assert(amount > 0, INVALID_TRANSFER_AMOUNT);
             let sender_collateral_amount = self
                 ._get_provisional_main_collateral_balance(:position_id);
-            assert(sender_collateral_amount.into() >= collateral.amount, AMOUNT_TOO_LARGE);
+            assert(sender_collateral_amount >= amount.into(), AMOUNT_TOO_LARGE);
 
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
@@ -1705,16 +1745,14 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             position_id: PositionId,
-            salt: felt252,
+            collateral_id: AssetId,
+            amount: u64,
             expiration: Timestamp,
-            collateral: AssetAmount,
-            recipient: ContractAddress,
         ) {
             self._validate_operator_flow(:operator_nonce);
-            let amount = collateral.amount;
-            assert(amount > 0, INVALID_NON_POSITIVE_AMOUNT);
+            self._validate_position_exists(:position_id);
+            assert(amount > 0, INVALID_ZERO_AMOUNT);
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            let collateral_id = collateral.asset_id;
             self.assets._validate_collateral_active(:collateral_id);
         }
     }

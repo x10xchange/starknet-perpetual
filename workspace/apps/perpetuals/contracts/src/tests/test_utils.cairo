@@ -177,13 +177,13 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     initial_supply: INITIAL_SUPPLY,
                     owner: COLLATERAL_OWNER(),
                 },
-                asset_id: COLLATERAL_ASSET_ID(),
+                collateral_id: COLLATERAL_ASSET_ID(),
                 version: COLLATERAL_VERSION,
                 quantum: COLLATERAL_QUANTUM,
                 risk_factor: Zero::zero(),
                 quorum: COLLATERAL_QUORUM,
             },
-            synthetic_cfg: SyntheticCfg { asset_id: SYNTHETIC_ASSET_ID_1() },
+            synthetic_cfg: SyntheticCfg { synthetic_id: SYNTHETIC_ASSET_ID_1() },
         }
     }
 }
@@ -192,7 +192,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
 #[derive(Drop)]
 pub struct CollateralCfg {
     pub token_cfg: TokenConfig,
-    pub asset_id: AssetId,
+    pub collateral_id: AssetId,
     pub version: u8,
     pub quantum: u64,
     pub risk_factor: FixedTwoDecimal,
@@ -202,7 +202,7 @@ pub struct CollateralCfg {
 /// The 'SyntheticCfg' struct represents a synthetic asset config with an associated asset id.
 #[derive(Drop)]
 pub struct SyntheticCfg {
-    pub asset_id: AssetId,
+    pub synthetic_id: AssetId,
 }
 
 /// The `SystemConfig` struct represents the configuration settings for the entire system.
@@ -280,13 +280,16 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
     state
         .assets
         .collateral_config
-        .write(*cfg.collateral_cfg.asset_id, Option::Some(collateral_config));
-    state.assets.collateral_timely_data.write(*cfg.collateral_cfg.asset_id, collateral_timely_data);
-    state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+        .write(*cfg.collateral_cfg.collateral_id, Option::Some(collateral_config));
+    state
+        .assets
+        .collateral_timely_data
+        .write(*cfg.collateral_cfg.collateral_id, collateral_timely_data);
+    state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.collateral_id));
     state
         .deposits
         .register_token(
-            asset_id: (*cfg.collateral_cfg.asset_id).into(),
+            asset_id: (*cfg.collateral_cfg.collateral_id).into(),
             token_address: *token_state.address,
             quantum: *cfg.collateral_cfg.quantum,
         );
@@ -294,9 +297,12 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
     state
         .assets
         .synthetic_config
-        .write(*cfg.synthetic_cfg.asset_id, Option::Some(SYNTHETIC_CONFIG()));
-    state.assets.synthetic_timely_data.write(*cfg.synthetic_cfg.asset_id, SYNTHETIC_TIMELY_DATA());
-    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.asset_id));
+        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
+    state
+        .assets
+        .synthetic_timely_data
+        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
+    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
     state.assets.num_of_active_synthetic_assets.write(1);
 
     // Fund the contract.
@@ -312,10 +318,10 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
     state
         ._apply_funding_and_set_balance(
             position_id: user.position_id,
-            asset_id: *cfg.collateral_cfg.asset_id,
+            asset_id: *cfg.collateral_cfg.collateral_id,
             balance: COLLATERAL_BALANCE_AMOUNT.into(),
         );
-    position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.asset_id));
+    position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.collateral_id));
 }
 
 pub fn init_position_with_owner(

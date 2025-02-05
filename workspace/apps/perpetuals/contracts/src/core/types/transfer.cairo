@@ -3,7 +3,8 @@ use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::types::{AssetAmount, PositionId};
+use perpetuals::core::types::PositionId;
+use perpetuals::core::types::asset::AssetId;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct TransferArgs {
@@ -11,17 +12,19 @@ pub struct TransferArgs {
     pub recipient: PositionId,
     pub salt: felt252,
     pub expiration: Timestamp,
-    pub collateral: AssetAmount,
+    pub collateral_id: AssetId,
+    pub amount: u64,
 }
 
 
 /// selector!(
 ///   "\"TransferArgs\"(
 ///    \"position_id\":\"PositionId\",
-///    \"recipient\":\"PositionId\",
 ///    \"salt\":\"felt\",
+///    \"recipient\":\"PositionId\",
+///    \"collateral_id\":\"AssetId\"
+///    \"amount\":\"u64\"
 ///    \"expiration\":\"Timestamp\",
-///    \"collateral\":\"AssetAmount\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
@@ -29,16 +32,12 @@ pub struct TransferArgs {
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
 ///    )
-///    \"AssetAmount\"(
-///    \"asset_id\":\"AssetId\",
-///    \"amount\":\"i64\",
-///    )"
 ///    \"AssetId\"(
 ///    \"value\":\"felt\"
 ///    )"
 /// );
 const TRANSFER_ARGS_TYPE_HASH: HashType =
-    0x345882384b2e2bd0da2a9aadd9cc9ef9c27c975d7d6d499eb9c0667d0452ed8;
+    0x35184c13d2cad195bb6bcec92c2fd9d47432bb88f92f2802eb40b850329fd3;
 
 impl StructHashImpl of StructHash<TransferArgs> {
     fn hash_struct(self: @TransferArgs) -> HashType {
@@ -54,7 +53,7 @@ mod tests {
     #[test]
     fn test_transfer_type_hash() {
         let expected = selector!(
-            "\"TransferArgs\"(\"position_id\":\"PositionId\",\"recipient\":\"PositionId\",\"salt\":\"felt\",\"expiration\":\"Timestamp\",\"collateral\":\"AssetAmount\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetAmount\"(\"asset_id\":\"AssetId\",\"amount\":\"i64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"TransferArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"recipient\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
         );
         assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
     }

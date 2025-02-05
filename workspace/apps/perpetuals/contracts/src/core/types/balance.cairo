@@ -1,8 +1,21 @@
 use core::num::traits::Zero;
+use core::traits::Neg;
 
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Balance {
     value: i64,
+}
+
+impl BalancePartialOrd of PartialOrd<Balance> {
+    fn lt(lhs: Balance, rhs: Balance) -> bool {
+        lhs.value < rhs.value
+    }
+}
+
+impl BalanceNeg of Neg<Balance> {
+    fn neg(a: Balance) -> Balance {
+        Balance { value: -(a.value) }
+    }
 }
 
 impl BalanceAdd of Add<Balance> {
@@ -28,19 +41,23 @@ pub impl BalanceSubAssign of core::ops::SubAssign<Balance, Balance> {
     }
 }
 
-pub impl U128TryIntoBalance of TryInto<u128, Balance> {
-    fn try_into(self: u128) -> Option<Balance> {
-        if let Option::Some(value) = self.try_into() {
-            Option::Some(Balance { value })
-        } else {
-            Option::None
-        }
-    }
-}
-
 pub impl I64IntoBalance of Into<i64, Balance> {
     fn into(self: i64) -> Balance {
         Balance { value: self }
+    }
+}
+
+pub impl U64IntoBalance of Into<u64, Balance> {
+    fn into(self: u64) -> Balance {
+        let value: i64 = self.try_into().expect('Balance value doesn\'t fit i64');
+        Balance { value }
+    }
+}
+
+pub impl U128IntoBalance of Into<u128, Balance> {
+    fn into(self: u128) -> Balance {
+        let value: i64 = self.try_into().expect('Balance value doesn\'t fit i64');
+        Balance { value }
     }
 }
 

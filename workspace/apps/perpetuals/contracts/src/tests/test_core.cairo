@@ -4,7 +4,6 @@ use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::TEN_POW_12;
-use contracts_commons::math::Abs;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
@@ -14,7 +13,8 @@ use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
-use perpetuals::core::types::AssetAmount;
+use perpetuals::core::types::PositionId;
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::SyntheticConfig;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
@@ -180,7 +180,7 @@ fn test_successful_deactivate_synthetic_asset() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
     // Setup parameters:
-    let synthetic_id = cfg.synthetic_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     assert!(state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
 
     // Test:
@@ -226,7 +226,8 @@ fn test_successful_withdraw() {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: WITHDRAW_AMOUNT,
         recipient: user.address,
     };
     let signature = user.sign_message(withdraw_args.get_message_hash(user.get_public_key()));
@@ -239,25 +240,27 @@ fn test_successful_withdraw() {
     state
         .withdraw_request(
             :signature,
-            position_id: withdraw_args.position_id,
-            salt: withdraw_args.salt,
-            expiration: withdraw_args.expiration,
-            collateral: withdraw_args.collateral,
             recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            collateral_id: withdraw_args.collateral_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .withdraw(
             :operator_nonce,
-            position_id: withdraw_args.position_id,
-            salt: withdraw_args.salt,
-            expiration: withdraw_args.expiration,
-            collateral: withdraw_args.collateral,
             recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            collateral_id: withdraw_args.collateral_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
     // Check:
     let user_balance = token_state.balance_of(user.address);
-    let onchain_amount = (WITHDRAW_AMOUNT.abs() * COLLATERAL_QUANTUM);
+    let onchain_amount = (WITHDRAW_AMOUNT * COLLATERAL_QUANTUM);
     assert_eq!(user_balance, onchain_amount.into());
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
@@ -296,7 +299,7 @@ fn test_successful_deposit() {
     let deposit_hash = state
         .deposit(
             beneficiary: user.position_id.value,
-            asset_id: cfg.collateral_cfg.asset_id.into(),
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -344,23 +347,29 @@ fn test_successful_trade() {
     let mut expiration = Time::now();
     expiration += Time::days(1);
 
-    let collateral_id = cfg.collateral_cfg.asset_id;
-    let synthetic_id = cfg.synthetic_cfg.asset_id;
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
 
     let order_a = Order {
         position_id: user_a.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
-        expiration,
         salt: user_a.salt_counter,
+        base_asset_id: synthetic_id,
+        base_amount: BASE,
+        quote_asset_id: collateral_id,
+        quote_amount: QUOTE,
+        fee_asset_id: collateral_id,
+        fee_amount: FEE,
+        expiration,
     };
 
     let order_b = Order {
         position_id: user_b.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: -BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
+        base_asset_id: synthetic_id,
+        base_amount: -BASE,
+        quote_asset_id: collateral_id,
+        quote_amount: -QUOTE,
+        fee_asset_id: collateral_id,
+        fee_amount: FEE,
         expiration,
         salt: user_b.salt_counter,
     };
@@ -389,73 +398,24 @@ fn test_successful_trade() {
         ._get_provisional_balance(position_id: user_a.position_id, asset_id: collateral_id);
     let user_a_synthetic_balance = state
         ._get_provisional_balance(position_id: user_a.position_id, asset_id: synthetic_id);
-    assert_eq!(user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE + QUOTE).into());
+    assert_eq!(
+        user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
+    );
     assert_eq!(user_a_synthetic_balance, (BASE).into());
 
     let user_b_collateral_balance = state
         ._get_provisional_balance(position_id: user_b.position_id, asset_id: collateral_id);
     let user_b_synthetic_balance = state
         ._get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
-    assert_eq!(user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
+    assert_eq!(
+        user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
+    );
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
 
     let fee_position_balance = state
         ._get_provisional_balance(position_id: Core::FEE_POSITION, asset_id: collateral_id);
     assert_eq!(fee_position_balance, (FEE + FEE).into());
 }
-
-// TODO: Add all the illegal trade cases once safe dispatcher is supported.
-#[test]
-#[should_panic(expected: 'INVALID_NEGATIVE_FEE')]
-fn test_invalid_trade_non_positve_fee() {
-    // Setup state, token and user:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-
-    let mut user = Default::default();
-    init_position(cfg: @cfg, ref :state, user: user);
-
-    // Test params:
-    let BASE = 10;
-    let QUOTE = -5;
-    let FEE = -1;
-
-    // Setup parameters:
-    let mut expiration = Time::now();
-    expiration += Time::days(1);
-
-    let collateral_id = cfg.collateral_cfg.asset_id;
-    let synthetic_id = cfg.synthetic_cfg.asset_id;
-
-    let order = Order {
-        position_id: user.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
-        expiration,
-        salt: user.salt_counter,
-    };
-
-    let signature = user.sign_message(order.get_message_hash(user.get_public_key()));
-    let operator_nonce = state.nonce();
-
-    // Test:
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state
-        .trade(
-            :operator_nonce,
-            signature_a: signature,
-            signature_b: signature,
-            order_a: order,
-            order_b: order,
-            actual_amount_base_a: BASE,
-            actual_amount_quote_a: QUOTE,
-            actual_fee_a: 1,
-            actual_fee_b: 1,
-        );
-}
-
 
 #[test]
 #[should_panic(expected: 'INVALID_TRADE_WRONG_AMOUNT_SIGN')]
@@ -480,26 +440,32 @@ fn test_invalid_trade_same_base_signs() {
     let mut expiration = Time::now();
     expiration += Time::days(1);
 
-    let collateral_id = cfg.collateral_cfg.asset_id;
-    let synthetic_id = cfg.synthetic_cfg.asset_id;
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
 
     let order_a = Order {
         position_id: user_a.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
-        expiration,
         salt: user_a.salt_counter,
+        base_asset_id: synthetic_id,
+        base_amount: BASE,
+        quote_asset_id: collateral_id,
+        quote_amount: QUOTE,
+        fee_asset_id: collateral_id,
+        fee_amount: FEE,
+        expiration,
     };
 
     // Wrong sign for base amount.
     let order_b = Order {
         position_id: user_b.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
-        expiration,
         salt: user_b.salt_counter,
+        base_asset_id: synthetic_id,
+        base_amount: BASE,
+        quote_asset_id: collateral_id,
+        quote_amount: -QUOTE,
+        fee_asset_id: collateral_id,
+        fee_amount: FEE,
+        expiration,
     };
 
     let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.get_public_key()));
@@ -542,7 +508,8 @@ fn test_successful_withdraw_request_with_public_key() {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: WITHDRAW_AMOUNT,
         recipient: recipient.address,
     };
     let msg_hash = withdraw_args.get_message_hash(public_key: user.get_public_key());
@@ -553,11 +520,12 @@ fn test_successful_withdraw_request_with_public_key() {
     state
         .withdraw_request(
             :signature,
-            position_id: withdraw_args.position_id,
-            salt: withdraw_args.salt,
-            expiration: withdraw_args.expiration,
-            collateral: withdraw_args.collateral,
             recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            collateral_id: withdraw_args.collateral_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
 
     // Check:
@@ -584,9 +552,10 @@ fn test_successful_withdraw_request_with_owner() {
     let mut withdraw_args = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
-        expiration,
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: WITHDRAW_AMOUNT },
         recipient: recipient.address,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: WITHDRAW_AMOUNT,
+        expiration,
     };
     let msg_hash = withdraw_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
@@ -596,11 +565,12 @@ fn test_successful_withdraw_request_with_owner() {
     state
         .withdraw_request(
             :signature,
-            position_id: withdraw_args.position_id,
-            salt: withdraw_args.salt,
-            expiration: withdraw_args.expiration,
-            collateral: withdraw_args.collateral,
             recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            collateral_id: withdraw_args.collateral_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
 
     // Check:
@@ -622,7 +592,7 @@ fn test_successful_liquidate() {
     init_position(cfg: @cfg, ref :state, user: liquidated);
     add_synthetic(
         ref :state,
-        asset_id: cfg.synthetic_cfg.asset_id,
+        asset_id: cfg.synthetic_cfg.synthetic_id,
         position_id: liquidated.position_id,
         balance: -SYNTHETIC_BALANCE_AMOUNT,
     );
@@ -638,16 +608,19 @@ fn test_successful_liquidate() {
     expiration += Time::days(1);
     let operator_nonce = state.nonce();
 
-    let collateral_id = cfg.collateral_cfg.asset_id;
-    let synthetic_id = cfg.synthetic_cfg.asset_id;
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
 
     let order_liquidator = Order {
         position_id: liquidator.position_id,
-        base: AssetAmount { asset_id: synthetic_id, amount: -BASE },
-        quote: AssetAmount { asset_id: collateral_id, amount: -QUOTE },
-        fee: AssetAmount { asset_id: collateral_id, amount: FEE },
-        expiration,
         salt: liquidator.salt_counter,
+        base_asset_id: synthetic_id,
+        base_amount: -BASE,
+        quote_asset_id: collateral_id,
+        quote_amount: -QUOTE,
+        fee_asset_id: collateral_id,
+        fee_amount: FEE,
+        expiration,
     };
 
     let liquidator_signature = liquidator
@@ -665,7 +638,8 @@ fn test_successful_liquidate() {
             actual_amount_base_liquidated: BASE,
             actual_amount_quote_liquidated: QUOTE,
             actual_liquidator_fee: FEE,
-            fee: AssetAmount { asset_id: collateral_id, amount: INSURANCE_FEE },
+            fee_asset_id: collateral_id,
+            fee_amount: INSURANCE_FEE,
         );
 
     // Check:
@@ -683,7 +657,8 @@ fn test_successful_liquidate() {
         .balance
         .read();
     assert_eq!(
-        liquidated_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - INSURANCE_FEE + QUOTE).into(),
+        liquidated_collateral_balance,
+        (COLLATERAL_BALANCE_AMOUNT.into() - INSURANCE_FEE.into() + QUOTE.into()),
     );
     assert_eq!(liquidated_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
@@ -697,7 +672,10 @@ fn test_successful_liquidate() {
         .entry(synthetic_id)
         .balance
         .read();
-    assert_eq!(liquidator_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - FEE - QUOTE).into());
+    assert_eq!(
+        liquidator_collateral_balance,
+        (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
+    );
     assert_eq!(liquidator_synthetic_balance, (-BASE).into());
 
     let fee_position_balance = state
@@ -728,10 +706,11 @@ fn test_successful_transfer_request_using_public_key() {
 
     let mut transfer_args = TransferArgs {
         position_id: user.position_id,
-        recipient: recipient.position_id,
         salt: user.salt_counter,
+        recipient: recipient.position_id,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: TRANSFER_AMOUNT,
         expiration,
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
     };
     let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(msg_hash);
@@ -741,11 +720,12 @@ fn test_successful_transfer_request_using_public_key() {
     state
         .transfer_request(
             :signature,
-            position_id: transfer_args.position_id,
             recipient: transfer_args.recipient,
-            salt: transfer_args.salt,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
             expiration: transfer_args.expiration,
-            collateral: transfer_args.collateral,
+            salt: transfer_args.salt,
         );
 
     // Check:
@@ -773,7 +753,8 @@ fn test_successful_transfer_request_with_owner() {
         recipient: recipient.position_id,
         salt: user.salt_counter,
         expiration,
-        collateral: AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT },
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: TRANSFER_AMOUNT,
     };
     let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
@@ -783,11 +764,12 @@ fn test_successful_transfer_request_with_owner() {
     state
         .transfer_request(
             :signature,
-            position_id: transfer_args.position_id,
             recipient: transfer_args.recipient,
-            salt: transfer_args.salt,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
             expiration: transfer_args.expiration,
-            collateral: transfer_args.collateral,
+            salt: transfer_args.salt,
         );
 
     // Check:
@@ -821,8 +803,8 @@ fn test_successful_set_public_key_request() {
         .set_public_key_request(
             :signature,
             position_id: set_public_key_args.position_id,
-            expiration: set_public_key_args.expiration,
             new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
         );
 
     // Check:
@@ -855,8 +837,8 @@ fn test_successful_set_public_key() {
         .set_public_key_request(
             :signature,
             position_id: set_public_key_args.position_id,
-            expiration: set_public_key_args.expiration,
             new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
         );
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -864,8 +846,8 @@ fn test_successful_set_public_key() {
         .set_public_key(
             operator_nonce: state.nonce(),
             position_id: set_public_key_args.position_id,
-            expiration: set_public_key_args.expiration,
             new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
         );
     // Check:
     assert_eq!(
@@ -897,8 +879,8 @@ fn test_successful_set_public_key_no_request() {
         .set_public_key(
             operator_nonce: state.nonce(),
             position_id: set_public_key_args.position_id,
-            expiration: set_public_key_args.expiration,
             new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
         );
 }
 
@@ -918,16 +900,16 @@ fn test_successful_transfer() {
 
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
-    let collateral_id = cfg.collateral_cfg.asset_id;
+    let collateral_id = cfg.collateral_cfg.collateral_id;
     let operator_nonce = state.nonce();
-    let collateral = AssetAmount { asset_id: cfg.collateral_cfg.asset_id, amount: TRANSFER_AMOUNT };
 
     let transfer_args = TransferArgs {
         position_id: sender.position_id,
         recipient: recipient.position_id,
         salt: sender.salt_counter,
         expiration: expiration,
-        collateral: collateral,
+        collateral_id,
+        amount: TRANSFER_AMOUNT,
     };
 
     let sender_signature = sender
@@ -936,31 +918,37 @@ fn test_successful_transfer() {
     state
         .transfer_request(
             signature: sender_signature,
-            position_id: transfer_args.position_id,
             recipient: transfer_args.recipient,
-            salt: transfer_args.salt,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
             expiration: transfer_args.expiration,
-            collateral: transfer_args.collateral,
+            salt: transfer_args.salt,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .transfer(
             :operator_nonce,
-            position_id: transfer_args.position_id,
             recipient: transfer_args.recipient,
-            salt: transfer_args.salt,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
             expiration: transfer_args.expiration,
-            collateral: transfer_args.collateral,
+            salt: transfer_args.salt,
         );
 
     // Check:
     let sender_collateral_balance = state
         ._get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
-    assert_eq!(sender_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - TRANSFER_AMOUNT).into());
+    assert_eq!(
+        sender_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into(),
+    );
 
     let recipient_collateral_balance = state
         ._get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
-    assert_eq!(recipient_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + TRANSFER_AMOUNT).into());
+    assert_eq!(
+        recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
+    );
 }
 
 #[test]
@@ -971,12 +959,12 @@ fn test_price_tick_basic() {
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
-    let asset_id = cfg.synthetic_cfg.asset_id;
-    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle1.key_pair.public_key,
             oracle_name: oracle1_name,
             :asset_name,
@@ -985,7 +973,9 @@ fn test_price_tick_basic() {
     state
         .assets
         .synthetic_config
-        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+        .write(
+            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
+        );
     state.assets.num_of_active_synthetic_assets.write(Zero::zero());
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), Zero::zero());
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -996,16 +986,16 @@ fn test_price_tick_basic() {
     state
         .price_tick(
             :operator_nonce,
-            :asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [
                 oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
             ]
                 .span(),
         );
-    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
-    let data = state.assets.synthetic_timely_data.read(asset_id);
+    let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price, price.convert(:resolution));
 }
@@ -1022,12 +1012,12 @@ fn test_price_tick_odd() {
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
     let oracle2 = Oracle { oracle_name: oracle2_name, asset_name, key_pair: KEY_PAIR_2() };
     let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
-    let asset_id = cfg.synthetic_cfg.asset_id;
-    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle1.key_pair.public_key,
             oracle_name: oracle1_name,
             :asset_name,
@@ -1035,7 +1025,7 @@ fn test_price_tick_odd() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle2.key_pair.public_key,
             oracle_name: oracle2_name,
             :asset_name,
@@ -1043,7 +1033,7 @@ fn test_price_tick_odd() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle3.key_pair.public_key,
             oracle_name: oracle3_name,
             :asset_name,
@@ -1052,7 +1042,9 @@ fn test_price_tick_odd() {
     state
         .assets
         .synthetic_config
-        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+        .write(
+            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
+        );
     state.assets.num_of_active_synthetic_assets.write(0);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -1063,7 +1055,7 @@ fn test_price_tick_odd() {
     state
         .price_tick(
             :operator_nonce,
-            :asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [
                 oracle2.get_signed_price(:price, timestamp: old_time.try_into().unwrap()),
@@ -1072,9 +1064,9 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
-    let data = state.assets.synthetic_timely_data.read(asset_id);
+    let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price, price.convert(:resolution));
 }
@@ -1088,12 +1080,12 @@ fn test_price_tick_even() {
     let oracle3_name = 'ORCL3';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
     let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
-    let asset_id = cfg.synthetic_cfg.asset_id;
-    let resolution = state.assets.synthetic_config.read(asset_id).unwrap().resolution;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle1.key_pair.public_key,
             oracle_name: oracle1_name,
             :asset_name,
@@ -1101,7 +1093,7 @@ fn test_price_tick_even() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle3.key_pair.public_key,
             oracle_name: oracle3_name,
             :asset_name,
@@ -1110,7 +1102,9 @@ fn test_price_tick_even() {
     state
         .assets
         .synthetic_config
-        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+        .write(
+            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
+        );
     state.assets.num_of_active_synthetic_assets.write(0);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -1121,7 +1115,7 @@ fn test_price_tick_even() {
     state
         .price_tick(
             :operator_nonce,
-            :asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [
                 oracle3.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
@@ -1129,9 +1123,9 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets._get_synthetic_config(asset_id).is_active);
+    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
-    let data = state.assets.synthetic_timely_data.read(asset_id);
+    let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price, price.convert(:resolution));
 }
@@ -1147,7 +1141,7 @@ fn test_price_tick_no_quorum() {
     state
         .price_tick(
             :operator_nonce,
-            asset_id: cfg.synthetic_cfg.asset_id,
+            asset_id: cfg.synthetic_cfg.synthetic_id,
             price: Zero::zero(),
             signed_prices: [].span(),
         );
@@ -1164,11 +1158,11 @@ fn test_price_tick_unsorted() {
     let oracle2_name = 'ORCL2';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
     let oracle2 = Oracle { oracle_name: oracle2_name, asset_name, key_pair: KEY_PAIR_3() };
-    let asset_id = cfg.synthetic_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle1.key_pair.public_key,
             oracle_name: oracle1_name,
             :asset_name,
@@ -1176,7 +1170,7 @@ fn test_price_tick_unsorted() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle2.key_pair.public_key,
             oracle_name: oracle2_name,
             :asset_name,
@@ -1185,14 +1179,16 @@ fn test_price_tick_unsorted() {
     state
         .assets
         .synthetic_config
-        .write(asset_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }));
+        .write(
+            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let price: u128 = TEN_POW_12.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
-            :asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [
                 oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
@@ -1211,11 +1207,11 @@ fn test_price_tick_old_oracle() {
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
-    let asset_id = cfg.synthetic_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            :asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: oracle1.key_pair.public_key,
             oracle_name: oracle1_name,
             :asset_name,
@@ -1229,7 +1225,7 @@ fn test_price_tick_old_oracle() {
     state
         .price_tick(
             :operator_nonce,
-            asset_id: cfg.synthetic_cfg.asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [
                 oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
@@ -1248,11 +1244,11 @@ fn test_price_tick_golden() {
     let oracle0_name = 'Stkai';
     let oracle1_name = 'Stork';
     let oracle2_name = 'StCrw';
-    let asset_id = cfg.synthetic_cfg.asset_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            asset_id: asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: 0x1f191d23b8825dcc3dba839b6a7155ea07ad0b42af76394097786aca0d9975c,
             oracle_name: oracle0_name,
             :asset_name,
@@ -1260,7 +1256,7 @@ fn test_price_tick_golden() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            asset_id: asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: 0xcc85afe4ca87f9628370c432c447e569a01dc96d160015c8039959db8521c4,
             oracle_name: oracle1_name,
             :asset_name,
@@ -1268,7 +1264,7 @@ fn test_price_tick_golden() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
-            asset_id: asset_id,
+            asset_id: synthetic_id,
             oracle_public_key: 0x41dbe627aeab66504b837b3abd88ae2f58ba6d98ee7bbd7f226c4684d9e6225,
             oracle_name: oracle2_name,
             :asset_name,
@@ -1312,11 +1308,11 @@ fn test_price_tick_golden() {
     state
         .price_tick(
             :operator_nonce,
-            :asset_id,
+            asset_id: synthetic_id,
             :price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
-    let data = state.assets.synthetic_timely_data.read(asset_id);
+    let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, Time::now());
     assert_eq!(data.price.value(), 6430);
 }
