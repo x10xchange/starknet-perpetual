@@ -71,7 +71,8 @@ pub struct PositionChangeResult {
 fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
     let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
     let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
-    before_ratio == after_ratio
+    let after_minus_one_ratio = FractionTrait::new(after.total_value - 1, after.total_risk);
+    after_minus_one_ratio < before_ratio && before_ratio <= after_ratio
 }
 
 /// The position is healthier if the total_value divided by the total_risk
