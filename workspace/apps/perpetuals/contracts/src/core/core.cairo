@@ -937,7 +937,10 @@ pub mod Core {
             self.roles.only_app_governor();
             self.assets.remove_oracle_from_asset(:asset_id, :oracle_public_key);
         }
-        fn update_asset_quorum(ref self: ContractState) {}
+        fn update_synthetic_quorum(ref self: ContractState, synthetic_id: AssetId, quorum: u8) {
+            self.roles.only_app_governor();
+            self.assets.update_synthetic_quorum(:synthetic_id, :quorum);
+        }
 
 
         /// Funding tick is called by the operator to update the funding index of all synthetic

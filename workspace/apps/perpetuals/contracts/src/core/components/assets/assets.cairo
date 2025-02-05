@@ -13,9 +13,10 @@ pub(crate) mod AssetsComponent {
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
-        INVALID_PRICE_TIMESTAMP, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
-        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
-        SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM, NOT_COLLATERAL,
+        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -66,6 +67,7 @@ pub(crate) mod AssetsComponent {
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
         RemoveOracle: events::RemoveOracle,
+        UpdateAssetQuorum: events::UpdateAssetQuorum,
     }
 
     #[embeddable_as(AssetsImpl)]
@@ -233,6 +235,18 @@ pub(crate) mod AssetsComponent {
             self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
             self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
+        }
+
+        fn update_synthetic_quorum(
+            ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
+        ) {
+            let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
+            self._validate_synthetic_active(:synthetic_id);
+            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
+            assert(synthetic_config.quorum != quorum, INVALID_SAME_QUORUM);
+            synthetic_config.quorum = quorum;
+            self.synthetic_config.entry(synthetic_id).write(Option::Some(synthetic_config));
+            self.emit(events::UpdateAssetQuorum { asset_id: synthetic_id, quorum });
         }
 
         fn _execute_funding_tick(

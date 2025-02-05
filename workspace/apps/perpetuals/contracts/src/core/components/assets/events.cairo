@@ -53,3 +53,10 @@ pub struct RemoveOracle {
     #[key]
     pub oracle_public_key: PublicKey,
 }
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct UpdateAssetQuorum {
+    #[key]
+    pub asset_id: AssetId,
+    pub quorum: u8,
+}
