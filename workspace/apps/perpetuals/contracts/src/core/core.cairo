@@ -931,7 +931,12 @@ pub mod Core {
                 .add_oracle_to_asset(:asset_id, :oracle_public_key, :oracle_name, :asset_name);
         }
 
-        fn remove_oracle_from_asset(ref self: ContractState) {}
+        fn remove_oracle_from_asset(
+            ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
+        ) {
+            self.roles.only_app_governor();
+            self.assets.remove_oracle_from_asset(:asset_id, :oracle_public_key);
+        }
         fn update_asset_quorum(ref self: ContractState) {}
 
 

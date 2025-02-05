@@ -14,8 +14,8 @@ pub(crate) mod AssetsComponent {
         ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
         INVALID_PRICE_TIMESTAMP, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
-        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -65,6 +65,7 @@ pub(crate) mod AssetsComponent {
         DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
+        RemoveOracle: events::RemoveOracle,
     }
 
     #[embeddable_as(AssetsImpl)]
@@ -169,6 +170,18 @@ pub(crate) mod AssetsComponent {
             self.emit(events::AddOracle { asset_id, oracle_public_key });
         }
 
+        fn remove_oracle_from_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            oracle_public_key: PublicKey,
+        ) {
+            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
+
+            // Validate the oracle exists.
+            assert(oracle_inner_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
+            self.oracles.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
+            self.emit(events::RemoveOracle { asset_id, oracle_public_key });
+        }
 
         fn add_synthetic_asset(
             ref self: ComponentState<TContractState>,
