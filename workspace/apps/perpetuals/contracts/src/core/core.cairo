@@ -979,7 +979,7 @@ pub mod Core {
         /// - Operator nonce is valid.
         /// - Prices array is sorted according to the signer public key.
         /// - The price is the median of the prices.
-        /// - The signeture is valid.
+        /// - The signature is valid.
         /// - The timestamp is valid(less than the max oracle price validity).
         ///
         /// Execution:
