@@ -13,8 +13,6 @@ use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
-use perpetuals::core::types::PositionId;
-use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::SyntheticConfig;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};

@@ -117,12 +117,12 @@ pub trait ICore<TContractState> {
     fn deleverage(
         ref self: TContractState,
         operator_nonce: u64,
-        delevereged_position: PositionId,
+        deleveraged_position: PositionId,
         deleverager_position: PositionId,
-        delevereged_base_asset_id: AssetId,
-        delevereged_base_amount: i64,
-        delevereged_quote_asset_id: AssetId,
-        delevereged_quote_amount: i64,
+        deleveraged_base_asset_id: AssetId,
+        deleveraged_base_amount: i64,
+        deleveraged_quote_asset_id: AssetId,
+        deleveraged_quote_amount: i64,
     );
     // Asset Flows
     fn register_collateral(

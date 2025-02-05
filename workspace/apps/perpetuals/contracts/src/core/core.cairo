@@ -29,11 +29,11 @@ pub mod Core {
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
         DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
         INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_POSITIVE_AMOUNT, INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION,
-        INVALID_PUBLIC_KEY, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
-        INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
-        POSITION_HAS_OWNER_ACCOUNT, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
-        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
+        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
+        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -54,7 +54,8 @@ pub mod Core {
         AssetDiffEntry, AssetEntry, PositionData, PositionDiff, PositionId,
     };
     use perpetuals::core::value_risk_calculator::{
-        validate_liquidated_position, validate_position_is_healthy_or_healthier,
+        validate_deleveraged_position, validate_liquidated_position,
+        validate_position_is_healthy_or_healthier,
     };
     use starknet::event::EventEmitter;
     use starknet::storage::{
@@ -849,25 +850,36 @@ pub mod Core {
         fn deleverage(
             ref self: ContractState,
             operator_nonce: u64,
-            delevereged_position: PositionId,
+            deleveraged_position: PositionId,
             deleverager_position: PositionId,
-            delevereged_base_asset_id: AssetId,
-            delevereged_base_amount: i64,
-            delevereged_quote_asset_id: AssetId,
-            delevereged_quote_amount: i64,
+            deleveraged_base_asset_id: AssetId,
+            deleveraged_base_amount: i64,
+            deleveraged_quote_asset_id: AssetId,
+            deleveraged_quote_amount: i64,
         ) {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
 
             self
                 ._validate_deleverage(
-                    :delevereged_position,
+                    :deleveraged_position,
                     :deleverager_position,
-                    :delevereged_base_asset_id,
-                    :delevereged_base_amount,
-                    :delevereged_quote_asset_id,
-                    :delevereged_quote_amount,
-                )
+                    :deleveraged_base_asset_id,
+                    :deleveraged_base_amount,
+                    :deleveraged_quote_asset_id,
+                    :deleveraged_quote_amount,
+                );
+
+            /// Execution:
+            self
+                ._execute_deleverage(
+                    :deleveraged_position,
+                    :deleverager_position,
+                    :deleveraged_base_asset_id,
+                    :deleveraged_base_amount,
+                    :deleveraged_quote_asset_id,
+                    :deleveraged_quote_amount,
+                );
         }
 
         /// Add collateral asset is called by the operator to add a new collateral asset.
@@ -1672,43 +1684,133 @@ pub mod Core {
 
         fn _validate_deleverage(
             ref self: ContractState,
-            delevereged_position: PositionId,
+            deleveraged_position: PositionId,
             deleverager_position: PositionId,
-            delevereged_base_asset_id: AssetId,
-            delevereged_base_amount: i64,
-            delevereged_quote_asset_id: AssetId,
-            delevereged_quote_amount: i64,
+            deleveraged_base_asset_id: AssetId,
+            deleveraged_base_amount: i64,
+            deleveraged_quote_asset_id: AssetId,
+            deleveraged_quote_amount: i64,
         ) {
             // Non-zero amount check.
-            assert(delevereged_base_amount != 0, INVALID_ZERO_AMOUNT);
-            assert(delevereged_quote_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(deleveraged_base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(deleveraged_quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Assets check.
-            self.assets._validate_collateral_active(collateral_id: delevereged_quote_asset_id);
+            self.assets._validate_collateral_active(collateral_id: deleveraged_quote_asset_id);
             assert(
-                self.assets._is_synthetic(asset_id: delevereged_base_asset_id),
+                self.assets._is_synthetic(asset_id: deleveraged_base_asset_id),
                 INVALID_NON_SYNTHETIC_ASSET,
             );
 
             // Sign Validation for amounts.
             assert(
-                !have_same_sign(a: delevereged_base_amount, b: delevereged_quote_amount),
+                !have_same_sign(a: deleveraged_base_amount, b: deleveraged_quote_amount),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
             self
                 .validate_deleverage_base_shrinks(
-                    position_id: delevereged_position,
-                    asset_id: delevereged_base_asset_id,
-                    amount: delevereged_base_amount,
+                    position_id: deleveraged_position,
+                    asset_id: deleveraged_base_asset_id,
+                    amount: deleveraged_base_amount,
                 );
             self
                 .validate_deleverage_base_shrinks(
                     position_id: deleverager_position,
-                    asset_id: delevereged_base_asset_id,
-                    amount: -delevereged_base_amount,
+                    asset_id: deleveraged_base_asset_id,
+                    amount: -deleveraged_base_amount,
                 );
+        }
+
+        fn _execute_deleverage(
+            ref self: ContractState,
+            deleveraged_position: PositionId,
+            deleverager_position: PositionId,
+            deleveraged_base_asset_id: AssetId,
+            deleveraged_base_amount: i64,
+            deleveraged_quote_asset_id: AssetId,
+            deleveraged_quote_amount: i64,
+        ) {
+            let deleveraged_order = Order {
+                position_id: deleveraged_position,
+                base_asset_id: deleveraged_base_asset_id,
+                base_amount: deleveraged_base_amount,
+                quote_asset_id: deleveraged_quote_asset_id,
+                quote_amount: deleveraged_quote_amount,
+                // Dummy values needed to initialize the struct and pass validation.
+                fee_asset_id: deleveraged_quote_asset_id,
+                fee_amount: Zero::zero(),
+                salt: Zero::zero(),
+                expiration: Time::now(),
+            };
+
+            let deleverager_order = Order {
+                position_id: deleverager_position,
+                base_asset_id: deleveraged_base_asset_id,
+                base_amount: -deleveraged_base_amount,
+                quote_asset_id: deleveraged_quote_asset_id,
+                quote_amount: -deleveraged_quote_amount,
+                // Dummy values needed to initialize the struct and pass validation.
+                fee_asset_id: deleveraged_quote_asset_id,
+                fee_amount: Zero::zero(),
+                salt: Zero::zero(),
+                expiration: Time::now(),
+            };
+
+            let deleveraged_position_id = deleveraged_order.position_id;
+            let deleveraged_position_data = self._get_position_data(deleveraged_position);
+            let deleveraged_asset_diff_entries = self
+                ._create_asset_diff_entries_from_order(
+                    order: deleveraged_order,
+                    actual_amount_base: deleveraged_base_amount,
+                    actual_amount_quote: deleveraged_quote_amount,
+                    actual_fee: Zero::zero(),
+                );
+
+            let deleverager_position_id = deleverager_order.position_id;
+            let deleverager_position_data = self._get_position_data(deleverager_position_id);
+            let deleverager_asset_diff_entries = self
+                ._create_asset_diff_entries_from_order(
+                    order: deleverager_order,
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -deleveraged_base_amount,
+                    actual_amount_quote: -deleveraged_quote_amount,
+                    actual_fee: Zero::zero(),
+                );
+            self
+                ._apply_diff(
+                    position_id: deleveraged_position_id,
+                    asset_diff_entries: deleveraged_asset_diff_entries,
+                );
+            self
+                ._apply_diff(
+                    position_id: deleverager_position_id,
+                    asset_diff_entries: deleverager_asset_diff_entries,
+                );
+
+            match self.assets._get_synthetic_config(deleveraged_base_asset_id).is_active {
+                // If the synthetic asset is active, the position should be deleveragable
+                // and changed to fair deleverage and healthier.
+                true => validate_deleveraged_position(
+                    position_id: deleveraged_position_id,
+                    position_data: deleveraged_position_data,
+                    asset_diff_entries: deleveraged_asset_diff_entries,
+                ),
+                // In case of inactive synthetic asset, the position should change to healthy or
+                // healthier.
+                false => validate_position_is_healthy_or_healthier(
+                    position_id: deleveraged_position_id,
+                    position_data: deleveraged_position_data,
+                    asset_diff_entries: deleveraged_asset_diff_entries,
+                ),
+            };
+
+            validate_position_is_healthy_or_healthier(
+                position_id: deleverager_position_id,
+                position_data: deleverager_position_data,
+                asset_diff_entries: deleverager_asset_diff_entries,
+            );
         }
 
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
