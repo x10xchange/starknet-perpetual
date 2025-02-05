@@ -831,6 +831,79 @@ fn test_successful_set_public_key_request() {
 }
 
 #[test]
+fn test_successful_set_public_key() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+
+    user.set_public_key(KEY_PAIR_2());
+    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    let mut set_public_key_args = SetPublicKeyArgs {
+        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+    };
+    let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(message: msg_hash);
+    state
+        .set_public_key_request(
+            :signature,
+            position_id: set_public_key_args.position_id,
+            expiration: set_public_key_args.expiration,
+            new_public_key: set_public_key_args.new_public_key,
+        );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .set_public_key(
+            operator_nonce: state.nonce(),
+            position_id: set_public_key_args.position_id,
+            expiration: set_public_key_args.expiration,
+            new_public_key: set_public_key_args.new_public_key,
+        );
+    // Check:
+    assert_eq!(
+        user.get_public_key(), state.positions.entry(user.position_id).owner_public_key.read(),
+    );
+}
+
+#[test]
+#[should_panic(expected: 'REQUEST_NOT_REGISTERED')]
+fn test_successful_set_public_key_no_request() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+
+    user.set_public_key(KEY_PAIR_2());
+    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+
+    let mut set_public_key_args = SetPublicKeyArgs {
+        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+    };
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .set_public_key(
+            operator_nonce: state.nonce(),
+            position_id: set_public_key_args.position_id,
+            expiration: set_public_key_args.expiration,
+            new_public_key: set_public_key_args.new_public_key,
+        );
+}
+
+
+#[test]
 fn test_successful_transfer() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
