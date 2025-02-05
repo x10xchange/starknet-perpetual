@@ -28,12 +28,12 @@ pub mod Core {
     use perpetuals::core::errors::{
         AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
         DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
-        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_POSITIVE_AMOUNT,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
-        INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err,
+        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
+        INVALID_NON_POSITIVE_AMOUNT, INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION,
+        INVALID_PUBLIC_KEY, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN,
+        INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
+        POSITION_HAS_OWNER_ACCOUNT, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
+        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -1611,6 +1611,23 @@ pub mod Core {
             );
         }
 
+        fn validate_deleverage_base_shrinks(
+            ref self: ContractState, position_id: PositionId, asset_amount: AssetAmount,
+        ) {
+            let position_base_balance: i64 = self
+                ._get_provisional_balance(:position_id, asset_id: asset_amount.asset_id)
+                .into();
+
+            assert(
+                have_same_sign(a: asset_amount.amount, b: position_base_balance),
+                INVALID_TRADE_WRONG_AMOUNT_SIGN,
+            );
+            assert(
+                asset_amount.amount.abs() <= position_base_balance.abs(),
+                INVALID_DELEVERAGE_BASE_CHANGE,
+            );
+        }
+
         fn _validate_deleverage(
             ref self: ContractState,
             delevereged_position: PositionId,
@@ -1638,6 +1655,19 @@ pub mod Core {
             assert(
                 !have_same_sign(a: base_amount, b: quote_amount), INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
+
+            // Ensure that TR does not increase and that the base amount retains the same sign.
+            self
+                .validate_deleverage_base_shrinks(
+                    position_id: delevereged_position, asset_amount: delevereged_base_asset,
+                );
+            self
+                .validate_deleverage_base_shrinks(
+                    position_id: deleverager_position,
+                    asset_amount: AssetAmount {
+                        amount: -delevereged_base_asset.amount, ..delevereged_base_asset,
+                    },
+                );
         }
 
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
