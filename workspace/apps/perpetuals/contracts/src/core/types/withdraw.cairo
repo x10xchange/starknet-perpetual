@@ -9,35 +9,35 @@ use starknet::ContractAddress;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct WithdrawArgs {
+    pub recipient: ContractAddress,
     pub position_id: PositionId,
-    pub salt: felt252,
     pub collateral_id: AssetId,
     pub amount: u64,
-    pub recipient: ContractAddress,
     pub expiration: Timestamp,
+    pub salt: felt252,
 }
 
 /// selector!(
 ///   "\"WithdrawArgs\"(
+///    \"recipient\":\"ContractAddress\",
 ///    \"position_id\":\"PositionId\",
-///    \"salt\":\"felt\",
-///    \"recipient\":\"ContractAddress\"
 ///    \"collateral_id\":\"AssetId\",
 ///    \"amount\":\"u64\",
 ///    \"expiration\":\"Timestamp\"
+///    \"salt\":\"felt\",
 ///    )
 ///    \"PositionId\"(
+///    \"value\":\"felt\"
+///    )"
+///    \"AssetId\"(
 ///    \"value\":\"felt\"
 ///    )"
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
 ///    )
-///    \"AssetId\"(
-///    \"value\":\"felt\"
-///    )"
 /// );
 const WITHDRAW_ARGS_TYPE_HASH: HashType =
-    0x37c3df1ba2eb3467001cbd2a4f75769284b49103ec57f4cbf6ce7a99b3e9c0c;
+    0xe448e0bfe1cbb05949be6a78782513a905154f70479e57a9a6a674445e84ed;
 
 impl StructHashImpl of StructHash<WithdrawArgs> {
     fn hash_struct(self: @WithdrawArgs) -> HashType {
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_withdraw_type_hash() {
         let expected = selector!(
-            "\"WithdrawArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"recipient\":\"ContractAddress\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"WithdrawArgs\"(\"recipient\":\"ContractAddress\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(WITHDRAW_ARGS_TYPE_HASH, expected);
     }

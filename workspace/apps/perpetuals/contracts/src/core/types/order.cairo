@@ -17,7 +17,6 @@ pub const VERSION: u8 = 0;
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct Order {
     pub position_id: PositionId,
-    pub salt: felt252,
     pub base_asset_id: AssetId,
     pub base_amount: i64,
     pub quote_asset_id: AssetId,
@@ -25,6 +24,7 @@ pub struct Order {
     pub fee_asset_id: AssetId,
     pub fee_amount: u64,
     pub expiration: Timestamp,
+    pub salt: felt252,
 }
 
 #[generate_trait]
@@ -69,14 +69,14 @@ pub impl OrderImpl of OrderTrait {
 /// selector!(
 ///   "\"Order\"(
 ///    \"position_id\":\"PositionId\",
-///    \"salt\":\"felt\",
 ///    \"base_asset_id\":\"AssetId\",
 ///    \"base_amount\":\"i64\",
 ///    \"quote_asset_id\":\"AssetId\",
 ///    \"quote_amount\":\"i64\",
 ///    \"fee_asset_id\":\"AssetId\",
 ///    \"fee_amount\":\"u64\",
-///    \"expiration\":\"Timestamp\"
+///    \"expiration\":\"Timestamp\",
+///    \"salt\":\"felt\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
@@ -89,7 +89,7 @@ pub impl OrderImpl of OrderTrait {
 ///    )
 /// );
 
-const ORDER_TYPE_HASH: HashType = 0x1ec3ed94d0b2c61e61a4ee4257fdd5d765c4bba3d7791158ec51fb271a70ba7;
+const ORDER_TYPE_HASH: HashType = 0x26e3f2492aae9866d09bd1635084175acbb80a33730cd0f2314b21c7f9d47eb;
 
 impl StructHashImpl of StructHash<Order> {
     fn hash_struct(self: @Order) -> HashType {
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_order_type_hash() {
         let expected = selector!(
-            "\"Order\"(\"position_id\":\"felt\",\"salt\":\"felt\",\"base_asset_id\":\"AssetId\",\"base_amount\":\"i64\",\"quote_asset_id\":\"AssetId\",\"quote_amount\":\"i64\",\"fee_asset_id\":\"AssetId\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"Order\"(\"position_id\":\"felt\",\"base_asset_id\":\"AssetId\",\"base_amount\":\"i64\",\"quote_asset_id\":\"AssetId\",\"quote_amount\":\"i64\",\"fee_asset_id\":\"AssetId\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(ORDER_TYPE_HASH, expected);
     }

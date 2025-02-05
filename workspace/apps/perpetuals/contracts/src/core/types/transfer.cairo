@@ -8,36 +8,36 @@ use perpetuals::core::types::asset::AssetId;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct TransferArgs {
-    pub position_id: PositionId,
     pub recipient: PositionId,
-    pub salt: felt252,
-    pub expiration: Timestamp,
+    pub position_id: PositionId,
     pub collateral_id: AssetId,
     pub amount: u64,
+    pub expiration: Timestamp,
+    pub salt: felt252,
 }
 
 
 /// selector!(
 ///   "\"TransferArgs\"(
-///    \"position_id\":\"PositionId\",
-///    \"salt\":\"felt\",
 ///    \"recipient\":\"PositionId\",
+///    \"position_id\":\"PositionId\",
 ///    \"collateral_id\":\"AssetId\"
 ///    \"amount\":\"u64\"
 ///    \"expiration\":\"Timestamp\",
+///    \"salt\":\"felt\"
 ///    )
 ///    \"PositionId\"(
+///    \"value\":\"felt\"
+///    )"
+///    \"AssetId\"(
 ///    \"value\":\"felt\"
 ///    )"
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
 ///    )
-///    \"AssetId\"(
-///    \"value\":\"felt\"
-///    )"
 /// );
 const TRANSFER_ARGS_TYPE_HASH: HashType =
-    0x35184c13d2cad195bb6bcec92c2fd9d47432bb88f92f2802eb40b850329fd3;
+    0x3fb5df0157f6dd203dfa79d636eb34324be3d0aae154623c6b904b2153a61f6;
 
 impl StructHashImpl of StructHash<TransferArgs> {
     fn hash_struct(self: @TransferArgs) -> HashType {
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_transfer_type_hash() {
         let expected = selector!(
-            "\"TransferArgs\"(\"position_id\":\"PositionId\",\"salt\":\"felt\",\"recipient\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")\"AssetId\"(\"value\":\"felt\")",
+            "\"TransferArgs\"(\"recipient\":\"PositionId\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
     }

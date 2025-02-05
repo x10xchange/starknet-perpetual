@@ -8,16 +8,16 @@ use perpetuals::core::types::PositionId;
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct SetPublicKeyArgs {
     pub position_id: PositionId,
-    pub expiration: Timestamp,
     pub new_public_key: PublicKey,
+    pub expiration: Timestamp,
 }
 
 
 /// selector!(
 ///   "\"SetPublicKeyArgs\"(
 ///    \"position_id\":\"PositionId\",
-///    \"expiration\":\"Timestamp\",
-///    \"new_public_key\":\"felt\"
+///    \"new_public_key\":\"felt\",
+///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
 ///    \"value\":\"felt\"
@@ -27,7 +27,7 @@ pub struct SetPublicKeyArgs {
 ///    )
 /// );
 const SET_PUBLIC_KEY_ARGS_HASH: HashType =
-    0x27005793d92f58c51325473ffb97f3ae01c4a59dbd059e4d55fc660ae2fc0ea;
+    0xb79fbe994c2722b9c9686014e7b05f49373b3d54baa20fb09d60bd8735301c;
 
 impl StructHashImpl of StructHash<SetPublicKeyArgs> {
     fn hash_struct(self: @SetPublicKeyArgs) -> HashType {
@@ -43,7 +43,7 @@ mod tests {
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"expiration\":\"Timestamp\",\"new_public_key\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"new_public_key\":\"felt\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(SET_PUBLIC_KEY_ARGS_HASH, expected);
     }
