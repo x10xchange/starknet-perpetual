@@ -516,7 +516,9 @@ pub(crate) mod AssetsComponent {
                 let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
                 // In case of a new asset, `last_price_update` is zero. Don't validate the price
                 // since it has not been set yet.
-                if synthetic_timely_data.last_price_update != Zero::zero() {
+                // In case of an inactive asset, don't validate the price.
+                if (synthetic_timely_data.last_price_update != Zero::zero()
+                    && self._get_synthetic_config(asset_id).is_active) {
                     assert(
                         now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
                         SYNTHETIC_EXPIRED_PRICE,

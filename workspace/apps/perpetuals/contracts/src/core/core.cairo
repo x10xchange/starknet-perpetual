@@ -898,7 +898,6 @@ pub mod Core {
         /// Execution:
         /// - Deactivate synthetic_config.
         ///     - Set the asset as active = false.
-        /// - remove asset from `synthetic_timely_data` map
         fn deactivate_synthetic(ref self: ContractState, synthetic_id: AssetId) {
             /// Validations:
             self.roles.only_app_governor();
