@@ -332,7 +332,7 @@ pub fn init_position_with_owner(
     position.owner_account.write(user.address);
 }
 
-pub fn add_synthetic(
+pub fn add_synthetic_to_position(
     ref state: Core::ContractState, asset_id: AssetId, position_id: PositionId, balance: i64,
 ) {
     let position = state.positions.entry(position_id);

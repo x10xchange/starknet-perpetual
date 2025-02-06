@@ -1676,7 +1676,7 @@ pub mod Core {
                 .into();
 
             assert(
-                have_same_sign(a: amount, b: position_base_balance),
+                !have_same_sign(a: amount, b: position_base_balance),
                 INVALID_TRADE_WRONG_AMOUNT_SIGN,
             );
             assert(amount.abs() <= position_base_balance.abs(), INVALID_DELEVERAGE_BASE_CHANGE);

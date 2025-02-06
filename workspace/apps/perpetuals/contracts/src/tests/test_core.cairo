@@ -22,8 +22,9 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::assert_new_position_event_with_expected;
 use perpetuals::tests::test_utils::{
-    Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic, check_synthetic_asset,
-    init_position, init_position_with_owner, initialized_contract_state, setup_state,
+    Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic_to_position,
+    check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
+    setup_state,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -576,6 +577,157 @@ fn test_successful_withdraw_request_with_owner() {
     assert_eq!(status, RequestStatus::PENDING);
 }
 
+// Deleverage tests.
+
+#[test]
+fn test_successful_deleverage() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let deleveraged = Default::default();
+    init_position(cfg: @cfg, ref :state, user: deleveraged);
+    add_synthetic_to_position(
+        ref :state,
+        asset_id: cfg.synthetic_cfg.synthetic_id,
+        position_id: deleveraged.position_id,
+        // To make the position deleveragable, the total value must be negative, which requires a
+        // negative synthetic balance.
+        balance: -2 * SYNTHETIC_BALANCE_AMOUNT,
+    );
+
+    let deleverager = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position(cfg: @cfg, ref :state, user: deleverager);
+    add_synthetic_to_position(
+        ref :state,
+        asset_id: cfg.synthetic_cfg.synthetic_id,
+        position_id: deleverager.position_id,
+        balance: SYNTHETIC_BALANCE_AMOUNT,
+    );
+
+    // Test params:
+    let operator_nonce = state.nonce();
+    // For a fair deleverage, the TV/TR ratio of the deleveraged position should remain the same
+    // before and after the deleverage. This is the reasoning behind the choice
+    // of QUOTE and BASE.
+    let BASE = 10;
+    let QUOTE = -500;
+
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // State change:
+    //                            TV                            TR                          TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Deleveraged before:     2000-40*100=-2000              40*100*0.5=2000                 -1
+    // Deleveraged after:    (2000-500)+(-40+10)*100=-1500           1500                     -1
+    // Deleverager before:     2000+20*100=4000               20*100*0.5=1000                 4
+    // Deleverager after:    (2000+500)+(20-10)*100=3500            1500                      7/3
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .deleverage(
+            :operator_nonce,
+            deleveraged_position: deleveraged.position_id,
+            deleverager_position: deleverager.position_id,
+            deleveraged_base_asset_id: synthetic_id,
+            deleveraged_base_amount: BASE,
+            deleveraged_quote_asset_id: collateral_id,
+            deleveraged_quote_amount: QUOTE,
+        );
+
+    // Check:
+    let deleveraged_position = state.positions.entry(deleveraged.position_id);
+    let deleverager_position = state.positions.entry(deleverager.position_id);
+
+    let deleveraged_collateral_balance = deleveraged_position
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let deleveraged_synthetic_balance = deleveraged_position
+        .synthetic_assets
+        .entry(synthetic_id)
+        .balance
+        .read();
+    assert_eq!(deleveraged_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + QUOTE).into());
+    assert_eq!(deleveraged_synthetic_balance, (-2 * SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+
+    let deleverager_collateral_balance = deleverager_position
+        .collateral_assets
+        .entry(collateral_id)
+        .balance
+        .read();
+    let deleverager_synthetic_balance = deleverager_position
+        .synthetic_assets
+        .entry(synthetic_id)
+        .balance
+        .read();
+    assert_eq!(deleverager_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - QUOTE).into());
+    assert_eq!(deleverager_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
+}
+
+#[test]
+#[should_panic(expected: 'POSITION_IS_NOT_FAIR_DELEVERAGE')]
+fn test_unfair_deleverage() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+
+    let deleveraged = Default::default();
+    init_position(cfg: @cfg, ref :state, user: deleveraged);
+    add_synthetic_to_position(
+        ref :state,
+        asset_id: cfg.synthetic_cfg.synthetic_id,
+        position_id: deleveraged.position_id,
+        // To make the position deleveragable, the total value must be negative, which requires a
+        // negative synthetic balance.
+        balance: -2 * SYNTHETIC_BALANCE_AMOUNT,
+    );
+
+    let deleverager = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position(cfg: @cfg, ref :state, user: deleverager);
+    add_synthetic_to_position(
+        ref :state,
+        asset_id: cfg.synthetic_cfg.synthetic_id,
+        position_id: deleverager.position_id,
+        balance: SYNTHETIC_BALANCE_AMOUNT,
+    );
+
+    // Test params:
+    let operator_nonce = state.nonce();
+    // The following value causes an unfair deleverage, as it breaks the TV/TR ratio.
+    let BASE = 10;
+    let QUOTE = -10;
+
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // State change:
+    //                            TV                            TR                         TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Deleveraged before:     2000-40*100=-2000              40*100*0.5=2000               -1
+    // Deleveraged after:    (2000-10)+(-40+10)*100=-1010           1500                    -101/150
+    // Deleverager before:     2000+20*100=4000               20*100*0.5=1000               4
+    // Deleverager after:    (2000+10)+(20-10)*100=3010            1500                     301/150
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .deleverage(
+            :operator_nonce,
+            deleveraged_position: deleveraged.position_id,
+            deleverager_position: deleverager.position_id,
+            deleveraged_base_asset_id: synthetic_id,
+            deleveraged_base_amount: BASE,
+            deleveraged_quote_asset_id: collateral_id,
+            deleveraged_quote_amount: QUOTE,
+        );
+}
+
 #[test]
 fn test_successful_liquidate() {
     // Setup state, token and user:
@@ -588,7 +740,7 @@ fn test_successful_liquidate() {
 
     let mut liquidated = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: liquidated);
-    add_synthetic(
+    add_synthetic_to_position(
         ref :state,
         asset_id: cfg.synthetic_cfg.synthetic_id,
         position_id: liquidated.position_id,
