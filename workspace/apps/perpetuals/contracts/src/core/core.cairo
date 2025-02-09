@@ -618,7 +618,7 @@ pub mod Core {
         /// Executes a trade between two orders (Order A and Order B).
         ///
         /// Validations:
-        /// - Common user flow validations are performed.
+        /// - Performs operator flow validations [`_validate_operator_flow`].
         /// - Validates signatures for both orders using the public keys of their respective owners.
         /// - Ensures the fee amounts in both orders are positive.
         /// - Validates that the base and quote asset types match between the two orders.
@@ -634,7 +634,7 @@ pub mod Core {
         /// - Add the fees to the `fee_position`.
         /// - Update Order A's position and Order B's position, based on `actual_amount_base`.
         /// - Adjust collateral balances.
-        /// - Perform fundamental validation for both positions after the trade.
+        /// - Perform fundamental validation for both positions after the execution.
         /// - Update order fulfillment.
         fn trade(
             ref self: ContractState,
@@ -729,7 +729,7 @@ pub mod Core {
         /// Executes a liquidate of a user position with liquidator order.
         ///
         /// Validations:
-        /// - Common user flow validations are performed.
+        /// - Performs operator flow validations [`_validate_operator_flow`].
         /// - Validates signatures for liquidator order using the public keys of it owner.
         /// - Ensures the fee amounts are positive.
         /// - Validates that the base and quote asset types match between the liquidator and
@@ -743,12 +743,11 @@ pub mod Core {
         /// - Validates liqudated position is liquidatable.
         ///
         /// Execution:
-        /// - Apply funding to both positions.
         /// - Subtract the fees from each position's collateral.
         /// - Add the fees to the `fee_position`.
         /// - Update orders' position, based on `actual_amount_base`.
         /// - Adjust collateral balances.
-        /// - Perform fundamental validation for both positions after the trade.
+        /// - Perform fundamental validation for both positions after the execution.
         /// - Update liquidator order fulfillment.
         fn liquidate(
             ref self: ContractState,
@@ -837,6 +836,20 @@ pub mod Core {
                 );
         }
 
+        /// Executes a deleverage of a user position with a deleverager position.
+        ///
+        /// Validations:
+        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - Verifies the signs of amounts:
+        ///   - Ensures the opposite sign of amounts in base and quote.
+        ///   - Ensures the sign of amounts in each position is consistent.
+        /// - If base asset is active, validates the deleveraged position is deleveragable.
+        /// - If base asset is inactive, it can always be deleveraged.
+        ///
+        /// Execution:
+        /// - Update the position, based on `delevereged_base_asset`.
+        /// - Adjust collateral balances based on `delevereged_quote_asset`.
+        /// - Perform fundamental validation for both positions after the execution.
         fn deleverage(
             ref self: ContractState,
             operator_nonce: u64,
