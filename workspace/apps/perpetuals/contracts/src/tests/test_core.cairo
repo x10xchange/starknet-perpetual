@@ -3,7 +3,7 @@ use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit}
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::TEN_POW_12;
+use contracts_commons::constants::TEN_POW_15;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
@@ -1110,7 +1110,6 @@ fn test_price_tick_basic() {
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
@@ -1131,7 +1130,7 @@ fn test_price_tick_basic() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_12.into();
+    let price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
@@ -1147,7 +1146,7 @@ fn test_price_tick_basic() {
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price, price.convert(:resolution));
+    assert_eq!(data.price.value(), 268);
 }
 
 #[test]
@@ -1163,7 +1162,6 @@ fn test_price_tick_odd() {
     let oracle2 = Oracle { oracle_name: oracle2_name, asset_name, key_pair: KEY_PAIR_2() };
     let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
@@ -1200,7 +1198,7 @@ fn test_price_tick_odd() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_12.into();
+    let price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
@@ -1218,7 +1216,7 @@ fn test_price_tick_odd() {
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price, price.convert(:resolution));
+    assert_eq!(data.price.value(), 268);
 }
 #[test]
 fn test_price_tick_even() {
@@ -1231,7 +1229,6 @@ fn test_price_tick_even() {
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
     let oracle3 = Oracle { oracle_name: oracle3_name, asset_name, key_pair: KEY_PAIR_3() };
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    let resolution = state.assets.synthetic_config.read(synthetic_id).unwrap().resolution;
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_oracle_to_asset(
@@ -1260,7 +1257,7 @@ fn test_price_tick_even() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_12.into();
+    let price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
@@ -1277,7 +1274,7 @@ fn test_price_tick_even() {
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price, price.convert(:resolution));
+    assert_eq!(data.price.value(), 268);
 }
 
 #[test]
@@ -1333,7 +1330,7 @@ fn test_price_tick_unsorted() {
             synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_12.into();
+    let price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
