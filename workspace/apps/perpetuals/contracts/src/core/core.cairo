@@ -176,6 +176,7 @@ pub mod Core {
         DepositEvent: Deposit::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
+        Deleverage: events::Deleverage,
         Liquidate: events::Liquidate,
         NewPosition: events::NewPosition,
         SetOwnerAccount: events::SetOwnerAccount,
@@ -880,6 +881,18 @@ pub mod Core {
                     :deleveraged_quote_asset_id,
                     :deleveraged_quote_amount,
                 );
+
+            self
+                .emit(
+                    events::Deleverage {
+                        deleveraged_position,
+                        deleverager_position,
+                        deleveraged_base_asset_id,
+                        deleveraged_base_amount,
+                        deleveraged_quote_asset_id,
+                        deleveraged_quote_amount,
+                    },
+                )
         }
 
         /// Add collateral asset is called by the operator to add a new collateral asset.

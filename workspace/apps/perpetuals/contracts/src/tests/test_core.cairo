@@ -20,7 +20,9 @@ use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
-use perpetuals::tests::event_test_utils::assert_new_position_event_with_expected;
+use perpetuals::tests::event_test_utils::{
+    assert_deleverage_event_with_expected, assert_new_position_event_with_expected,
+};
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
@@ -585,6 +587,7 @@ fn test_successful_deleverage() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
 
     let deleveraged = Default::default();
     init_position(cfg: @cfg, ref :state, user: deleveraged);
@@ -637,6 +640,18 @@ fn test_successful_deleverage() {
             deleveraged_quote_asset_id: collateral_id,
             deleveraged_quote_amount: QUOTE,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deleverage_event_with_expected(
+        spied_event: events[0],
+        deleveraged_position: deleveraged.position_id,
+        deleverager_position: deleverager.position_id,
+        deleveraged_base_asset_id: synthetic_id,
+        deleveraged_base_amount: BASE,
+        deleveraged_quote_asset_id: collateral_id,
+        deleveraged_quote_amount: QUOTE,
+    );
 
     // Check:
     let deleveraged_position = state.positions.entry(deleveraged.position_id);

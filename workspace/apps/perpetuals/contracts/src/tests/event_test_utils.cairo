@@ -216,6 +216,27 @@ pub fn assert_liquidate_event_with_expected(
     );
 }
 
+pub fn assert_deleverage_event_with_expected(
+    spied_event: @(ContractAddress, Event),
+    deleveraged_position: PositionId,
+    deleverager_position: PositionId,
+    deleveraged_base_asset_id: AssetId,
+    deleveraged_base_amount: i64,
+    deleveraged_quote_asset_id: AssetId,
+    deleveraged_quote_amount: i64,
+) {
+    let expected_event = events::Deleverage {
+        deleveraged_position,
+        deleverager_position,
+        deleveraged_base_asset_id,
+        deleveraged_base_amount,
+        deleveraged_quote_asset_id,
+        deleveraged_quote_amount,
+    };
+    assert_expected_event_emitted(
+        :spied_event, :expected_event, expected_event_selector: @selector!("Deleverage"),
+    );
+}
 
 pub fn assert_transfer_request_event_with_expected(
     spied_event: @(ContractAddress, Event),
