@@ -128,21 +128,6 @@ pub trait ICore<TContractState> {
     fn register_collateral(
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
     );
-    fn add_synthetic_asset(
-        ref self: TContractState, asset_id: AssetId, risk_factor: u8, quorum: u8, resolution: u64,
-    );
-    fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
-    fn add_oracle_to_asset(
-        ref self: TContractState,
-        asset_id: AssetId,
-        oracle_public_key: PublicKey,
-        oracle_name: felt252,
-        asset_name: felt252,
-    );
-    fn remove_oracle_from_asset(
-        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
-    );
-    fn update_synthetic_quorum(ref self: TContractState, synthetic_id: AssetId, quorum: u8);
     // Ticks
     fn funding_tick(
         ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,

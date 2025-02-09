@@ -1,5 +1,7 @@
 #[starknet::component]
 pub(crate) mod AssetsComponent {
+    use RolesComponent::InternalTrait as RolesInternalTrait;
+    use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
     use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
@@ -10,6 +12,8 @@ pub(crate) mod AssetsComponent {
     use contracts_commons::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
     use core::num::traits::{One, Zero};
     use core::panic_with_felt252;
+    use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
         ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
@@ -72,8 +76,140 @@ pub(crate) mod AssetsComponent {
 
     #[embeddable_as(AssetsImpl)]
     impl Assets<
-        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+        TContractState,
+        +HasComponent<TContractState>,
+        +Drop<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        +AccessControlComponent::HasComponent<TContractState>,
+        +SRC5Component::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
+        /// Add oracle to a synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the app governor can call this function.
+        /// - The 'oracle_public_key' does not exist in the Oracle map.
+        /// - The size of 'oracle_name' is 40 bits.
+        /// - The size of 'asset_name' is 128 bits.
+        ///
+        /// Execution:
+        /// - Add a new entry to the Oracle map.
+        fn add_oracle_to_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            oracle_public_key: PublicKey,
+            oracle_name: felt252,
+            asset_name: felt252,
+        ) {
+            let roles = get_dep_component!(@self, Roles);
+            roles.only_app_governor();
+            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
+
+            // Validate the oracle does not exist.
+            assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
+
+            const TWO_POW_40: u64 = 0x100_0000_0000;
+            // Validate the size of the oracle name.
+            if let Option::Some(oracle_name) = oracle_name.try_into() {
+                assert(oracle_name < TWO_POW_40, ORACLE_NAME_TOO_LONG);
+            } else {
+                panic_with_felt252(ORACLE_NAME_TOO_LONG);
+            }
+
+            // Validate the size of the asset name.
+            assert(asset_name.into() < TWO_POW_128, ASSET_NAME_TOO_LONG);
+
+            // Add the oracle to the asset.
+            let shifted_asset_name = TWO_POW_40.into() * asset_name;
+            oracle_inner_entry.write(shifted_asset_name + oracle_name);
+            self.emit(events::AddOracle { asset_id, oracle_public_key });
+        }
+
+        /// Add asset is called by the operator to add a new synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the app_governor can call this function.
+        /// - The asset is not already exists.
+        /// - The risk factor is less or equal to 100.
+        /// - The quorum is greater than 0.
+        ///
+        /// Execution:
+        /// - Add new entry to synthetic_config.
+        ///     - Set the asset as in-active.
+        /// - Add a new entry at the beginning of synthetic_timely_data
+        ///     - Set the price to zero.
+        ///     - Set the funding index to zero.
+        ///     - Set the `last_price_update` to zero.
+        fn add_synthetic_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            risk_factor: u8,
+            quorum: u8,
+            resolution: u64,
+        ) {
+            let roles = get_dep_component!(@self, Roles);
+            roles.only_app_governor();
+            assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
+            self
+                .synthetic_config
+                .entry(asset_id)
+                .write(
+                    Option::Some(
+                        SyntheticConfig {
+                            version: SYNTHETIC_VERSION,
+                            // It'll be active in the next price tick.
+                            is_active: false,
+                            // It validates the range of the risk factor.
+                            risk_factor: FixedTwoDecimalTrait::new(risk_factor),
+                            quorum,
+                            resolution,
+                        },
+                    ),
+                );
+
+            self
+                .synthetic_timely_data
+                .entry(asset_id)
+                .write(
+                    SyntheticTimelyData {
+                        version: SYNTHETIC_VERSION,
+                        next: self.synthetic_timely_data_head.read(),
+                        // These fields will be updated in the next price tick.
+                        price: Zero::zero(),
+                        last_price_update: Zero::zero(),
+                        funding_index: Zero::zero(),
+                    },
+                );
+            self.synthetic_timely_data_head.write(Option::Some(asset_id));
+            self.emit(events::AddSynthetic { asset_id, risk_factor, resolution, quorum });
+        }
+
+        /// - Deactivate synthetic asset.
+        ///
+        /// Validations:
+        /// - Only the app governor can call this function.
+        /// - The asset is already exists and active.
+        ///
+        /// Execution:
+        /// - Deactivate synthetic_config.
+        ///     - Set the asset as active = false.
+        /// - remove asset from `synthetic_timely_data` map
+        /// - Decrement the number of active synthetic assets.
+        ///
+        /// When a synthetic asset is deactivated, it can no longer be traded or liquidated. It also
+        /// stops receiving funding and price updates. Additionally, a deactivated asset cannot be
+        /// reactivated.
+        fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
+            let roles = get_dep_component!(@self, Roles);
+            roles.only_app_governor();
+            let mut config = self._get_synthetic_config(:synthetic_id);
+            self._validate_synthetic_active(:synthetic_id);
+            config.is_active = false;
+            self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
+            self.num_of_active_synthetic_assets.sub_and_write(1);
+            self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
+        }
+
         fn get_price_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
             self.max_price_interval.read()
         }
@@ -82,6 +218,53 @@ pub(crate) mod AssetsComponent {
         }
         fn get_max_funding_rate(self: @ComponentState<TContractState>) -> u32 {
             self.max_funding_rate.read()
+        }
+
+        /// Remove oracle from asset.
+        /// Validations:
+        /// - Only the app governor can call this function.
+        /// - The oracle exists.
+        ///
+        /// Execution:
+        /// - Remove the oracle from the asset.
+        /// - Emit RemoveOracle event.
+        fn remove_oracle_from_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            oracle_public_key: PublicKey,
+        ) {
+            let roles = get_dep_component!(@self, Roles);
+            roles.only_app_governor();
+            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
+            // Validate the oracle exists.
+            assert(oracle_inner_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
+            self.oracles.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
+            self.emit(events::RemoveOracle { asset_id, oracle_public_key });
+        }
+
+        /// Update synthetic quorum.
+        ///
+        /// Validations:
+        /// - Only the app governor can call this function.
+        /// - The asset is already exists and active.
+        /// - The quorum is not the same as the current quorum.
+        /// - The quorum is greater than 0.
+        ///
+        /// Execution:
+        /// - Update the quorum.
+        /// - Emit UpdateAssetQuorum event.
+        fn update_synthetic_quorum(
+            ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
+        ) {
+            let roles = get_dep_component!(@self, Roles);
+            roles.only_app_governor();
+            let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
+            self._validate_synthetic_active(:synthetic_id);
+            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
+            assert(synthetic_config.quorum != quorum, INVALID_SAME_QUORUM);
+            synthetic_config.quorum = quorum;
+            self.synthetic_config.entry(synthetic_id).write(Option::Some(synthetic_config));
+            self.emit(events::UpdateAssetQuorum { asset_id: synthetic_id, quorum });
         }
     }
 
@@ -141,112 +324,6 @@ pub(crate) mod AssetsComponent {
                     },
                 );
             self.collateral_timely_data_head.write(Option::Some(asset_id));
-        }
-
-        fn add_oracle_to_asset(
-            ref self: ComponentState<TContractState>,
-            asset_id: AssetId,
-            oracle_public_key: PublicKey,
-            oracle_name: felt252,
-            asset_name: felt252,
-        ) {
-            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
-
-            // Validate the oracle does not exist.
-            assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
-
-            const TWO_POW_40: u64 = 0x100_0000_0000;
-            // Validate the size of the oracle name.
-            if let Option::Some(oracle_name) = oracle_name.try_into() {
-                assert(oracle_name < TWO_POW_40, ORACLE_NAME_TOO_LONG);
-            } else {
-                panic_with_felt252(ORACLE_NAME_TOO_LONG);
-            }
-
-            // Validate the size of the asset name.
-            assert(asset_name.into() < TWO_POW_128, ASSET_NAME_TOO_LONG);
-
-            // Add the oracle to the asset.
-            let shifted_asset_name = TWO_POW_40.into() * asset_name;
-            oracle_inner_entry.write(shifted_asset_name + oracle_name);
-            self.emit(events::AddOracle { asset_id, oracle_public_key });
-        }
-
-        fn remove_oracle_from_asset(
-            ref self: ComponentState<TContractState>,
-            asset_id: AssetId,
-            oracle_public_key: PublicKey,
-        ) {
-            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
-
-            // Validate the oracle exists.
-            assert(oracle_inner_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
-            self.oracles.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
-            self.emit(events::RemoveOracle { asset_id, oracle_public_key });
-        }
-
-        fn add_synthetic_asset(
-            ref self: ComponentState<TContractState>,
-            asset_id: AssetId,
-            risk_factor: u8,
-            quorum: u8,
-            resolution: u64,
-        ) {
-            assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
-            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
-            self
-                .synthetic_config
-                .entry(asset_id)
-                .write(
-                    Option::Some(
-                        SyntheticConfig {
-                            version: SYNTHETIC_VERSION,
-                            // It'll be active in the next price tick.
-                            is_active: false,
-                            // It validates the range of the risk factor.
-                            risk_factor: FixedTwoDecimalTrait::new(risk_factor),
-                            quorum,
-                            resolution,
-                        },
-                    ),
-                );
-
-            self
-                .synthetic_timely_data
-                .entry(asset_id)
-                .write(
-                    SyntheticTimelyData {
-                        version: SYNTHETIC_VERSION,
-                        next: self.synthetic_timely_data_head.read(),
-                        // These fields will be updated in the next price tick.
-                        price: Zero::zero(),
-                        last_price_update: Zero::zero(),
-                        funding_index: Zero::zero(),
-                    },
-                );
-            self.synthetic_timely_data_head.write(Option::Some(asset_id));
-            self.emit(events::AddSynthetic { asset_id, risk_factor, resolution, quorum });
-        }
-
-        fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
-            let mut config = self._get_synthetic_config(:synthetic_id);
-            self._validate_synthetic_active(:synthetic_id);
-            config.is_active = false;
-            self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
-            self.num_of_active_synthetic_assets.sub_and_write(1);
-            self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
-        }
-
-        fn update_synthetic_quorum(
-            ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
-        ) {
-            let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
-            self._validate_synthetic_active(:synthetic_id);
-            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
-            assert(synthetic_config.quorum != quorum, INVALID_SAME_QUORUM);
-            synthetic_config.quorum = quorum;
-            self.synthetic_config.entry(synthetic_id).write(Option::Some(synthetic_config));
-            self.emit(events::UpdateAssetQuorum { asset_id: synthetic_id, quorum });
         }
 
         fn _execute_funding_tick(
