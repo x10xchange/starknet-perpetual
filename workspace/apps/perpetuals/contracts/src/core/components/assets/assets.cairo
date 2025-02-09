@@ -15,12 +15,12 @@ pub(crate) mod AssetsComponent {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
-        ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
-        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
-        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM, NOT_COLLATERAL,
-        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS,
+        ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
+        COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED,
+        FUNDING_TICKS_NOT_SORTED, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM,
+        NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
+        ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -70,6 +70,7 @@ pub(crate) mod AssetsComponent {
         DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
+        RegisterCollateral: events::RegisterCollateral,
         RemoveOracle: events::RemoveOracle,
         UpdateAssetQuorum: events::UpdateAssetQuorum,
     }
@@ -128,7 +129,7 @@ pub(crate) mod AssetsComponent {
         ///
         /// Validations:
         /// - Only the app_governor can call this function.
-        /// - The asset is not already exists.
+        /// - The asset does not exists.
         /// - The risk factor is less or equal to 100.
         /// - The quorum is greater than 0.
         ///
@@ -148,7 +149,9 @@ pub(crate) mod AssetsComponent {
         ) {
             let roles = get_dep_component!(@self, Roles);
             roles.only_app_governor();
-            assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+            assert(
+                self.synthetic_config.entry(asset_id).read().is_none(), SYNTHETIC_ALREADY_EXISTS,
+            );
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             self
                 .synthetic_config
@@ -261,10 +264,16 @@ pub(crate) mod AssetsComponent {
             let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
             self._validate_synthetic_active(:synthetic_id);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
-            assert(synthetic_config.quorum != quorum, INVALID_SAME_QUORUM);
+            let old_quorum = synthetic_config.quorum;
+            assert(old_quorum != quorum, INVALID_SAME_QUORUM);
             synthetic_config.quorum = quorum;
             self.synthetic_config.entry(synthetic_id).write(Option::Some(synthetic_config));
-            self.emit(events::UpdateAssetQuorum { asset_id: synthetic_id, quorum });
+            self
+                .emit(
+                    events::UpdateAssetQuorum {
+                        asset_id: synthetic_id, new_quorum: quorum, old_quorum,
+                    },
+                );
         }
     }
 
@@ -279,6 +288,8 @@ pub(crate) mod AssetsComponent {
             max_funding_rate: u32,
             max_oracle_price_validity: TimeDelta,
         ) {
+            // Checks that the contract has not been initialized yet.
+            assert(self.max_price_interval.read().is_zero(), ALREADY_INITIALIZED);
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
@@ -294,7 +305,11 @@ pub(crate) mod AssetsComponent {
             quantum: u64,
             quorum: u8,
         ) {
-            assert(self.collateral_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+            assert(
+                self.collateral_config.entry(asset_id).read().is_none(), COLLATERAL_ALREADY_EXISTS,
+            );
+            // We currently support only one collateral asset.
+            assert(self.collateral_timely_data_head.read().is_none(), COLLATERAL_ALREADY_EXISTS);
 
             self
                 .collateral_config
@@ -324,6 +339,7 @@ pub(crate) mod AssetsComponent {
                     },
                 );
             self.collateral_timely_data_head.write(Option::Some(asset_id));
+            self.emit(events::RegisterCollateral { asset_id, token_address, quantum });
         }
 
         fn _execute_funding_tick(

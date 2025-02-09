@@ -17,7 +17,6 @@ use openzeppelin::presets::interfaces::{
 };
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
-use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreDispatcher;
@@ -265,14 +264,6 @@ fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
 pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
     let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
-    state
-        .assets
-        .initialize(
-            max_price_interval: *cfg.max_price_interval,
-            max_funding_interval: *cfg.max_funding_interval,
-            max_funding_rate: *cfg.max_funding_rate,
-            max_oracle_price_validity: *cfg.max_oracle_price_validity,
-        );
     // Collateral asset configs.
     let (collateral_config, collateral_timely_data) = generate_collateral(
         collateral_cfg: cfg.collateral_cfg, :token_state,

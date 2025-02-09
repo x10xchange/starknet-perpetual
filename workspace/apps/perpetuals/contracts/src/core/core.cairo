@@ -26,11 +26,11 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::errors::{
-        AMOUNT_TOO_LARGE, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
-        DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
-        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_POSITION, INVALID_PUBLIC_KEY,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
+        APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, DIFFERENT_BASE_ASSET_IDS,
+        DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_DELEVERAGE_BASE_CHANGE,
+        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_SYNTHETIC_ASSET,
+        INVALID_POSITION, INVALID_PUBLIC_KEY, INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+        INVALID_TRADE_SAME_POSITIONS, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
         INVALID_ZERO_AMOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, order_expired_err,
@@ -131,8 +131,8 @@ pub mod Core {
 
     #[storage]
     struct Storage {
-        // Message hash to fulfilled amount.
-        fulfillment: Map<HashType, i64>,
+        // Order hash to fulfilled absolute base amount.
+        fulfillment: Map<HashType, u64>,
         pub positions: Map<PositionId, Position>,
         // --- Components ---
         #[substorage(v0)]
@@ -228,6 +228,20 @@ pub mod Core {
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
+        /// Adds a new position to the system.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The operator nonce must be valid.
+        /// - The position does not exist.
+        /// - The owner public key is non-zero.
+        ///
+        /// Execution:
+        /// - Create a new position with the given `owner_public_key` and `owner_account`.
+        /// - Emit a `NewPosition` event.
+        ///
+        /// The position can be initialized with `owner_account` that is zero (no owner account).
+        /// This is to support the case where it doesn't have a L2 account.
         fn new_position(
             ref self: ContractState,
             operator_nonce: u64,
@@ -238,7 +252,7 @@ pub mod Core {
             self.pausable.assert_not_paused();
             self._consume_operator_nonce(:operator_nonce);
             let mut position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_zero(), POSITION_ALREADY_EXISTS);
+            assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
@@ -304,13 +318,12 @@ pub mod Core {
             expiration: Timestamp,
         ) {
             let position = self._get_position_const(:position_id);
-            assert(
-                position.owner_account.read() == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT,
-            );
+            let owner_account = position.owner_account.read();
+            assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
             let hash = self
                 .request_approvals
                 .register_approval(
-                    owner_account: position.owner_account.read(),
+                    :owner_account,
                     public_key: new_public_key,
                     :signature,
                     args: SetPublicKeyArgs { position_id, expiration, new_public_key },
@@ -394,7 +407,7 @@ pub mod Core {
             amount: u128,
             salt: felt252,
         ) {
-            self._validate_deposit(:operator_nonce, :position_id, :collateral_id);
+            self._validate_deposit(:operator_nonce, :position_id, :collateral_id, :amount);
             self
                 .deposits
                 .process_deposit(
@@ -477,46 +490,6 @@ pub mod Core {
                 ._validate_withdraw(
                     :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
                 );
-
-            /// Execution - Withdraw:
-            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
-            let token_contract = IERC20Dispatcher {
-                contract_address: collateral_cfg.token_address,
-            };
-            /// Validation - Not withdrawing from pending deposits:
-            let pending_unquantized_amount = self
-                .deposits
-                .aggregate_pending_deposit
-                .read(collateral_id.into());
-            let erc20_balance = token_contract.balance_of(get_contract_address());
-            let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
-            assert(
-                erc20_balance >= withdraw_unquantized_amount.into()
-                    + pending_unquantized_amount.into(),
-                INSUFFICIENT_FUNDS,
-            );
-            token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
-
-            /// Validations - Fundamentals:
-            let before = self._get_provisional_main_collateral_balance(:position_id);
-            let after = before - amount.into();
-            let price = self.assets._get_collateral_price(:collateral_id);
-            let asset_diff_entries = array![
-                AssetDiffEntry {
-                    id: collateral_id,
-                    before,
-                    after,
-                    price,
-                    risk_factor: self.assets._get_risk_factor(asset_id: collateral_id),
-                },
-            ]
-                .span();
-            let position_data = self._get_position_data(:position_id);
-
-            validate_position_is_healthy_or_healthier(
-                :position_id, :position_data, :asset_diff_entries,
-            );
-            self._apply_diff(:position_id, :asset_diff_entries);
             let position = self._get_position_const(:position_id);
             let hash = self
                 .request_approvals
@@ -526,6 +499,33 @@ pub mod Core {
                     },
                     public_key: position.owner_public_key.read(),
                 );
+            /// Validation - Not withdrawing from pending deposits:
+            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
+            let token_contract = IERC20Dispatcher {
+                contract_address: collateral_cfg.token_address,
+            };
+            let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
+            self
+                ._validate_sufficent_funds(
+                    :token_contract, :collateral_id, amount: withdraw_unquantized_amount,
+                );
+            /// Execution - Withdraw:
+            token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
+
+            /// Validations - Fundamentals:
+            let asset_diff_entries = array![
+                self
+                    ._create_asset_diff_entry(
+                        asset_id: collateral_id, :position_id, amount: amount.into(),
+                    ),
+            ]
+                .span();
+            let position_data = self._get_position_data(:position_id);
+
+            validate_position_is_healthy_or_healthier(
+                :position_id, :position_data, :asset_diff_entries,
+            );
+            self._apply_diff(:position_id, :asset_diff_entries);
             self
                 .emit(
                     events::Withdraw {
@@ -649,24 +649,17 @@ pub mod Core {
             actual_fee_b: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
-            /// Validations:
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
             // Signatures validation:
-            let position_a = self._get_position_const(position_id: position_id_a);
-            let position_b = self._get_position_const(position_id: position_id_b);
-            let hash_a = order_a.get_message_hash(public_key: position_a.owner_public_key.read());
-            validate_stark_signature(
-                public_key: position_a.owner_public_key.read(),
-                msg_hash: hash_a,
-                signature: signature_a,
-            );
-            let hash_b = order_b.get_message_hash(public_key: position_b.owner_public_key.read());
-            validate_stark_signature(
-                public_key: position_b.owner_public_key.read(),
-                msg_hash: hash_b,
-                signature: signature_b,
-            );
+            let hash_a = self
+                ._validate_order_signature(
+                    position_id: position_id_a, order: order_a, signature: signature_a,
+                );
+            let hash_b = self
+                ._validate_order_signature(
+                    position_id: position_id_b, order: order_b, signature: signature_b,
+                );
 
             // Validate and update fulfillments.
             self
@@ -709,14 +702,14 @@ pub mod Core {
             self
                 .emit(
                     events::Trade {
-                        order_a_position_id: order_a.position_id,
+                        order_a_position_id: position_id_a,
                         order_a_base_asset_id: order_a.base_asset_id,
                         order_a_base_amount: order_a.base_amount,
                         order_a_quote_asset_id: order_a.quote_asset_id,
                         order_a_quote_amount: order_a.quote_amount,
                         fee_a_asset_id: order_a.fee_asset_id,
                         fee_a_amount: order_a.fee_amount,
-                        order_b_position_id: order_b.position_id,
+                        order_b_position_id: position_id_b,
                         order_b_base_asset_id: order_b.base_asset_id,
                         order_b_base_amount: order_b.base_amount,
                         order_b_quote_asset_id: order_b.quote_asset_id,
@@ -773,16 +766,12 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce);
 
             // Signatures validation:
-            let liquidator_position = self
-                ._get_position_const(position_id: liquidator_order.position_id);
-            let liquidator_public_key = liquidator_position.owner_public_key.read();
-            let liquidator_order_hash = liquidator_order
-                .get_message_hash(public_key: liquidator_public_key);
-            validate_stark_signature(
-                public_key: liquidator_public_key,
-                msg_hash: liquidator_order_hash,
-                signature: liquidator_signature,
-            );
+            let liquidator_order_hash = self
+                ._validate_order_signature(
+                    position_id: liquidator_order.position_id,
+                    order: liquidator_order,
+                    signature: liquidator_signature,
+                );
 
             // Validate and update fulfilment.
             self
@@ -900,7 +889,8 @@ pub mod Core {
         ///
         /// Validations:
         /// - Only the operator can call this function.
-        /// - The asset is not already exists.
+        /// - The asset does not exists.
+        /// - There's no collateral asset in the system.
         ///
         /// Execution:
         /// - Adds a new entry to collateral_config.
@@ -1196,7 +1186,8 @@ pub mod Core {
             actual_liquidator_fee: u64,
         ) {
             let liquidated_position_id = liquidated_order.position_id;
-            let liquidated_position_data = self._get_position_data(liquidated_position_id);
+            let liquidated_position_data = self
+                ._get_position_data(position_id: liquidated_position_id);
             let liquidated_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: liquidated_order,
@@ -1206,7 +1197,8 @@ pub mod Core {
                 );
 
             let liquidator_position_id = liquidator_order.position_id;
-            let liquidator_position_data = self._get_position_data(liquidator_position_id);
+            let liquidator_position_data = self
+                ._get_position_data(position_id: liquidator_position_id);
             let liquidator_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: liquidator_order,
@@ -1264,7 +1256,7 @@ pub mod Core {
             actual_fee_a: u64,
             actual_fee_b: u64,
         ) {
-            let position_data_a = self._get_position_data(order_a.position_id);
+            let position_data_a = self._get_position_data(position_id: order_a.position_id);
             let asset_diff_entries_a = self
                 ._create_asset_diff_entries_from_order(
                     order: order_a,
@@ -1273,7 +1265,7 @@ pub mod Core {
                     actual_fee: actual_fee_a,
                 );
 
-            let position_data_b = self._get_position_data(order_b.position_id);
+            let position_data_b = self._get_position_data(position_id: order_b.position_id);
             let asset_diff_entries_b = self
                 ._create_asset_diff_entries_from_order(
                     order: order_b,
@@ -1328,7 +1320,7 @@ pub mod Core {
             amount: u64,
         ) {
             // Parameters
-            let sender_position_data = self._get_position_data(position_id);
+            let sender_position_data = self._get_position_data(:position_id);
             let asset_diff_entry_sender = self
                 ._create_asset_diff_entry(
                     asset_id: collateral_id, :position_id, amount: -(amount.into()),
@@ -1390,8 +1382,7 @@ pub mod Core {
 
         fn _get_position_data(self: @ContractState, position_id: PositionId) -> PositionData {
             let mut asset_entries = array![];
-            let position = self._get_position_const(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            self._validate_position_exists(:position_id);
             self._collect_position_collateral(ref :asset_entries, :position_id);
             self._collect_position_synthetics(ref :asset_entries, :position_id);
             PositionData { asset_entries: asset_entries.span() }
@@ -1430,12 +1421,11 @@ pub mod Core {
             actual_amount: i64,
         ) {
             let fulfillment_entry = self.fulfillment.entry(hash);
-            let final_amount = fulfillment_entry.read() + actual_amount;
-            // Both `final_amount` and `order_amount` are guaranteed to have the same sign.
+            let total_amount = fulfillment_entry.read() + actual_amount.abs();
             assert_with_byte_array(
-                final_amount.abs() <= order_amount.abs(), fulfillment_exceeded_err(:position_id),
+                total_amount <= order_amount.abs(), fulfillment_exceeded_err(:position_id),
             );
-            fulfillment_entry.write(final_amount);
+            fulfillment_entry.write(total_amount);
         }
 
         fn _update_collateral_in_position(
@@ -1511,10 +1501,12 @@ pub mod Core {
             operator_nonce: u64,
             position_id: PositionId,
             collateral_id: AssetId,
+            amount: u128,
         ) {
-            self._validate_position_exists(:position_id);
             self._validate_operator_flow(:operator_nonce);
+            self._validate_position_exists(:position_id);
             self.assets._validate_collateral_active(:collateral_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
         }
 
         /// Validates operator flows prerequisites:
@@ -1528,12 +1520,13 @@ pub mod Core {
             self.assets._validate_assets_integrity();
         }
 
-        fn _validate_order(ref self: ContractState, order: Order, now: Timestamp) {
+        fn _validate_order(ref self: ContractState, order: Order) {
             // Non-zero amount check.
-            assert(order.base_amount != 0, INVALID_ZERO_AMOUNT);
-            assert(order.quote_amount != 0, INVALID_ZERO_AMOUNT);
+            assert(order.base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(order.quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Expiration check.
+            let now = Time::now();
             assert_with_byte_array(now < order.expiration, order_expired_err(order.position_id));
 
             // Assets check.
@@ -1568,9 +1561,9 @@ pub mod Core {
             actual_fee_a: u64,
             actual_fee_b: u64,
         ) {
-            let now = Time::now();
-            self._validate_order(order: order_a, :now);
-            self._validate_order(order: order_b, :now);
+            assert(order_a.position_id != order_b.position_id, INVALID_TRADE_SAME_POSITIONS);
+            self._validate_order(order: order_a);
+            self._validate_order(order: order_b);
 
             order_a
                 .validate_against_actual_amounts(
@@ -1691,7 +1684,8 @@ pub mod Core {
             };
 
             let deleveraged_position_id = deleveraged_order.position_id;
-            let deleveraged_position_data = self._get_position_data(deleveraged_position);
+            let deleveraged_position_data = self
+                ._get_position_data(position_id: deleveraged_position);
             let deleveraged_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: deleveraged_order,
@@ -1701,7 +1695,8 @@ pub mod Core {
                 );
 
             let deleverager_position_id = deleverager_order.position_id;
-            let deleverager_position_data = self._get_position_data(deleverager_position_id);
+            let deleverager_position_data = self
+                ._get_position_data(position_id: deleverager_position_id);
             let deleverager_asset_diff_entries = self
                 ._create_asset_diff_entries_from_order(
                     order: deleverager_order,
@@ -1745,6 +1740,16 @@ pub mod Core {
             );
         }
 
+        fn _validate_order_signature(
+            self: @ContractState, position_id: PositionId, order: Order, signature: Signature,
+        ) -> HashType {
+            let position = self._get_position_const(:position_id);
+            let public_key = position.owner_public_key.read();
+            let msg_hash = order.get_message_hash(:public_key);
+            validate_stark_signature(:public_key, :msg_hash, :signature);
+            msg_hash
+        }
+
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
             self._get_position_const(:position_id);
         }
@@ -1760,19 +1765,31 @@ pub mod Core {
             amount: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
-
             // Check positions.
             self._validate_position_exists(position_id: recipient);
 
             // Validate collateral.
             self.assets._validate_collateral_active(:collateral_id);
             assert(amount > 0, INVALID_TRANSFER_AMOUNT);
-            let sender_collateral_amount = self
-                ._get_provisional_main_collateral_balance(:position_id);
-            assert(sender_collateral_amount >= amount.into(), AMOUNT_TOO_LARGE);
-
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+        }
+
+        fn _validate_sufficent_funds(
+            self: @ContractState,
+            token_contract: IERC20Dispatcher,
+            collateral_id: AssetId,
+            amount: u64,
+        ) {
+            let pending_unquantized_amount = self
+                .deposits
+                .aggregate_pending_deposit
+                .read(collateral_id.into());
+            let erc20_balance = token_contract.balance_of(get_contract_address());
+            assert(
+                erc20_balance >= amount.into() + pending_unquantized_amount.into(),
+                INSUFFICIENT_FUNDS,
+            );
         }
 
         fn _validate_withdraw(

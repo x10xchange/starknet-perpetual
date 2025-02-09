@@ -2,6 +2,7 @@ use contracts_commons::types::PublicKey;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
+use starknet::ContractAddress;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct AddOracle {
@@ -47,6 +48,15 @@ pub struct PriceTick {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct RegisterCollateral {
+    #[key]
+    pub asset_id: AssetId,
+    #[key]
+    pub token_address: ContractAddress,
+    pub quantum: u64,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct RemoveOracle {
     #[key]
     pub asset_id: AssetId,
@@ -58,5 +68,6 @@ pub struct RemoveOracle {
 pub struct UpdateAssetQuorum {
     #[key]
     pub asset_id: AssetId,
-    pub quorum: u8,
+    pub new_quorum: u8,
+    pub old_quorum: u8,
 }
