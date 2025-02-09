@@ -21,7 +21,15 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
-    assert_deleverage_event_with_expected, assert_new_position_event_with_expected,
+    assert_add_oracle_event_with_expected, assert_add_synthetic_event_with_expected,
+    assert_asset_activated_event_with_expected,
+    assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
+    assert_deposit_event_with_expected, assert_liquidate_event_with_expected,
+    assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
+    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic_to_position,
@@ -97,6 +105,7 @@ fn test_successful_add_synthetic_asset() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
 
     // Setup test parameters:
     let synthetic_id_1 = SYNTHETIC_ASSET_ID_2();
@@ -126,6 +135,16 @@ fn test_successful_add_synthetic_asset() {
             quorum: quorum_2,
             resolution: resolution_2,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_synthetic_event_with_expected(
+        spied_event: events[0],
+        asset_id: synthetic_id_1,
+        risk_factor: risk_factor_1,
+        resolution: resolution_1,
+        quorum: quorum_1,
+    );
 
     // Check:
     check_synthetic_asset(
@@ -180,6 +199,8 @@ fn test_successful_deactivate_synthetic_asset() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
+
     // Setup parameters:
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     assert!(state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
@@ -187,6 +208,12 @@ fn test_successful_deactivate_synthetic_asset() {
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.deactivate_synthetic(:synthetic_id);
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deactivate_synthetic_asset_event_with_expected(
+        spied_event: events[0], asset_id: synthetic_id,
+    );
 
     // Check:
     assert!(!state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
@@ -217,6 +244,7 @@ fn test_successful_withdraw() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -231,7 +259,8 @@ fn test_successful_withdraw() {
         amount: WITHDRAW_AMOUNT,
         recipient: user.address,
     };
-    let signature = user.sign_message(withdraw_args.get_message_hash(user.get_public_key()));
+    let hash = withdraw_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(hash);
     let operator_nonce = state.nonce();
 
     let contract_state_balance = token_state.balance_of(test_address());
@@ -259,6 +288,27 @@ fn test_successful_withdraw() {
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_withdraw_request_event_with_expected(
+        spied_event: events[0],
+        position_id: withdraw_args.position_id,
+        recipient: withdraw_args.recipient,
+        collateral_id: withdraw_args.collateral_id,
+        amount: withdraw_args.amount,
+        expiration: withdraw_args.expiration,
+        withdraw_request_hash: hash,
+    );
+    assert_withdraw_event_with_expected(
+        spied_event: events[1],
+        position_id: withdraw_args.position_id,
+        recipient: withdraw_args.recipient,
+        collateral_id: withdraw_args.collateral_id,
+        amount: withdraw_args.amount,
+        expiration: withdraw_args.expiration,
+        withdraw_request_hash: hash,
+    );
     // Check:
     let user_balance = token_state.balance_of(user.address);
     let onchain_amount = (WITHDRAW_AMOUNT * COLLATERAL_QUANTUM);
@@ -273,6 +323,7 @@ fn test_successful_deposit() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -305,6 +356,18 @@ fn test_successful_deposit() {
             salt: user.salt_counter,
         );
 
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id.value,
+        depositing_address: user.address,
+        asset_id: cfg.collateral_cfg.collateral_id.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        deposit_request_hash: deposit_hash,
+    );
+
     // Check after deposit:
     let user_balance_after_deposit = token_state.balance_of(user.address);
     assert_eq!(
@@ -332,6 +395,7 @@ fn test_successful_trade() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
 
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
@@ -375,8 +439,10 @@ fn test_successful_trade() {
         salt: user_b.salt_counter,
     };
 
-    let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.get_public_key()));
-    let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.get_public_key()));
+    let hash_a = order_a.get_message_hash(user_a.get_public_key());
+    let hash_b = order_b.get_message_hash(user_b.get_public_key());
+    let signature_a = user_a.sign_message(hash_a);
+    let signature_b = user_b.sign_message(hash_b);
     let operator_nonce = state.nonce();
 
     // Test:
@@ -393,6 +459,32 @@ fn test_successful_trade() {
             actual_fee_a: FEE,
             actual_fee_b: FEE,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_trade_event_with_expected(
+        spied_event: events[0],
+        order_a_position_id: user_a.position_id,
+        order_a_base_asset_id: synthetic_id,
+        order_a_base_amount: BASE,
+        order_a_quote_asset_id: collateral_id,
+        order_a_quote_amount: QUOTE,
+        fee_a_asset_id: collateral_id,
+        fee_a_amount: FEE,
+        order_b_position_id: user_b.position_id,
+        order_b_base_asset_id: synthetic_id,
+        order_b_base_amount: -BASE,
+        order_b_quote_asset_id: collateral_id,
+        order_b_quote_amount: -QUOTE,
+        fee_b_asset_id: collateral_id,
+        fee_b_amount: FEE,
+        actual_amount_base_a: BASE,
+        actual_amount_quote_a: QUOTE,
+        actual_fee_a: FEE,
+        actual_fee_b: FEE,
+        order_a_hash: hash_a,
+        order_b_hash: hash_b,
+    );
 
     // Check:
     let user_a_collateral_balance = state
@@ -749,6 +841,7 @@ fn test_successful_liquidate() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
 
     let mut liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
@@ -788,8 +881,8 @@ fn test_successful_liquidate() {
         expiration,
     };
 
-    let liquidator_signature = liquidator
-        .sign_message(order_liquidator.get_message_hash(liquidator.get_public_key()));
+    let liquidator_hash = order_liquidator.get_message_hash(liquidator.get_public_key());
+    let liquidator_signature = liquidator.sign_message(liquidator_hash);
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -806,6 +899,26 @@ fn test_successful_liquidate() {
             fee_asset_id: collateral_id,
             fee_amount: INSURANCE_FEE,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_liquidate_event_with_expected(
+        spied_event: events[0],
+        liquidated_position_id: liquidated.position_id,
+        liquidator_order_position_id: liquidator.position_id,
+        liquidator_order_base_asset_id: synthetic_id,
+        liquidator_order_base_amount: -BASE,
+        liquidator_order_quote_asset_id: collateral_id,
+        liquidator_order_quote_amount: -QUOTE,
+        liquidator_order_fee_asset_id: collateral_id,
+        liquidator_order_fee_amount: FEE,
+        actual_amount_base_liquidated: BASE,
+        actual_amount_quote_liquidated: QUOTE,
+        actual_liquidator_fee: FEE,
+        insurance_fund_fee_asset_id: collateral_id,
+        insurance_fund_fee_amount: INSURANCE_FEE,
+        liquidator_order_hash: liquidator_hash,
+    );
 
     // Check:
     let liquidated_position = state.positions.entry(liquidated.position_id);
@@ -983,6 +1096,7 @@ fn test_successful_set_public_key() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
@@ -1014,6 +1128,24 @@ fn test_successful_set_public_key() {
             new_public_key: set_public_key_args.new_public_key,
             expiration: set_public_key_args.expiration,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_set_public_key_request_event_with_expected(
+        spied_event: events[0],
+        position_id: set_public_key_args.position_id,
+        new_public_key: set_public_key_args.new_public_key,
+        expiration: set_public_key_args.expiration,
+        set_public_key_request_hash: msg_hash,
+    );
+    assert_set_public_key_event_with_expected(
+        spied_event: events[1],
+        position_id: set_public_key_args.position_id,
+        new_public_key: set_public_key_args.new_public_key,
+        expiration: set_public_key_args.expiration,
+        set_public_key_request_hash: msg_hash,
+    );
+
     // Check:
     assert_eq!(
         user.get_public_key(), state.positions.entry(user.position_id).owner_public_key.read(),
@@ -1056,6 +1188,7 @@ fn test_successful_transfer() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
 
     let mut sender = Default::default();
     init_position(cfg: @cfg, ref :state, user: sender);
@@ -1077,8 +1210,8 @@ fn test_successful_transfer() {
         amount: TRANSFER_AMOUNT,
     };
 
-    let sender_signature = sender
-        .sign_message(transfer_args.get_message_hash(sender.get_public_key()));
+    let msg_hash = transfer_args.get_message_hash(sender.get_public_key());
+    let sender_signature = sender.sign_message(msg_hash);
     // Test:
     state
         .transfer_request(
@@ -1102,6 +1235,27 @@ fn test_successful_transfer() {
             salt: transfer_args.salt,
         );
 
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_transfer_request_event_with_expected(
+        spied_event: events[0],
+        position_id: transfer_args.position_id,
+        recipient: transfer_args.recipient,
+        collateral_id: transfer_args.collateral_id,
+        amount: transfer_args.amount,
+        expiration: transfer_args.expiration,
+        transfer_request_hash: msg_hash,
+    );
+    assert_transfer_event_with_expected(
+        spied_event: events[1],
+        position_id: transfer_args.position_id,
+        recipient: transfer_args.recipient,
+        collateral_id: transfer_args.collateral_id,
+        amount: transfer_args.amount,
+        expiration: transfer_args.expiration,
+        transfer_request_hash: msg_hash,
+    );
+
     // Check:
     let sender_collateral_balance = state
         ._get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
@@ -1121,6 +1275,7 @@ fn test_price_tick_basic() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
@@ -1157,6 +1312,19 @@ fn test_price_tick_basic() {
             ]
                 .span(),
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_oracle_event_with_expected(
+        spied_event: events[0],
+        asset_id: synthetic_id,
+        oracle_public_key: oracle1.key_pair.public_key,
+    );
+    assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: synthetic_id);
+    assert_price_tick_event_with_expected(
+        spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(268),
+    );
+
     assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
     assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
