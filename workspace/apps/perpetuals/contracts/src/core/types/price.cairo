@@ -76,7 +76,7 @@ impl PriceMulBalance of PriceMulTrait<Balance> {
 }
 
 #[generate_trait]
-pub impl PriceImp of PriceTrait {
+pub impl PriceImpl of PriceTrait {
     fn new(value: u64) -> Price {
         assert(value < LIMIT, 'Value must be < 2^56');
         Price { value: value }

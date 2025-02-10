@@ -287,7 +287,7 @@ pub(crate) mod AssetsComponent {
             max_funding_rate: u32,
             max_oracle_price_validity: TimeDelta,
         ) {
-            // Checks that the contract has not been initialized yet.
+            // Checks that the component has not been initialized yet.
             assert(self.max_price_interval.read().is_zero(), ALREADY_INITIALIZED);
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);

@@ -17,6 +17,7 @@ use openzeppelin::presets::interfaces::{
 };
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
+use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreDispatcher;
@@ -304,37 +305,31 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
 }
 
 pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
-    let position = state.positions.entry(user.position_id);
+    let position = state.positions.positions.entry(user.position_id);
     position.owner_public_key.write(user.get_public_key());
-    state
-        ._apply_funding_and_set_balance(
-            position_id: user.position_id,
-            asset_id: *cfg.collateral_cfg.collateral_id,
-            balance: COLLATERAL_BALANCE_AMOUNT.into(),
+    let asset_id = *cfg.collateral_cfg.collateral_id;
+    let position_id = user.position_id;
+    let asset_diff_entries = state
+        ._create_asset_diff_entry(
+            :position_id, :asset_id, amount: COLLATERAL_BALANCE_AMOUNT.into(),
         );
-    position.collateral_assets_head.write(Option::Some(*cfg.collateral_cfg.collateral_id));
+    state.positions.apply_diff(:position_id, :asset_diff_entries);
 }
 
 pub fn init_position_with_owner(
     cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User,
 ) {
     init_position(cfg, ref :state, :user);
-    let position = state.positions.entry(user.position_id);
+    let position = state.positions.get_position_mut(position_id: user.position_id);
     position.owner_account.write(user.address);
 }
 
 pub fn add_synthetic_to_position(
     ref state: Core::ContractState, asset_id: AssetId, position_id: PositionId, balance: i64,
 ) {
-    let position = state.positions.entry(position_id);
-    match position.synthetic_assets_head.read() {
-        Option::Some(head) => {
-            position.synthetic_assets_head.write(Option::Some(asset_id));
-            position.synthetic_assets.entry(asset_id).next.write(Option::Some(head));
-        },
-        Option::None => position.synthetic_assets_head.write(Option::Some(asset_id)),
-    }
-    position.synthetic_assets.entry(asset_id).balance.write(balance.into());
+    let asset_diff_entries = state
+        ._create_asset_diff_entry(:position_id, :asset_id, amount: balance.into());
+    state.positions.apply_diff(:position_id, :asset_diff_entries);
 }
 
 pub fn initialized_contract_state() -> Core::ContractState {

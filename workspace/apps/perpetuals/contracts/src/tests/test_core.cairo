@@ -1,4 +1,3 @@
-use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit};
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
@@ -10,7 +9,11 @@ use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
 use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::interface::IAssets;
-use perpetuals::core::core::Core;
+use perpetuals::core::components::positions::Positions::POSITION_VERSION;
+use perpetuals::core::components::positions::interface::IPositions;
+use perpetuals::core::components::positions::{
+    Positions, Positions::InternalTrait as PositionsInternal,
+};
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::synthetic::SyntheticConfig;
@@ -52,15 +55,36 @@ fn test_constructor() {
     assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
 
-    assert_eq!(state.positions.entry(Core::FEE_POSITION).owner_account.read(), OPERATOR());
     assert_eq!(
-        state.positions.entry(Core::FEE_POSITION).owner_public_key.read(), OPERATOR_PUBLIC_KEY(),
+        state
+            .positions
+            .get_position_const(position_id: Positions::FEE_POSITION)
+            .owner_account
+            .read(),
+        OPERATOR(),
     );
     assert_eq!(
-        state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_account.read(), OPERATOR(),
+        state
+            .positions
+            .get_position_const(position_id: Positions::FEE_POSITION)
+            .owner_public_key
+            .read(),
+        OPERATOR_PUBLIC_KEY(),
     );
     assert_eq!(
-        state.positions.entry(Core::INSURANCE_FUND_POSITION).owner_public_key.read(),
+        state
+            .positions
+            .get_position_const(position_id: Positions::INSURANCE_FUND_POSITION)
+            .owner_account
+            .read(),
+        OPERATOR(),
+    );
+    assert_eq!(
+        state
+            .positions
+            .get_position_const(position_id: Positions::INSURANCE_FUND_POSITION)
+            .owner_public_key
+            .read(),
         OPERATOR_PUBLIC_KEY(),
     );
 }
@@ -92,9 +116,13 @@ fn test_new_position() {
     );
 
     // Check.
-    assert_eq!(state.positions.entry(position_id).version.read(), Core::POSITION_VERSION);
-    assert_eq!(state.positions.entry(position_id).owner_public_key.read(), owner_public_key);
-    assert_eq!(state.positions.entry(position_id).owner_account.read(), owner_account);
+    assert_eq!(state.positions.get_position_const(:position_id).version.read(), POSITION_VERSION);
+    assert_eq!(
+        state.positions.get_position_const(:position_id).owner_public_key.read(), owner_public_key,
+    );
+    assert_eq!(
+        state.positions.get_position_const(:position_id).owner_account.read(), owner_account,
+    );
 }
 
 // Add synthetic asset tests.
@@ -488,25 +516,30 @@ fn test_successful_trade() {
 
     // Check:
     let user_a_collateral_balance = state
-        ._get_provisional_balance(position_id: user_a.position_id, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: user_a.position_id, asset_id: collateral_id);
     let user_a_synthetic_balance = state
-        ._get_provisional_balance(position_id: user_a.position_id, asset_id: synthetic_id);
+        .positions
+        .get_provisional_balance(position_id: user_a.position_id, asset_id: synthetic_id);
     assert_eq!(
         user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
     );
     assert_eq!(user_a_synthetic_balance, (BASE).into());
 
     let user_b_collateral_balance = state
-        ._get_provisional_balance(position_id: user_b.position_id, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: user_b.position_id, asset_id: collateral_id);
     let user_b_synthetic_balance = state
-        ._get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
+        .positions
+        .get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
     assert_eq!(
         user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
     );
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
 
     let fee_position_balance = state
-        ._get_provisional_balance(position_id: Core::FEE_POSITION, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: Positions::FEE_POSITION, asset_id: collateral_id);
     assert_eq!(fee_position_balance, (FEE + FEE).into());
 }
 
@@ -746,8 +779,12 @@ fn test_successful_deleverage() {
     );
 
     // Check:
-    let deleveraged_position = state.positions.entry(deleveraged.position_id);
-    let deleverager_position = state.positions.entry(deleverager.position_id);
+    let deleveraged_position = state
+        .positions
+        .get_position_const(position_id: deleveraged.position_id);
+    let deleverager_position = state
+        .positions
+        .get_position_const(position_id: deleverager.position_id);
 
     let deleveraged_collateral_balance = deleveraged_position
         .collateral_assets
@@ -845,7 +882,6 @@ fn test_successful_liquidate() {
 
     let mut liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
-
     let mut liquidated = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: liquidated);
     add_synthetic_to_position(
@@ -886,7 +922,6 @@ fn test_successful_liquidate() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-
     state
         .liquidate(
             :operator_nonce,
@@ -899,7 +934,6 @@ fn test_successful_liquidate() {
             fee_asset_id: collateral_id,
             fee_amount: INSURANCE_FEE,
         );
-
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_liquidate_event_with_expected(
@@ -921,8 +955,12 @@ fn test_successful_liquidate() {
     );
 
     // Check:
-    let liquidated_position = state.positions.entry(liquidated.position_id);
-    let liquidator_position = state.positions.entry(liquidator.position_id);
+    let liquidated_position = state
+        .positions
+        .get_position_const(position_id: liquidated.position_id);
+    let liquidator_position = state
+        .positions
+        .get_position_const(position_id: liquidator.position_id);
 
     let liquidated_collateral_balance = liquidated_position
         .collateral_assets
@@ -957,12 +995,14 @@ fn test_successful_liquidate() {
     assert_eq!(liquidator_synthetic_balance, (-BASE).into());
 
     let fee_position_balance = state
-        ._get_provisional_balance(position_id: Core::FEE_POSITION, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: Positions::FEE_POSITION, asset_id: collateral_id);
     assert_eq!(fee_position_balance, FEE.into());
 
     let insurance_position_balance = state
-        ._get_provisional_balance(
-            position_id: Core::INSURANCE_FUND_POSITION, asset_id: collateral_id,
+        .positions
+        .get_provisional_balance(
+            position_id: Positions::INSURANCE_FUND_POSITION, asset_id: collateral_id,
         );
     assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
 }
@@ -1148,7 +1188,8 @@ fn test_successful_set_public_key() {
 
     // Check:
     assert_eq!(
-        user.get_public_key(), state.positions.entry(user.position_id).owner_public_key.read(),
+        user.get_public_key(),
+        state.positions.get_position_const(position_id: user.position_id).owner_public_key.read(),
     );
 }
 
@@ -1258,13 +1299,15 @@ fn test_successful_transfer() {
 
     // Check:
     let sender_collateral_balance = state
-        ._get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
     assert_eq!(
         sender_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into(),
     );
 
     let recipient_collateral_balance = state
-        ._get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
+        .positions
+        .get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
     assert_eq!(
         recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
     );

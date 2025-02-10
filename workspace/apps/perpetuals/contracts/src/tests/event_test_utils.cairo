@@ -3,6 +3,7 @@ use contracts_commons::test_utils::assert_expected_event_emitted;
 use contracts_commons::types::PublicKey;
 use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::components::assets::events as assets_events;
+use perpetuals::core::components::positions::events as positions_events;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::events;
 use perpetuals::core::types::PositionId;
@@ -21,7 +22,9 @@ pub fn assert_new_position_event_with_expected(
     owner_public_key: PublicKey,
     owner_account: ContractAddress,
 ) {
-    let expected_event = events::NewPosition { position_id, owner_public_key, owner_account };
+    let expected_event = positions_events::NewPosition {
+        position_id, owner_public_key, owner_account,
+    };
     assert_expected_event_emitted(
         :spied_event, :expected_event, expected_event_selector: @selector!("NewPosition"),
     );
@@ -280,7 +283,7 @@ pub fn assert_set_owner_account_event_with_expected(
     expiration: Timestamp,
     set_owner_account_hash: felt252,
 ) {
-    let expected_event = events::SetOwnerAccount {
+    let expected_event = positions_events::SetOwnerAccount {
         position_id, public_key, new_position_owner, expiration, set_owner_account_hash,
     };
     assert_expected_event_emitted(
@@ -296,7 +299,7 @@ pub fn assert_set_public_key_request_event_with_expected(
     expiration: Timestamp,
     set_public_key_request_hash: felt252,
 ) {
-    let expected_event = events::SetPublicKeyRequest {
+    let expected_event = positions_events::SetPublicKeyRequest {
         position_id, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
@@ -311,7 +314,7 @@ pub fn assert_set_public_key_event_with_expected(
     expiration: Timestamp,
     set_public_key_request_hash: felt252,
 ) {
-    let expected_event = events::SetPublicKey {
+    let expected_event = positions_events::SetPublicKey {
         position_id, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
