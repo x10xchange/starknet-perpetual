@@ -3,7 +3,6 @@ pub(crate) mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
-    use contracts_commons::errors::panic_with_felt;
     use contracts_commons::math::Abs;
     use contracts_commons::span_utils::{check_range, validate_median};
     use contracts_commons::types::PublicKey;
@@ -475,7 +474,7 @@ pub(crate) mod AssetsComponent {
             } else if self._is_synthetic(:asset_id) {
                 self._get_synthetic_price(synthetic_id: asset_id)
             } else {
-                panic_with_felt(ASSET_NOT_EXISTS)
+                panic_with_felt252(ASSET_NOT_EXISTS)
             }
         }
 
@@ -491,7 +490,7 @@ pub(crate) mod AssetsComponent {
             if self._is_collateral(asset_id: collateral_id) {
                 self.collateral_timely_data.entry(collateral_id).price.read()
             } else {
-                panic_with_felt(NOT_COLLATERAL)
+                panic_with_felt252(NOT_COLLATERAL)
             }
         }
 
@@ -511,7 +510,7 @@ pub(crate) mod AssetsComponent {
             if self._is_synthetic(asset_id: synthetic_id) {
                 self.synthetic_timely_data.entry(synthetic_id).price.read()
             } else {
-                panic_with_felt(NOT_SYNTHETIC)
+                panic_with_felt252(NOT_SYNTHETIC)
             }
         }
 
@@ -523,7 +522,7 @@ pub(crate) mod AssetsComponent {
             } else if self._is_synthetic(:asset_id) {
                 self._get_synthetic_config(synthetic_id: asset_id).risk_factor
             } else {
-                panic_with_felt(ASSET_NOT_EXISTS)
+                panic_with_felt252(ASSET_NOT_EXISTS)
             }
         }
 
@@ -533,7 +532,7 @@ pub(crate) mod AssetsComponent {
             if self._is_synthetic(asset_id: synthetic_id) {
                 self.synthetic_timely_data.entry(synthetic_id).funding_index.read()
             } else {
-                panic_with_felt(NOT_SYNTHETIC)
+                panic_with_felt252(NOT_SYNTHETIC)
             }
         }
 
