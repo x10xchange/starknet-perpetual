@@ -271,7 +271,6 @@ fn test_successful_withdraw() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -293,6 +292,7 @@ fn test_successful_withdraw() {
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, CONTRACT_INIT_BALANCE.into());
 
+    let mut spy = snforge_std::spy_events();
     // Test:
     state
         .withdraw_request(
@@ -350,7 +350,6 @@ fn test_successful_deposit() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -372,7 +371,7 @@ fn test_successful_deposit() {
     assert_eq!(user_balance_before_deposit, USER_INIT_BALANCE.try_into().unwrap());
     let contract_state_balance_before_deposit = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance_before_deposit, CONTRACT_INIT_BALANCE.try_into().unwrap());
-
+    let mut spy = snforge_std::spy_events();
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let deposit_hash = state
@@ -422,7 +421,6 @@ fn test_successful_trade() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
 
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
@@ -472,6 +470,7 @@ fn test_successful_trade() {
     let signature_b = user_b.sign_message(hash_b);
     let operator_nonce = state.nonce();
 
+    let mut spy = snforge_std::spy_events();
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
@@ -711,7 +710,6 @@ fn test_successful_deleverage() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
 
     let deleveraged = Default::default();
     init_position(cfg: @cfg, ref :state, user: deleveraged);
@@ -752,6 +750,7 @@ fn test_successful_deleverage() {
     // Deleverager before:     2000+20*100=4000               20*100*0.5=1000                 4
     // Deleverager after:    (2000+500)+(20-10)*100=3500            1500                      7/3
 
+    let mut spy = snforge_std::spy_events();
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
@@ -877,7 +876,6 @@ fn test_successful_liquidate() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
 
     let mut liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
@@ -919,6 +917,7 @@ fn test_successful_liquidate() {
     let liquidator_hash = order_liquidator.get_message_hash(liquidator.get_public_key());
     let liquidator_signature = liquidator.sign_message(liquidator_hash);
 
+    let mut spy = snforge_std::spy_events();
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
@@ -1135,7 +1134,6 @@ fn test_successful_set_public_key() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
@@ -1151,6 +1149,7 @@ fn test_successful_set_public_key() {
     };
     let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
+    let mut spy = snforge_std::spy_events();
     state
         .set_public_key_request(
             :signature,
@@ -1228,7 +1227,6 @@ fn test_successful_transfer() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state(cfg: @cfg, token_state: @token_state);
-    let mut spy = snforge_std::spy_events();
 
     let mut sender = Default::default();
     init_position(cfg: @cfg, ref :state, user: sender);
@@ -1250,6 +1248,7 @@ fn test_successful_transfer() {
         amount: TRANSFER_AMOUNT,
     };
 
+    let mut spy = snforge_std::spy_events();
     let msg_hash = transfer_args.get_message_hash(sender.get_public_key());
     let sender_signature = sender.sign_message(msg_hash);
     // Test:

@@ -62,7 +62,7 @@ pub(crate) mod Positions {
 
     #[storage]
     pub struct Storage {
-        pub positions: Map<PositionId, Position>,
+        positions: Map<PositionId, Position>,
     }
 
     #[event]

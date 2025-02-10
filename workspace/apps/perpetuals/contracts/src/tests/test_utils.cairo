@@ -1,5 +1,6 @@
 use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::deposit::Deposit::InternalTrait;
+use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::TWO_POW_32;
 use contracts_commons::test_utils::{
@@ -18,6 +19,7 @@ use openzeppelin::presets::interfaces::{
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreDispatcher;
@@ -305,10 +307,16 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
 }
 
 pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
-    let position = state.positions.positions.entry(user.position_id);
-    position.owner_public_key.write(user.get_public_key());
-    let asset_id = *cfg.collateral_cfg.collateral_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
     let position_id = user.position_id;
+    state
+        .new_position(
+            operator_nonce: state.nonce(),
+            :position_id,
+            owner_public_key: user.get_public_key(),
+            owner_account: Zero::zero(),
+        );
+    let asset_id = *cfg.collateral_cfg.collateral_id;
     let asset_diff_entries = state
         ._create_position_diff(:position_id, :asset_id, amount: COLLATERAL_BALANCE_AMOUNT.into());
     state.positions.apply_diff(:position_id, :asset_diff_entries);
