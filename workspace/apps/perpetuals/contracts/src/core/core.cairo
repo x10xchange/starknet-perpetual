@@ -244,7 +244,7 @@ pub mod Core {
                     :salt,
                 );
             let asset_diff_entries = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     :position_id, asset_id: collateral_id, amount: amount.into(),
                 );
             self.positions.apply_diff(:position_id, :asset_diff_entries);
@@ -341,7 +341,7 @@ pub mod Core {
 
             /// Validations - Fundamentals:
             let asset_diff_entries = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     :position_id, asset_id: collateral_id, amount: amount.into(),
                 );
             let position_data = self.positions.get_position_data(:position_id);
@@ -822,22 +822,26 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _create_asset_diff_entry(
+        fn _create_position_diff(
             self: @ContractState, position_id: PositionId, asset_id: AssetId, amount: Balance,
         ) -> PositionDiff {
+            array![self._create_asset_diff_entry(:position_id, :asset_id, :amount)].span()
+        }
+
+        fn _create_asset_diff_entry(
+            self: @ContractState, position_id: PositionId, asset_id: AssetId, amount: Balance,
+        ) -> AssetDiffEntry {
             let position_asset_balance = self
                 .positions
                 .get_provisional_balance(:position_id, :asset_id);
-            array![
-                AssetDiffEntry {
-                    id: asset_id,
-                    before: position_asset_balance,
-                    after: position_asset_balance + amount,
-                    price: self.assets.get_asset_price(:asset_id),
-                    risk_factor: self.assets.get_risk_factor(:asset_id),
-                },
-            ]
-                .span()
+
+            AssetDiffEntry {
+                id: asset_id,
+                before: position_asset_balance,
+                after: position_asset_balance + amount,
+                price: self.assets.get_asset_price(:asset_id),
+                risk_factor: self.assets.get_risk_factor(:asset_id),
+            }
         }
 
         /// Builds asset diff entries from an order's fee, quote, and base assets, handling overlaps
@@ -967,7 +971,7 @@ pub mod Core {
 
             // Update fee positions.
             let asset_diff_entries_liquidated_fee = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     position_id: FEE_POSITION,
                     asset_id: liquidated_order.fee_asset_id,
                     amount: liquidated_order.fee_amount.into(),
@@ -980,7 +984,7 @@ pub mod Core {
                 );
 
             let asset_diff_entries_liquidator_fee = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     position_id: FEE_POSITION,
                     asset_id: liquidator_order.fee_asset_id,
                     amount: actual_liquidator_fee.into(),
@@ -1049,7 +1053,7 @@ pub mod Core {
 
             // Update fee positions.
             let asset_diff_entries_fee_a = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     position_id: FEE_POSITION,
                     asset_id: order_a.fee_asset_id,
                     amount: actual_fee_a.into(),
@@ -1060,7 +1064,7 @@ pub mod Core {
                     position_id: FEE_POSITION, asset_diff_entries: asset_diff_entries_fee_a,
                 );
             let asset_diff_entries_fee_b = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     position_id: FEE_POSITION,
                     asset_id: order_b.fee_asset_id,
                     amount: actual_fee_b.into(),
@@ -1094,11 +1098,11 @@ pub mod Core {
             // Parameters
             let sender_position_data = self.positions.get_position_data(:position_id);
             let asset_diff_entry_sender = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     :position_id, asset_id: collateral_id, amount: -(amount.into()),
                 );
             let asset_diff_entry_recipient = self
-                ._create_asset_diff_entry(
+                ._create_position_diff(
                     position_id: recipient, asset_id: collateral_id, amount: amount.into(),
                 );
 
