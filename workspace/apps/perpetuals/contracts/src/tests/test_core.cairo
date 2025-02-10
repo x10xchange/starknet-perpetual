@@ -7,7 +7,6 @@ use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
-use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::components::positions::Positions::POSITION_VERSION;
 use perpetuals::core::components::positions::interface::IPositions;
@@ -35,7 +34,7 @@ use perpetuals::tests::event_test_utils::{
     assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
-    Oracle, OracleTrait, PerpetualsInitConfig, UserTrait, add_synthetic_to_position,
+    Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
     setup_state,
 };
@@ -1313,6 +1312,182 @@ fn test_successful_transfer() {
     );
 }
 
+// `validate_synthetic_price` tests.
+
+#[test]
+#[should_panic(expected: 'SYNTHETIC_EXPIRED_PRICE')]
+fn test_validate_synthetic_prices_expired() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+        );
+    // Set the block timestamp to be after the price validation interval
+    let now = Time::now().add(delta: Time::days(count: 2));
+    start_cheat_block_timestamp_global(block_timestamp: now.into());
+    state.assets.last_funding_tick.write(now);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.into(),
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // Call the function, should panic with EXPIRED_PRICE error
+    state
+        .process_deposit(
+            operator_nonce: state.nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+fn test_validate_synthetic_prices_uninitialized_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+        );
+    state
+        .assets
+        .synthetic_timely_data
+        .entry(cfg.synthetic_cfg.synthetic_id)
+        .last_price_update
+        .write(Time::now());
+    // Set the block timestamp to be after the price validation interval
+    let now = Time::now().add(delta: Time::days(count: 2));
+    start_cheat_block_timestamp_global(block_timestamp: now.into());
+    state.assets.last_funding_tick.write(Time::now());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.into(),
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // Call the function, should panic with EXPIRED_PRICE error
+    state
+        .process_deposit(
+            operator_nonce: state.nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    // If no assertion error is thrown, the test passes
+}
+
+#[test]
+fn test_validate_prices() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+        );
+    let new_time = Time::now().add(delta: Time::days(count: 1));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    state.assets.last_funding_tick.write(Time::now());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.into(),
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .process_deposit(
+            operator_nonce: state.nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    assert_eq!(state.assets.last_price_validation.read(), new_time);
+}
+
+#[test]
+fn test_validate_prices_no_update_needed() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: test_address(),
+            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+        );
+    let old_time = Time::now();
+    assert_eq!(state.assets.last_price_validation.read(), old_time);
+    let new_time = Time::now().add(delta: Time::seconds(count: 1000));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.into(),
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .process_deposit(
+            operator_nonce: state.nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    assert_eq!(state.assets.last_price_validation.read(), old_time);
+}
+
+// `price_tick` tests.
+
 #[test]
 fn test_price_tick_basic() {
     let cfg: PerpetualsInitConfig = Default::default();
@@ -1339,7 +1514,7 @@ fn test_price_tick_basic() {
             synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
         );
     state.assets.num_of_active_synthetic_assets.write(Zero::zero());
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), Zero::zero());
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), Zero::zero());
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -1368,8 +1543,8 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(268),
     );
 
-    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
@@ -1420,7 +1595,7 @@ fn test_price_tick_odd() {
             synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
         );
     state.assets.num_of_active_synthetic_assets.write(0);
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -1438,8 +1613,8 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
@@ -1479,7 +1654,7 @@ fn test_price_tick_even() {
             synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
         );
     state.assets.num_of_active_synthetic_assets.write(0);
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 0);
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -1496,8 +1671,8 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets._get_synthetic_config(synthetic_id).is_active);
-    assert_eq!(state.assets._get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);

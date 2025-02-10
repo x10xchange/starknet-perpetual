@@ -1,5 +1,5 @@
 #[starknet::component]
-pub(crate) mod AssetsComponent {
+pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
@@ -212,14 +212,41 @@ pub(crate) mod AssetsComponent {
             self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
         }
 
-        fn get_price_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
-            self.max_price_interval.read()
+        fn get_collateral_config(
+            self: @ComponentState<TContractState>, collateral_id: AssetId,
+        ) -> CollateralConfig {
+            self._get_collateral_config(:collateral_id)
         }
         fn get_funding_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
             self.max_funding_interval.read()
         }
+        fn get_last_funding_tick(self: @ComponentState<TContractState>) -> Timestamp {
+            self.last_funding_tick.read()
+        }
+        fn get_last_price_validation(self: @ComponentState<TContractState>) -> Timestamp {
+            self.last_price_validation.read()
+        }
         fn get_max_funding_rate(self: @ComponentState<TContractState>) -> u32 {
             self.max_funding_rate.read()
+        }
+        fn get_max_oracle_price_validity(self: @ComponentState<TContractState>) -> TimeDelta {
+            self.max_oracle_price_validity.read()
+        }
+        fn get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
+            self.num_of_active_synthetic_assets.read()
+        }
+        fn get_price_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
+            self.max_price_interval.read()
+        }
+        fn get_synthetic_config(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> SyntheticConfig {
+            self._get_synthetic_config(:synthetic_id)
+        }
+        fn get_synthetic_timely_data(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> SyntheticTimelyData {
+            self._get_synthetic_timely_data(:synthetic_id)
         }
 
         /// Remove oracle from asset.
@@ -341,7 +368,7 @@ pub(crate) mod AssetsComponent {
             self.emit(events::RegisterCollateral { asset_id, token_address, quantum });
         }
 
-        fn _execute_funding_tick(
+        fn execute_funding_tick(
             ref self: ComponentState<TContractState>, funding_ticks: Span<FundingTick>,
         ) {
             let now = Time::now();
@@ -359,30 +386,70 @@ pub(crate) mod AssetsComponent {
             self.last_funding_tick.write(now);
         }
 
-        fn _process_funding_tick(
-            ref self: ComponentState<TContractState>,
-            now: Timestamp,
-            new_funding_index: FundingIndex,
-            synthetic_id: AssetId,
-        ) {
-            let last_funding_index = self._get_funding_index(:synthetic_id);
-            let index_diff: i64 = (last_funding_index - new_funding_index).into();
-            let last_funding_tick = self.last_funding_tick.read();
-            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
-            validate_funding_rate(
-                :synthetic_id,
-                index_diff: index_diff.abs(),
-                max_funding_rate: self.max_funding_rate.read(),
-                :time_diff,
-                synthetic_price: self._get_synthetic_price(:synthetic_id),
-            );
-            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(new_funding_index);
-            self
-                .emit(
-                    events::FundingTick {
-                        asset_id: synthetic_id, funding_index: new_funding_index,
-                    },
-                );
+        fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
+            if self.is_collateral(:asset_id) {
+                self.get_collateral_price(collateral_id: asset_id)
+            } else if self.is_synthetic(:asset_id) {
+                self.get_synthetic_price(synthetic_id: asset_id)
+            } else {
+                panic_with_felt252(ASSET_NOT_EXISTS)
+            }
+        }
+
+        fn get_collateral_price(
+            self: @ComponentState<TContractState>, collateral_id: AssetId,
+        ) -> Price {
+            if self.is_collateral(asset_id: collateral_id) {
+                self.collateral_timely_data.entry(collateral_id).price.read()
+            } else {
+                panic_with_felt252(NOT_COLLATERAL)
+            }
+        }
+
+        fn get_synthetic_price(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> Price {
+            if self.is_synthetic(asset_id: synthetic_id) {
+                self.synthetic_timely_data.entry(synthetic_id).price.read()
+            } else {
+                panic_with_felt252(NOT_SYNTHETIC)
+            }
+        }
+
+        fn get_risk_factor(
+            self: @ComponentState<TContractState>, asset_id: AssetId,
+        ) -> FixedTwoDecimal {
+            if self.is_collateral(:asset_id) {
+                self._get_collateral_config(collateral_id: asset_id).risk_factor
+            } else if self.is_synthetic(:asset_id) {
+                self._get_synthetic_config(synthetic_id: asset_id).risk_factor
+            } else {
+                panic_with_felt252(ASSET_NOT_EXISTS)
+            }
+        }
+
+        fn get_funding_index(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> FundingIndex {
+            if self.is_synthetic(asset_id: synthetic_id) {
+                self.synthetic_timely_data.entry(synthetic_id).funding_index.read()
+            } else {
+                panic_with_felt252(NOT_SYNTHETIC)
+            }
+        }
+
+        /// The main collateral asset is the only collateral asset in the system.
+        fn get_main_collateral_asset_id(self: @ComponentState<TContractState>) -> AssetId {
+            self.collateral_timely_data_head.read().expect(COLLATERAL_NOT_EXISTS)
+        }
+
+        // The system has only the main collateral asset.
+        fn is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
+            self.collateral_config.read(asset_id).is_some()
+        }
+
+        fn is_synthetic(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
+            self.synthetic_config.read(asset_id).is_some()
         }
 
 
@@ -406,6 +473,57 @@ pub(crate) mod AssetsComponent {
             self.emit(events::PriceTick { asset_id, price });
         }
 
+        fn validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
+            let collateral_config = self.collateral_config.read(asset_id);
+            let is_collateral_active = match collateral_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            let synthetic_config = self.synthetic_config.read(asset_id);
+            let is_synthetic_active = match synthetic_config {
+                Option::Some(config) => config.is_active,
+                Option::None => false,
+            };
+            assert(is_collateral_active || is_synthetic_active, ASSET_NOT_ACTIVE);
+        }
+
+        /// Validates assets integrity prerequisites:
+        /// - Funding interval validation.
+        /// - Prices validation.
+        fn validate_assets_integrity(ref self: ComponentState<TContractState>) {
+            let now = Time::now();
+            // Funding validation.
+            assert(
+                now.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),
+                FUNDING_EXPIRED,
+            );
+            // Price validation.
+            self._validate_prices(:now);
+        }
+
+        fn validate_collateral_active(
+            self: @ComponentState<TContractState>, collateral_id: AssetId,
+        ) {
+            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
+        }
+
+        fn validate_oracle_signature(
+            self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
+        ) {
+            let packed_asset_oracle = self
+                .oracles
+                .entry(asset_id)
+                .read(signed_price.signer_public_key);
+            let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
+                + signed_price.timestamp.into();
+            let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
+            validate_stark_signature(
+                public_key: signed_price.signer_public_key,
+                :msg_hash,
+                signature: signed_price.signature,
+            );
+        }
+
         /// Validates a price tick.
         /// - The signed prices must be sorted by the public key.
         /// - The signed prices are signed by the oracles.
@@ -414,7 +532,7 @@ pub(crate) mod AssetsComponent {
         /// - The signed price time must not be in the future, and must not lag more than
         /// `max_oracle_price_validity`.
         /// - The `price` is the median of the signed_prices.
-        fn _validate_price_tick(
+        fn validate_price_tick(
             self: @ComponentState<TContractState>,
             asset_id: AssetId,
             price: u128,
@@ -450,6 +568,57 @@ pub(crate) mod AssetsComponent {
                 INVALID_PRICE_TIMESTAMP,
             );
         }
+    }
+
+
+    #[generate_trait]
+    impl PrivateImpl<
+        TContractState, +HasComponent<TContractState>,
+    > of PrivateTrait<TContractState> {
+        fn _get_collateral_config(
+            self: @ComponentState<TContractState>, collateral_id: AssetId,
+        ) -> CollateralConfig {
+            self.collateral_config.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
+        }
+
+        fn _get_synthetic_config(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> SyntheticConfig {
+            self.synthetic_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
+        }
+
+        fn _get_synthetic_timely_data(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId,
+        ) -> SyntheticTimelyData {
+            self._get_synthetic_config(:synthetic_id);
+            self.synthetic_timely_data.read(synthetic_id)
+        }
+
+        fn _process_funding_tick(
+            ref self: ComponentState<TContractState>,
+            now: Timestamp,
+            new_funding_index: FundingIndex,
+            synthetic_id: AssetId,
+        ) {
+            let last_funding_index = self.get_funding_index(:synthetic_id);
+            let index_diff: i64 = (last_funding_index - new_funding_index).into();
+            let last_funding_tick = self.last_funding_tick.read();
+            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
+            validate_funding_rate(
+                :synthetic_id,
+                index_diff: index_diff.abs(),
+                max_funding_rate: self.max_funding_rate.read(),
+                :time_diff,
+                synthetic_price: self.get_synthetic_price(:synthetic_id),
+            );
+            self.synthetic_timely_data.entry(synthetic_id).funding_index.write(new_funding_index);
+            self
+                .emit(
+                    events::FundingTick {
+                        asset_id: synthetic_id, funding_index: new_funding_index,
+                    },
+                );
+        }
 
         fn _validate_oracle_signature(
             self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
@@ -466,122 +635,6 @@ pub(crate) mod AssetsComponent {
                 :msg_hash,
                 signature: signed_price.signature,
             );
-        }
-
-        fn _get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
-            if self._is_collateral(:asset_id) {
-                self._get_collateral_price(collateral_id: asset_id)
-            } else if self._is_synthetic(:asset_id) {
-                self._get_synthetic_price(synthetic_id: asset_id)
-            } else {
-                panic_with_felt252(ASSET_NOT_EXISTS)
-            }
-        }
-
-        fn _get_collateral_config(
-            self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) -> CollateralConfig {
-            self.collateral_config.read(collateral_id).expect(COLLATERAL_NOT_EXISTS)
-        }
-
-        fn _get_collateral_price(
-            self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) -> Price {
-            if self._is_collateral(asset_id: collateral_id) {
-                self.collateral_timely_data.entry(collateral_id).price.read()
-            } else {
-                panic_with_felt252(NOT_COLLATERAL)
-            }
-        }
-
-        fn _get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
-            self.num_of_active_synthetic_assets.read()
-        }
-
-        fn _get_synthetic_config(
-            self: @ComponentState<TContractState>, synthetic_id: AssetId,
-        ) -> SyntheticConfig {
-            self.synthetic_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
-        }
-
-        fn _get_synthetic_price(
-            self: @ComponentState<TContractState>, synthetic_id: AssetId,
-        ) -> Price {
-            if self._is_synthetic(asset_id: synthetic_id) {
-                self.synthetic_timely_data.entry(synthetic_id).price.read()
-            } else {
-                panic_with_felt252(NOT_SYNTHETIC)
-            }
-        }
-
-        fn _get_risk_factor(
-            self: @ComponentState<TContractState>, asset_id: AssetId,
-        ) -> FixedTwoDecimal {
-            if self._is_collateral(:asset_id) {
-                self._get_collateral_config(collateral_id: asset_id).risk_factor
-            } else if self._is_synthetic(:asset_id) {
-                self._get_synthetic_config(synthetic_id: asset_id).risk_factor
-            } else {
-                panic_with_felt252(ASSET_NOT_EXISTS)
-            }
-        }
-
-        fn _get_funding_index(
-            self: @ComponentState<TContractState>, synthetic_id: AssetId,
-        ) -> FundingIndex {
-            if self._is_synthetic(asset_id: synthetic_id) {
-                self.synthetic_timely_data.entry(synthetic_id).funding_index.read()
-            } else {
-                panic_with_felt252(NOT_SYNTHETIC)
-            }
-        }
-
-        /// The main collateral asset is the only collateral asset in the system.
-        fn _get_main_collateral_asset_id(self: @ComponentState<TContractState>) -> AssetId {
-            self.collateral_timely_data_head.read().expect(COLLATERAL_NOT_EXISTS)
-        }
-
-        // The system has only the main collateral asset.
-        fn _is_collateral(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
-            self.collateral_config.read(asset_id).is_some()
-        }
-
-        fn _is_synthetic(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
-            self.synthetic_config.read(asset_id).is_some()
-        }
-
-        fn _validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
-            let collateral_config = self.collateral_config.read(asset_id);
-            let is_collateral_active = match collateral_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            let synthetic_config = self.synthetic_config.read(asset_id);
-            let is_synthetic_active = match synthetic_config {
-                Option::Some(config) => config.is_active,
-                Option::None => false,
-            };
-            assert(is_collateral_active || is_synthetic_active, ASSET_NOT_ACTIVE);
-        }
-
-        /// Validates assets integrity prerequisites:
-        /// - Funding interval validation.
-        /// - Prices validation.
-        fn _validate_assets_integrity(ref self: ComponentState<TContractState>) {
-            let now = Time::now();
-            // Funding validation.
-            assert(
-                now.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),
-                FUNDING_EXPIRED,
-            );
-            // Price validation.
-            self._validate_prices(:now);
-        }
-
-        fn _validate_collateral_active(
-            self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) {
-            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
         }
 
         /// If `max_price_interval` has passed since `last_price_validation`, validate

@@ -327,7 +327,7 @@ pub mod Core {
                     public_key: position.owner_public_key.read(),
                 );
             /// Validation - Not withdrawing from pending deposits:
-            let collateral_cfg = self.assets._get_collateral_config(:collateral_id);
+            let collateral_cfg = self.assets.get_collateral_config(:collateral_id);
             let token_contract = IERC20Dispatcher {
                 contract_address: collateral_cfg.token_address,
             };
@@ -786,7 +786,7 @@ pub mod Core {
             ref self: ContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
         ) {
             self._validate_funding_tick(:funding_ticks, :operator_nonce);
-            self.assets._execute_funding_tick(:funding_ticks);
+            self.assets.execute_funding_tick(:funding_ticks);
         }
 
         /// Price tick for an asset to update the price of the asset.
@@ -813,8 +813,8 @@ pub mod Core {
             self.pausable.assert_not_paused();
             self.roles.only_operator();
             self.nonce.use_checked_nonce(nonce: operator_nonce);
-            self.assets._validate_price_tick(:asset_id, :price, :signed_prices);
-            let synthetic_config = self.assets._get_synthetic_config(synthetic_id: asset_id);
+            self.assets.validate_price_tick(:asset_id, :price, :signed_prices);
+            let synthetic_config = self.assets.get_synthetic_config(synthetic_id: asset_id);
             let converted_price = price.convert(resolution: synthetic_config.resolution);
             self.assets.set_price(:asset_id, price: converted_price);
         }
@@ -833,8 +833,8 @@ pub mod Core {
                     id: asset_id,
                     before: position_asset_balance,
                     after: position_asset_balance + amount,
-                    price: self.assets._get_asset_price(:asset_id),
-                    risk_factor: self.assets._get_risk_factor(:asset_id),
+                    price: self.assets.get_asset_price(:asset_id),
+                    risk_factor: self.assets.get_risk_factor(:asset_id),
                 },
             ]
                 .span()
@@ -854,7 +854,7 @@ pub mod Core {
 
             // fee asset.
             let fee_asset_id = order.fee_asset_id;
-            let fee_price = self.assets._get_asset_price(asset_id: fee_asset_id);
+            let fee_price = self.assets.get_asset_price(asset_id: fee_asset_id);
             let fee_balance = self
                 .positions
                 .get_provisional_balance(:position_id, asset_id: fee_asset_id);
@@ -864,7 +864,7 @@ pub mod Core {
                 before: fee_balance,
                 after: fee_balance - actual_fee.into(),
                 price: fee_price,
-                risk_factor: self.assets._get_risk_factor(asset_id: fee_asset_id),
+                risk_factor: self.assets.get_risk_factor(asset_id: fee_asset_id),
             };
 
             // Quote asset.
@@ -874,7 +874,7 @@ pub mod Core {
             if quote_asset_id == fee_asset_id {
                 fee_diff.after += actual_amount_quote.into();
             } else {
-                let quote_price = self.assets._get_collateral_price(collateral_id: quote_asset_id);
+                let quote_price = self.assets.get_collateral_price(collateral_id: quote_asset_id);
                 let quote_balance = self
                     .positions
                     .get_provisional_balance(:position_id, asset_id: quote_asset_id);
@@ -884,7 +884,7 @@ pub mod Core {
                         before: quote_balance,
                         after: quote_balance.add(actual_amount_quote),
                         price: quote_price,
-                        risk_factor: self.assets._get_risk_factor(asset_id: quote_asset_id),
+                        risk_factor: self.assets.get_risk_factor(asset_id: quote_asset_id),
                     };
             }
 
@@ -905,8 +905,8 @@ pub mod Core {
                         id: base_asset_id,
                         before: base_balance,
                         after: base_balance.add(actual_amount_base),
-                        price: self.assets._get_asset_price(asset_id: base_asset_id),
-                        risk_factor: self.assets._get_risk_factor(asset_id: base_asset_id),
+                        price: self.assets.get_asset_price(asset_id: base_asset_id),
+                        risk_factor: self.assets.get_risk_factor(asset_id: base_asset_id),
                     };
             }
 
@@ -1141,7 +1141,7 @@ pub mod Core {
         ) {
             self._validate_operator_flow(:operator_nonce);
             self._validate_position_exists(:position_id);
-            self.assets._validate_collateral_active(:collateral_id);
+            self.assets.validate_collateral_active(:collateral_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
         }
 
@@ -1154,7 +1154,7 @@ pub mod Core {
             self.pausable.assert_not_paused();
             self.roles.only_operator();
             self.nonce.use_checked_nonce(nonce: operator_nonce);
-            self.assets._validate_assets_integrity();
+            self.assets.validate_assets_integrity();
         }
 
         fn _validate_order(ref self: ContractState, order: Order) {
@@ -1167,9 +1167,9 @@ pub mod Core {
             assert_with_byte_array(now < order.expiration, order_expired_err(order.position_id));
 
             // Assets check.
-            self.assets._validate_collateral_active(collateral_id: order.fee_asset_id);
-            self.assets._validate_collateral_active(collateral_id: order.quote_asset_id);
-            self.assets._validate_asset_active(asset_id: order.base_asset_id);
+            self.assets.validate_collateral_active(collateral_id: order.fee_asset_id);
+            self.assets.validate_collateral_active(collateral_id: order.quote_asset_id);
+            self.assets.validate_asset_active(asset_id: order.base_asset_id);
 
             // Sign Validation for amounts.
             assert(
@@ -1185,7 +1185,7 @@ pub mod Core {
             self.roles.only_operator();
             self.nonce.use_checked_nonce(nonce: operator_nonce);
             assert(
-                funding_ticks.len() == self.assets._get_num_of_active_synthetic_assets(),
+                funding_ticks.len() == self.assets.get_num_of_active_synthetic_assets(),
                 INVALID_FUNDING_TICK_LEN,
             );
         }
@@ -1260,9 +1260,9 @@ pub mod Core {
             assert(deleveraged_quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Assets check.
-            self.assets._validate_collateral_active(collateral_id: deleveraged_quote_asset_id);
+            self.assets.validate_collateral_active(collateral_id: deleveraged_quote_asset_id);
             assert(
-                self.assets._is_synthetic(asset_id: deleveraged_base_asset_id),
+                self.assets.is_synthetic(asset_id: deleveraged_base_asset_id),
                 INVALID_NON_SYNTHETIC_ASSET,
             );
 
@@ -1359,7 +1359,7 @@ pub mod Core {
                     asset_diff_entries: deleverager_asset_diff_entries,
                 );
 
-            match self.assets._get_synthetic_config(deleveraged_base_asset_id).is_active {
+            match self.assets.get_synthetic_config(deleveraged_base_asset_id).is_active {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
                 true => validate_deleveraged_position(
@@ -1412,7 +1412,7 @@ pub mod Core {
             self._validate_position_exists(position_id: recipient);
 
             // Validate collateral.
-            self.assets._validate_collateral_active(:collateral_id);
+            self.assets.validate_collateral_active(:collateral_id);
             assert(amount > 0, INVALID_TRANSFER_AMOUNT);
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
@@ -1447,7 +1447,7 @@ pub mod Core {
             self._validate_position_exists(:position_id);
             assert(amount > 0, INVALID_ZERO_AMOUNT);
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            self.assets._validate_collateral_active(:collateral_id);
+            self.assets.validate_collateral_active(:collateral_id);
         }
     }
 }

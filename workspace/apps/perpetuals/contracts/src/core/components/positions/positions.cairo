@@ -321,9 +321,9 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId, asset_id: AssetId,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
-            if assets._is_collateral(:asset_id) {
+            if assets.is_collateral(:asset_id) {
                 self._get_provisional_main_collateral_balance(:position_id)
-            } else if assets._is_synthetic(:asset_id) {
+            } else if assets.is_synthetic(:asset_id) {
                 self
                     ._get_position_const(:position_id)
                     .synthetic_assets
@@ -403,12 +403,12 @@ pub(crate) mod Positions {
             let position = self._get_position_const(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
-                .entry(assets._get_main_collateral_asset_id())
+                .entry(assets.get_main_collateral_asset_id())
                 .balance
                 .read();
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
-                let curr_funding_index = assets._get_funding_index(:synthetic_id);
+                let curr_funding_index = assets.get_funding_index(:synthetic_id);
                 let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
                 main_collateral_balance += funding;
                 asset_id_opt = position.synthetic_assets.entry(synthetic_id).next.read();
@@ -440,8 +440,8 @@ pub(crate) mod Positions {
                             AssetEntry {
                                 id: collateral_id,
                                 balance,
-                                price: assets._get_collateral_price(:collateral_id),
-                                risk_factor: assets._get_risk_factor(asset_id: collateral_id),
+                                price: assets.get_collateral_price(:collateral_id),
+                                risk_factor: assets.get_risk_factor(asset_id: collateral_id),
                             },
                         );
                 }
@@ -465,8 +465,8 @@ pub(crate) mod Positions {
                             AssetEntry {
                                 id: synthetic_id,
                                 balance,
-                                price: assets._get_synthetic_price(:synthetic_id),
-                                risk_factor: assets._get_risk_factor(asset_id: synthetic_id),
+                                price: assets.get_synthetic_price(:synthetic_id),
+                                risk_factor: assets.get_risk_factor(asset_id: synthetic_id),
                             },
                         );
                 }
@@ -496,7 +496,7 @@ pub(crate) mod Positions {
             balance: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
-            if assets._is_collateral(:asset_id) {
+            if assets.is_collateral(:asset_id) {
                 let mut position = self._get_position_mut(:position_id);
                 self.update_collateral_in_position(position, collateral_id: asset_id);
                 position.collateral_assets.entry(asset_id).balance.write(balance);
@@ -540,9 +540,9 @@ pub(crate) mod Positions {
             let position = self._get_position_mut(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
-                .entry(assets._get_main_collateral_asset_id())
+                .entry(assets.get_main_collateral_asset_id())
                 .balance;
-            let curr_funding_index = assets._get_funding_index(:synthetic_id);
+            let curr_funding_index = assets.get_funding_index(:synthetic_id);
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
             main_collateral_balance.add_and_write(funding);
             self._update_synthetic_in_position(:position, :synthetic_id);
