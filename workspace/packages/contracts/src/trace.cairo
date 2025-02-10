@@ -1,4 +1,4 @@
-mod errors;
+pub mod errors;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
