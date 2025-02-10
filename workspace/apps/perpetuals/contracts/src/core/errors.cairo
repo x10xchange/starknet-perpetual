@@ -23,6 +23,7 @@ pub const POSITION_IS_NOT_HEALTHIER: felt252 = 'POSITION_IS_NOT_HEALTHIER';
 pub const POSITION_IS_NOT_LIQUIDATABLE: felt252 = 'POSITION_IS_NOT_LIQUIDATABLE';
 pub const POSITION_UNHEALTHY: felt252 = 'POSITION_UNHEALTHY';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
+pub const CANT_DELEVERAGE_PENDING_ASSET: felt252 = 'CANT_DELEVERAGE_PENDING_ASSET';
 
 pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)

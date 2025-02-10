@@ -21,12 +21,14 @@ pub mod AssetsComponent {
         ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
         SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
+
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{
         CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
     };
+    use perpetuals::core::types::asset::status::AssetStatus;
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
@@ -160,7 +162,7 @@ pub mod AssetsComponent {
                         SyntheticConfig {
                             version: SYNTHETIC_VERSION,
                             // It'll be active in the next price tick.
-                            is_active: false,
+                            status: AssetStatus::PENDING,
                             // It validates the range of the risk factor.
                             risk_factor: FixedTwoDecimalTrait::new(risk_factor),
                             quorum,
@@ -206,7 +208,7 @@ pub mod AssetsComponent {
             roles.only_app_governor();
             let mut config = self._get_synthetic_config(:synthetic_id);
             self._validate_synthetic_active(:synthetic_id);
-            config.is_active = false;
+            config.status = AssetStatus::DEACTIVATED;
             self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
             self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
@@ -345,7 +347,7 @@ pub mod AssetsComponent {
                         CollateralConfig {
                             version: COLLATERAL_VERSION,
                             token_address,
-                            is_active: true,
+                            status: AssetStatus::ACTIVATED,
                             risk_factor: Zero::zero(),
                             quantum,
                             quorum,
@@ -461,13 +463,17 @@ pub mod AssetsComponent {
 
             let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
             // If the asset is not active, it'll be activated.
-            if !synthetic_config.is_active {
+            if synthetic_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
                 self.num_of_active_synthetic_assets.add_and_write(1);
                 self
                     .synthetic_config
                     .entry(asset_id)
-                    .write(Option::Some(SyntheticConfig { is_active: true, ..synthetic_config }));
+                    .write(
+                        Option::Some(
+                            SyntheticConfig { status: AssetStatus::ACTIVATED, ..synthetic_config },
+                        ),
+                    );
                 self.emit(events::AssetActivated { asset_id });
             }
             self.emit(events::PriceTick { asset_id, price });
@@ -476,12 +482,12 @@ pub mod AssetsComponent {
         fn validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
             let collateral_config = self.collateral_config.read(asset_id);
             let is_collateral_active = match collateral_config {
-                Option::Some(config) => config.is_active,
+                Option::Some(config) => config.status == AssetStatus::ACTIVATED,
                 Option::None => false,
             };
             let synthetic_config = self.synthetic_config.read(asset_id);
             let is_synthetic_active = match synthetic_config {
-                Option::Some(config) => config.is_active,
+                Option::Some(config) => config.status == AssetStatus::ACTIVATED,
                 Option::None => false,
             };
             assert(is_collateral_active || is_synthetic_active, ASSET_NOT_ACTIVE);
@@ -504,7 +510,10 @@ pub mod AssetsComponent {
         fn validate_collateral_active(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) {
-            assert(self._get_collateral_config(collateral_id).is_active, COLLATERAL_NOT_ACTIVE);
+            assert(
+                self._get_collateral_config(collateral_id).status == AssetStatus::ACTIVATED,
+                COLLATERAL_NOT_ACTIVE,
+            );
         }
 
         fn validate_oracle_signature(
@@ -650,20 +659,20 @@ pub mod AssetsComponent {
         fn _validate_synthetic_active(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) {
-            assert(self._get_synthetic_config(synthetic_id).is_active, SYNTHETIC_NOT_ACTIVE);
+            assert(
+                self._get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED,
+                SYNTHETIC_NOT_ACTIVE,
+            );
         }
 
         fn _validate_synthetic_prices(
             self: @ComponentState<TContractState>, now: Timestamp, max_price_interval: TimeDelta,
         ) {
             let mut asset_id_opt = self.synthetic_timely_data_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                let synthetic_timely_data = self.synthetic_timely_data.read(asset_id);
-                // In case of a new asset, `last_price_update` is zero. Don't validate the price
-                // since it has not been set yet.
-                // In case of an inactive asset, don't validate the price.
-                if (synthetic_timely_data.last_price_update != Zero::zero()
-                    && self._get_synthetic_config(asset_id).is_active) {
+            while let Option::Some(synthetic_id) = asset_id_opt {
+                let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
+                // Validate only active asset
+                if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVATED {
                     assert(
                         now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
                         SYNTHETIC_EXPIRED_PRICE,

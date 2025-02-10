@@ -15,7 +15,7 @@ use perpetuals::core::components::positions::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
-use perpetuals::core::types::asset::synthetic::SyntheticConfig;
+use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
@@ -36,7 +36,7 @@ use perpetuals::tests::event_test_utils::{
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
-    setup_state,
+    setup_state_with_active_asset, setup_state_with_pending_asset,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -93,7 +93,7 @@ fn test_new_position() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut spy = snforge_std::spy_events();
 
     // Parameters:
@@ -131,7 +131,7 @@ fn test_successful_add_synthetic_asset() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut spy = snforge_std::spy_events();
 
     // Setup test parameters:
@@ -177,7 +177,7 @@ fn test_successful_add_synthetic_asset() {
     check_synthetic_asset(
         state: @state,
         synthetic_id: synthetic_id_1,
-        is_active: false,
+        status: AssetStatus::PENDING,
         risk_factor: risk_factor_1,
         quorum: quorum_1,
         resolution: resolution_1,
@@ -188,7 +188,7 @@ fn test_successful_add_synthetic_asset() {
     check_synthetic_asset(
         state: @state,
         synthetic_id: synthetic_id_2,
-        is_active: false,
+        status: AssetStatus::PENDING,
         risk_factor: risk_factor_2,
         quorum: quorum_2,
         resolution: resolution_2,
@@ -204,7 +204,7 @@ fn test_add_synthetic_asset_existed_asset() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
@@ -225,12 +225,20 @@ fn test_successful_deactivate_synthetic_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut spy = snforge_std::spy_events();
 
     // Setup parameters:
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    assert!(state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
+    assert!(
+        state
+            .assets
+            .synthetic_config
+            .entry(synthetic_id)
+            .read()
+            .unwrap()
+            .status == AssetStatus::ACTIVATED,
+    );
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
@@ -243,7 +251,15 @@ fn test_successful_deactivate_synthetic_asset() {
     );
 
     // Check:
-    assert!(!state.assets.synthetic_config.entry(synthetic_id).read().unwrap().is_active);
+    assert!(
+        state
+            .assets
+            .synthetic_config
+            .entry(synthetic_id)
+            .read()
+            .unwrap()
+            .status == AssetStatus::DEACTIVATED,
+    );
 }
 
 #[test]
@@ -252,7 +268,7 @@ fn test_deactivate_unexisted_synthetic_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     // Setup parameters:
     let synthetic_id = SYNTHETIC_ASSET_ID_2();
 
@@ -270,7 +286,7 @@ fn test_successful_withdraw() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -349,7 +365,7 @@ fn test_successful_deposit() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -420,7 +436,7 @@ fn test_successful_trade() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
@@ -547,7 +563,7 @@ fn test_invalid_trade_same_base_signs() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let mut user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
@@ -617,7 +633,7 @@ fn test_successful_withdraw_request_with_public_key() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
@@ -662,7 +678,7 @@ fn test_successful_withdraw_request_with_owner() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
@@ -709,7 +725,7 @@ fn test_successful_deleverage() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let deleveraged = Default::default();
     init_position(cfg: @cfg, ref :state, user: deleveraged);
@@ -817,7 +833,7 @@ fn test_unfair_deleverage() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let deleveraged = Default::default();
     init_position(cfg: @cfg, ref :state, user: deleveraged);
@@ -875,7 +891,7 @@ fn test_successful_liquidate() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let mut liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
@@ -1010,7 +1026,7 @@ fn test_successful_transfer_request_using_public_key() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
@@ -1054,7 +1070,7 @@ fn test_successful_transfer_request_with_owner() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position_with_owner(cfg: @cfg, ref :state, :user);
@@ -1098,7 +1114,7 @@ fn test_successful_set_public_key_request() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
@@ -1133,7 +1149,7 @@ fn test_successful_set_public_key() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
@@ -1197,7 +1213,7 @@ fn test_successful_set_public_key_no_request() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
@@ -1226,7 +1242,7 @@ fn test_successful_transfer() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let mut sender = Default::default();
     init_position(cfg: @cfg, ref :state, user: sender);
@@ -1319,7 +1335,7 @@ fn test_validate_synthetic_prices_expired() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     // Fund user.
@@ -1360,7 +1376,7 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     // Fund user.
@@ -1408,7 +1424,7 @@ fn test_validate_prices() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     // Fund user.
@@ -1448,7 +1464,7 @@ fn test_validate_prices_no_update_needed() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     // Fund user.
@@ -1491,7 +1507,7 @@ fn test_validate_prices_no_update_needed() {
 fn test_price_tick_basic() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut spy = snforge_std::spy_events();
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
@@ -1506,12 +1522,7 @@ fn test_price_tick_basic() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state
-        .assets
-        .synthetic_config
-        .write(
-            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
-        );
+    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(Zero::zero());
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), Zero::zero());
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -1542,8 +1553,9 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(268),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
+
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
@@ -1553,7 +1565,7 @@ fn test_price_tick_basic() {
 fn test_price_tick_odd() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle2_name = 'ORCL2';
@@ -1587,12 +1599,7 @@ fn test_price_tick_odd() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state
-        .assets
-        .synthetic_config
-        .write(
-            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
-        );
+    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(0);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -1612,7 +1619,7 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
@@ -1622,7 +1629,7 @@ fn test_price_tick_odd() {
 fn test_price_tick_even() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle3_name = 'ORCL3';
@@ -1646,12 +1653,7 @@ fn test_price_tick_even() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state
-        .assets
-        .synthetic_config
-        .write(
-            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
-        );
+    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(0);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
@@ -1670,8 +1672,9 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).is_active);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
+
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
@@ -1682,7 +1685,7 @@ fn test_price_tick_even() {
 fn test_price_tick_no_quorum() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let operator_nonce = state.nonce();
     state
@@ -1699,7 +1702,7 @@ fn test_price_tick_no_quorum() {
 fn test_price_tick_unsorted() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle2_name = 'ORCL2';
@@ -1723,12 +1726,7 @@ fn test_price_tick_unsorted() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state
-        .assets
-        .synthetic_config
-        .write(
-            synthetic_id, Option::Some(SyntheticConfig { is_active: false, ..SYNTHETIC_CONFIG() }),
-        );
+    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
@@ -1750,7 +1748,7 @@ fn test_price_tick_unsorted() {
 fn test_price_tick_old_oracle() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
@@ -1786,7 +1784,7 @@ fn test_price_tick_old_oracle() {
 fn test_price_tick_golden() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'PENGUUSDMARK\x00\x00\x00\x00';
     let oracle0_name = 'Stkai';
     let oracle1_name = 'Stork';

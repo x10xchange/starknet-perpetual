@@ -28,6 +28,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
+use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::tests::constants::*;
@@ -264,7 +265,42 @@ fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
 
 // Public functions.
 
-pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
+pub fn setup_state_with_active_asset(
+    cfg: @PerpetualsInitConfig, token_state: @TokenState,
+) -> Core::ContractState {
+    let mut state = init_state(:cfg, :token_state);
+    // Synthetic asset configs.
+    state
+        .assets
+        .synthetic_config
+        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
+    state
+        .assets
+        .synthetic_timely_data
+        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
+    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
+    state.assets.num_of_active_synthetic_assets.write(1);
+    state
+}
+
+pub fn setup_state_with_pending_asset(
+    cfg: @PerpetualsInitConfig, token_state: @TokenState,
+) -> Core::ContractState {
+    let mut state = init_state(:cfg, :token_state);
+    // Synthetic asset configs.
+    state
+        .assets
+        .synthetic_config
+        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
+    state
+        .assets
+        .synthetic_timely_data
+        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
+    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
+    state
+}
+
+pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
     let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
     // Collateral asset configs.
@@ -287,17 +323,6 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
             token_address: *token_state.address,
             quantum: *cfg.collateral_cfg.quantum,
         );
-    // Synthetic asset configs.
-    state
-        .assets
-        .synthetic_config
-        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
-    state
-        .assets
-        .synthetic_timely_data
-        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
-    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
-    state.assets.num_of_active_synthetic_assets.write(1);
 
     // Fund the contract.
     (*token_state)
@@ -305,6 +330,7 @@ pub fn setup_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core
 
     state
 }
+
 
 pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
@@ -364,7 +390,7 @@ pub fn generate_collateral(
             version: *collateral_cfg.version,
             token_address: *token_state.address,
             quantum: *collateral_cfg.quantum,
-            is_active: true,
+            status: AssetStatus::ACTIVATED,
             risk_factor: *collateral_cfg.risk_factor,
             quorum: *collateral_cfg.quorum,
         },
@@ -375,13 +401,13 @@ pub fn generate_collateral(
 pub fn check_synthetic_config(
     state: @Core::ContractState,
     synthetic_id: AssetId,
-    is_active: bool,
+    status: AssetStatus,
     risk_factor: u8,
     quorum: u8,
     resolution: u64,
 ) {
     let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
-    assert_eq!(synthetic_config.is_active, is_active);
+    assert_eq!(synthetic_config.status, status);
     assert_eq!(synthetic_config.risk_factor, FixedTwoDecimalTrait::new(risk_factor));
     assert_eq!(synthetic_config.quorum, quorum);
     assert_eq!(synthetic_config.resolution, resolution);
@@ -425,7 +451,7 @@ pub fn is_asset_in_synthetic_timely_data_list(
 pub fn check_synthetic_asset(
     state: @Core::ContractState,
     synthetic_id: AssetId,
-    is_active: bool,
+    status: AssetStatus,
     risk_factor: u8,
     quorum: u8,
     resolution: u64,
@@ -434,7 +460,7 @@ pub fn check_synthetic_asset(
     funding_index: FundingIndex,
 ) {
     check_synthetic_config(
-        :state, :synthetic_id, is_active: false, :risk_factor, :quorum, :resolution,
+        :state, :synthetic_id, status: status, :risk_factor, :quorum, :resolution,
     );
     check_synthetic_timely_data(
         :state,

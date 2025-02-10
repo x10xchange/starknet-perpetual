@@ -1,6 +1,7 @@
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
@@ -13,7 +14,7 @@ pub struct CollateralConfig {
     // Collateral ERC20 contract address
     pub token_address: ContractAddress,
     // Configurable
-    pub is_active: bool,
+    pub status: AssetStatus,
     pub risk_factor: FixedTwoDecimal,
     // Smallest unit of a token in the system.
     pub quantum: u64,

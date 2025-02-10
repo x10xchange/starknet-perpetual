@@ -18,6 +18,7 @@ pub mod Core {
     use contracts_commons::types::{HashType, PublicKey, Signature};
     use contracts_commons::utils::{validate_expiration, validate_stark_signature};
     use core::num::traits::Zero;
+    use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -29,15 +30,19 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS,
-        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_SAME_POSITIONS,
-        INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT,
-        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
+        INSUFFICIENT_FUNDS, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN,
+        INVALID_NEGATIVE_FEE, INVALID_NON_SYNTHETIC_ASSET, INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+        INVALID_TRADE_SAME_POSITIONS, INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT,
+        INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err,
     };
+
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::AssetId;
+
+    use perpetuals::core::types::asset::status::AssetStatus;
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::{Order, OrderTrait};
@@ -1363,21 +1368,23 @@ pub mod Core {
                     asset_diff_entries: deleverager_asset_diff_entries,
                 );
 
-            match self.assets.get_synthetic_config(deleveraged_base_asset_id).is_active {
+            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
-                true => validate_deleveraged_position(
+                AssetStatus::ACTIVATED => validate_deleveraged_position(
                     position_id: deleveraged_position_id,
                     position_data: deleveraged_position_data,
                     asset_diff_entries: deleveraged_asset_diff_entries,
                 ),
-                // In case of inactive synthetic asset, the position should change to healthy or
+                // In case of deactivated synthetic asset, the position should change to healthy or
                 // healthier.
-                false => validate_position_is_healthy_or_healthier(
+                AssetStatus::DEACTIVATED => validate_position_is_healthy_or_healthier(
                     position_id: deleveraged_position_id,
                     position_data: deleveraged_position_data,
                     asset_diff_entries: deleveraged_asset_diff_entries,
                 ),
+                // In case of pending synthetic asset, error should be thrown.
+                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
             };
 
             validate_position_is_healthy_or_healthier(
