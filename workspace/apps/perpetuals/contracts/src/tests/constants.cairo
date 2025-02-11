@@ -21,6 +21,9 @@ use starknet::{ContractAddress, contract_address_const};
 pub fn OPERATOR_PUBLIC_KEY() -> felt252 {
     StarkCurveKeyPairImpl::from_secret_key('OPERATOR_PRIVATE_KEY').public_key
 }
+pub(crate) fn ROLE_ADMIN() -> ContractAddress {
+    contract_address_const::<'ROLE_ADMIN'>()
+}
 pub fn KEY_PAIR_1() -> StarkKeyPair {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_1')
 }
