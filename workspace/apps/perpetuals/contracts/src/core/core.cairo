@@ -401,6 +401,20 @@ pub mod Core {
                     },
                 );
         }
+
+        /// Executes a transfer.
+        ///
+        /// Validations:
+        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - Validates both the sender and recipient positions exist.
+        /// - Validates the collateral asset exists.
+        /// - Ensures the amount is positive.
+        /// - Validates the expiration time.
+        /// - Validates request approval.
+        ///
+        /// Execution:
+        /// - Adjust collateral balances.
+        /// - Validates the sender position is healthy or healthier after the execution.
         fn transfer(
             ref self: ContractState,
             operator_nonce: u64,
