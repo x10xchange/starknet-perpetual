@@ -1,6 +1,6 @@
 {
   "name": "@perpetuals/contracts",
-  "version": "0.0.2-dev.354",
+  "version": "0.0.2-dev.355",
   "private": true,
   "description": "perpetuals contracts",
   "scripts": {

@@ -9,7 +9,7 @@ use contracts_commons::test_utils::{
 use contracts_commons::types::Signature;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
-use contracts_commons::types::time::time::{TimeDelta, Timestamp};
+use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -373,6 +373,7 @@ pub fn initialized_contract_state() -> Core::ContractState {
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
         max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
+        cancellation_delay_time: Time::weeks(1),
         fee_position_owner_account: OPERATOR(),
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
         insurance_fund_position_owner_account: OPERATOR(),

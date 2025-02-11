@@ -182,6 +182,7 @@ pub mod Core {
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
         max_oracle_price_validity: TimeDelta,
+        cancellation_delay_time: TimeDelta,
         fee_position_owner_account: ContractAddress,
         fee_position_owner_public_key: PublicKey,
         insurance_fund_position_owner_account: ContractAddress,
@@ -197,7 +198,7 @@ pub mod Core {
                 :max_funding_rate,
                 :max_oracle_price_validity,
             );
-        self.deposits.initialize();
+        self.deposits.initialize(cancellation_delay_time);
         self
             .positions
             .initialize(
