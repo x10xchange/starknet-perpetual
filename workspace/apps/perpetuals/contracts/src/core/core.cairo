@@ -492,6 +492,7 @@ pub mod Core {
             actual_fee_b: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
+
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
             // Signatures validation:
@@ -533,15 +534,33 @@ pub mod Core {
                 );
 
             /// Execution:
-            self
-                ._execute_trade(
+            let position_data_a = self.positions.get_position_data(position_id: position_id_a);
+            let position_data_b = self.positions.get_position_data(position_id: position_id_b);
+
+            let (asset_diff_entries_a, asset_diff_entries_b) = self
+                ._update_positions(
                     :order_a,
                     :order_b,
                     :actual_amount_base_a,
                     :actual_amount_quote_a,
                     :actual_fee_a,
                     :actual_fee_b,
+                    fee_position_a: FEE_POSITION,
+                    fee_position_b: FEE_POSITION,
                 );
+
+            /// Validations - Fundamentals:
+            validate_position_is_healthy_or_healthier(
+                position_id: order_a.position_id,
+                position_data: position_data_a,
+                asset_diff_entries: asset_diff_entries_a,
+            );
+            validate_position_is_healthy_or_healthier(
+                position_id: order_b.position_id,
+                position_data: position_data_b,
+                asset_diff_entries: asset_diff_entries_b,
+            );
+
             self
                 .emit(
                     events::Trade {
@@ -607,10 +626,11 @@ pub mod Core {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
 
+            let liquidator_position_id = liquidator_order.position_id;
             // Signatures validation:
             let liquidator_order_hash = self
                 ._validate_order_signature(
-                    position_id: liquidator_order.position_id,
+                    position_id: liquidator_position_id,
                     order: liquidator_order,
                     signature: liquidator_signature,
                 );
@@ -618,7 +638,7 @@ pub mod Core {
             // Validate and update fulfilment.
             self
                 ._update_fulfillment(
-                    position_id: liquidator_order.position_id,
+                    position_id: liquidator_position_id,
                     hash: liquidator_order_hash,
                     order_amount: liquidator_order.base_amount,
                     // Passing the negative of actual amounts to `liquidator_order` as it is linked
@@ -650,19 +670,42 @@ pub mod Core {
                 );
 
             /// Execution:
-            self
-                ._execute_liquidate(
-                    :liquidated_order,
-                    :liquidator_order,
-                    :actual_amount_base_liquidated,
-                    :actual_amount_quote_liquidated,
-                    :actual_liquidator_fee,
+            let liquidated_position_data = self
+                .positions
+                .get_position_data(position_id: liquidated_position_id);
+            let liquidator_position_data = self
+                .positions
+                .get_position_data(position_id: liquidator_position_id);
+
+            let (liquidated_asset_diff_entries, liquidator_asset_diff_entries) = self
+                ._update_positions(
+                    order_a: liquidated_order,
+                    order_b: liquidator_order,
+                    actual_amount_base_a: actual_amount_base_liquidated,
+                    actual_amount_quote_a: actual_amount_quote_liquidated,
+                    actual_fee_a: fee_amount,
+                    actual_fee_b: actual_liquidator_fee,
+                    fee_position_a: INSURANCE_FUND_POSITION,
+                    fee_position_b: FEE_POSITION,
                 );
+
+            /// Validations - Fundamentals:
+            validate_liquidated_position(
+                position_id: liquidated_position_id,
+                position_data: liquidated_position_data,
+                asset_diff_entries: liquidated_asset_diff_entries,
+            );
+            validate_position_is_healthy_or_healthier(
+                position_id: liquidator_position_id,
+                position_data: liquidator_position_data,
+                asset_diff_entries: liquidator_asset_diff_entries,
+            );
+
             self
                 .emit(
                     events::Liquidate {
                         liquidated_position_id,
-                        liquidator_order_position_id: liquidator_order.position_id,
+                        liquidator_order_position_id: liquidator_position_id,
                         liquidator_order_base_asset_id: liquidator_order.base_asset_id,
                         liquidator_order_base_amount: liquidator_order.base_amount,
                         liquidator_order_quote_asset_id: liquidator_order.quote_asset_id,
@@ -872,7 +915,7 @@ pub mod Core {
             actual_amount_base: i64,
             actual_amount_quote: i64,
             actual_fee: u64,
-        ) -> Span<AssetDiffEntry> {
+        ) -> PositionDiff {
             let position_id = order.position_id;
 
             // fee asset.
@@ -943,92 +986,7 @@ pub mod Core {
             diff_entries.span()
         }
 
-        fn _execute_liquidate(
-            ref self: ContractState,
-            liquidated_order: Order,
-            liquidator_order: Order,
-            actual_amount_base_liquidated: i64,
-            actual_amount_quote_liquidated: i64,
-            actual_liquidator_fee: u64,
-        ) {
-            let liquidated_position_id = liquidated_order.position_id;
-            let liquidated_position_data = self
-                .positions
-                .get_position_data(position_id: liquidated_position_id);
-            let liquidated_asset_diff_entries = self
-                ._create_asset_diff_entries_from_order(
-                    order: liquidated_order,
-                    actual_amount_base: actual_amount_base_liquidated,
-                    actual_amount_quote: actual_amount_quote_liquidated,
-                    actual_fee: liquidated_order.fee_amount,
-                );
-
-            let liquidator_position_id = liquidator_order.position_id;
-            let liquidator_position_data = self
-                .positions
-                .get_position_data(position_id: liquidator_position_id);
-            let liquidator_asset_diff_entries = self
-                ._create_asset_diff_entries_from_order(
-                    order: liquidator_order,
-                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    actual_amount_base: -actual_amount_base_liquidated,
-                    actual_amount_quote: -actual_amount_quote_liquidated,
-                    actual_fee: actual_liquidator_fee,
-                );
-            self
-                .positions
-                .apply_diff(
-                    position_id: liquidated_position_id,
-                    asset_diff_entries: liquidated_asset_diff_entries,
-                );
-            self
-                .positions
-                .apply_diff(
-                    position_id: liquidator_position_id,
-                    asset_diff_entries: liquidator_asset_diff_entries,
-                );
-
-            // Update fee positions.
-            let asset_diff_entries_liquidated_fee = self
-                ._create_position_diff(
-                    position_id: FEE_POSITION,
-                    asset_id: liquidated_order.fee_asset_id,
-                    amount: liquidated_order.fee_amount.into(),
-                );
-            self
-                .positions
-                .apply_diff(
-                    position_id: INSURANCE_FUND_POSITION,
-                    asset_diff_entries: asset_diff_entries_liquidated_fee,
-                );
-
-            let asset_diff_entries_liquidator_fee = self
-                ._create_position_diff(
-                    position_id: FEE_POSITION,
-                    asset_id: liquidator_order.fee_asset_id,
-                    amount: actual_liquidator_fee.into(),
-                );
-            self
-                .positions
-                .apply_diff(
-                    position_id: FEE_POSITION,
-                    asset_diff_entries: asset_diff_entries_liquidator_fee,
-                );
-
-            /// Validations - Fundamentals:
-            validate_liquidated_position(
-                position_id: liquidated_position_id,
-                position_data: liquidated_position_data,
-                asset_diff_entries: liquidated_asset_diff_entries,
-            );
-            validate_position_is_healthy_or_healthier(
-                position_id: liquidator_position_id,
-                position_data: liquidator_position_data,
-                asset_diff_entries: liquidator_asset_diff_entries,
-            );
-        }
-
-        fn _execute_trade(
+        fn _update_positions(
             ref self: ContractState,
             order_a: Order,
             order_b: Order,
@@ -1036,10 +994,9 @@ pub mod Core {
             actual_amount_quote_a: i64,
             actual_fee_a: u64,
             actual_fee_b: u64,
-        ) {
-            let position_data_a = self
-                .positions
-                .get_position_data(position_id: order_a.position_id);
+            fee_position_a: PositionId,
+            fee_position_b: PositionId,
+        ) -> (PositionDiff, PositionDiff) {
             let asset_diff_entries_a = self
                 ._create_asset_diff_entries_from_order(
                     order: order_a,
@@ -1047,10 +1004,6 @@ pub mod Core {
                     actual_amount_quote: actual_amount_quote_a,
                     actual_fee: actual_fee_a,
                 );
-
-            let position_data_b = self
-                .positions
-                .get_position_data(position_id: order_b.position_id);
             let asset_diff_entries_b = self
                 ._create_asset_diff_entries_from_order(
                     order: order_b,
@@ -1059,6 +1012,8 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_a,
                     actual_fee: actual_fee_b,
                 );
+
+            // Apply the asset diff entries.
             self
                 .positions
                 .apply_diff(
@@ -1071,40 +1026,31 @@ pub mod Core {
                 );
 
             // Update fee positions.
-            let asset_diff_entries_fee_a = self
+            let fee_asset_diff_entries_a = self
                 ._create_position_diff(
-                    position_id: FEE_POSITION,
+                    position_id: fee_position_a,
                     asset_id: order_a.fee_asset_id,
                     amount: actual_fee_a.into(),
                 );
             self
                 .positions
                 .apply_diff(
-                    position_id: FEE_POSITION, asset_diff_entries: asset_diff_entries_fee_a,
+                    position_id: fee_position_a, asset_diff_entries: fee_asset_diff_entries_a,
                 );
-            let asset_diff_entries_fee_b = self
+
+            let fee_asset_diff_entries_b = self
                 ._create_position_diff(
-                    position_id: FEE_POSITION,
-                    asset_id: order_b.fee_asset_id,
+                    position_id: fee_position_b,
+                    asset_id: order_a.fee_asset_id,
                     amount: actual_fee_b.into(),
                 );
             self
                 .positions
                 .apply_diff(
-                    position_id: FEE_POSITION, asset_diff_entries: asset_diff_entries_fee_b,
+                    position_id: fee_position_b, asset_diff_entries: fee_asset_diff_entries_b,
                 );
 
-            /// Validations - Fundamentals:
-            validate_position_is_healthy_or_healthier(
-                position_id: order_a.position_id,
-                position_data: position_data_a,
-                asset_diff_entries: asset_diff_entries_a,
-            );
-            validate_position_is_healthy_or_healthier(
-                position_id: order_b.position_id,
-                position_data: position_data_b,
-                asset_diff_entries: asset_diff_entries_b,
-            );
+            (asset_diff_entries_a, asset_diff_entries_b)
         }
 
         fn _execute_transfer(
