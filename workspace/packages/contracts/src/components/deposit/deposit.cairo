@@ -36,6 +36,18 @@ pub(crate) mod Deposit {
     impl Deposit<
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of IDeposit<ComponentState<TContractState>> {
+        /// Deposit is called by the user to add a deposit request.
+        ///
+        /// Validations:
+        /// - The quantized amount must be greater than 0.
+        /// - The deposit requested does not exists.
+        ///
+        /// Execution:
+        /// - Transfers the quantized amount from the user to the contract.
+        /// - Registers the deposit request.
+        /// - Updates the deposit status to pending.
+        /// - Updates the aggregate_pending_deposit.
+        /// - Emits a Deposit event.
         fn deposit(
             ref self: ComponentState<TContractState>,
             beneficiary: u32,
