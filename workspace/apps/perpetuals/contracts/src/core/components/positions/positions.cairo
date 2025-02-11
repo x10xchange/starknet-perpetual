@@ -172,6 +172,17 @@ pub(crate) mod Positions {
                 );
         }
 
+        /// Registers a request to set the position's public key.
+        ///
+        /// Validations:
+        /// - Validates the signature.
+        /// - Validates the position exists.
+        /// - Validates the called is the owner of the position.
+        /// - Validates the request does not exist.
+        ///
+        /// Execution:
+        /// - Registers the set public key request.
+        /// - Emits a `SetPublicKeyRequest` event.
         fn set_public_key_request(
             ref self: ComponentState<TContractState>,
             signature: Signature,
