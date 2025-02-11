@@ -27,7 +27,7 @@ pub struct TransferArgs {
 ///    \"salt\":\"felt\"
 ///    )
 ///    \"PositionId\"(
-///    \"value\":\"felt\"
+///    \"value\":\"u32\"
 ///    )"
 ///    \"AssetId\"(
 ///    \"value\":\"felt\"
@@ -37,7 +37,7 @@ pub struct TransferArgs {
 ///    )
 /// );
 const TRANSFER_ARGS_TYPE_HASH: HashType =
-    0x3fb5df0157f6dd203dfa79d636eb34324be3d0aae154623c6b904b2153a61f6;
+    0x1db88e2709fdf2c59e651d141c3296a42b209ce770871b40413ea109846a3b4;
 
 impl StructHashImpl of StructHash<TransferArgs> {
     fn hash_struct(self: @TransferArgs) -> HashType {
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_transfer_type_hash() {
         let expected = selector!(
-            "\"TransferArgs\"(\"recipient\":\"PositionId\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"TransferArgs\"(\"recipient\":\"PositionId\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
     }

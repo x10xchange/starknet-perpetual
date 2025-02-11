@@ -20,14 +20,14 @@ pub struct SetPublicKeyArgs {
 ///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
-///    \"value\":\"felt\"
+///    \"value\":\"u32\"
 ///    )"
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
 const SET_PUBLIC_KEY_ARGS_HASH: HashType =
-    0xb79fbe994c2722b9c9686014e7b05f49373b3d54baa20fb09d60bd8735301c;
+    0x38c4dbc4041b98ccb5dfac20bca95760aa1b2a94099b0f4fa220f7134649711;
 
 impl StructHashImpl of StructHash<SetPublicKeyArgs> {
     fn hash_struct(self: @SetPublicKeyArgs) -> HashType {
@@ -43,7 +43,7 @@ mod tests {
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"new_public_key\":\"felt\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"new_public_key\":\"felt\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(SET_PUBLIC_KEY_ARGS_HASH, expected);
     }

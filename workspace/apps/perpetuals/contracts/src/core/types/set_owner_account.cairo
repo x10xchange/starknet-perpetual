@@ -23,31 +23,31 @@ pub struct SetOwnerAccountArgs {
 ///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
-///    \"value\":\"felt\"
+///    \"value\":\"u32\"
 ///    )"
 ///    \"Timestamp\"(
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const SET_POSITION_OWNER_ARGS_HASH: HashType =
-    0x1015a2f2e38a330c931e7e8af30b630d21c0399752f94f9a2766534fe795c53;
+const SET_OWNER_ACCOUNT_ARGS_HASH: HashType =
+    0x3747d879b584b295f863344299e3e30178fbcffc3df0da44e8df7cdf67da11f;
 
 impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
     fn hash_struct(self: @SetOwnerAccountArgs) -> HashType {
         let hash_state = PoseidonTrait::new();
-        hash_state.update_with(SET_POSITION_OWNER_ARGS_HASH).update_with(*self).finalize()
+        hash_state.update_with(SET_OWNER_ACCOUNT_ARGS_HASH).update_with(*self).finalize()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::SET_POSITION_OWNER_ARGS_HASH;
+    use super::SET_OWNER_ACCOUNT_ARGS_HASH;
 
     #[test]
-    fn test_set_position_owner_type_hash() {
+    fn test_set_owner_account_type_hash() {
         let expected = selector!(
-            "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_account_owner\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_account_owner\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(SET_POSITION_OWNER_ARGS_HASH, expected);
+        assert_eq!(SET_OWNER_ACCOUNT_ARGS_HASH, expected);
     }
 }

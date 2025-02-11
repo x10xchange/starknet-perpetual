@@ -27,7 +27,7 @@ pub struct WithdrawArgs {
 ///    \"salt\":\"felt\",
 ///    )
 ///    \"PositionId\"(
-///    \"value\":\"felt\"
+///    \"value\":\"u32\"
 ///    )"
 ///    \"AssetId\"(
 ///    \"value\":\"felt\"
@@ -37,7 +37,7 @@ pub struct WithdrawArgs {
 ///    )
 /// );
 const WITHDRAW_ARGS_TYPE_HASH: HashType =
-    0xe448e0bfe1cbb05949be6a78782513a905154f70479e57a9a6a674445e84ed;
+    0x250a5fa378e8b771654bd43dcb34844534f9d1e29e16b14760d7936ea7f4b1d;
 
 impl StructHashImpl of StructHash<WithdrawArgs> {
     fn hash_struct(self: @WithdrawArgs) -> HashType {
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_withdraw_type_hash() {
         let expected = selector!(
-            "\"WithdrawArgs\"(\"recipient\":\"ContractAddress\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"felt\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"WithdrawArgs\"(\"recipient\":\"ContractAddress\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert_eq!(WITHDRAW_ARGS_TYPE_HASH, expected);
     }
