@@ -217,8 +217,7 @@ struct SystemConfig {
 }
 
 /// The `SystemState` struct represents the state of the entire system.
-/// It includes the state for the token, staking, minting curve, and reward supplier contracts,
-/// as well as a base account identifier.
+/// It includes the state for the token and core contracts,
 #[derive(Drop, Copy)]
 pub struct SystemState {
     pub token: TokenState,
