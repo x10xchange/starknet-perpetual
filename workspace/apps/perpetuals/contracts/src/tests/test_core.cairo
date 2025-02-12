@@ -4,7 +4,9 @@ use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::TEN_POW_15;
 use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
+use contracts_commons::test_utils::{
+    Deployable, TokenTrait, cheat_caller_address_once, validate_balance,
+};
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
 use perpetuals::core::components::assets::interface::IAssets;
@@ -367,27 +369,22 @@ fn test_successful_deposit() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let mut user = Default::default();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
-    token_state
-        .approve(
-            owner: user.address,
-            spender: test_address(),
-            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
-        );
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
 
     // Check before deposit:
-    let user_balance_before_deposit = token_state.balance_of(user.address);
-    assert_eq!(user_balance_before_deposit, USER_INIT_BALANCE.try_into().unwrap());
-    let contract_state_balance_before_deposit = token_state.balance_of(test_address());
-    assert_eq!(contract_state_balance_before_deposit, CONTRACT_INIT_BALANCE.try_into().unwrap());
+    validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
+    validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
     let mut spy = snforge_std::spy_events();
+
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let deposit_hash = state
@@ -411,15 +408,13 @@ fn test_successful_deposit() {
     );
 
     // Check after deposit:
-    let user_balance_after_deposit = token_state.balance_of(user.address);
-    assert_eq!(
-        user_balance_after_deposit,
-        (USER_INIT_BALANCE - DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into()).into(),
+    validate_balance(
+        token_state, user.address, (USER_INIT_BALANCE - user_deposit_amount).try_into().unwrap(),
     );
-    let contract_state_balance_after_deposit = token_state.balance_of(test_address());
-    assert_eq!(
-        contract_state_balance_after_deposit,
-        (CONTRACT_INIT_BALANCE + DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into()).into(),
+    validate_balance(
+        token_state,
+        test_address(),
+        (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
     );
     let status = state.deposits.registered_deposits.entry(deposit_hash).read();
     if let DepositStatus::PENDING(timestamp) = status {
@@ -427,6 +422,60 @@ fn test_successful_deposit() {
     } else {
         panic!("Deposit not found");
     }
+}
+
+#[test]
+fn test_successful_cancel_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let user_deposit_amount = (DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into());
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Check before cancel deposit:
+    validate_balance(
+        token_state, user.address, (USER_INIT_BALANCE - user_deposit_amount).try_into().unwrap(),
+    );
+    validate_balance(
+        token_state,
+        test_address(),
+        (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
+    );
+
+    // Test:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Check after deposit cancelation:
+    validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
+    validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
 }
 
 // Trade tests.
