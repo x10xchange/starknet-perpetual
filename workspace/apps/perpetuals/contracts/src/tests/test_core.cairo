@@ -4,9 +4,7 @@ use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::TEN_POW_15;
 use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::{
-    Deployable, TokenTrait, cheat_caller_address_once, validate_balance,
-};
+use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
 use perpetuals::core::components::assets::interface::IAssets;
@@ -38,7 +36,7 @@ use perpetuals::tests::event_test_utils::{
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
-    setup_state_with_active_asset, setup_state_with_pending_asset,
+    setup_state_with_active_asset, setup_state_with_pending_asset, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};

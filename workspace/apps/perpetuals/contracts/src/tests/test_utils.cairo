@@ -472,3 +472,8 @@ pub fn check_synthetic_asset(
     // Check the synthetic_timely_data list.
     assert!(is_asset_in_synthetic_timely_data_list(:state, :synthetic_id));
 }
+
+pub fn validate_balance(token_state: TokenState, address: ContractAddress, expected_balance: u128) {
+    let balance_to_check = token_state.balance_of(address);
+    assert_eq!(balance_to_check, expected_balance);
+}
