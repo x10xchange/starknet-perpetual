@@ -30,10 +30,10 @@ use perpetuals::tests::event_test_utils::{
     assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
     assert_deposit_event_with_expected, assert_liquidate_event_with_expected,
     assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
-    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
-    assert_trade_event_with_expected, assert_transfer_event_with_expected,
-    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_remove_oracle_event_with_expected, assert_set_public_key_event_with_expected,
+    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
+    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -1888,6 +1888,7 @@ fn test_price_tick_odd() {
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
 }
+
 #[test]
 fn test_price_tick_even() {
     let cfg: PerpetualsInitConfig = Default::default();
@@ -2124,3 +2125,151 @@ fn test_price_tick_golden() {
     assert_eq!(data.last_price_update, Time::now());
     assert_eq!(data.price.value(), 6430);
 }
+
+// Add and remove oracle tests.
+
+#[test]
+fn test_successful_add_and_remove_oracle() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let asset_name = 'ASSET_NAME';
+    let oracle_name = 'ORCL';
+    let key_pair = KEY_PAIR_1();
+    // let oracle1 = Oracle { oracle_name, asset_name, key_pair };
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // Test:
+    let mut spy = snforge_std::spy_events();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+
+    // Add another oracle for the same asset id.
+    let asset_name = 'ASSET_NAME';
+    let oracle_name = 'ORCL';
+    let key_pair = KEY_PAIR_2();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+
+    state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
+
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_oracle_event_with_expected(
+        spied_event: events[1], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,
+    );
+    assert_remove_oracle_event_with_expected(
+        spied_event: events[2], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,
+    );
+}
+
+#[test]
+#[should_panic(expected: 'ORACLE_NAME_TOO_LONG')]
+fn test_add_oracle_name_too_long() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let asset_name = 'ASSET_NAME';
+    let oracle_name = 'LONG_ORACLE_NAME';
+    let key_pair = KEY_PAIR_1();
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'ASSET_NAME_TOO_LONG')]
+fn test_add_oracle_asset_name_too_long() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let asset_name = 'TOO_LONG_ASSET_NAME';
+    let oracle_name = 'ORCL';
+    let key_pair = KEY_PAIR_1();
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'ORACLE_ALREADY_EXISTS')]
+fn test_add_existed_oracle() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let asset_name = 'ASSET_NAME';
+    let oracle_name = 'ORCL';
+    let key_pair = KEY_PAIR_1();
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+
+    // Add the a new oracle with the same names, and different public key.
+    let asset_name = 'SAME_ASSET_NAME';
+    let oracle_name = 'ORCL2';
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: key_pair.public_key,
+            :oracle_name,
+            :asset_name,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'ORACLE_NOT_EXISTS')]
+fn test_successful_remove_unexisted_oracle() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    // Parameters:
+    let key_pair = KEY_PAIR_1();
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
+}
+
