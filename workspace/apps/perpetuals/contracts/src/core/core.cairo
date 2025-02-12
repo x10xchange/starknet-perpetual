@@ -387,6 +387,7 @@ pub mod Core {
             salt: felt252,
         ) {
             let position = self.positions.get_position_const(:position_id);
+            assert(amount > 0, INVALID_TRANSFER_AMOUNT);
             let hash = self
                 .request_approvals
                 .register_approval(

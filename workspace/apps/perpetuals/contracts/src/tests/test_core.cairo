@@ -1022,94 +1022,6 @@ fn test_successful_liquidate() {
 }
 
 #[test]
-fn test_successful_transfer_request_using_public_key() {
-    // Setup state, token and user:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
-    init_position(cfg: @cfg, ref :state, :user);
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
-
-    // Setup parameters:
-    let expected_time = Time::now().add(delta: Time::days(1));
-    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
-    let expiration = expected_time.add(delta: Time::days(1));
-
-    let mut transfer_args = TransferArgs {
-        position_id: user.position_id,
-        salt: user.salt_counter,
-        recipient: recipient.position_id,
-        collateral_id: cfg.collateral_cfg.collateral_id,
-        amount: TRANSFER_AMOUNT,
-        expiration,
-    };
-    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
-    let signature = user.sign_message(msg_hash);
-
-    // Test:
-    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state
-        .transfer_request(
-            :signature,
-            recipient: transfer_args.recipient,
-            position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
-            amount: transfer_args.amount,
-            expiration: transfer_args.expiration,
-            salt: transfer_args.salt,
-        );
-
-    // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status, RequestStatus::PENDING);
-}
-
-#[test]
-fn test_successful_transfer_request_with_owner() {
-    // Setup state, token and user:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
-    init_position_with_owner(cfg: @cfg, ref :state, :user);
-
-    // Setup parameters:
-    let expected_time = Time::now().add(delta: Time::days(1));
-    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
-    let expiration = expected_time.add(delta: Time::days(1));
-
-    let mut transfer_args = TransferArgs {
-        position_id: user.position_id,
-        recipient: recipient.position_id,
-        salt: user.salt_counter,
-        expiration,
-        collateral_id: cfg.collateral_cfg.collateral_id,
-        amount: TRANSFER_AMOUNT,
-    };
-    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
-    let signature = user.sign_message(message: msg_hash);
-
-    // Test:
-    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state
-        .transfer_request(
-            :signature,
-            recipient: transfer_args.recipient,
-            position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
-            amount: transfer_args.amount,
-            expiration: transfer_args.expiration,
-            salt: transfer_args.salt,
-        );
-
-    // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
-    assert_eq!(status, RequestStatus::PENDING);
-}
-
-#[test]
 fn test_successful_set_public_key_request() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -1236,6 +1148,95 @@ fn test_successful_set_public_key_no_request() {
         );
 }
 
+// Transfer tests.
+
+#[test]
+fn test_successful_transfer_request_using_public_key() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let mut transfer_args = TransferArgs {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        recipient: recipient.position_id,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: TRANSFER_AMOUNT,
+        expiration,
+    };
+    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .transfer_request(
+            :signature,
+            recipient: transfer_args.recipient,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
+            expiration: transfer_args.expiration,
+            salt: transfer_args.salt,
+        );
+
+    // Check:
+    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    assert_eq!(status, RequestStatus::PENDING);
+}
+
+#[test]
+fn test_successful_transfer_request_with_owner() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut user = Default::default();
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let mut transfer_args = TransferArgs {
+        position_id: user.position_id,
+        recipient: recipient.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: TRANSFER_AMOUNT,
+    };
+    let msg_hash = transfer_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(message: msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .transfer_request(
+            :signature,
+            recipient: transfer_args.recipient,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
+            expiration: transfer_args.expiration,
+            salt: transfer_args.salt,
+        );
+
+    // Check:
+    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    assert_eq!(status, RequestStatus::PENDING);
+}
 
 #[test]
 fn test_successful_transfer() {
@@ -1268,6 +1269,7 @@ fn test_successful_transfer() {
     let msg_hash = transfer_args.get_message_hash(sender.get_public_key());
     let sender_signature = sender.sign_message(msg_hash);
     // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: sender.address);
     state
         .transfer_request(
             signature: sender_signature,
@@ -1325,6 +1327,50 @@ fn test_successful_transfer() {
     assert_eq!(
         recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
     );
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_TRANSFER_AMOUNT')]
+fn test_invalid_transfer_request_amount_is_zero() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let mut sender = Default::default();
+    init_position(cfg: @cfg, ref :state, user: sender);
+
+    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position(cfg: @cfg, ref :state, user: recipient);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+    let collateral_id = cfg.collateral_cfg.collateral_id;
+
+    let transfer_args = TransferArgs {
+        position_id: sender.position_id,
+        recipient: recipient.position_id,
+        salt: sender.salt_counter,
+        expiration: expiration,
+        collateral_id,
+        amount: 0,
+    };
+
+    let sender_signature = sender
+        .sign_message(transfer_args.get_message_hash(sender.get_public_key()));
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: sender.address);
+    state
+        .transfer_request(
+            signature: sender_signature,
+            recipient: transfer_args.recipient,
+            position_id: transfer_args.position_id,
+            collateral_id: transfer_args.collateral_id,
+            amount: transfer_args.amount,
+            expiration: transfer_args.expiration,
+            salt: transfer_args.salt,
+        );
 }
 
 // `validate_synthetic_price` tests.
