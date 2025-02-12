@@ -279,12 +279,12 @@ pub fn assert_set_owner_account_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     public_key: PublicKey,
-    new_position_owner: ContractAddress,
+    new_owner_account: ContractAddress,
     expiration: Timestamp,
     set_owner_account_hash: felt252,
 ) {
     let expected_event = positions_events::SetOwnerAccount {
-        position_id, public_key, new_position_owner, expiration, set_owner_account_hash,
+        position_id, public_key, new_owner_account, expiration, set_owner_account_hash,
     };
     assert_expected_event_emitted(
         :spied_event, :expected_event, expected_event_selector: @selector!("SetOwnerAccount"),
@@ -295,12 +295,13 @@ pub fn assert_set_owner_account_event_with_expected(
 pub fn assert_set_public_key_request_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
+    old_public_key: PublicKey,
     new_public_key: PublicKey,
     expiration: Timestamp,
     set_public_key_request_hash: felt252,
 ) {
     let expected_event = positions_events::SetPublicKeyRequest {
-        position_id, new_public_key, expiration, set_public_key_request_hash,
+        position_id, old_public_key, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event, :expected_event, expected_event_selector: @selector!("SetPublicKeyRequest"),
@@ -310,12 +311,13 @@ pub fn assert_set_public_key_request_event_with_expected(
 pub fn assert_set_public_key_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
+    old_public_key: PublicKey,
     new_public_key: PublicKey,
     expiration: Timestamp,
     set_public_key_request_hash: felt252,
 ) {
     let expected_event = positions_events::SetPublicKey {
-        position_id, new_public_key, expiration, set_public_key_request_hash,
+        position_id, old_public_key, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event, :expected_event, expected_event_selector: @selector!("SetPublicKey"),

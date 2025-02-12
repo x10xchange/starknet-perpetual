@@ -1250,13 +1250,18 @@ fn test_successful_set_public_key_request() {
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
 
-    user.set_public_key(KEY_PAIR_2());
-    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+    let old_public_key = user.get_public_key();
+    let new_key_pair = KEY_PAIR_2();
+    user.set_public_key(new_key_pair);
+    assert_eq!(user.get_public_key(), new_key_pair.public_key);
 
     // Test change public key in perps:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let mut set_public_key_args = SetPublicKeyArgs {
-        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+        position_id: user.position_id,
+        old_public_key,
+        new_public_key: user.get_public_key(),
+        expiration,
     };
     let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
@@ -1285,12 +1290,17 @@ fn test_successful_set_public_key() {
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
 
-    user.set_public_key(KEY_PAIR_2());
-    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+    let old_public_key = user.get_public_key();
+    let new_key_pair = KEY_PAIR_2();
+    user.set_public_key(new_key_pair);
+    assert_eq!(user.get_public_key(), new_key_pair.public_key);
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let mut set_public_key_args = SetPublicKeyArgs {
-        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+        position_id: user.position_id,
+        old_public_key,
+        new_public_key: user.get_public_key(),
+        expiration,
     };
     let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
     let signature = user.sign_message(message: msg_hash);
@@ -1317,6 +1327,7 @@ fn test_successful_set_public_key() {
     assert_set_public_key_request_event_with_expected(
         spied_event: events[0],
         position_id: set_public_key_args.position_id,
+        old_public_key: set_public_key_args.old_public_key,
         new_public_key: set_public_key_args.new_public_key,
         expiration: set_public_key_args.expiration,
         set_public_key_request_hash: msg_hash,
@@ -1324,6 +1335,7 @@ fn test_successful_set_public_key() {
     assert_set_public_key_event_with_expected(
         spied_event: events[1],
         position_id: set_public_key_args.position_id,
+        old_public_key: set_public_key_args.old_public_key,
         new_public_key: set_public_key_args.new_public_key,
         expiration: set_public_key_args.expiration,
         set_public_key_request_hash: msg_hash,
@@ -1349,11 +1361,16 @@ fn test_successful_set_public_key_no_request() {
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
 
-    user.set_public_key(KEY_PAIR_2());
-    assert_eq!(user.get_public_key(), KEY_PAIR_2().public_key);
+    let old_public_key = user.get_public_key();
+    let new_key_pair = KEY_PAIR_2();
+    user.set_public_key(new_key_pair);
+    assert_eq!(user.get_public_key(), new_key_pair.public_key);
 
     let mut set_public_key_args = SetPublicKeyArgs {
-        position_id: user.position_id, expiration, new_public_key: user.get_public_key(),
+        position_id: user.position_id,
+        old_public_key,
+        new_public_key: user.get_public_key(),
+        expiration,
     };
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state

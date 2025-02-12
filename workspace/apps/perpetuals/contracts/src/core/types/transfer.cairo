@@ -48,6 +48,7 @@ impl StructHashImpl of StructHash<TransferArgs> {
 
 #[cfg(test)]
 mod tests {
+    use openzeppelin_testing::common::IntoBase16String;
     use super::TRANSFER_ARGS_TYPE_HASH;
 
     #[test]
@@ -55,7 +56,7 @@ mod tests {
         let expected = selector!(
             "\"TransferArgs\"(\"recipient\":\"PositionId\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(TRANSFER_ARGS_TYPE_HASH, expected);
+        assert_eq!(TRANSFER_ARGS_TYPE_HASH.into_base_16_string(), expected.into_base_16_string());
     }
 }
 

@@ -48,6 +48,7 @@ impl StructHashImpl of StructHash<WithdrawArgs> {
 
 #[cfg(test)]
 mod tests {
+    use openzeppelin_testing::common::IntoBase16String;
     use super::WITHDRAW_ARGS_TYPE_HASH;
 
     #[test]
@@ -55,6 +56,6 @@ mod tests {
         let expected = selector!(
             "\"WithdrawArgs\"(\"recipient\":\"ContractAddress\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(WITHDRAW_ARGS_TYPE_HASH, expected);
+        assert_eq!(WITHDRAW_ARGS_TYPE_HASH.into_base_16_string(), expected.into_base_16_string());
     }
 }

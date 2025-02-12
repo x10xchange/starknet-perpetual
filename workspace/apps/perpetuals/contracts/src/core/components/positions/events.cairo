@@ -22,7 +22,7 @@ pub struct SetOwnerAccount {
     #[key]
     pub public_key: PublicKey,
     #[key]
-    pub new_position_owner: ContractAddress,
+    pub new_owner_account: ContractAddress,
     pub expiration: Timestamp,
     pub set_owner_account_hash: felt252,
 }
@@ -33,6 +33,7 @@ pub struct SetPublicKeyRequest {
     pub position_id: PositionId,
     #[key]
     pub new_public_key: PublicKey,
+    pub old_public_key: PublicKey,
     pub expiration: Timestamp,
     #[key]
     pub set_public_key_request_hash: felt252,
@@ -44,6 +45,7 @@ pub struct SetPublicKey {
     pub position_id: PositionId,
     #[key]
     pub new_public_key: PublicKey,
+    pub old_public_key: PublicKey,
     pub expiration: Timestamp,
     #[key]
     pub set_public_key_request_hash: felt252,

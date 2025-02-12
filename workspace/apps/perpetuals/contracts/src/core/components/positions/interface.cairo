@@ -19,7 +19,7 @@ pub trait IPositions<TContractState> {
         signature: Signature,
         position_id: PositionId,
         public_key: PublicKey,
-        new_account_owner: ContractAddress,
+        new_owner_account: ContractAddress,
         expiration: Timestamp,
     );
     fn set_public_key_request(

@@ -142,7 +142,7 @@ pub(crate) mod Positions {
             signature: Signature,
             position_id: PositionId,
             public_key: PublicKey,
-            new_account_owner: ContractAddress,
+            new_owner_account: ContractAddress,
             expiration: Timestamp,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
@@ -153,19 +153,19 @@ pub(crate) mod Positions {
             let position = self._get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
             let hash = SetOwnerAccountArgs {
-                position_id, public_key, new_account_owner, expiration,
+                position_id, public_key, new_owner_account, expiration,
             }
                 .get_message_hash(public_key: position.owner_public_key.read());
             validate_stark_signature(
                 public_key: position.owner_public_key.read(), msg_hash: hash, signature: signature,
             );
-            position.owner_account.write(new_account_owner);
+            position.owner_account.write(new_owner_account);
             self
                 .emit(
                     events::SetOwnerAccount {
                         position_id: position_id,
                         public_key,
-                        new_position_owner: new_account_owner,
+                        new_owner_account,
                         expiration: expiration,
                         set_owner_account_hash: hash,
                     },
@@ -192,6 +192,7 @@ pub(crate) mod Positions {
         ) {
             let position = self._get_position_const(:position_id);
             let owner_account = position.owner_account.read();
+            let old_public_key = position.owner_public_key.read();
             assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
@@ -199,20 +200,22 @@ pub(crate) mod Positions {
                     :owner_account,
                     public_key: new_public_key,
                     :signature,
-                    args: SetPublicKeyArgs { position_id, expiration, new_public_key },
+                    args: SetPublicKeyArgs {
+                        position_id, old_public_key, new_public_key, expiration,
+                    },
                 );
             self
                 .emit(
                     events::SetPublicKeyRequest {
                         position_id,
                         new_public_key,
+                        old_public_key,
                         expiration: expiration,
                         set_public_key_request_hash: hash,
                     },
                 );
         }
 
-        // TODO: talk about this flow
         /// Sets the position's public key.
         ///
         /// Validations:
@@ -235,11 +238,14 @@ pub(crate) mod Positions {
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self._get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
+            let old_public_key = position.owner_public_key.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .consume_approved_request(
-                    args: SetPublicKeyArgs { position_id, expiration, new_public_key },
+                    args: SetPublicKeyArgs {
+                        position_id, old_public_key, new_public_key, expiration,
+                    },
                     public_key: new_public_key,
                 );
             position.owner_public_key.write(new_public_key);
@@ -247,7 +253,8 @@ pub(crate) mod Positions {
                 .emit(
                     events::SetPublicKey {
                         position_id,
-                        new_public_key: new_public_key,
+                        new_public_key,
+                        old_public_key,
                         expiration: expiration,
                         set_public_key_request_hash: hash,
                     },

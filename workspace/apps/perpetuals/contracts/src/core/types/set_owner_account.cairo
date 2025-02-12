@@ -10,7 +10,7 @@ use starknet::ContractAddress;
 pub struct SetOwnerAccountArgs {
     pub position_id: PositionId,
     pub public_key: PublicKey,
-    pub new_account_owner: ContractAddress,
+    pub new_owner_account: ContractAddress,
     pub expiration: Timestamp,
 }
 
@@ -19,7 +19,7 @@ pub struct SetOwnerAccountArgs {
 ///   "\"SetOwnerAccountArgs\"(
 ///    \"position_id\":\"PositionId\",
 ///    \"public_key\":\"felt\",
-///    \"new_account_owner\":\"ContractAddress\",
+///    \"new_owner_account\":\"ContractAddress\",
 ///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
@@ -30,7 +30,7 @@ pub struct SetOwnerAccountArgs {
 ///    )
 /// );
 const SET_OWNER_ACCOUNT_ARGS_HASH: HashType =
-    0x3747d879b584b295f863344299e3e30178fbcffc3df0da44e8df7cdf67da11f;
+    0x02c897e00cdbfcfefe21b980feb2bf084673bba0020c809eeecd810c2cf97cfd;
 
 impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
     fn hash_struct(self: @SetOwnerAccountArgs) -> HashType {
@@ -41,13 +41,16 @@ impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
 
 #[cfg(test)]
 mod tests {
+    use openzeppelin_testing::common::IntoBase16String;
     use super::SET_OWNER_ACCOUNT_ARGS_HASH;
 
     #[test]
     fn test_set_owner_account_type_hash() {
         let expected = selector!(
-            "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_account_owner\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_owner_account\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(SET_OWNER_ACCOUNT_ARGS_HASH, expected);
+        assert_eq!(
+            SET_OWNER_ACCOUNT_ARGS_HASH.into_base_16_string(), expected.into_base_16_string(),
+        );
     }
 }
