@@ -315,7 +315,7 @@ pub(crate) mod Positions {
         ) -> PositionData {
             let mut asset_entries = array![];
             self._validate_position_exists(:position_id);
-            self._collect_position_collateral(ref :asset_entries, :position_id);
+            self._collect_position_collaterals(ref :asset_entries, :position_id);
             self._collect_position_synthetics(ref :asset_entries, :position_id);
             PositionData { asset_entries: asset_entries.span() }
         }
@@ -433,30 +433,12 @@ pub(crate) mod Positions {
             self._get_position_const(:position_id);
         }
 
-        /// We only have one collateral asset.
-        fn _collect_position_collateral(
+        fn _collect_position_collaterals(
             self: @ComponentState<TContractState>,
             ref asset_entries: Array<AssetEntry>,
             position_id: PositionId,
         ) {
-            let assets = get_dep_component!(self, Assets);
-            let position = self._get_position_const(:position_id);
-            let mut asset_id_opt = position.collateral_assets_head.read();
-
-            if let Option::Some(collateral_id) = asset_id_opt {
-                let balance = self._get_provisional_main_collateral_balance(:position_id);
-                if balance.is_non_zero() {
-                    asset_entries
-                        .append(
-                            AssetEntry {
-                                id: collateral_id,
-                                balance,
-                                price: assets.get_collateral_price(:collateral_id),
-                                risk_factor: assets.get_risk_factor(asset_id: collateral_id),
-                            },
-                        );
-                }
-            };
+            self._collect_position_assets(ref :asset_entries, :position_id, collaterals: true);
         }
 
         fn _collect_position_synthetics(
@@ -464,24 +446,42 @@ pub(crate) mod Positions {
             ref asset_entries: Array<AssetEntry>,
             position_id: PositionId,
         ) {
+            self._collect_position_assets(ref :asset_entries, :position_id, collaterals: false);
+        }
+
+        fn _collect_position_assets(
+            self: @ComponentState<TContractState>,
+            ref asset_entries: Array<AssetEntry>,
+            position_id: PositionId,
+            collaterals: bool,
+        ) {
             let assets = get_dep_component!(self, Assets);
             let position = self._get_position_const(:position_id);
-            let mut asset_id_opt = position.synthetic_assets_head.read();
-            while let Option::Some(synthetic_id) = asset_id_opt {
-                let synthetic_asset = position.synthetic_assets.read(synthetic_id);
-                let balance = self.get_provisional_balance(:position_id, asset_id: synthetic_id);
+            let mut asset_id_opt = if collaterals {
+                position.collateral_assets_head.read()
+            } else {
+                position.synthetic_assets_head.read()
+            };
+            while let Option::Some(asset_id) = asset_id_opt {
+                let balance = self.get_provisional_balance(:position_id, :asset_id);
+                let price = assets.get_asset_price(:asset_id);
                 if balance.is_non_zero() {
                     asset_entries
                         .append(
                             AssetEntry {
-                                id: synthetic_id,
+                                id: asset_id,
                                 balance,
-                                price: assets.get_synthetic_price(:synthetic_id),
-                                risk_factor: assets.get_risk_factor(asset_id: synthetic_id),
+                                price,
+                                risk_factor: assets.get_risk_factor(:asset_id),
                             },
                         );
                 }
-                asset_id_opt = synthetic_asset.next;
+                asset_id_opt =
+                    if collaterals {
+                        position.collateral_assets.read(asset_id).next
+                    } else {
+                        position.synthetic_assets.read(asset_id).next
+                    };
             };
         }
 
