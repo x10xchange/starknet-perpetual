@@ -368,6 +368,7 @@ fn test_successful_deposit() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let mut user = Default::default();
     let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
@@ -390,7 +391,7 @@ fn test_successful_deposit() {
     let deposit_hash = state
         .deposit(
             beneficiary: user.position_id.value,
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -401,7 +402,7 @@ fn test_successful_deposit() {
         spied_event: events[0],
         position_id: user.position_id.value,
         depositing_address: user.address,
-        asset_id: cfg.collateral_cfg.collateral_id.into(),
+        asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
         unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
@@ -424,6 +425,8 @@ fn test_successful_deposit() {
     }
 }
 
+// Cancel deposit tests.
+
 #[test]
 fn test_successful_cancel_deposit() {
     // Setup state, token and user:
@@ -432,7 +435,8 @@ fn test_successful_cancel_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let user_deposit_amount = (DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into());
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -446,7 +450,7 @@ fn test_successful_cancel_deposit() {
     state
         .deposit(
             beneficiary: user.position_id.value,
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -468,7 +472,7 @@ fn test_successful_cancel_deposit() {
     state
         .cancel_deposit(
             beneficiary: user.position_id.value,
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -476,6 +480,170 @@ fn test_successful_cancel_deposit() {
     // Check after deposit cancelation:
     validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
     validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_NOT_REGISTERED')]
+fn test_cancel_non_registered_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_ALREADY_PROCESSED')]
+fn test_cancel_already_done_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::seconds(1000)).into(),
+    );
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .process_deposit(
+            operator_nonce: state.nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            collateral_id: collateral_cfg_id.into(),
+            amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_ALREADY_CANCELED')]
+fn test_double_cancel_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_NOT_CANCELABLE')]
+fn test_cancel_deposit_before_cancellation_delay_passed() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    state
+        .cancel_deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
 }
 
 // Trade tests.
