@@ -376,6 +376,18 @@ pub mod Core {
                 );
         }
 
+        /// Executes a transfer request.
+        ///
+        /// Validations:
+        /// - Validates the position exists.
+        /// - Validates the request does not exist.
+        /// - If the position has an owner account, validate that the caller is the position owner
+        /// account.
+        /// - Validates the signature.
+        ///
+        /// Execution:
+        /// - Registers the transfer request.
+        /// - Emits a `TransferRequest` event.
         fn transfer_request(
             ref self: ContractState,
             signature: Signature,
