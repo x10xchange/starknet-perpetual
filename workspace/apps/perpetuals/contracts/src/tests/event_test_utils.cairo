@@ -26,7 +26,10 @@ pub fn assert_new_position_event_with_expected(
         position_id, owner_public_key, owner_account,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("NewPosition"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("NewPosition"),
+        expected_event_name: "NewPosition",
     );
 }
 
@@ -49,7 +52,10 @@ pub fn assert_deposit_event_with_expected(
     };
 
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Deposit"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Deposit"),
+        expected_event_name: "Deposit",
     );
 }
 
@@ -71,7 +77,10 @@ pub fn assert_deposit_canceled_event_with_expected(
         deposit_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("DepositCanceled"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("DepositCanceled"),
+        expected_event_name: "DepositCanceled",
     );
 }
 
@@ -93,7 +102,10 @@ pub fn assert_deposit_processed_event_with_expected(
         deposit_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("DepositProcessed"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("DepositProcessed"),
+        expected_event_name: "DepositProcessed",
     );
 }
 
@@ -110,7 +122,10 @@ pub fn assert_withdraw_request_event_with_expected(
         position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("WithdrawRequest"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("WithdrawRequest"),
+        expected_event_name: "WithdrawRequest",
     );
 }
 
@@ -127,7 +142,10 @@ pub fn assert_withdraw_event_with_expected(
         position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Withdraw"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Withdraw"),
+        expected_event_name: "Withdraw",
     );
 }
 
@@ -177,7 +195,10 @@ pub fn assert_trade_event_with_expected(
         order_b_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Trade"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Trade"),
+        expected_event_name: "Trade",
     );
 }
 
@@ -215,7 +236,10 @@ pub fn assert_liquidate_event_with_expected(
         liquidator_order_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Liquidate"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Liquidate"),
+        expected_event_name: "Liquidate",
     );
 }
 
@@ -237,7 +261,10 @@ pub fn assert_deleverage_event_with_expected(
         deleveraged_quote_amount,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Deleverage"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Deleverage"),
+        expected_event_name: "Deleverage",
     );
 }
 
@@ -254,7 +281,10 @@ pub fn assert_transfer_request_event_with_expected(
         position_id, recipient, collateral_id, amount, expiration, transfer_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("TransferRequest"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("TransferRequest"),
+        expected_event_name: "TransferRequest",
     );
 }
 
@@ -271,7 +301,10 @@ pub fn assert_transfer_event_with_expected(
         position_id, recipient, collateral_id, amount, expiration, transfer_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("Transfer"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("Transfer"),
+        expected_event_name: "Transfer",
     );
 }
 
@@ -287,7 +320,10 @@ pub fn assert_set_owner_account_event_with_expected(
         position_id, public_key, new_owner_account, expiration, set_owner_account_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("SetOwnerAccount"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("SetOwnerAccount"),
+        expected_event_name: "SetOwnerAccount",
     );
 }
 
@@ -304,7 +340,10 @@ pub fn assert_set_public_key_request_event_with_expected(
         position_id, old_public_key, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("SetPublicKeyRequest"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("SetPublicKeyRequest"),
+        expected_event_name: "SetPublicKeyRequest",
     );
 }
 
@@ -320,7 +359,10 @@ pub fn assert_set_public_key_event_with_expected(
         position_id, old_public_key, new_public_key, expiration, set_public_key_request_hash,
     };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("SetPublicKey"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("SetPublicKey"),
+        expected_event_name: "SetPublicKey",
     );
 }
 
@@ -329,7 +371,10 @@ pub fn assert_funding_tick_event_with_expected(
 ) {
     let expected_event = assets_events::FundingTick { asset_id, funding_index };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("FundingTick"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("FundingTick"),
+        expected_event_name: "FundingTick",
     );
 }
 
@@ -338,7 +383,10 @@ pub fn assert_price_tick_event_with_expected(
 ) {
     let expected_event = assets_events::PriceTick { asset_id, price };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("PriceTick"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("PriceTick"),
+        expected_event_name: "PriceTick",
     );
 }
 
@@ -347,7 +395,10 @@ pub fn assert_asset_activated_event_with_expected(
 ) {
     let expected_event = assets_events::AssetActivated { asset_id };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("AssetActivated"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("AssetActivated"),
+        expected_event_name: "AssetActivated",
     );
 }
 
@@ -360,7 +411,10 @@ pub fn assert_add_synthetic_event_with_expected(
 ) {
     let expected_event = assets_events::AddSynthetic { asset_id, risk_factor, resolution, quorum };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("AddSynthetic"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("AddSynthetic"),
+        expected_event_name: "AddSynthetic",
     );
 }
 
@@ -372,6 +426,7 @@ pub fn assert_deactivate_synthetic_asset_event_with_expected(
         :spied_event,
         :expected_event,
         expected_event_selector: @selector!("DeactivateSyntheticAsset"),
+        expected_event_name: "DeactivateSyntheticAsset",
     );
 }
 
@@ -381,7 +436,10 @@ pub fn assert_remove_oracle_event_with_expected(
 ) {
     let expected_event = assets_events::RemoveOracle { asset_id, oracle_public_key };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("RemoveOracle"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("RemoveOracle"),
+        expected_event_name: "RemoveOracle",
     );
 }
 
@@ -390,6 +448,9 @@ pub fn assert_add_oracle_event_with_expected(
 ) {
     let expected_event = assets_events::AddOracle { asset_id, oracle_public_key };
     assert_expected_event_emitted(
-        :spied_event, :expected_event, expected_event_selector: @selector!("AddOracle"),
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("AddOracle"),
+        expected_event_name: "AddOracle",
     );
 }
