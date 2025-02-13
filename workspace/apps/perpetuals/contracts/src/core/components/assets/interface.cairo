@@ -1,4 +1,5 @@
 use contracts_commons::types::PublicKey;
+use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::{TimeDelta, Timestamp};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralConfig;
@@ -15,7 +16,13 @@ pub trait IAssets<TContractState> {
         asset_name: felt252,
     );
     fn add_synthetic_asset(
-        ref self: TContractState, asset_id: AssetId, risk_factor: u8, quorum: u8, resolution: u64,
+        ref self: TContractState,
+        asset_id: AssetId,
+        risk_factor_tiers: Span<u8>,
+        risk_factor_first_tier_boundary: u128,
+        risk_factor_tier_size: u128,
+        quorum: u8,
+        resolution: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;
@@ -30,6 +37,7 @@ pub trait IAssets<TContractState> {
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
+    fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<FixedTwoDecimal>;
     fn remove_oracle_from_asset(
         ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
     );

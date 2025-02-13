@@ -48,7 +48,8 @@ pub struct AssetDiffEntry {
     pub before: Balance,
     pub after: Balance,
     pub price: Price,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor_before: FixedTwoDecimal,
+    pub risk_factor_after: FixedTwoDecimal,
 }
 
 pub type PositionDiff = Span<AssetDiffEntry>;

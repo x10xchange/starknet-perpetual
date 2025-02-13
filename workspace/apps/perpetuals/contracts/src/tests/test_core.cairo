@@ -2,7 +2,7 @@ use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit}
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::TEN_POW_15;
+use contracts_commons::constants::{MAX_U128, TEN_POW_15};
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
@@ -137,8 +137,10 @@ fn test_successful_add_synthetic_asset() {
     // Setup test parameters:
     let synthetic_id_1 = SYNTHETIC_ASSET_ID_2();
     let synthetic_id_2 = SYNTHETIC_ASSET_ID_3();
-    let risk_factor_1 = 10;
-    let risk_factor_2 = 20;
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = Zero::zero();
+    let risk_factor_1 = array![10].span();
+    let risk_factor_2 = array![20].span();
     let quorum_1 = 1_u8;
     let quorum_2 = 2_u8;
     let resolution_1 = 1_000_000_000;
@@ -149,7 +151,9 @@ fn test_successful_add_synthetic_asset() {
     state
         .add_synthetic_asset(
             asset_id: synthetic_id_1,
-            risk_factor: risk_factor_1,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
             quorum: quorum_1,
             resolution: resolution_1,
         );
@@ -158,7 +162,9 @@ fn test_successful_add_synthetic_asset() {
     state
         .add_synthetic_asset(
             asset_id: synthetic_id_2,
-            risk_factor: risk_factor_2,
+            risk_factor_tiers: risk_factor_2,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
             quorum: quorum_2,
             resolution: resolution_2,
         );
@@ -168,7 +174,9 @@ fn test_successful_add_synthetic_asset() {
     assert_add_synthetic_event_with_expected(
         spied_event: events[0],
         asset_id: synthetic_id_1,
-        risk_factor: risk_factor_1,
+        risk_factor_tiers: risk_factor_1,
+        :risk_factor_first_tier_boundary,
+        :risk_factor_tier_size,
         resolution: resolution_1,
         quorum: quorum_1,
     );
@@ -178,7 +186,9 @@ fn test_successful_add_synthetic_asset() {
         state: @state,
         synthetic_id: synthetic_id_1,
         status: AssetStatus::PENDING,
-        risk_factor: risk_factor_1,
+        risk_factor_tiers: risk_factor_1,
+        :risk_factor_first_tier_boundary,
+        :risk_factor_tier_size,
         quorum: quorum_1,
         resolution: resolution_1,
         price: Zero::zero(),
@@ -189,7 +199,9 @@ fn test_successful_add_synthetic_asset() {
         state: @state,
         synthetic_id: synthetic_id_2,
         status: AssetStatus::PENDING,
-        risk_factor: risk_factor_2,
+        risk_factor_tiers: risk_factor_2,
+        :risk_factor_first_tier_boundary,
+        :risk_factor_tier_size,
         quorum: quorum_2,
         resolution: resolution_2,
         price: Zero::zero(),
@@ -212,7 +224,9 @@ fn test_add_synthetic_asset_existed_asset() {
         .add_synthetic_asset(
             // Setup state already added `SYNTHETIC_ASSET_ID_1`.
             asset_id: SYNTHETIC_ASSET_ID_1(),
-            risk_factor: Zero::zero(),
+            risk_factor_tiers: array![].span(),
+            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_tier_size: Zero::zero(),
             quorum: Zero::zero(),
             resolution: Zero::zero(),
         );

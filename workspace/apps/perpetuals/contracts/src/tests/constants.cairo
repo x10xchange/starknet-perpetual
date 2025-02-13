@@ -1,4 +1,4 @@
-use contracts_commons::constants::{DAY, MINUTE};
+use contracts_commons::constants::{DAY, MAX_U128, MINUTE};
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::time::{Time, TimeDelta};
 use core::num::traits::{One, Zero};
@@ -67,13 +67,13 @@ pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
     }
 }
 
-
 pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
     SyntheticConfig {
         version: SYNTHETIC_VERSION,
         resolution: SYNTHETIC_RESOLUTION,
         status: AssetStatus::ACTIVATED,
-        risk_factor: RISK_FACTOR(),
+        risk_factor_first_tier_boundary: MAX_U128,
+        risk_factor_tier_size: Zero::zero(),
         quorum: SYNTHETIC_QUORUM,
     }
 }
@@ -83,7 +83,8 @@ pub fn SYNTHETIC_PENDING_CONFIG() -> SyntheticConfig {
         version: SYNTHETIC_VERSION,
         resolution: SYNTHETIC_RESOLUTION,
         status: AssetStatus::PENDING,
-        risk_factor: RISK_FACTOR(),
+        risk_factor_first_tier_boundary: MAX_U128,
+        risk_factor_tier_size: Zero::zero(),
         quorum: SYNTHETIC_QUORUM,
     }
 }

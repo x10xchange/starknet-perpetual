@@ -1,11 +1,9 @@
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
-
 
 pub const VERSION: u8 = 1;
 
@@ -14,7 +12,8 @@ pub struct SyntheticConfig {
     pub version: u8,
     // Configurable
     pub status: AssetStatus,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
     pub quorum: u8,
     // Smallest unit of a synthetic asset in the system.
     pub resolution: u64,

@@ -18,6 +18,7 @@ use openzeppelin::presets::interfaces::{
 };
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
+use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
@@ -36,7 +37,8 @@ use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
 use starknet::storage::{
-    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
+    StoragePointerWriteAccess,
 };
 
 
@@ -275,6 +277,12 @@ pub fn setup_state_with_active_asset(
         .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
     state
         .assets
+        .risk_factor_tiers
+        .entry(*cfg.synthetic_cfg.synthetic_id)
+        .append()
+        .write(RISK_FACTOR());
+    state
+        .assets
         .synthetic_timely_data
         .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
     state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
@@ -402,13 +410,20 @@ pub fn check_synthetic_config(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     status: AssetStatus,
-    risk_factor: u8,
+    risk_factor_tiers: Span<u8>,
+    risk_factor_first_tier_boundary: u128,
+    risk_factor_tier_size: u128,
     quorum: u8,
     resolution: u64,
 ) {
     let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
     assert_eq!(synthetic_config.status, status);
-    assert_eq!(synthetic_config.risk_factor, FixedTwoDecimalTrait::new(risk_factor));
+    let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
+    for i in 0..risk_factor_tiers.len() {
+        assert_eq!(*tiers[i], FixedTwoDecimalTrait::new(*risk_factor_tiers[i]));
+    };
+    assert_eq!(synthetic_config.risk_factor_first_tier_boundary, risk_factor_first_tier_boundary);
+    assert_eq!(synthetic_config.risk_factor_tier_size, risk_factor_tier_size);
     assert_eq!(synthetic_config.quorum, quorum);
     assert_eq!(synthetic_config.resolution, resolution);
 }
@@ -452,7 +467,9 @@ pub fn check_synthetic_asset(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     status: AssetStatus,
-    risk_factor: u8,
+    risk_factor_tiers: Span<u8>,
+    risk_factor_first_tier_boundary: u128,
+    risk_factor_tier_size: u128,
     quorum: u8,
     resolution: u64,
     price: Price,
@@ -460,7 +477,14 @@ pub fn check_synthetic_asset(
     funding_index: FundingIndex,
 ) {
     check_synthetic_config(
-        :state, :synthetic_id, status: status, :risk_factor, :quorum, :resolution,
+        :state,
+        :synthetic_id,
+        status: status,
+        :risk_factor_tiers,
+        :risk_factor_first_tier_boundary,
+        :risk_factor_tier_size,
+        :quorum,
+        :resolution,
     );
     check_synthetic_timely_data(
         :state,

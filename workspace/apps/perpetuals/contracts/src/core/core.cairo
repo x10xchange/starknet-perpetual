@@ -917,13 +917,16 @@ pub mod Core {
             let position_asset_balance = self
                 .positions
                 .get_provisional_balance(:position_id, :asset_id);
-
+            let price = self.assets.get_asset_price(:asset_id);
+            let before = position_asset_balance;
+            let after = position_asset_balance + diff;
             AssetDiffEntry {
                 id: asset_id,
-                before: position_asset_balance,
-                after: position_asset_balance + diff,
-                price: self.assets.get_asset_price(:asset_id),
-                risk_factor: self.assets.get_risk_factor(:asset_id),
+                before,
+                after,
+                price,
+                risk_factor_before: self.assets.get_risk_factor(:asset_id, balance: before),
+                risk_factor_after: self.assets.get_risk_factor(:asset_id, balance: after),
             }
         }
 

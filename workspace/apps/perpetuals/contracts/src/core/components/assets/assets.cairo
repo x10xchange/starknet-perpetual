@@ -32,12 +32,13 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
+    use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::{Price, SignedPrice};
+    use perpetuals::core::types::price::{Price, PriceMulTrait, SignedPrice};
     use starknet::ContractAddress;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
+        Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, VecTrait,
     };
 
 
@@ -58,6 +59,7 @@ pub mod AssetsComponent {
         pub num_of_active_synthetic_assets: usize,
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
+        pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
         oracles: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
     }
@@ -131,7 +133,7 @@ pub mod AssetsComponent {
         /// Validations:
         /// - Only the app_governor can call this function.
         /// - The asset does not exists.
-        /// - The risk factor is less or equal to 100.
+        /// - Each risk factor in risk_factor_tiers is less or equal to 100.
         /// - The quorum is greater than 0.
         ///
         /// Execution:
@@ -141,10 +143,25 @@ pub mod AssetsComponent {
         ///     - Set the price to zero.
         ///     - Set the funding index to zero.
         ///     - Set the `last_price_update` to zero.
+        ///
+        /// Risk factor tiers example:
+        /// - risk_factor_tiers = [1, 2, 3, 5, 10, 20, 40]
+        /// - risk_factor_first_tier_boundary = 10,000
+        /// - risk_factor_tier_size = 20,000
+        /// which means:
+        /// - 0 - 10,000 -> 1%
+        /// - 10,000 - 30,000 -> 2%
+        /// - 30,000 - 50,000 -> 3%
+        /// - 50,000 - 70,000 -> 5%
+        /// - 70,000 - 90,000 -> 10%
+        /// - 90,000 - 110,000 -> 20%
+        /// - 110,000+ -> 40%
         fn add_synthetic_asset(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
-            risk_factor: u8,
+            risk_factor_tiers: Span<u8>,
+            risk_factor_first_tier_boundary: u128,
+            risk_factor_tier_size: u128,
             quorum: u8,
             resolution: u64,
         ) {
@@ -164,7 +181,8 @@ pub mod AssetsComponent {
                             // It'll be active in the next price tick.
                             status: AssetStatus::PENDING,
                             // It validates the range of the risk factor.
-                            risk_factor: FixedTwoDecimalTrait::new(risk_factor),
+                            risk_factor_first_tier_boundary,
+                            risk_factor_tier_size,
                             quorum,
                             resolution,
                         },
@@ -184,8 +202,26 @@ pub mod AssetsComponent {
                         funding_index: Zero::zero(),
                     },
                 );
+
             self.synthetic_timely_data_head.write(Option::Some(asset_id));
-            self.emit(events::AddSynthetic { asset_id, risk_factor, resolution, quorum });
+            for risk_factor in risk_factor_tiers {
+                self
+                    .risk_factor_tiers
+                    .entry(asset_id)
+                    .append()
+                    .write(FixedTwoDecimalTrait::new(*risk_factor));
+            };
+            self
+                .emit(
+                    events::AddSynthetic {
+                        asset_id,
+                        risk_factor_tiers,
+                        risk_factor_first_tier_boundary,
+                        risk_factor_tier_size,
+                        resolution,
+                        quorum,
+                    },
+                );
         }
 
         /// - Deactivate synthetic asset.
@@ -249,6 +285,23 @@ pub mod AssetsComponent {
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticTimelyData {
             self._get_synthetic_timely_data(:synthetic_id)
+        }
+
+        fn get_risk_factor_tiers(
+            self: @ComponentState<TContractState>, asset_id: AssetId,
+        ) -> Span<FixedTwoDecimal> {
+            if (self.is_collateral(:asset_id)) {
+                panic_with_felt252(NOT_SYNTHETIC)
+            } else if (self.is_synthetic(:asset_id)) {
+                let mut tiers = array![];
+                let risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
+                for i in 0..risk_factor_tiers.len() {
+                    tiers.append(risk_factor_tiers.at(i).read());
+                };
+                tiers.span()
+            } else {
+                panic_with_felt252(ASSET_NOT_EXISTS)
+            }
         }
 
         /// Remove oracle from asset.
@@ -418,13 +471,39 @@ pub mod AssetsComponent {
             }
         }
 
+        /// Get the risk factor of an asset.
+        /// - If the asset is a collateral asset, return the risk factor (0).
+        /// - If the asset is a synthetic asset, return the risk factor according to the tier
+        /// corresponding to the synthetic value according to formula:
+        ///   - synthetic_value = |price * balance|
+        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   first risk factor.
+        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
+        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - If the index is out of bounds, return the last risk factor.
+        /// - If the asset does not exist, panic.
         fn get_risk_factor(
-            self: @ComponentState<TContractState>, asset_id: AssetId,
+            self: @ComponentState<TContractState>, asset_id: AssetId, balance: Balance,
         ) -> FixedTwoDecimal {
             if self.is_collateral(:asset_id) {
                 self._get_collateral_config(collateral_id: asset_id).risk_factor
             } else if self.is_synthetic(:asset_id) {
-                self._get_synthetic_config(synthetic_id: asset_id).risk_factor
+                let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
+                let price = self.get_synthetic_price(synthetic_id: asset_id);
+                let synthetic_value: u128 = price.mul(rhs: balance).abs();
+                let mut index = if synthetic_value <= synthetic_config
+                    .risk_factor_first_tier_boundary {
+                    0_u64
+                } else {
+                    ((synthetic_value - synthetic_config.risk_factor_first_tier_boundary)
+                        / synthetic_config.risk_factor_tier_size)
+                        .try_into()
+                        .expect('INDEX_OVERFLOW')
+                };
+                if index >= self.risk_factor_tiers.entry(asset_id).len().into() {
+                    index = self.risk_factor_tiers.entry(asset_id).len() - 1;
+                }
+                self.risk_factor_tiers.entry(asset_id).at(index).read()
             } else {
                 panic_with_felt252(ASSET_NOT_EXISTS)
             }

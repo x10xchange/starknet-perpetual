@@ -19,7 +19,6 @@ use starknet::ContractAddress;
 use super::constants as flow_tests_constants;
 use super::super::constants;
 
-
 #[derive(Drop)]
 struct Oracle {
     account: Account,
@@ -183,10 +182,12 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         self.set_app_governor_as_caller();
         dispatcher
             .add_synthetic_asset(
-                *synthetic_config.asset_id,
-                *synthetic_config.risk_factor,
-                *synthetic_config.quorum,
-                *synthetic_config.resolution,
+                asset_id: *synthetic_config.asset_id,
+                risk_factor_tiers: *synthetic_config.risk_factor_tiers,
+                risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
+                risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
+                quorum: *synthetic_config.quorum,
+                resolution: *synthetic_config.resolution,
             );
 
         self.set_app_governor_as_caller();

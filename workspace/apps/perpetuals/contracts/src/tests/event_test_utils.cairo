@@ -405,11 +405,20 @@ pub fn assert_asset_activated_event_with_expected(
 pub fn assert_add_synthetic_event_with_expected(
     spied_event: @(ContractAddress, Event),
     asset_id: AssetId,
-    risk_factor: u8,
+    risk_factor_tiers: Span<u8>,
+    risk_factor_first_tier_boundary: u128,
+    risk_factor_tier_size: u128,
     resolution: u64,
     quorum: u8,
 ) {
-    let expected_event = assets_events::AddSynthetic { asset_id, risk_factor, resolution, quorum };
+    let expected_event = assets_events::AddSynthetic {
+        asset_id,
+        risk_factor_tiers,
+        risk_factor_first_tier_boundary,
+        risk_factor_tier_size,
+        resolution,
+        quorum,
+    };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,

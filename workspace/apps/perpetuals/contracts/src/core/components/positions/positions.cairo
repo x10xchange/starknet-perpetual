@@ -479,7 +479,7 @@ pub(crate) mod Positions {
                                 id: asset_id,
                                 balance,
                                 price,
-                                risk_factor: assets.get_risk_factor(:asset_id),
+                                risk_factor: assets.get_risk_factor(:asset_id, :balance),
                             },
                         );
                 }

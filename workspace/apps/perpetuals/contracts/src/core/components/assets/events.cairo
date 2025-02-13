@@ -16,7 +16,9 @@ pub struct AddOracle {
 pub struct AddSynthetic {
     #[key]
     pub asset_id: AssetId,
-    pub risk_factor: u8,
+    pub risk_factor_tiers: Span<u8>,
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
     pub resolution: u64,
     pub quorum: u8,
 }

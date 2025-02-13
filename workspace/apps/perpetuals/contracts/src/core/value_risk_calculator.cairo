@@ -183,11 +183,12 @@ fn calculate_position_tvtr_change(
         total_risk_before += risk_factor.mul(asset_value.abs());
     };
 
-    // Calculate the total value and total risk after the diff.
+    // Calculate the total value and total risk - after (i.e. counting diff as applied).
     let mut total_value_after = total_value_before;
     let mut total_risk_after: u128 = total_risk_before;
     for asset_diff_entry in position_diff {
-        let risk_factor = *asset_diff_entry.risk_factor;
+        let risk_factor_before = *asset_diff_entry.risk_factor_before;
+        let risk_factor_after = *asset_diff_entry.risk_factor_after;
         let price = *asset_diff_entry.price;
         let balance_before = *asset_diff_entry.before;
         let balance_after = *asset_diff_entry.after;
@@ -199,8 +200,8 @@ fn calculate_position_tvtr_change(
         total_value_after -= asset_value_before;
 
         /// Update the total risk.
-        total_risk_after += risk_factor.mul(asset_value_after.abs());
-        total_risk_after -= risk_factor.mul(asset_value_before.abs());
+        total_risk_after += risk_factor_after.mul(asset_value_after.abs());
+        total_risk_after -= risk_factor_before.mul(asset_value_before.abs());
     };
 
     // Return the total value and total risk before and after the diff.
@@ -288,7 +289,8 @@ mod tests {
             before: asset_entry.balance,
             after: BalanceTrait::new(value: 80),
             price: asset_entry.price,
-            risk_factor: RISK_FACTOR_1(),
+            risk_factor_before: RISK_FACTOR_1(),
+            risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff = array![asset_diff_entry].span();
 
@@ -336,7 +338,8 @@ mod tests {
             before: asset_entry.balance,
             after: BalanceTrait::new(value: 20),
             price: asset_entry.price,
-            risk_factor: RISK_FACTOR_1(),
+            risk_factor_before: RISK_FACTOR_1(),
+            risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff = array![asset_diff_entry].span();
 
@@ -412,14 +415,16 @@ mod tests {
             before: asset_entry_1.balance,
             after: BalanceTrait::new(value: 80),
             price: asset_entry_1.price,
-            risk_factor: RISK_FACTOR_1(),
+            risk_factor_before: RISK_FACTOR_1(),
+            risk_factor_after: RISK_FACTOR_1(),
         };
         let asset_diff_entry_2 = AssetDiffEntry {
             id: asset_entry_2.id,
             before: asset_entry_2.balance,
             after: BalanceTrait::new(value: 60),
             price: asset_entry_2.price,
-            risk_factor: RISK_FACTOR_2(),
+            risk_factor_before: RISK_FACTOR_2(),
+            risk_factor_after: RISK_FACTOR_2(),
         };
         let position_diff = array![asset_diff_entry_1, asset_diff_entry_2].span();
 
