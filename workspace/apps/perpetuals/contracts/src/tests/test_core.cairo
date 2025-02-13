@@ -26,12 +26,13 @@ use perpetuals::tests::event_test_utils::{
     assert_add_oracle_event_with_expected, assert_add_synthetic_event_with_expected,
     assert_asset_activated_event_with_expected,
     assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
-    assert_deposit_event_with_expected, assert_liquidate_event_with_expected,
-    assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
-    assert_remove_oracle_event_with_expected, assert_set_public_key_event_with_expected,
-    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
+    assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
+    assert_price_tick_event_with_expected, assert_remove_oracle_event_with_expected,
+    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -503,13 +504,14 @@ fn test_successful_cancel_deposit() {
         block_timestamp: Time::now().add(delta: Time::days(1)).into(),
     );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    state
+    let deposit_hash = state
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+    let mut spy = snforge_std::spy_events();
 
     // Check before cancel deposit:
     validate_balance(
@@ -532,6 +534,18 @@ fn test_successful_cancel_deposit() {
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_canceled_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id.value,
+        depositing_address: user.address,
+        asset_id: collateral_cfg_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        deposit_request_hash: deposit_hash,
+    );
 
     // Check after deposit cancelation:
     validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
