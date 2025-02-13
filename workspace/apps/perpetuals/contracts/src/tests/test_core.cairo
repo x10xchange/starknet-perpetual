@@ -375,6 +375,8 @@ fn test_successful_withdraw() {
     assert_eq!(contract_state_balance, (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
 }
 
+// Deposit tests.
+
 #[test]
 fn test_successful_deposit() {
     // Setup state, token and user:
@@ -436,6 +438,44 @@ fn test_successful_deposit() {
     } else {
         panic!("Deposit not found");
     }
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_ALREADY_REGISTERED')]
+fn test_deposit_already_registered() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
+    let mut user = Default::default();
+    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    state
+        .deposit(
+            beneficiary: user.position_id.value,
+            asset_id: collateral_cfg_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
 }
 
 #[test]
