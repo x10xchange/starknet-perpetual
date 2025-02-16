@@ -27,12 +27,12 @@ use perpetuals::tests::event_test_utils::{
     assert_asset_activated_event_with_expected,
     assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
-    assert_price_tick_event_with_expected, assert_remove_oracle_event_with_expected,
-    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
-    assert_trade_event_with_expected, assert_transfer_event_with_expected,
-    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_liquidate_event_with_expected,
+    assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
+    assert_remove_oracle_event_with_expected, assert_set_public_key_event_with_expected,
+    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
+    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -506,6 +506,7 @@ fn test_successful_process_deposit() {
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+    let mut spy = snforge_std::spy_events();
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
@@ -517,6 +518,18 @@ fn test_successful_process_deposit() {
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_processed_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id.value,
+        depositing_address: user.address,
+        asset_id: collateral_cfg_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        deposit_request_hash: deposit_hash,
+    );
 
     let status = state.deposits.registered_deposits.entry(deposit_hash).read();
     assert_eq!(status, DepositStatus::DONE, "Deposit not processed");
