@@ -381,7 +381,7 @@ pub fn initialized_contract_state() -> Core::ContractState {
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
         max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
-        cancellation_delay_time: Time::weeks(1),
+        deposit_grace_period: Time::weeks(1),
         fee_position_owner_account: OPERATOR(),
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
         insurance_fund_position_owner_account: OPERATOR(),
