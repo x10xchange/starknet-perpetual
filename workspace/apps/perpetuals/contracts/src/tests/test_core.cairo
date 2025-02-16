@@ -18,6 +18,7 @@ use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
+use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
@@ -29,10 +30,11 @@ use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
     assert_deposit_processed_event_with_expected, assert_liquidate_event_with_expected,
     assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
-    assert_remove_oracle_event_with_expected, assert_set_public_key_event_with_expected,
-    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_remove_oracle_event_with_expected, assert_set_owner_account_event_with_expected,
+    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -123,6 +125,98 @@ fn test_new_position() {
     assert_eq!(
         state.positions.get_position_const(:position_id).owner_account.read(), owner_account,
     );
+}
+
+// Set owner account tests.
+
+#[test]
+fn test_successful_set_owner_account() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let user: User = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Parameters:
+    let position_id = POSITION_ID_1;
+    let public_key = KEY_PAIR_1().public_key;
+    let new_owner_account = POSITION_OWNER_1();
+    let expiration = Time::now().add(Time::days(1));
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        position_id, public_key, new_owner_account, expiration,
+    };
+    let set_owner_account_hash = set_owner_account_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(set_owner_account_hash);
+
+    // Test.
+    let mut spy = snforge_std::spy_events();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_owner_account(
+            operator_nonce: state.nonce(),
+            :signature,
+            :position_id,
+            :public_key,
+            :new_owner_account,
+            :expiration,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_set_owner_account_event_with_expected(
+        spied_event: events[0],
+        :position_id,
+        :public_key,
+        :new_owner_account,
+        :expiration,
+        :set_owner_account_hash,
+    );
+
+    // Check.
+    assert_eq!(
+        state.positions.get_position_const(:position_id).owner_account.read(), new_owner_account,
+    );
+}
+
+#[test]
+#[should_panic(expected: 'POSITION_HAS_OWNER_ACCOUNT')]
+fn test_set_existed_owner_account() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let user: User = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Parameters:
+    let position_id = POSITION_ID_1;
+    let public_key = KEY_PAIR_1().public_key;
+    let new_owner_account = POSITION_OWNER_1();
+    let expiration = Time::now().add(Time::days(1));
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        position_id, public_key, new_owner_account, expiration,
+    };
+    let set_owner_account_hash = set_owner_account_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(set_owner_account_hash);
+
+    // Test.
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_owner_account(
+            operator_nonce: state.nonce(),
+            :signature,
+            :position_id,
+            :public_key,
+            :new_owner_account,
+            :expiration,
+        );
 }
 
 // Add synthetic asset tests.

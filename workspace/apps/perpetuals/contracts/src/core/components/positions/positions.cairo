@@ -127,6 +127,7 @@ pub(crate) mod Positions {
                     },
                 );
         }
+
         /// Sets the owner of a position to a new account owner.
         ///
         /// Validations:

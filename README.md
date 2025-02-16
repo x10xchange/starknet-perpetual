@@ -23,9 +23,6 @@
 - [Dependencies](#dependencies)
 - [Installation](#installation)
 - [Implementation specification](#implementation-specification)
-- [Getting help](#getting-help)
-- [Help make Perpetual better!](#help-make-perpetual-better)
-- [Contributing](#contributing)
 - [Security](#security)
 
 
@@ -48,24 +45,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://docs.swmansion.com/scarb/install.sh
 
 ## Implementation specification
 Specs document found [here](docs/spec.md)
-
-## Getting help
-
-Reach out to the maintainer at any of the following:
-- [GitHub Discussions](https://github.com/starkware-libs/starknet-perpetual/discussions)
-- Contact options listed on this [GitHub profile](https://github.com/starkware-libs)
-
-## Help make Perpetual better!
-
-If you want to say thank you or support the active development of Starknet Perpetual:
-- Add a GitHub Star to the project.
-- Tweet about Starknet Perpetual.
-- Write interesting articles about the project on [Dev.to](https://dev.to/), [Medium](https://medium.com), or your personal blog.
-
-## Contributing
-Thanks for taking the time to contribute! Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make benefit everybody else and are greatly appreciated.
-
-Please read our [contribution guidelines](https://github.com/starkware-libs/starknet-perpetual/blob/main/docs/CONTRIBUTING.md), and thank you for being involved!
 
 ## Security
 Starknet Perpetual follows good practices of security, but 100% security cannot be assured. Starknet Perpetual is provided "as is" without any warranty. Use at your own risk.
