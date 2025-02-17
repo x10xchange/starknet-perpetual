@@ -276,6 +276,7 @@ pub mod Core {
             salt: felt252,
         ) {
             let position = self.positions.get_position_const(:position_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
                 .register_approval(
@@ -1211,10 +1212,6 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_a,
                     actual_fee: actual_fee_b,
                 );
-            // Actual fees amount are positive.
-            assert(0 <= actual_fee_a, INVALID_NEGATIVE_FEE);
-            assert(0 <= actual_fee_b, INVALID_NEGATIVE_FEE);
-
             // Types validation.
             assert(order_a.quote_asset_id == order_b.quote_asset_id, DIFFERENT_QUOTE_ASSET_IDS);
             assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
