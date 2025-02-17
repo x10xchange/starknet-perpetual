@@ -2,12 +2,13 @@ use contracts_commons::constants::MAX_U128;
 use core::num::traits::Zero;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 
-pub(crate) const ORACLE_A_NAME: felt252 = 'ORCLA';
-pub(crate) const ORACLE_B_NAME: felt252 = 'ORCLB';
+pub const ORACLE_A_NAME: felt252 = 'ORCLA';
+pub const ORACLE_B_NAME: felt252 = 'ORCLB';
 
 #[derive(Drop)]
-pub(crate) struct SyntheticConfig {
+pub struct SyntheticConfig {
     pub asset_id: AssetId,
+    pub asset_name: felt252,
     pub oracle_a_name: felt252,
     pub oracle_b_name: felt252,
     pub risk_factor_tiers: Span<u8>,
@@ -17,9 +18,10 @@ pub(crate) struct SyntheticConfig {
     pub resolution: u64,
 }
 
-pub(crate) fn SYNTHETIC_CONFIG_1() -> SyntheticConfig {
+pub fn SYNTHETIC_CONFIG_1() -> SyntheticConfig {
     SyntheticConfig {
         asset_id: AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_1")),
+        asset_name: 'SYN_1',
         oracle_a_name: 'ORACLE_A_SYN_1',
         oracle_b_name: 'ORACLE_B_SYN_1',
         risk_factor_tiers: array![50].span(),
@@ -30,9 +32,10 @@ pub(crate) fn SYNTHETIC_CONFIG_1() -> SyntheticConfig {
     }
 }
 
-pub(crate) fn SYNTHETIC_CONFIG_2() -> SyntheticConfig {
+pub fn SYNTHETIC_CONFIG_2() -> SyntheticConfig {
     SyntheticConfig {
         asset_id: AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_2")),
+        asset_name: 'SYN_2',
         oracle_a_name: 'ORACLE_A_SYN_2',
         oracle_b_name: 'ORACLE_B_SYN_2',
         risk_factor_tiers: array![25].span(),
@@ -43,9 +46,10 @@ pub(crate) fn SYNTHETIC_CONFIG_2() -> SyntheticConfig {
     }
 }
 
-pub(crate) fn SYNTHETIC_CONFIG_3() -> SyntheticConfig {
+pub fn SYNTHETIC_CONFIG_3() -> SyntheticConfig {
     SyntheticConfig {
         asset_id: AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3")),
+        asset_name: 'SYN_3',
         oracle_a_name: 'ORACLE_A_SYN_3',
         oracle_b_name: 'ORACLE_B_SYN_3',
         risk_factor_tiers: array![10].span(),

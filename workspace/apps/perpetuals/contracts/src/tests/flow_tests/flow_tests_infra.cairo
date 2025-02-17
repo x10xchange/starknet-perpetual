@@ -1,5 +1,6 @@
 use contracts_commons::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
 use contracts_commons::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
+use contracts_commons::constants::TWO_POW_32;
 use contracts_commons::test_utils::TokenTrait;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, TimeDelta};
@@ -11,18 +12,42 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
+use perpetuals::core::types::price::SignedPrice;
+use perpetuals::tests::constants;
+use perpetuals::tests::flow_tests::constants::{
+    ORACLE_A_NAME, ORACLE_B_NAME, SYNTHETIC_CONFIG_1, SYNTHETIC_CONFIG_2, SYNTHETIC_CONFIG_3,
+    SyntheticConfig,
+};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::start_cheat_block_timestamp_global;
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
-use super::constants as flow_tests_constants;
-use super::super::constants;
 
-#[derive(Drop)]
+const TIME_STEP: u64 = 60;
+const BEGINNING_OF_TIME: u64 = 1000000;
+const HOUR: u64 = 3600;
+
+#[derive(Copy, Drop)]
 struct Oracle {
     account: Account,
     name: felt252,
+}
+
+#[generate_trait]
+impl OracleImpl of OracleTrait {
+    fn sign_price(self: @Oracle, price: u128, timestamp: u32, asset_name: felt252) -> SignedPrice {
+        const TWO_POW_40: felt252 = 0x100_0000_0000;
+        let packed_timestamp_price = (timestamp.into() + price * TWO_POW_32.into()).into();
+        let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40;
+        let msg_hash = core::pedersen::pedersen(oracle_name_asset_name, packed_timestamp_price);
+        SignedPrice {
+            signature: self.account.sign_message(msg_hash),
+            signer_public_key: *self.account.key_pair.public_key,
+            timestamp,
+            price,
+        }
+    }
 }
 
 #[derive(Drop)]
@@ -49,7 +74,7 @@ impl DefaultPerpetualsConfig of Default<PerpetualsConfig> {
         PerpetualsConfig {
             operator,
             governance_admin: constants::GOVERNANCE_ADMIN(),
-            role_admin: constants::ROLE_ADMIN(),
+            role_admin: constants::APP_ROLE_ADMIN(),
             app_governor: constants::APP_GOVERNOR(),
             upgrade_delay: constants::UPGRADE_DELAY,
             max_price_interval: constants::MAX_PRICE_INTERVAL,
@@ -88,7 +113,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 #[derive(Copy, Drop)]
 struct Account {
     address: ContractAddress,
-    key_pair: StarkKeyPair,
+    pub key_pair: StarkKeyPair,
 }
 
 #[generate_trait]
@@ -104,15 +129,15 @@ impl AccountImpl of AccountTrait {
         cheat_caller_address_once(:contract_address, caller_address: *self.address);
     }
 
-    fn sign_message(self: Account, message: felt252) -> Signature {
-        let (r, s) = self.key_pair.sign(message).unwrap();
+    fn sign_message(self: @Account, message: felt252) -> Signature {
+        let (r, s) = (*self).key_pair.sign(message).unwrap();
         array![r, s].span()
     }
 }
 
 /// FlowTestState is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
-pub(crate) struct FlowTestState {
+pub struct FlowTestState {
     governance_admin: ContractAddress,
     role_admin: ContractAddress,
     app_governor: ContractAddress,
@@ -129,6 +154,7 @@ pub(crate) struct FlowTestState {
 impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
     fn get_nonce(self: @FlowTestState) -> u64 {
         let dispatcher = INonceDispatcher { contract_address: *self.perpetuals_contract };
+        self.operator.set_as_caller(*self.perpetuals_contract);
         dispatcher.nonce()
     }
 
@@ -137,7 +163,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
             contract_address: *self.perpetuals_contract, caller_address: *self.app_governor,
         );
     }
-    fn set_role_admin_as_caller(self: @FlowTestState) {
+    fn set_app_role_admin_as_caller(self: @FlowTestState) {
         cheat_caller_address_once(
             contract_address: *self.perpetuals_contract, caller_address: *self.role_admin,
         );
@@ -154,10 +180,10 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         self.set_governance_admin_as_caller();
         dispatcher.register_app_role_admin(*self.role_admin);
 
-        self.set_role_admin_as_caller();
+        self.set_app_role_admin_as_caller();
         dispatcher.register_app_governor(*self.app_governor);
 
-        self.set_role_admin_as_caller();
+        self.set_app_role_admin_as_caller();
         dispatcher.register_operator(account: *self.operator.address);
     }
 
@@ -173,10 +199,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
             );
     }
 
-
-    fn add_synthetic(
-        self: @FlowTestState, synthetic_config: @flow_tests_constants::SyntheticConfig,
-    ) {
+    fn add_synthetic(self: @FlowTestState, synthetic_config: @SyntheticConfig) {
         let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
 
         self.set_app_governor_as_caller();
@@ -196,7 +219,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
                 *synthetic_config.asset_id,
                 *self.oracle_a.account.key_pair.public_key,
                 *self.oracle_a.name,
-                *synthetic_config.oracle_a_name,
+                *synthetic_config.asset_name,
             );
 
         self.set_app_governor_as_caller();
@@ -205,7 +228,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
                 *synthetic_config.asset_id,
                 *self.oracle_b.account.key_pair.public_key,
                 *self.oracle_b.name,
-                *synthetic_config.oracle_b_name,
+                *synthetic_config.asset_name,
             );
     }
 }
@@ -215,7 +238,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
 #[generate_trait]
 pub impl FlowTestStateImpl of FlowTestTrait {
     fn init() -> FlowTestState {
-        start_cheat_block_timestamp_global(1000000);
+        start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
         let mut key_gen = 1;
         let perpetuals_config: PerpetualsConfig = Default::default();
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
@@ -236,12 +259,8 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             token_state,
             key_gen,
             operator: perpetuals_config.operator,
-            oracle_a: Oracle {
-                account: AccountTrait::new(ref key_gen), name: flow_tests_constants::ORACLE_A_NAME,
-            },
-            oracle_b: Oracle {
-                account: AccountTrait::new(ref key_gen), name: flow_tests_constants::ORACLE_B_NAME,
-            },
+            oracle_a: Oracle { account: AccountTrait::new(ref key_gen), name: ORACLE_A_NAME },
+            oracle_b: Oracle { account: AccountTrait::new(ref key_gen), name: ORACLE_B_NAME },
             position_id_gen: 100,
         };
 
@@ -251,6 +270,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn setup(ref self: FlowTestState) {
         self.set_roles();
         self.register_collateral();
+        self.add_synthetic(@SYNTHETIC_CONFIG_1());
+        self.add_synthetic(@SYNTHETIC_CONFIG_2());
+        self.add_synthetic(@SYNTHETIC_CONFIG_3());
+        advance_time(HOUR);
     }
 
     fn new_user(ref self: FlowTestState) -> Account {
@@ -258,11 +281,12 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         self.token_state.fund(new_user.address, constants::USER_INIT_BALANCE);
 
-        self.operator.set_as_caller(self.perpetuals_contract);
+        let operator_nonce = self.get_nonce();
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        self.operator.set_as_caller(self.perpetuals_contract);
         dispatcher
             .new_position(
-                operator_nonce: self.get_nonce(),
+                operator_nonce,
                 position_id: self.position_id_gen.into(),
                 owner_public_key: new_user.key_pair.public_key,
                 owner_account: new_user.address,
@@ -271,9 +295,28 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         new_user
     }
+
+    fn price_tick(ref self: FlowTestState, synthetic_config: @SyntheticConfig, price: u128) {
+        let timestamp = Time::now().seconds.try_into().unwrap();
+        let oracle_a_signed_price = self
+            .oracle_a
+            .sign_price(:price, :timestamp, asset_name: *synthetic_config.asset_name);
+        let oracle_b_signed_price = self
+            .oracle_b
+            .sign_price(:price, :timestamp, asset_name: *synthetic_config.asset_name);
+        let signed_prices = array![oracle_a_signed_price, oracle_b_signed_price].span();
+        advance_time(TIME_STEP);
+
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .price_tick(
+                operator_nonce, asset_id: *synthetic_config.asset_id, :price, :signed_prices,
+            );
+    }
     /// TODO: add all the necessary functions to interact with the contract.
 }
 
-pub fn advance_time(delta: TimeDelta) {
-    start_cheat_block_timestamp_global(Time::now().add(delta).into());
+pub fn advance_time(seconds: u64) {
+    start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
 }
