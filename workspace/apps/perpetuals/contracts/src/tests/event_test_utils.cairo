@@ -463,3 +463,18 @@ pub fn assert_add_oracle_event_with_expected(
         expected_event_name: "AddOracle",
     );
 }
+
+pub fn assert_register_collateral_event_with_expected(
+    spied_event: @(ContractAddress, Event),
+    asset_id: AssetId,
+    token_address: ContractAddress,
+    quantum: u64,
+) {
+    let expected_event = assets_events::RegisterCollateral { asset_id, token_address, quantum };
+    assert_expected_event_emitted(
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("RegisterCollateral"),
+        expected_event_name: "RegisterCollateral",
+    );
+}

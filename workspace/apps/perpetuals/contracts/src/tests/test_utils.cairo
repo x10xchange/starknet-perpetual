@@ -242,7 +242,16 @@ fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()
 }
 
-fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
+fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
+    let calldata = array![key_pair.public_key];
+    let account_address = declare_and_deploy("AccountUpgradeable", calldata);
+
+    account_address
+}
+
+// Public functions.
+
+pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
     cheat_caller_address_once(
         contract_address: test_address(), caller_address: *cfg.governance_admin,
     );
@@ -256,15 +265,6 @@ fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
     );
     state.register_operator(account: *cfg.operator);
 }
-
-fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
-    let calldata = array![key_pair.public_key];
-    let account_address = declare_and_deploy("AccountUpgradeable", calldata);
-
-    account_address
-}
-
-// Public functions.
 
 pub fn setup_state_with_active_asset(
     cfg: @PerpetualsInitConfig, token_state: @TokenState,
