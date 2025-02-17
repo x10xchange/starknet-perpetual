@@ -36,7 +36,7 @@ pub(crate) mod Positions {
     use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait};
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-    use perpetuals::core::types::{AssetEntry, PositionData, PositionDiff, PositionId};
+    use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId};
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -302,13 +302,16 @@ pub(crate) mod Positions {
         fn apply_diff(
             ref self: ComponentState<TContractState>,
             position_id: PositionId,
-            asset_diff_entries: PositionDiff,
+            position_diff: PositionDiff,
         ) {
-            for diff in asset_diff_entries {
+            for diff in position_diff {
                 let asset_id = *diff.id;
                 let balance = self.get_provisional_balance(:position_id, :asset_id);
-                assert(*diff.before == balance, APPLY_DIFF_MISMATCH);
-                self._apply_funding_and_set_balance(:position_id, :asset_id, balance: *diff.after);
+                assert(*diff.balance_before == balance, APPLY_DIFF_MISMATCH);
+                self
+                    ._apply_funding_and_set_balance(
+                        :position_id, :asset_id, balance: *diff.balance_after,
+                    );
             }
         }
 
@@ -321,11 +324,11 @@ pub(crate) mod Positions {
         fn get_position_data(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
-            let mut asset_entries = array![];
+            let mut position_data = array![];
             self._validate_position_exists(:position_id);
-            self._collect_position_collaterals(ref :asset_entries, :position_id);
-            self._collect_position_synthetics(ref :asset_entries, :position_id);
-            PositionData { asset_entries: asset_entries.span() }
+            self._collect_position_collaterals(ref :position_data, :position_id);
+            self._collect_position_synthetics(ref :position_data, :position_id);
+            position_data.span()
         }
 
         /// Returns the position at the given `position_id`.
@@ -443,23 +446,23 @@ pub(crate) mod Positions {
 
         fn _collect_position_collaterals(
             self: @ComponentState<TContractState>,
-            ref asset_entries: Array<AssetEntry>,
+            ref position_data: Array<Asset>,
             position_id: PositionId,
         ) {
-            self._collect_position_assets(ref :asset_entries, :position_id, collaterals: true);
+            self._collect_position_assets(ref :position_data, :position_id, collaterals: true);
         }
 
         fn _collect_position_synthetics(
             self: @ComponentState<TContractState>,
-            ref asset_entries: Array<AssetEntry>,
+            ref position_data: Array<Asset>,
             position_id: PositionId,
         ) {
-            self._collect_position_assets(ref :asset_entries, :position_id, collaterals: false);
+            self._collect_position_assets(ref :position_data, :position_id, collaterals: false);
         }
 
         fn _collect_position_assets(
             self: @ComponentState<TContractState>,
-            ref asset_entries: Array<AssetEntry>,
+            ref position_data: Array<Asset>,
             position_id: PositionId,
             collaterals: bool,
         ) {
@@ -474,9 +477,9 @@ pub(crate) mod Positions {
                 let balance = self.get_provisional_balance(:position_id, :asset_id);
                 let price = assets.get_asset_price(:asset_id);
                 if balance.is_non_zero() {
-                    asset_entries
+                    position_data
                         .append(
-                            AssetEntry {
+                            Asset {
                                 id: asset_id,
                                 balance,
                                 price,

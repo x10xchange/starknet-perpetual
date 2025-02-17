@@ -29,27 +29,24 @@ pub impl PositionIdIntoU32 of Into<PositionId, u32> {
     }
 }
 
-#[derive(Debug, Drop, Serde)]
-pub struct PositionData {
-    pub asset_entries: Span<AssetEntry>,
-}
-
 #[derive(Copy, Debug, Drop, Serde)]
-pub struct AssetEntry {
+pub struct Asset {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
     pub risk_factor: FixedTwoDecimal,
 }
 
+pub type PositionData = Span<Asset>;
+
 #[derive(Copy, Debug, Default, Drop, Serde)]
-pub struct AssetDiffEntry {
+pub struct AssetDiff {
     pub id: AssetId,
-    pub before: Balance,
-    pub after: Balance,
+    pub balance_before: Balance,
+    pub balance_after: Balance,
     pub price: Price,
     pub risk_factor_before: FixedTwoDecimal,
     pub risk_factor_after: FixedTwoDecimal,
 }
 
-pub type PositionDiff = Span<AssetDiffEntry>;
+pub type PositionDiff = Span<AssetDiff>;

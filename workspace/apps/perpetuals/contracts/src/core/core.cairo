@@ -48,7 +48,7 @@ pub mod Core {
     use perpetuals::core::types::price::{PriceTrait, SignedPrice};
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::types::{AssetDiffEntry, PositionDiff, PositionId};
+    use perpetuals::core::types::{AssetDiff, PositionDiff, PositionId};
     use perpetuals::core::value_risk_calculator::{
         validate_deleveraged_position, validate_liquidated_position,
         validate_position_is_healthy_or_healthier,
@@ -248,9 +248,9 @@ pub mod Core {
                     quantized_amount: amount,
                     :salt,
                 );
-            let asset_diff_entries = self
+            let position_diff = self
                 ._create_position_diff(:position_id, asset_id: collateral_id, diff: amount.into());
-            self.positions.apply_diff(:position_id, :asset_diff_entries);
+            self.positions.apply_diff(:position_id, :position_diff);
         }
 
         /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
@@ -355,14 +355,12 @@ pub mod Core {
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             /// Validations - Fundamentals:
-            let asset_diff_entries = self
+            let position_diff = self
                 ._create_position_diff(:position_id, asset_id: collateral_id, diff: amount.into());
             let position_data = self.positions.get_position_data(:position_id);
 
-            validate_position_is_healthy_or_healthier(
-                :position_id, :position_data, :asset_diff_entries,
-            );
-            self.positions.apply_diff(:position_id, :asset_diff_entries);
+            validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);
+            self.positions.apply_diff(:position_id, :position_diff);
             self
                 .emit(
                     events::Withdraw {
@@ -558,7 +556,7 @@ pub mod Core {
             let position_data_a = self.positions.get_position_data(position_id: position_id_a);
             let position_data_b = self.positions.get_position_data(position_id: position_id_b);
 
-            let (asset_diff_entries_a, asset_diff_entries_b) = self
+            let (position_diff_a, position_diff_b) = self
                 ._update_positions(
                     :order_a,
                     :order_b,
@@ -574,12 +572,12 @@ pub mod Core {
             validate_position_is_healthy_or_healthier(
                 position_id: order_a.position_id,
                 position_data: position_data_a,
-                asset_diff_entries: asset_diff_entries_a,
+                position_diff: position_diff_a,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: order_b.position_id,
                 position_data: position_data_b,
-                asset_diff_entries: asset_diff_entries_b,
+                position_diff: position_diff_b,
             );
 
             self
@@ -698,7 +696,7 @@ pub mod Core {
                 .positions
                 .get_position_data(position_id: liquidator_position_id);
 
-            let (liquidated_asset_diff_entries, liquidator_asset_diff_entries) = self
+            let (liquidated_position_diff, liquidator_position_diff) = self
                 ._update_positions(
                     order_a: liquidated_order,
                     order_b: liquidator_order,
@@ -714,12 +712,12 @@ pub mod Core {
             validate_liquidated_position(
                 position_id: liquidated_position_id,
                 position_data: liquidated_position_data,
-                asset_diff_entries: liquidated_asset_diff_entries,
+                position_diff: liquidated_position_diff,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: liquidator_position_id,
                 position_data: liquidator_position_data,
-                asset_diff_entries: liquidator_asset_diff_entries,
+                position_diff: liquidator_position_diff,
             );
 
             self
@@ -908,32 +906,32 @@ pub mod Core {
         fn _create_position_diff(
             self: @ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
         ) -> PositionDiff {
-            array![self._create_asset_diff_entry(:position_id, :asset_id, :diff)].span()
+            array![self._create_asset_diff(:position_id, :asset_id, :diff)].span()
         }
 
-        fn _create_asset_diff_entry(
+        fn _create_asset_diff(
             self: @ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
-        ) -> AssetDiffEntry {
+        ) -> AssetDiff {
             let position_asset_balance = self
                 .positions
                 .get_provisional_balance(:position_id, :asset_id);
             let price = self.assets.get_asset_price(:asset_id);
-            let before = position_asset_balance;
-            let after = position_asset_balance + diff;
-            AssetDiffEntry {
+            let balance_before = position_asset_balance;
+            let balance_after = position_asset_balance + diff;
+            AssetDiff {
                 id: asset_id,
-                before,
-                after,
+                balance_before,
+                balance_after,
                 price,
-                risk_factor_before: self.assets.get_risk_factor(:asset_id, balance: before),
-                risk_factor_after: self.assets.get_risk_factor(:asset_id, balance: after),
+                risk_factor_before: self.assets.get_risk_factor(:asset_id, balance: balance_before),
+                risk_factor_after: self.assets.get_risk_factor(:asset_id, balance: balance_after),
             }
         }
 
-        /// Builds asset diff entries from an order's fee, quote, and base assets, handling overlaps
-        /// by updating existing entries. If an asset matches an existing entry, only `after
+        /// Builds assets diff from an order's fee, quote, and base assets, handling overlaps
+        /// by updating existing diffs. If an asset matches an existing entry, only `after
         /// balance` is updated.
-        fn _create_asset_diff_entries_from_order(
+        fn _create_position_diff_from_order(
             ref self: ContractState,
             order: Order,
             actual_amount_base: i64,
@@ -941,7 +939,7 @@ pub mod Core {
             actual_fee: u64,
         ) -> PositionDiff {
             self
-                ._create_asset_diff_entries_from_asset_amounts(
+                ._create_position_diff_from_asset_amounts(
                     position_id: order.position_id,
                     base_id: order.base_asset_id,
                     base_amount: actual_amount_base,
@@ -952,7 +950,7 @@ pub mod Core {
                 )
         }
 
-        fn _create_asset_diff_entries_from_asset_amounts(
+        fn _create_position_diff_from_asset_amounts(
             ref self: ContractState,
             position_id: PositionId,
             base_id: AssetId,
@@ -966,50 +964,48 @@ pub mod Core {
             let is_fee_exist = fee_id.is_some();
 
             // fee asset.
-            let mut fee_diff: AssetDiffEntry = Default::default();
+            let mut fee_diff: AssetDiff = Default::default();
             let mut fee_asset_id: AssetId = Zero::zero();
             if let (Option::Some(fee_amount), Option::Some(fee_id)) = (fee_amount, fee_id) {
                 fee_asset_id = fee_id;
                 fee_diff = self
-                    ._create_asset_diff_entry(
+                    ._create_asset_diff(
                         :position_id, asset_id: fee_asset_id, diff: -(fee_amount.into()),
                     );
             }
 
             // Quote asset.
-            let mut quote_diff: AssetDiffEntry = Default::default();
+            let mut quote_diff: AssetDiff = Default::default();
 
             if is_fee_exist && (quote_id == fee_asset_id) {
-                fee_diff.after += quote_amount.into();
+                fee_diff.balance_after += quote_amount.into();
             } else {
                 quote_diff = self
-                    ._create_asset_diff_entry(
+                    ._create_asset_diff(
                         :position_id, asset_id: quote_id, diff: quote_amount.into(),
                     );
             }
 
             // Base asset.
-            let mut base_diff: AssetDiffEntry = Default::default();
+            let mut base_diff: AssetDiff = Default::default();
 
             if is_fee_exist && (base_id == fee_asset_id) {
-                fee_diff.after += base_amount.into();
+                fee_diff.balance_after += base_amount.into();
             } else if base_id == quote_id {
-                quote_diff.after += base_amount.into();
+                quote_diff.balance_after += base_amount.into();
             } else {
                 base_diff = self
-                    ._create_asset_diff_entry(
-                        :position_id, asset_id: base_id, diff: base_amount.into(),
-                    );
+                    ._create_asset_diff(:position_id, asset_id: base_id, diff: base_amount.into());
             }
 
-            // Build asset diff entries array.
-            let mut diff_entries = array![];
+            // Build position diff.
+            let mut position_diff = array![];
             for asset_diff in array![fee_diff, quote_diff, base_diff] {
                 if asset_diff.id != Default::default() {
-                    diff_entries.append(asset_diff);
+                    position_diff.append(asset_diff);
                 }
             };
-            diff_entries.span()
+            position_diff.span()
         }
 
         fn _update_positions(
@@ -1023,15 +1019,15 @@ pub mod Core {
             fee_position_a: PositionId,
             fee_position_b: PositionId,
         ) -> (PositionDiff, PositionDiff) {
-            let asset_diff_entries_a = self
-                ._create_asset_diff_entries_from_order(
+            let position_diff_a = self
+                ._create_position_diff_from_order(
                     order: order_a,
                     actual_amount_base: actual_amount_base_a,
                     actual_amount_quote: actual_amount_quote_a,
                     actual_fee: actual_fee_a,
                 );
-            let asset_diff_entries_b = self
-                ._create_asset_diff_entries_from_order(
+            let position_diff_b = self
+                ._create_position_diff_from_order(
                     order: order_b,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
                     actual_amount_base: -actual_amount_base_a,
@@ -1039,20 +1035,16 @@ pub mod Core {
                     actual_fee: actual_fee_b,
                 );
 
-            // Apply the asset diff entries.
+            // Apply the position diff.
             self
                 .positions
-                .apply_diff(
-                    position_id: order_a.position_id, asset_diff_entries: asset_diff_entries_a,
-                );
+                .apply_diff(position_id: order_a.position_id, position_diff: position_diff_a);
             self
                 .positions
-                .apply_diff(
-                    position_id: order_b.position_id, asset_diff_entries: asset_diff_entries_b,
-                );
+                .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
 
             // Update fee positions.
-            let fee_asset_diff_entries_a = self
+            let fee_position_diff_a = self
                 ._create_position_diff(
                     position_id: fee_position_a,
                     asset_id: order_a.fee_asset_id,
@@ -1060,11 +1052,9 @@ pub mod Core {
                 );
             self
                 .positions
-                .apply_diff(
-                    position_id: fee_position_a, asset_diff_entries: fee_asset_diff_entries_a,
-                );
+                .apply_diff(position_id: fee_position_a, position_diff: fee_position_diff_a);
 
-            let fee_asset_diff_entries_b = self
+            let fee_position_diff_b = self
                 ._create_position_diff(
                     position_id: fee_position_b,
                     asset_id: order_a.fee_asset_id,
@@ -1072,11 +1062,9 @@ pub mod Core {
                 );
             self
                 .positions
-                .apply_diff(
-                    position_id: fee_position_b, asset_diff_entries: fee_asset_diff_entries_b,
-                );
+                .apply_diff(position_id: fee_position_b, position_diff: fee_position_diff_b);
 
-            (asset_diff_entries_a, asset_diff_entries_b)
+            (position_diff_a, position_diff_b)
         }
 
         fn _execute_transfer(
@@ -1088,27 +1076,27 @@ pub mod Core {
         ) {
             // Parameters
             let sender_position_data = self.positions.get_position_data(:position_id);
-            let asset_diff_entry_sender = self
+            let position_diff_sender = self
                 ._create_position_diff(
                     :position_id, asset_id: collateral_id, diff: -(amount.into()),
                 );
-            let asset_diff_entry_recipient = self
+            let position_diff_recipient = self
                 ._create_position_diff(
                     position_id: recipient, asset_id: collateral_id, diff: amount.into(),
                 );
 
             // Execute transfer
-            self.positions.apply_diff(:position_id, asset_diff_entries: asset_diff_entry_sender);
+            self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
 
             self
                 .positions
-                .apply_diff(position_id: recipient, asset_diff_entries: asset_diff_entry_recipient);
+                .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
 
             /// Validations - Fundamentals:
             validate_position_is_healthy_or_healthier(
                 :position_id,
                 position_data: sender_position_data,
-                asset_diff_entries: asset_diff_entry_sender,
+                position_diff: position_diff_sender,
             );
         }
 
@@ -1287,8 +1275,8 @@ pub mod Core {
             let deleveraged_position_data = self
                 .positions
                 .get_position_data(position_id: deleveraged_position);
-            let deleveraged_asset_diff_entries = self
-                ._create_asset_diff_entries_from_asset_amounts(
+            let deleveraged_position_diff = self
+                ._create_position_diff_from_asset_amounts(
                     position_id: deleveraged_position,
                     base_id: deleveraged_base_asset_id,
                     base_amount: deleveraged_base_amount,
@@ -1301,8 +1289,8 @@ pub mod Core {
             let deleverager_position_data = self
                 .positions
                 .get_position_data(position_id: deleverager_position);
-            let deleverager_asset_diff_entries = self
-                ._create_asset_diff_entries_from_asset_amounts(
+            let deleverager_position_diff = self
+                ._create_position_diff_from_asset_amounts(
                     position_id: deleverager_position,
                     base_id: deleveraged_base_asset_id,
                     // Passing the negative of actual amounts to deleverager as it is linked to
@@ -1317,14 +1305,12 @@ pub mod Core {
             self
                 .positions
                 .apply_diff(
-                    position_id: deleveraged_position,
-                    asset_diff_entries: deleveraged_asset_diff_entries,
+                    position_id: deleveraged_position, position_diff: deleveraged_position_diff,
                 );
             self
                 .positions
                 .apply_diff(
-                    position_id: deleverager_position,
-                    asset_diff_entries: deleverager_asset_diff_entries,
+                    position_id: deleverager_position, position_diff: deleverager_position_diff,
                 );
 
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
@@ -1333,14 +1319,14 @@ pub mod Core {
                 AssetStatus::ACTIVATED => validate_deleveraged_position(
                     position_id: deleveraged_position,
                     position_data: deleveraged_position_data,
-                    asset_diff_entries: deleveraged_asset_diff_entries,
+                    position_diff: deleveraged_position_diff,
                 ),
                 // In case of deactivated synthetic asset, the position should change to healthy or
                 // healthier.
                 AssetStatus::DEACTIVATED => validate_position_is_healthy_or_healthier(
                     position_id: deleveraged_position,
                     position_data: deleveraged_position_data,
-                    asset_diff_entries: deleveraged_asset_diff_entries,
+                    position_diff: deleveraged_position_diff,
                 ),
                 // In case of pending synthetic asset, error should be thrown.
                 AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
@@ -1349,7 +1335,7 @@ pub mod Core {
             validate_position_is_healthy_or_healthier(
                 position_id: deleverager_position,
                 position_data: deleverager_position_data,
-                asset_diff_entries: deleverager_asset_diff_entries,
+                position_diff: deleverager_position_diff,
             );
         }
 
