@@ -32,10 +32,9 @@ pub mod Core {
     use perpetuals::core::errors::{
         CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
         FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS, INVALID_DELEVERAGE_BASE_CHANGE,
-        INVALID_FUNDING_TICK_LEN, INVALID_NEGATIVE_FEE, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_TRADE_QUOTE_AMOUNT_SIGN, INVALID_TRADE_SAME_POSITIONS,
-        INVALID_TRADE_WRONG_AMOUNT_SIGN, INVALID_TRANSFER_AMOUNT, INVALID_ZERO_AMOUNT,
-        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        INVALID_FUNDING_TICK_LEN, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
+        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED,
+        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -400,7 +399,7 @@ pub mod Core {
             salt: felt252,
         ) {
             let position = self.positions.get_position_const(:position_id);
-            assert(amount > 0, INVALID_TRANSFER_AMOUNT);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
                 .register_approval(
@@ -1170,7 +1169,7 @@ pub mod Core {
             // Sign Validation for amounts.
             assert(
                 !have_same_sign(a: order.quote_amount, b: order.base_amount),
-                INVALID_TRADE_WRONG_AMOUNT_SIGN,
+                INVALID_WRONG_AMOUNT_SIGN,
             );
         }
 
@@ -1195,7 +1194,7 @@ pub mod Core {
             actual_fee_a: u64,
             actual_fee_b: u64,
         ) {
-            assert(order_a.position_id != order_b.position_id, INVALID_TRADE_SAME_POSITIONS);
+            assert(order_a.position_id != order_b.position_id, INVALID_SAME_POSITIONS);
             self._validate_order(order: order_a);
             self._validate_order(order: order_b);
 
@@ -1219,7 +1218,7 @@ pub mod Core {
             // Sign Validation for amounts.
             assert(
                 !have_same_sign(a: order_a.quote_amount, b: order_b.quote_amount),
-                INVALID_TRADE_QUOTE_AMOUNT_SIGN,
+                INVALID_QUOTE_AMOUNT_SIGN,
             );
         }
 
@@ -1231,10 +1230,7 @@ pub mod Core {
                 .get_provisional_balance(:position_id, :asset_id)
                 .into();
 
-            assert(
-                !have_same_sign(a: amount, b: position_base_balance),
-                INVALID_TRADE_WRONG_AMOUNT_SIGN,
-            );
+            assert(!have_same_sign(a: amount, b: position_base_balance), INVALID_WRONG_AMOUNT_SIGN);
             assert(amount.abs() <= position_base_balance.abs(), INVALID_DELEVERAGE_BASE_CHANGE);
         }
 
@@ -1261,7 +1257,7 @@ pub mod Core {
             // Sign Validation for amounts.
             assert(
                 !have_same_sign(a: deleveraged_base_amount, b: deleveraged_quote_amount),
-                INVALID_TRADE_WRONG_AMOUNT_SIGN,
+                INVALID_WRONG_AMOUNT_SIGN,
             );
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
@@ -1387,7 +1383,7 @@ pub mod Core {
 
             // Validate collateral.
             self.assets.validate_collateral_active(:collateral_id);
-            assert(amount > 0, INVALID_TRANSFER_AMOUNT);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
         }
@@ -1419,7 +1415,7 @@ pub mod Core {
         ) {
             self._validate_operator_flow(:operator_nonce);
             self._validate_position_exists(:position_id);
-            assert(amount > 0, INVALID_ZERO_AMOUNT);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
             self.assets.validate_collateral_active(:collateral_id);
         }

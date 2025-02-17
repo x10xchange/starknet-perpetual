@@ -33,14 +33,22 @@ This repo holds the implementation of Staknet Perpetual Trading contracts.
 Perpetual is a work in progress.
 
 ## Dependencies
-- [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
-- Cairo dependencies such as [Scarb](https://docs.swmansion.com/scarb/) and [Starknet foundry](https://foundry-rs.github.io/starknet-foundry/index.html).
+- Cairo dependencies such as [Scarb](https://docs.swmansion.com/scarb/) and [Starknet foundry](https://foundry-rs.github.io/starknet-foundry/index.html) - install using [starkup](https://github.com/software-mansion/starkup).
 
 ## Installation
 Clone the repo and from within the projects root folder run:
 ```bash
-curl https://sh.rustup.rs -sSf | sh
-curl --proto '=https' --tlsv1.2 -sSf https://docs.swmansion.com/scarb/install.sh | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.dev | sh
+```
+
+## Build and Test
+Build the contracts from the repo root:
+```bash
+scarb build
+```
+To run the tests, execute:
+```bash
+scarb test
 ```
 
 ## Implementation specification

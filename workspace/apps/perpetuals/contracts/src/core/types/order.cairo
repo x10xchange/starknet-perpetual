@@ -6,8 +6,8 @@ use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::errors::{
-    INVALID_TRADE_ACTUAL_BASE_SIGN, INVALID_TRADE_ACTUAL_QUOTE_SIGN, INVALID_ZERO_AMOUNT,
-    trade_illegal_base_to_quote_ratio_err, trade_illegal_fee_to_quote_ratio_err,
+    INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN, INVALID_ZERO_AMOUNT,
+    illegal_base_to_quote_ratio_err, illegal_fee_to_quote_ratio_err,
 };
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
@@ -70,21 +70,20 @@ pub impl OrderImpl of OrderTrait {
 
         // Sign Validation for amounts.
         assert(
-            have_same_sign(a: *self.base_amount, b: actual_amount_base),
-            INVALID_TRADE_ACTUAL_BASE_SIGN,
+            have_same_sign(a: *self.base_amount, b: actual_amount_base), INVALID_ACTUAL_BASE_SIGN,
         );
         assert(
             have_same_sign(a: *self.quote_amount, b: actual_amount_quote),
-            INVALID_TRADE_ACTUAL_QUOTE_SIGN,
+            INVALID_ACTUAL_QUOTE_SIGN,
         );
 
-        // Validate the actual fee-to-amount ratio does not exceed the ordered fee-to-amount ratio.
+        // Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
         validate_ratio(
             n1: actual_fee,
             d1: actual_amount_quote.abs(),
             n2: *self.fee_amount,
             d2: (*self.quote_amount).abs(),
-            err: trade_illegal_fee_to_quote_ratio_err(*self.position_id),
+            err: illegal_fee_to_quote_ratio_err(*self.position_id),
         );
 
         // Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
@@ -93,7 +92,7 @@ pub impl OrderImpl of OrderTrait {
             d1: (*self.quote_amount).abs(),
             n2: actual_amount_base,
             d2: actual_amount_quote.abs(),
-            err: trade_illegal_base_to_quote_ratio_err(*self.position_id),
+            err: illegal_base_to_quote_ratio_err(*self.position_id),
         );
     }
 }

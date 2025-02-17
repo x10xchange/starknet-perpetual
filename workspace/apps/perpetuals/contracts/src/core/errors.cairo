@@ -6,17 +6,15 @@ pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
 pub const DIFFERENT_QUOTE_ASSET_IDS: felt252 = 'DIFFERENT_QUOTE_ASSET_IDS';
 pub const FEE_ASSET_AMOUNT_MISMATCH: felt252 = 'FEE_ASSET_AMOUNT_MISMATCH';
 pub const INSUFFICIENT_FUNDS: felt252 = 'INSUFFICIENT_FUNDS';
+pub const INVALID_ACTUAL_BASE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_BASE_SIGN';
+pub const INVALID_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_QUOTE_SIGN';
 pub const INVALID_DELEVERAGE_BASE_CHANGE: felt252 = 'INVALID_DELEVERAGE_BASE_CHANGE';
 pub const INVALID_FUNDING_TICK_LEN: felt252 = 'INVALID_FUNDING_TICK_LEN';
-pub const INVALID_NEGATIVE_FEE: felt252 = 'INVALID_NEGATIVE_FEE';
 pub const INVALID_NON_SYNTHETIC_ASSET: felt252 = 'INVALID_NON_SYNTHETIC_ASSET';
 pub const INVALID_OWNER_SIGNATURE: felt252 = 'INVALID_ACCOUNT_OWNER_SIGNATURE';
-pub const INVALID_TRADE_ACTUAL_BASE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_BASE_SIGN';
-pub const INVALID_TRADE_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_QUOTE_SIGN';
-pub const INVALID_TRADE_SAME_POSITIONS: felt252 = 'INVALID_TRADE_SAME_POSITIONS';
-pub const INVALID_TRADE_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_QUOTE_AMOUNT_SIGN';
-pub const INVALID_TRADE_WRONG_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_WRONG_AMOUNT_SIGN';
-pub const INVALID_TRANSFER_AMOUNT: felt252 = 'INVALID_TRANSFER_AMOUNT';
+pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_QUOTE_AMOUNT_SIGN';
+pub const INVALID_SAME_POSITIONS: felt252 = 'INVALID_TRADE_SAME_POSITIONS';
+pub const INVALID_WRONG_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_WRONG_AMOUNT_SIGN';
 pub const INVALID_ZERO_AMOUNT: felt252 = 'INVALID_ZERO_AMOUNT';
 pub const POSITION_IS_NOT_DELEVERAGABLE: felt252 = 'POSITION_IS_NOT_DELEVERAGABLE';
 pub const POSITION_IS_NOT_FAIR_DELEVERAGE: felt252 = 'POSITION_IS_NOT_FAIR_DELEVERAGE';
@@ -30,6 +28,14 @@ pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)
 }
 
+pub fn illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
+    format!("ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?}", position_id)
+}
+
+pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
+    format!("ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
+}
+
 pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {
     format!("INVALID_FUNDING_RATE synthetic_id: {:?}", synthetic_id)
 }
@@ -40,12 +46,4 @@ pub fn order_expired_err(position_id: PositionId) -> ByteArray {
 
 pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
     format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
-}
-
-pub fn trade_illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
-    format!("TRADE_ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?}", position_id)
-}
-
-pub fn trade_illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
-    format!("TRADE_ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }

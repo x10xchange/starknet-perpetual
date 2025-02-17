@@ -1855,7 +1855,7 @@ fn test_successful_transfer() {
 }
 
 #[test]
-#[should_panic(expected: 'INVALID_TRANSFER_AMOUNT')]
+#[should_panic(expected: 'INVALID_ZERO_AMOUNT')]
 fn test_invalid_transfer_request_amount_is_zero() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
