@@ -90,15 +90,15 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
 
 
 pub fn evaluate_position_change(
-    position: PositionData, position_diff: PositionDiff,
+    position_data: PositionData, position_diff: PositionDiff,
 ) -> PositionChangeResult {
-    let tvtr = calculate_position_tvtr_change(position, position_diff);
+    let tvtr = calculate_position_tvtr_change(:position_data, :position_diff);
 
     let change_effects = if tvtr.before.total_risk != 0 && tvtr.after.total_risk != 0 {
         Option::Some(
             ChangeEffects {
-                is_healthier: is_healthier(tvtr.before, tvtr.after),
-                is_fair_deleverage: is_fair_deleverage(tvtr.before, tvtr.after),
+                is_healthier: is_healthier(before: tvtr.before, after: tvtr.after),
+                is_fair_deleverage: is_fair_deleverage(before: tvtr.before, after: tvtr.after),
             },
         )
     } else {
@@ -114,7 +114,7 @@ pub fn evaluate_position_change(
 pub fn validate_position_is_healthy_or_healthier(
     position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
 ) {
-    let position_change_result = evaluate_position_change(position_data, position_diff);
+    let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
     let position_is_healthier = if let Option::Some(change_effects) = position_change_result
         .change_effects {
@@ -133,7 +133,7 @@ pub fn validate_position_is_healthy_or_healthier(
 pub fn validate_liquidated_position(
     position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
 ) {
-    let position_change_result = evaluate_position_change(position_data, position_diff);
+    let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
     assert(
         position_change_result.position_state_before_change == PositionState::Liquidatable
@@ -151,7 +151,7 @@ pub fn validate_liquidated_position(
 pub fn validate_deleveraged_position(
     position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
 ) {
-    let position_change_result = evaluate_position_change(position_data, position_diff);
+    let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
     assert(
         position_change_result.position_state_before_change == PositionState::Deleveragable,

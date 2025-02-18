@@ -1,10 +1,14 @@
 use contracts_commons::types::time::time::Timestamp;
 use contracts_commons::types::{PublicKey, Signature};
-use perpetuals::core::types::PositionId;
+use perpetuals::core::types::{PositionData, PositionId};
 use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IPositions<TContractState> {
+    fn get_position_data(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
     // Position Flows
     fn new_position(
         ref self: TContractState,

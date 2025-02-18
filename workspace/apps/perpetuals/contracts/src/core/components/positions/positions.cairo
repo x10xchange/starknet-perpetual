@@ -37,6 +37,7 @@ pub(crate) mod Positions {
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId};
+    use perpetuals::core::value_risk_calculator::{PositionState, evaluate_position_change};
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -87,6 +88,43 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
+        /// This function is mostly used as view function - it's better to use the
+        /// `evaluate_position_change` function as it gives all the information needed at the same
+        /// cost.
+        fn is_healthy(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
+            let position_state = self._get_position_state(:position_id);
+            position_state == PositionState::Healthy
+        }
+
+        /// This function is mostly used as view function - it's better to use the
+        /// `evaluate_position_change` function as it gives all the information needed at the same
+        /// cost.
+        fn is_liquidatable(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
+            let position_state = self._get_position_state(:position_id);
+            position_state == PositionState::Liquidatable
+                || position_state == PositionState::Deleveragable
+        }
+
+        /// This function is mostly used as view function - it's better to use the
+        /// `evaluate_position_change` function as it gives all the information needed at the same
+        /// cost.
+        fn is_deleveragable(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> bool {
+            let position_state = self._get_position_state(:position_id);
+            position_state == PositionState::Deleveragable
+        }
+
+        fn get_position_data(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> PositionData {
+            let mut position_data = array![];
+            self._validate_position_exists(:position_id);
+            self._collect_position_collaterals(ref :position_data, :position_id);
+            self._collect_position_synthetics(ref :position_data, :position_id);
+            position_data.span()
+        }
+
         /// Adds a new position to the system.
         ///
         /// Validations:
@@ -321,16 +359,6 @@ pub(crate) mod Positions {
             self._get_position_const(:position_id)
         }
 
-        fn get_position_data(
-            self: @ComponentState<TContractState>, position_id: PositionId,
-        ) -> PositionData {
-            let mut position_data = array![];
-            self._validate_position_exists(:position_id);
-            self._collect_position_collaterals(ref :position_data, :position_id);
-            self._collect_position_synthetics(ref :position_data, :position_id);
-            position_data.span()
-        }
-
         /// Returns the position at the given `position_id`.
         /// The function asserts that the position exists and has a non-zero owner public key.
         fn get_position_mut(
@@ -373,7 +401,7 @@ pub(crate) mod Positions {
     }
 
     #[generate_trait]
-    pub impl PrivateImpl<
+    impl PrivateImpl<
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
@@ -571,6 +599,17 @@ pub(crate) mod Positions {
             let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             synthetic_asset.balance.write(balance);
             synthetic_asset.funding_index.write(curr_funding_index);
+        }
+
+        fn _get_position_state(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> PositionState {
+            let position_data = self.get_position_data(:position_id);
+
+            let position_change_result = evaluate_position_change(
+                :position_data, position_diff: array![].span(),
+            );
+            position_change_result.position_state_after_change
         }
     }
 }

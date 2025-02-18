@@ -174,6 +174,10 @@ classDiagram
     }
     class Positions{
         positions: Map< PositionId, Position>
+        get_position_data() -> PositionData
+        is_deleveragable() -> bool
+        is_healthy() -> bool
+        is_liquidatable() -> bool
         new_position()
         set_owner_account()
         set_public_key_request()
@@ -1384,6 +1388,10 @@ In charge of all position-related.
 ```rust
 #[starknet::interface]
 pub trait IPositions<TContractState> {
+    fn get_position_data(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
     // Position Flows
     fn new_position(
         ref self: TContractState,
