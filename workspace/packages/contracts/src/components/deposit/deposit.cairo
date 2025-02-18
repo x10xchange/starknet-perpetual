@@ -19,8 +19,9 @@ pub(crate) mod Deposit {
         registered_deposits: Map<HashType, DepositStatus>,
         // aggregate_pending_deposit is in unquantized amount
         pub aggregate_pending_deposit: Map<felt252, u128>,
+        // asset_id -> (ContractAddress, quantum)
         pub asset_info: Map<felt252, (ContractAddress, u64)>,
-        pub deposit_grace_period: TimeDelta,
+        deposit_grace_period: TimeDelta,
     }
 
     #[event]
@@ -62,13 +63,13 @@ pub(crate) mod Deposit {
                     signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
                 );
             assert(
-                self.get_deposit_status(:deposit_hash) == DepositStatus::NOT_EXIST,
+                self._get_deposit_status(:deposit_hash) == DepositStatus::NOT_EXIST,
                 errors::DEPOSIT_ALREADY_REGISTERED,
             );
             self
                 .registered_deposits
                 .write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));
-            let (token_address, quantum) = self.get_asset_info(:asset_id);
+            let (token_address, quantum) = self._get_asset_info(:asset_id);
             let unquantized_amount = quantized_amount * quantum.into();
             self.aggregate_pending_deposit.entry(asset_id).add_and_write(unquantized_amount);
 
@@ -119,7 +120,7 @@ pub(crate) mod Deposit {
                 );
 
             // Validations
-            match self.get_deposit_status(:deposit_hash) {
+            match self._get_deposit_status(:deposit_hash) {
                 DepositStatus::PENDING(deposit_timestamp) => assert(
                     deposit_timestamp.add(self.deposit_grace_period.read()) < Time::now(),
                     errors::DEPOSIT_NOT_CANCELABLE,
@@ -131,7 +132,7 @@ pub(crate) mod Deposit {
 
             self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED);
             self.aggregate_pending_deposit.entry(asset_id).sub_and_write(quantized_amount);
-            let (token_address, quantum) = self.get_asset_info(:asset_id);
+            let (token_address, quantum) = self._get_asset_info(:asset_id);
 
             let token_contract = IERC20Dispatcher { contract_address: token_address };
             let unquantized_amount = quantized_amount * quantum.into();
@@ -172,6 +173,8 @@ pub(crate) mod Deposit {
             self.deposit_grace_period.write(deposit_grace_period);
         }
 
+        /// Each `asset_id` can be registered only once.
+        /// Same `token_address` and `quantum` can be shared by different asset_id.
         fn register_token(
             ref self: ComponentState<TContractState>,
             asset_id: felt252,
@@ -180,6 +183,8 @@ pub(crate) mod Deposit {
         ) {
             let (_token_address, _) = self.asset_info.read(asset_id);
             assert(_token_address.is_zero(), errors::ASSET_ALREADY_REGISTERED);
+            assert(token_address.is_non_zero(), errors::INVALID_ZERO_TOKEN_ADDRESS);
+            assert(quantum.is_non_zero(), errors::INVALID_ZERO_QUANTUM);
             self.asset_info.write(key: asset_id, value: (token_address, quantum));
         }
 
