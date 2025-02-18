@@ -2,7 +2,7 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::constants::{MAX_U32, TWO_POW_128, TWO_POW_32};
+    use contracts_commons::constants::{MAX_U32, MINUTE, TWO_POW_128, TWO_POW_32};
     use contracts_commons::math::abs::Abs;
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
@@ -15,12 +15,12 @@ pub mod AssetsComponent {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
-        COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED,
-        FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS,
+        COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET,
+        FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
+        INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
+        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
     };
 
     use perpetuals::core::components::assets::events;
@@ -628,6 +628,7 @@ pub mod AssetsComponent {
             signed_prices: Span<SignedPrice>,
         ) {
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
+            assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
             assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
 
             let mut min_timestamp = MAX_U32;
@@ -660,9 +661,13 @@ pub mod AssetsComponent {
             assert(2 * (higher_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
             let now: u64 = Time::now().into();
             let max_oracle_price_validity = self.max_oracle_price_validity.read();
-            let from: u64 = now - max_oracle_price_validity.into();
+            let from = now - max_oracle_price_validity.into();
+            // Add 2 minutes to allow timestamps that were signed after the block timestamp as the
+            // timestamp is the open block timestamp and there could be a scenario where the oracle
+            // signed the price after the block was opened and still got into the block.
+            let to = now + 2 * MINUTE;
             assert(
-                from <= min_timestamp.into() && min_timestamp.into() < now, INVALID_PRICE_TIMESTAMP,
+                from <= min_timestamp.into() && min_timestamp.into() < to, INVALID_PRICE_TIMESTAMP,
             );
         }
     }
