@@ -479,7 +479,7 @@ fn test_successful_withdraw() {
     // Setup parameters:
     let expiration = Time::now().add(Time::days(1));
 
-    let mut withdraw_args = WithdrawArgs {
+    let withdraw_args = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -555,7 +555,7 @@ fn test_successful_deposit() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let mut user = Default::default();
+    let user = Default::default();
     let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -626,7 +626,7 @@ fn test_deposit_already_registered() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let mut user = Default::default();
+    let user = Default::default();
     let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
 
@@ -1009,10 +1009,10 @@ fn test_successful_trade() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let mut user_a = Default::default();
+    let user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
 
-    let mut user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
@@ -1021,8 +1021,7 @@ fn test_successful_trade() {
     let FEE = 1;
 
     // Setup parameters:
-    let mut expiration = Time::now();
-    expiration += Time::days(1);
+    let expiration = Time::now().add(delta: Time::days(1));
 
     let collateral_id = cfg.collateral_cfg.collateral_id;
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
@@ -1136,10 +1135,10 @@ fn test_invalid_trade_same_base_signs() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let mut user_a = Default::default();
+    let user_a = Default::default();
     init_position(cfg: @cfg, ref :state, user: user_a);
 
-    let mut user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let user_b = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: user_b);
 
     // Test params:
@@ -1148,8 +1147,7 @@ fn test_invalid_trade_same_base_signs() {
     let FEE = 1;
 
     // Setup parameters:
-    let mut expiration = Time::now();
-    expiration += Time::days(1);
+    let expiration = Time::now().add(delta: Time::days(1));
 
     let collateral_id = cfg.collateral_cfg.collateral_id;
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
@@ -1205,7 +1203,7 @@ fn test_successful_withdraw_request_with_public_key() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
+    let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
@@ -1215,7 +1213,7 @@ fn test_successful_withdraw_request_with_public_key() {
     );
     let expiration = Time::now().add(delta: Time::days(1));
 
-    let mut withdraw_args = WithdrawArgs {
+    let withdraw_args = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         expiration,
@@ -1250,7 +1248,7 @@ fn test_successful_withdraw_request_with_owner() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
+    let user = Default::default();
     init_position_with_owner(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
@@ -1260,7 +1258,7 @@ fn test_successful_withdraw_request_with_owner() {
     );
     let expiration = Time::now().add(delta: Time::days(1));
 
-    let mut withdraw_args = WithdrawArgs {
+    let withdraw_args = WithdrawArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         recipient: recipient.address,
@@ -1464,9 +1462,9 @@ fn test_successful_liquidate() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let mut liquidator = Default::default();
+    let liquidator = Default::default();
     init_position(cfg: @cfg, ref :state, user: liquidator);
-    let mut liquidated = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let liquidated = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: liquidated);
     add_synthetic_to_position(
         ref :state,
@@ -1482,8 +1480,7 @@ fn test_successful_liquidate() {
     let FEE = 2;
 
     // Setup parameters:
-    let mut expiration = Time::now();
-    expiration += Time::days(1);
+    let expiration = Time::now().add(delta: Time::days(1));
     let operator_nonce = state.nonce();
 
     let collateral_id = cfg.collateral_cfg.collateral_id;
@@ -1592,6 +1589,8 @@ fn test_successful_liquidate() {
     assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
 }
 
+// Test set public key.
+
 #[test]
 fn test_successful_set_public_key_request() {
     // Setup state, token and user:
@@ -1611,7 +1610,7 @@ fn test_successful_set_public_key_request() {
 
     // Test change public key in perps:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    let mut set_public_key_args = SetPublicKeyArgs {
+    let set_public_key_args = SetPublicKeyArgs {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
@@ -1650,7 +1649,7 @@ fn test_successful_set_public_key() {
     assert_eq!(user.get_public_key(), new_key_pair.public_key);
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    let mut set_public_key_args = SetPublicKeyArgs {
+    let set_public_key_args = SetPublicKeyArgs {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
@@ -1704,7 +1703,7 @@ fn test_successful_set_public_key() {
 
 #[test]
 #[should_panic(expected: 'REQUEST_NOT_REGISTERED')]
-fn test_successful_set_public_key_no_request() {
+fn test_set_public_key_no_request() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -1718,9 +1717,8 @@ fn test_successful_set_public_key_no_request() {
     let old_public_key = user.get_public_key();
     let new_key_pair = KEY_PAIR_2();
     user.set_public_key(new_key_pair);
-    assert_eq!(user.get_public_key(), new_key_pair.public_key);
 
-    let mut set_public_key_args = SetPublicKeyArgs {
+    let set_public_key_args = SetPublicKeyArgs {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
@@ -1736,6 +1734,74 @@ fn test_successful_set_public_key_no_request() {
         );
 }
 
+#[test]
+#[should_panic(expected: 'CALLER_IS_NOT_OWNER_ACCOUNT')]
+fn test_invalid_set_public_key_request_wrong_owner() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let no_position_owner = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, user: no_position_owner);
+    let position_owner = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position_with_owner(cfg: @cfg, ref :state, user: position_owner);
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+
+    // Test change public key in perps:
+    let set_public_key_args = SetPublicKeyArgs {
+        position_id: position_owner.position_id,
+        old_public_key: position_owner.get_public_key(),
+        new_public_key: no_position_owner.get_public_key(),
+        expiration,
+    };
+    let msg_hash = set_public_key_args
+        .get_message_hash(public_key: no_position_owner.get_public_key());
+    let signature = no_position_owner.sign_message(message: msg_hash);
+    cheat_caller_address_once(
+        contract_address: test_address(), caller_address: no_position_owner.address,
+    );
+    state
+        .set_public_key_request(
+            :signature,
+            position_id: set_public_key_args.position_id,
+            new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_POSITION')]
+fn test_set_public_key_request_position_not_exist() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+
+    // Setup parameters:
+    let expiration = Time::now().add(delta: Time::days(1));
+    let set_public_key_args = SetPublicKeyArgs {
+        position_id: user.position_id,
+        old_public_key: KEY_PAIR_2().public_key,
+        new_public_key: user.get_public_key(),
+        expiration,
+    };
+
+    // Test change public key in perps:
+    let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(message: msg_hash);
+
+    state
+        .set_public_key_request(
+            :signature,
+            position_id: set_public_key_args.position_id,
+            new_public_key: set_public_key_args.new_public_key,
+            expiration: set_public_key_args.expiration,
+        );
+}
+
 // Transfer tests.
 
 #[test]
@@ -1744,16 +1810,16 @@ fn test_successful_transfer_request_using_public_key() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
+    let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
     let expiration = expected_time.add(delta: Time::days(1));
 
-    let mut transfer_args = TransferArgs {
+    let transfer_args = TransferArgs {
         position_id: user.position_id,
         salt: user.salt_counter,
         recipient: recipient.position_id,
@@ -1788,8 +1854,8 @@ fn test_successful_transfer_request_with_owner() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let mut user = Default::default();
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let user = Default::default();
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position_with_owner(cfg: @cfg, ref :state, :user);
 
     // Setup parameters:
@@ -1797,7 +1863,7 @@ fn test_successful_transfer_request_with_owner() {
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
     let expiration = expected_time.add(delta: Time::days(1));
 
-    let mut transfer_args = TransferArgs {
+    let transfer_args = TransferArgs {
         position_id: user.position_id,
         recipient: recipient.position_id,
         salt: user.salt_counter,
@@ -1833,10 +1899,10 @@ fn test_successful_transfer() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let mut sender = Default::default();
+    let sender = Default::default();
     init_position(cfg: @cfg, ref :state, user: sender);
 
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: recipient);
 
     // Setup parameters:
@@ -1925,10 +1991,10 @@ fn test_invalid_transfer_request_amount_is_zero() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let mut sender = Default::default();
+    let sender = Default::default();
     init_position(cfg: @cfg, ref :state, user: sender);
 
-    let mut recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position(cfg: @cfg, ref :state, user: recipient);
 
     // Setup parameters:
