@@ -818,7 +818,7 @@ pub mod Core {
         ///     - Sets the `last_price_update` to zero.
         ///     - Sets the risk factor to zero.
         ///     - Sets the quorum to zero.
-        /// - Registers the token to depositis component.
+        /// - Registers the token to deposits component.
         fn register_collateral(
             ref self: ContractState,
             asset_id: AssetId,

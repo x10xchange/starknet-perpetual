@@ -198,7 +198,7 @@ classDiagram
 
         add_oracle_to_asset()
         add_synthetic_asset()
-        deactivate_synthetic
+        deactivate_synthetic()
         get_collateral_config()
         get_funding_validation_interval()
         get_last_funding_tick()
@@ -411,14 +411,15 @@ pub struct ChangeEffects {
 
 ### Is Healthier
 
-1. $ ( \frac{TV}{TR} )\_{new}\leq(\frac{TV}{TR})\_{old} $
-
+$$ ( \frac{TV}{TR} )\_{new}\leq(\frac{TV}{TR})\_{old} $$
+   
    **AND**  
-2. $TR_{new}<TR_{old}$
+
+$$ TR_{new}<TR_{old} $$
 
 ### Is Fair Deleverage
 
-1. $ \frac{TV\_{new}-1USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}{TR}\_{new} $
+$$ \frac{TV\_{new}-1USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}{TR}\_{new} $$
 
 Deleveragerer should be [healthy](#healthy) or [healthier](#is-healthier).  
 Deleveragree should be ([healthy](#healthy) or [healthier](#is-healthier)) **and** [is fair deleverage](#is-fair-deleverage)
@@ -3206,27 +3207,23 @@ Only the Operator can execute.
 
 1. For each `price_tick` in `price_ticks`:  
    1. Validate stark signature on:  
-      `pedersen(`  
-      `oracles[price_ticks[i].signer_public_key],`  
-      `0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits)`  
-      `)`  
-2.   
-3. `median_price =` price\*228asset\_id.resolution\_factor\*1012  
-4. `Self.synthetic_timely_data[asset_id].price = media_price`
+      `pedersen(oracles[price_ticks[i].signer_public_key],0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits))`  
+2. $ median\_price = \frac {price*2^{28}}{asset\_id.resolution\_factor*10^{12}}  $
+3. `self.synthetic_timely_data[asset_id].price = media_price`
 
    Explanation: Oracles sign prices in the same format as StarkEx \- they sign proces of major unit with 18 decimals precision. So to ge the asset price of 1 Starknet unit of synthetic asset:
 
-   SN\_asset\_price=oracle\_asset\_price\* 228resolution\_factor\*1012
+   $ SN\_asset\_price = \frac {oracle\_asset\_price * 2^{28}} {resolution\_factor * 10^{12}} $
 
-   228: price has 28bit precision
+   $ 2^{28}:\ price\ has\ 28-bit\ precision $
 
-   1012: converting 18 decimals to 6 USDC decimals
+   $ 10^{12}:\ converting\ 18\ decimals\ to\ 6\ USDC\ decimals $
 
-5. `self.synthetic_timely_data[asset_id].last_price_update = Time::now()`  
-6. `Activate uninitialized assets - if asset_id is not active:`  
-   1. `Set asset_id status = AssetStatus::ACTIVATED`  
-   2. `update num_of_active_synthetic_asset+=1`  
-   3. `Emit AssetActivated`
+4. `self.synthetic_timely_data[asset_id].last_price_update = Time::now()`  
+5. if asset_id is not active:
+   1. Set asset_id status = AssetStatus::ACTIVATED
+   2. num_of_active_synthetic_asset+=1
+   3. Emit AssetActivated
 
 #### Emits
 
@@ -3385,8 +3382,8 @@ Only the App governor can execute.
 
 #### Logic 
 
-1. set synthetic\_config\[asset\_id\].status=AssetStatus::DEACTIVATED  
-2. Num\_of\_active\_synthetic\_assets \-= 1
+1. `synthetic_config[asset_id].status=AssetStatus::DEACTIVATED`
+2. `num_of_active_synthetic_assets -= 1`
 
 #### Emits
 
