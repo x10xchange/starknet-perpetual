@@ -4,6 +4,8 @@
     <summary><strong style="font-size: 1.5em;">Table of contents</strong></summary>
 
 - # Table of contents
+- [Diagrams](#diagrams)
+    - [L2 Contracts block diagram](#l2-contracts-block-diagram)
 - [Core contract](#core-contract)
     - [Value risk calculator](#value-risk-calculator)
         - [Total Value (TV) and Total Risk (TR)](#total-value-\(tv\)-and-total-risk-\(tr\))
@@ -127,6 +129,217 @@
         - [Add Synthetic](#add-synthetic)
         - [Deactivate Synthetic](#deactivate-synthetic)
 </details>
+
+# Diagrams
+
+## L2 Contracts block diagram
+
+# Diagrams
+## L2 Contracts block diagram
+```mermaid
+classDiagram
+    class CoreContract{
+        fulfillment: Map< HashType, u64>
+        accesscontrol: Component
+        nonce: Component
+        pausable: Component
+        replaceability: Component
+        roles: Component
+        src5: Component
+        assets: Component
+        deposits: Component
+        request_approvals: Component
+        positions: Component
+
+        process_deposit()
+        withdraw_request()
+        withdraw()
+        transfer_request()
+        transfer()
+        trade()
+        liquidate()
+        deleverage()
+        register_collateral()
+        funding_tick()
+        price_tick()
+    }
+    class Position{
+        version: u8
+        owner_account: ContractAddress
+        owner_public_key: PublicKey
+        collateral_assets_head: Option< AssetId>
+        collateral_assets: Map< AssetId, CollateralAsset>
+        synthetic_assets_head: Option< AssetId>
+        synthetic_assets: Map< AssetId, SyntheticAsset>
+    }
+    class Positions{
+        positions: Map< PositionId, Position>
+        new_position()
+        set_owner_account()
+        set_public_key_request()
+        set_public_key()
+    }
+    class Assets{
+        max_funding_rate: u32
+        max_price_interval: TimeDelta
+        max_funding_interval: TimeDelta
+        last_price_validation: Timestamp
+        last_funding_tick: Timestamp
+        collateral_config: Map< AssetId, Option[CollateralConfig]>
+        synthetic_config: Map< AssetId, Option[SyntheticConfig]>
+        collateral_timely_data_head: Option[AssetId]
+        collateral_timely_data: Map <AssetId, CollateralTimelyData>
+        num_of_active_synthetic_assets: usize
+        synthetic_timely_data_head: Option[AssetId]
+        synthetic_timely_data: Map< AssetId, SyntheticTimelyData>
+        risk_factor_tiers: Map< AssetId, Vec[FixedTwoDecimal]>
+        oracles: Map< AssetId, Map[PublicKey, felt252]>
+        max_oracle_price_validity: TimeDelta
+
+        add_oracle_to_asset()
+        add_synthetic_asset()
+        deactivate_synthetic
+        get_collateral_config()
+        get_funding_validation_interval()
+        get_last_funding_tick()
+        get_last_price_validation()
+        get_max_funding_rate()
+        get_max_oracle_price_validity()
+        get_num_of_active_synthetic_assets()
+        get_price_validation_interval()
+        get_synthetic_config()
+        get_synthetic_timely_data()
+        get_risk_factor_tiers()
+        remove_oracle_from_asset()
+        update_synthetic_quorum()
+    }
+    class Deposit{
+        registered_deposits: Map< HashType, DepositStatus>
+        aggregate_pending_deposit: Map< felt252, u128>
+        asset_info: Map< felt252, [ContractAddress, u64]>
+        deposit_grace_period: TimeDelta
+
+        deposit()
+        cancel_deposit()
+        get_deposit_status()
+        get_asset_info()
+    }
+    class Requests{
+        approved_requests: Map< HashType, RequestStatus>
+
+        get_request_status()
+    }
+    class Nonce{
+        nonce: u64
+
+        nonce()
+    }
+    class Pausable{
+        paused: bool
+
+        is_paused() -> bool
+        pause()
+        unpause()
+    }
+    class ReplaceabilityComponent {
+        upgrade_delay: u64
+        impl_activation_time: Map< felt252, u64>
+        impl_expiration_time: Map< felt252, u64>
+        finalized: bool
+
+        get_upgrade_delay() -> u64
+        get_impl_activation_time() -> u64
+        add_new_implementation()
+        remove_implementation()
+        replace_to()
+    }
+    class Roles{
+        is_app_governor() -> bool
+        is_app_role_admin() -> bool
+        is_governance_admin() -> bool
+        is_operator() -> bool
+        is_token_admin() -> bool
+        is_upgrade_governor() -> bool
+        is_security_admin() -> bool
+        is_security_agent() -> bool
+        register_app_governor()
+        remove_app_governor()
+        register_app_role_admin()
+        remove_app_role_admin()
+        register_governance_admin()
+        remove_governance_admin()
+        register_operator()
+        remove_operator()
+        register_token_admin()
+        remove_token_admin()
+        register_upgrade_governor()
+        remove_upgrade_governor()
+        renounce()
+        register_security_admin()
+        remove_security_admin()
+        register_security_agent()
+        remove_security_agent()
+    }
+    class CollateralAsset {
+        version: u8,
+        balance: Balance
+        next: Option<AssetId>
+    }
+    class SyntheticAsset{
+        version: u8
+        balance: Balance
+        funding_index: FundingIndex
+        next: Option<AssetId>
+    }
+
+    class CollateralConfig{
+        version: u8
+        token_address: ContractAddress
+        status: AssetStatus
+        risk_factor: FixedTwoDecimal
+        quantum: u64
+        quorum: u8
+    }
+    class SyntheticConfig{
+        version: u8
+        status: AssetStatus
+        risk_factor_first_tier_boundary: u128
+        risk_factor_tier_size: u128
+        quorum: u8
+        resolution: u64
+    }
+    class CollateralTimelyData{
+        version: u8
+        price: Price
+        last_price_update: Timestamp
+        next: Option<AssetId>
+
+    }
+    class SyntheticTimelyData{
+        version: u8
+        price: Price
+        last_price_update: Timestamp
+        funding_index: FundingIndex
+        next: Option<AssetId>
+
+    }
+
+    CoreContract o-- Positions
+    CoreContract o-- Assets
+    CoreContract o-- Deposit
+    CoreContract o-- Requests
+    CoreContract o-- Nonce
+    CoreContract o-- Pausable
+    CoreContract o-- Roles
+    CoreContract o-- ReplaceabilityComponent
+    Assets o-- CollateralConfig
+    Assets o-- SyntheticConfig
+    Assets o-- CollateralTimelyData
+    Assets o-- SyntheticTimelyData
+    Positions o-- Position
+    Position o-- CollateralAsset
+    Position o-- SyntheticAsset
+```
 
 # Core contract
 

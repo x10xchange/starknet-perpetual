@@ -2,13 +2,13 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::constants::{TWO_POW_128, TWO_POW_32};
+    use contracts_commons::constants::{MAX_U32, TWO_POW_128, TWO_POW_32};
     use contracts_commons::math::Abs;
-    use contracts_commons::span_utils::{check_range, validate_median};
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use contracts_commons::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
+    use core::cmp::min;
     use core::num::traits::{One, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -16,10 +16,11 @@ pub mod AssetsComponent {
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, FUNDING_EXPIRED,
-        FUNDING_TICKS_NOT_SORTED, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM,
-        NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
-        ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
+        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
+        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS,
     };
 
     use perpetuals::core::components::assets::events;
@@ -629,13 +630,22 @@ pub mod AssetsComponent {
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
             assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
 
-            let mut prices: Array<u128> = array![];
-            let mut timestamps: Array<u64> = array![];
+            let mut min_timestamp = MAX_U32;
+            let mut lower_amount: usize = 0;
+            let mut higher_amount: usize = 0;
+            let mut equal_amount: usize = 0;
 
             let mut previous_public_key_opt: Option<PublicKey> = Option::None;
             for signed_price in signed_prices {
-                prices.append(*signed_price.price);
-                timestamps.append((*signed_price).timestamp.into());
+                if *signed_price.price < price {
+                    lower_amount += 1;
+                } else if *signed_price.price > price {
+                    higher_amount += 1;
+                } else {
+                    equal_amount += 1;
+                }
+
+                min_timestamp = min(min_timestamp, (*signed_price).timestamp);
                 self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
 
                 if let Option::Some(previous_public_key) = previous_public_key_opt {
@@ -646,14 +656,13 @@ pub mod AssetsComponent {
                 previous_public_key_opt = Option::Some((*signed_price.signer_public_key));
             };
 
-            validate_median(median: price, span: prices.span());
+            assert(2 * (lower_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
+            assert(2 * (higher_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
             let now: u64 = Time::now().into();
             let max_oracle_price_validity = self.max_oracle_price_validity.read();
+            let from: u64 = now - max_oracle_price_validity.into();
             assert(
-                check_range(
-                    from: now - max_oracle_price_validity.into(), to: now, span: timestamps.span(),
-                ),
-                INVALID_PRICE_TIMESTAMP,
+                from <= min_timestamp.into() && min_timestamp.into() < now, INVALID_PRICE_TIMESTAMP,
             );
         }
     }

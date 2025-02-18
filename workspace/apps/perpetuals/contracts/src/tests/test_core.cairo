@@ -2458,7 +2458,9 @@ fn test_price_tick_golden() {
         timestamp,
         price,
     };
-    start_cheat_block_timestamp_global(block_timestamp: Timestamp { seconds: 1737451976 }.into());
+    start_cheat_block_timestamp_global(
+        block_timestamp: Timestamp { seconds: timestamp.into() + 1 }.into(),
+    );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let operator_nonce = state.nonce();
     state
