@@ -2,7 +2,7 @@ use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit}
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::{MAX_U128, TEN_POW_15};
+use contracts_commons::constants::{MAX_U128, TEN_POW_15, TWO_POW_32};
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, Timestamp};
@@ -17,6 +17,7 @@ use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::asset::AssetIdTrait;
 use perpetuals::core::types::asset::status::AssetStatus;
+use perpetuals::core::types::funding::{FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
@@ -29,13 +30,14 @@ use perpetuals::tests::event_test_utils::{
     assert_asset_activated_event_with_expected,
     assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_liquidate_event_with_expected,
-    assert_new_position_event_with_expected, assert_price_tick_event_with_expected,
-    assert_register_collateral_event_with_expected, assert_remove_oracle_event_with_expected,
-    assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
-    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_funding_tick_event_with_expected,
+    assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
+    assert_price_tick_event_with_expected, assert_register_collateral_event_with_expected,
+    assert_remove_oracle_event_with_expected, assert_set_owner_account_event_with_expected,
+    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -2109,6 +2111,101 @@ fn test_validate_prices_no_update_needed() {
         );
 
     assert_eq!(state.assets.last_price_validation.read(), old_time);
+}
+
+// `funding_tick` tests.
+
+#[test]
+fn test_funding_tick_basic() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let new_time = Time::now().add(Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    // Funding index is 12.
+    let new_funding_index = FundingIndex { value: 12 * TWO_POW_32.try_into().unwrap() };
+    let funding_ticks: Span<FundingTick> = array![
+        FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
+    ]
+        .span();
+
+    // Test:
+
+    // The funding index must be within the max funding rate:
+    // |prev_funding_index-new_funding_index| = |0 - 12| = 12.
+    // synthetic_price * max_funding_rate * time_diff = 100 * 12% per day * 1 day = 12.
+    // 12 <= 12.
+    let mut spy = snforge_std::spy_events();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_funding_tick_event_with_expected(
+        spied_event: events[0], asset_id: synthetic_id, funding_index: new_funding_index,
+    );
+
+    // Check:
+    assert_eq!(
+        state.assets.synthetic_timely_data.entry(synthetic_id).funding_index.read(),
+        new_funding_index,
+    );
+}
+
+#[test]
+#[should_panic(
+    expected: "INVALID_FUNDING_RATE synthetic_id: AssetId { value: 720515315941943725751128480342703114962297896757142150278960020243082094068 }",
+)]
+fn test_invalid_funding_rate() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let new_time = Time::now().add(Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    // Funding index is 13.
+    let new_funding_index = FundingIndex { value: 13 * TWO_POW_32.try_into().unwrap() };
+    let funding_ticks: Span<FundingTick> = array![
+        FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
+    ]
+        .span();
+
+    // Test:
+
+    // The funding index must be within the max funding rate:
+    // |prev_funding_index-new_funding_index| = |0 - 13| = 13.
+    // synthetic_price * max_funding_rate * time_diff = 100 * 13% per day * 1 day = 13.
+    // 13 > 12.
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_FUNDING_TICK_LEN')]
+fn test_invalid_funding_len() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    let new_time = Time::now().add(Time::seconds(10));
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+
+    let new_funding_index_1 = FundingIndex { value: 100 * TWO_POW_32.try_into().unwrap() };
+    let new_funding_index_2 = FundingIndex { value: 3 * TWO_POW_32.try_into().unwrap() };
+    let funding_ticks: Span<FundingTick> = array![
+        FundingTick { asset_id: SYNTHETIC_ASSET_ID_1(), funding_index: new_funding_index_1 },
+        FundingTick { asset_id: SYNTHETIC_ASSET_ID_2(), funding_index: new_funding_index_2 },
+    ]
+        .span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
 }
 
 // `price_tick` tests.
