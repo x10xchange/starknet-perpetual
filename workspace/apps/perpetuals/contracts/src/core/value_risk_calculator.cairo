@@ -136,7 +136,8 @@ pub fn validate_liquidated_position(
     let position_change_result = evaluate_position_change(position_data, position_diff);
 
     assert(
-        position_change_result.position_state_before_change == PositionState::Liquidatable,
+        position_change_result.position_state_before_change == PositionState::Liquidatable
+            || position_change_result.position_state_before_change == PositionState::Deleveragable,
         POSITION_IS_NOT_LIQUIDATABLE,
     );
 
