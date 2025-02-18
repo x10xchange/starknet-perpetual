@@ -41,8 +41,9 @@ use perpetuals::tests::event_test_utils::{
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
-    check_synthetic_asset, init_position, init_position_with_owner, initialized_contract_state,
-    set_roles, setup_state_with_active_asset, setup_state_with_pending_asset, validate_balance,
+    check_synthetic_asset, deposit_hash, init_position, init_position_with_owner,
+    initialized_contract_state, set_roles, setup_state_with_active_asset,
+    setup_state_with_pending_asset, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -573,13 +574,20 @@ fn test_successful_deposit() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    let deposit_hash = state
+    state
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+    let deposit_hash = deposit_hash(
+        signer: user.address,
+        beneficiary: user.position_id.value,
+        asset_id: collateral_cfg_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
@@ -669,13 +677,20 @@ fn test_successful_process_deposit() {
     );
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    let deposit_hash = state
+    state
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+    let deposit_hash = deposit_hash(
+        signer: user.address,
+        beneficiary: user.position_id.value,
+        asset_id: collateral_cfg_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
     let mut spy = snforge_std::spy_events();
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -727,13 +742,20 @@ fn test_successful_cancel_deposit() {
         block_timestamp: Time::now().add(delta: Time::days(1)).into(),
     );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
-    let deposit_hash = state
+    state
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
+    let deposit_hash = deposit_hash(
+        signer: user.address,
+        beneficiary: user.position_id.value,
+        asset_id: collateral_cfg_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
     let mut spy = snforge_std::spy_events();
 
     // Check before cancel deposit:

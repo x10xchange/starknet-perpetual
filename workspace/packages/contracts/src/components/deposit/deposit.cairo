@@ -55,13 +55,12 @@ pub(crate) mod Deposit {
             asset_id: felt252,
             quantized_amount: u128,
             salt: felt252,
-        ) -> HashType {
+        ) {
             assert(quantized_amount > 0, errors::ZERO_AMOUNT);
             let caller_address = get_caller_address();
-            let deposit_hash = self
-                .deposit_hash(
-                    signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
-                );
+            let deposit_hash = deposit_hash(
+                signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
+            );
             assert(
                 self._get_deposit_status(:deposit_hash) == DepositStatus::NOT_EXIST,
                 errors::DEPOSIT_ALREADY_REGISTERED,
@@ -91,7 +90,6 @@ pub(crate) mod Deposit {
                         deposit_request_hash: deposit_hash,
                     },
                 );
-            deposit_hash
         }
 
         /// Cancel deposit is called by the user to cancel a deposit request which did not take
@@ -114,10 +112,9 @@ pub(crate) mod Deposit {
             salt: felt252,
         ) {
             let caller_address = get_caller_address();
-            let deposit_hash = self
-                .deposit_hash(
-                    signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
-                );
+            let deposit_hash = deposit_hash(
+                signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
+            );
 
             // Validations
             match self._get_deposit_status(:deposit_hash) {
@@ -195,10 +192,11 @@ pub(crate) mod Deposit {
             asset_id: felt252,
             quantized_amount: u128,
             salt: felt252,
-        ) -> HashType {
+        ) {
             assert(quantized_amount > 0, errors::ZERO_AMOUNT);
-            let deposit_hash = self
-                .deposit_hash(signer: depositor, :beneficiary, :asset_id, :quantized_amount, :salt);
+            let deposit_hash = deposit_hash(
+                signer: depositor, :beneficiary, :asset_id, :quantized_amount, :salt,
+            );
             let deposit_status = self._get_deposit_status(:deposit_hash);
             match deposit_status {
                 DepositStatus::NOT_EXIST => { panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED) },
@@ -225,7 +223,6 @@ pub(crate) mod Deposit {
                         );
                 },
             };
-            deposit_hash
         }
     }
 
@@ -246,22 +243,22 @@ pub(crate) mod Deposit {
             assert(token_address.is_non_zero(), errors::ASSET_NOT_REGISTERED);
             (token_address, quantum)
         }
+    }
 
-        fn deposit_hash(
-            ref self: ComponentState<TContractState>,
-            signer: ContractAddress,
-            beneficiary: u32,
-            asset_id: felt252,
-            quantized_amount: u128,
-            salt: felt252,
-        ) -> HashType {
-            PoseidonTrait::new()
-                .update_with(value: signer)
-                .update_with(value: beneficiary)
-                .update_with(value: asset_id)
-                .update_with(value: quantized_amount)
-                .update_with(value: salt)
-                .finalize()
-        }
+    fn deposit_hash(
+        signer: ContractAddress,
+        beneficiary: u32,
+        asset_id: felt252,
+        quantized_amount: u128,
+        salt: felt252,
+    ) -> HashType {
+        PoseidonTrait::new()
+            .update_with(value: signer)
+            .update_with(value: beneficiary)
+            .update_with(value: asset_id)
+            .update_with(value: quantized_amount)
+            .update_with(value: salt)
+            .finalize()
     }
 }
+

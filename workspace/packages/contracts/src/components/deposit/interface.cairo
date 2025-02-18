@@ -12,7 +12,7 @@ pub trait IDeposit<TContractState> {
         asset_id: felt252,
         quantized_amount: u128,
         salt: felt252,
-    ) -> HashType;
+    );
     fn cancel_deposit(
         ref self: TContractState,
         beneficiary: u32,

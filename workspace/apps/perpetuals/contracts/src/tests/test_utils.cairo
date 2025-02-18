@@ -6,10 +6,10 @@ use contracts_commons::constants::TWO_POW_32;
 use contracts_commons::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use contracts_commons::types::Signature;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
 use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
+use contracts_commons::types::{HashType, Signature};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -499,4 +499,20 @@ pub fn check_synthetic_asset(
 pub fn validate_balance(token_state: TokenState, address: ContractAddress, expected_balance: u128) {
     let balance_to_check = token_state.balance_of(address);
     assert_eq!(balance_to_check, expected_balance);
+}
+
+pub fn deposit_hash(
+    signer: ContractAddress,
+    beneficiary: u32,
+    asset_id: felt252,
+    quantized_amount: u128,
+    salt: felt252,
+) -> HashType {
+    PoseidonTrait::new()
+        .update_with(value: signer)
+        .update_with(value: beneficiary)
+        .update_with(value: asset_id)
+        .update_with(value: quantized_amount)
+        .update_with(value: salt)
+        .finalize()
 }
