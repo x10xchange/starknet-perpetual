@@ -1,4 +1,5 @@
-use contracts_commons::math::{Abs, have_same_sign};
+use contracts_commons::math::abs::Abs;
+use contracts_commons::math::utils::have_same_sign;
 use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use contracts_commons::utils::validate_ratio;

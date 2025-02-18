@@ -12,7 +12,8 @@ pub mod Core {
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
     use contracts_commons::errors::assert_with_byte_array;
-    use contracts_commons::math::{Abs, have_same_sign};
+    use contracts_commons::math::abs::Abs;
+    use contracts_commons::math::utils::have_same_sign;
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use contracts_commons::types::{HashType, PublicKey, Signature};

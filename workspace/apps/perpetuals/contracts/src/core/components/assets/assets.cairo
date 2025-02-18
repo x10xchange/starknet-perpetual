@@ -3,7 +3,7 @@ pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::constants::{MAX_U32, TWO_POW_128, TWO_POW_32};
-    use contracts_commons::math::Abs;
+    use contracts_commons::math::abs::Abs;
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
