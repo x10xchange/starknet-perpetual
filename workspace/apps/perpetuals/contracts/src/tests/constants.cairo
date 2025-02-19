@@ -122,6 +122,9 @@ pub const USER_INIT_BALANCE: u128 = 100_000_000;
 pub const POSITION_ID_1: PositionId = PositionId { value: 2 };
 pub const POSITION_ID_2: PositionId = PositionId { value: 3 };
 
+pub const ORACLE_A_NAME: felt252 = 'ORCLA';
+pub const ORACLE_B_NAME: felt252 = 'ORCLB';
+
 /// Assets IDs
 pub fn COLLATERAL_ASSET_ID() -> AssetId {
     AssetIdTrait::new(value: selector!("COLLATERAL_ASSET_ID"))

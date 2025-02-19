@@ -1,10 +1,11 @@
 use contracts_commons::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
 use contracts_commons::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use contracts_commons::constants::TWO_POW_32;
+use contracts_commons::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_32};
 use contracts_commons::test_utils::TokenTrait;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
 use contracts_commons::types::time::time::{Time, TimeDelta};
 use contracts_commons::types::{PublicKey, Signature};
+use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -12,21 +13,22 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
+use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::tests::constants;
-use perpetuals::tests::flow_tests::constants::{
-    ORACLE_A_NAME, ORACLE_B_NAME, SYNTHETIC_CONFIG_1, SYNTHETIC_CONFIG_2, SYNTHETIC_CONFIG_3,
-    SyntheticConfig,
-};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::start_cheat_block_timestamp_global;
 use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
 
-const TIME_STEP: u64 = 60;
-const BEGINNING_OF_TIME: u64 = 1000000;
-const HOUR: u64 = 3600;
+const TIME_STEP: u64 = MINUTE;
+const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
+
+pub struct User {
+    position_id: u32,
+    account: Account,
+}
 
 #[derive(Copy, Drop)]
 struct Oracle {
@@ -135,6 +137,29 @@ impl AccountImpl of AccountTrait {
     }
 }
 
+#[derive(Drop)]
+pub struct SyntheticConfig {
+    pub asset_name: felt252,
+    pub asset_id: AssetId,
+    pub risk_factor_tiers: Span<u8>,
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
+    pub quorum: u8,
+    pub resolution: u64,
+}
+
+pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
+    SyntheticConfig {
+        asset_name,
+        asset_id: AssetId { value: asset_name },
+        risk_factor_tiers: array![50].span(),
+        risk_factor_first_tier_boundary: MAX_U128,
+        risk_factor_tier_size: Zero::zero(),
+        quorum: constants::SYNTHETIC_QUORUM,
+        resolution: constants::SYNTHETIC_RESOLUTION,
+    }
+}
+
 /// FlowTestState is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
 pub struct FlowTestState {
@@ -152,6 +177,10 @@ pub struct FlowTestState {
 
 #[generate_trait]
 impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
+    fn generate_position_id(ref self: FlowTestState) -> u32 {
+        self.position_id_gen += 1;
+        self.position_id_gen
+    }
     fn get_nonce(self: @FlowTestState) -> u64 {
         let dispatcher = INonceDispatcher { contract_address: *self.perpetuals_contract };
         self.operator.set_as_caller(*self.perpetuals_contract);
@@ -201,11 +230,10 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
 
     fn add_synthetic(self: @FlowTestState, synthetic_config: @SyntheticConfig) {
         let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
-
         self.set_app_governor_as_caller();
         dispatcher
             .add_synthetic_asset(
-                asset_id: *synthetic_config.asset_id,
+                *synthetic_config.asset_id,
                 risk_factor_tiers: *synthetic_config.risk_factor_tiers,
                 risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
                 risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
@@ -259,41 +287,45 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             token_state,
             key_gen,
             operator: perpetuals_config.operator,
-            oracle_a: Oracle { account: AccountTrait::new(ref key_gen), name: ORACLE_A_NAME },
-            oracle_b: Oracle { account: AccountTrait::new(ref key_gen), name: ORACLE_B_NAME },
+            oracle_a: Oracle {
+                account: AccountTrait::new(ref key_gen), name: constants::ORACLE_A_NAME,
+            },
+            oracle_b: Oracle {
+                account: AccountTrait::new(ref key_gen), name: constants::ORACLE_B_NAME,
+            },
             position_id_gen: 100,
         };
 
         state
     }
 
-    fn setup(ref self: FlowTestState) {
+    fn setup(ref self: FlowTestState, synthetics: Span<SyntheticConfig>) {
         self.set_roles();
         self.register_collateral();
-        self.add_synthetic(@SYNTHETIC_CONFIG_1());
-        self.add_synthetic(@SYNTHETIC_CONFIG_2());
-        self.add_synthetic(@SYNTHETIC_CONFIG_3());
+        for synthetic_config in synthetics {
+            self.add_synthetic(synthetic_config);
+        };
         advance_time(HOUR);
     }
 
-    fn new_user(ref self: FlowTestState) -> Account {
-        let new_user = AccountTrait::new(ref self.key_gen);
+    fn new_user(ref self: FlowTestState) -> User {
+        let account = AccountTrait::new(ref self.key_gen);
 
-        self.token_state.fund(new_user.address, constants::USER_INIT_BALANCE);
+        self.token_state.fund(account.address, constants::USER_INIT_BALANCE);
 
         let operator_nonce = self.get_nonce();
+        let position_id = self.generate_position_id();
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         self.operator.set_as_caller(self.perpetuals_contract);
         dispatcher
             .new_position(
                 operator_nonce,
-                position_id: self.position_id_gen.into(),
-                owner_public_key: new_user.key_pair.public_key,
-                owner_account: new_user.address,
+                position_id: position_id.into(),
+                owner_public_key: account.key_pair.public_key,
+                owner_account: account.address,
             );
-        self.position_id_gen += 1;
 
-        new_user
+        User { position_id, account }
     }
 
     fn price_tick(ref self: FlowTestState, synthetic_config: @SyntheticConfig, price: u128) {
@@ -311,7 +343,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .price_tick(
-                operator_nonce, asset_id: *synthetic_config.asset_id, :price, :signed_prices,
+                :operator_nonce, asset_id: *synthetic_config.asset_id, :price, :signed_prices,
             );
     }
     /// TODO: add all the necessary functions to interact with the contract.
