@@ -1058,7 +1058,7 @@ pub mod Core {
             let fee_position_diff_b = self
                 ._create_position_diff(
                     position_id: fee_position_b,
-                    asset_id: order_a.fee_asset_id,
+                    asset_id: order_b.fee_asset_id,
                     diff: actual_fee_b.into(),
                 );
             self
