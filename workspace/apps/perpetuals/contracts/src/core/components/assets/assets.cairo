@@ -17,7 +17,8 @@ pub mod AssetsComponent {
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET,
         FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
-        INVALID_SAME_QUORUM, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
+        INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
+        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
         ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
         SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
         SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
@@ -107,10 +108,14 @@ pub mod AssetsComponent {
         ) {
             let roles = get_dep_component!(@self, Roles);
             roles.only_app_governor();
-            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
 
             // Validate the oracle does not exist.
+            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
             assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
+
+            assert(oracle_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
+            assert(asset_name.is_non_zero(), INVALID_ZERO_ASSET_NAME);
+            assert(oracle_name.is_non_zero(), INVALID_ZERO_ORACLE_NAME);
 
             const TWO_POW_40: u64 = 0x100_0000_0000;
             // Validate the size of the oracle name.
