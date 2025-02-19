@@ -1,11 +1,11 @@
 use Core::InternalCoreFunctionsTrait;
 use contracts_commons::components::deposit::Deposit::InternalTrait;
 use contracts_commons::components::nonce::interface::INonce;
-use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::TWO_POW_32;
-use contracts_commons::test_utils::{
-    Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
+use contracts_commons::components::roles::interface::{
+    IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
+use contracts_commons::constants::TWO_POW_32;
+use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
 use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
@@ -23,7 +23,7 @@ use perpetuals::core::components::positions::Positions::InternalTrait as Positio
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::interface::ICoreDispatcher;
+use perpetuals::core::interface::ICoreSafeDispatcher;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
@@ -48,10 +48,10 @@ use starknet::storage::{
 pub struct CoreConfig {}
 
 
-/// The `CoreState` struct represents the state of the Core contract.
+/// The `PerpetualsInitState` struct represents the state of the Core contract.
 /// It includes the contract address
 #[derive(Drop, Copy)]
-pub struct CoreState {
+pub struct PerpetualsInitState {
     pub address: ContractAddress,
 }
 
@@ -137,6 +137,7 @@ pub impl OracleImpl of OracleTrait {
 #[derive(Drop)]
 pub struct PerpetualsInitConfig {
     pub governance_admin: ContractAddress,
+    pub upgrade_delay: u64,
     pub app_role_admin: ContractAddress,
     pub app_governor: ContractAddress,
     pub operator: ContractAddress,
@@ -144,30 +145,47 @@ pub struct PerpetualsInitConfig {
     pub max_price_interval: TimeDelta,
     pub max_funding_rate: u32,
     pub max_oracle_price_validity: TimeDelta,
+    pub deposit_grace_period: TimeDelta,
+    pub fee_position_owner_account: ContractAddress,
+    pub fee_position_owner_public_key: felt252,
+    pub insurance_fund_position_owner_account: ContractAddress,
+    pub insurance_fund_position_owner_public_key: felt252,
     pub collateral_cfg: CollateralCfg,
     pub synthetic_cfg: SyntheticCfg,
 }
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: CoreConfig) -> CoreState {
-        let mut calldata = array![];
+    fn deploy(self: @PerpetualsInitConfig) -> PerpetualsInitState {
+        let mut calldata = ArrayTrait::new();
+        self.governance_admin.serialize(ref calldata);
+        self.upgrade_delay.serialize(ref calldata);
+        self.max_price_interval.serialize(ref calldata);
+        self.max_funding_interval.serialize(ref calldata);
+        self.max_funding_rate.serialize(ref calldata);
+        self.max_oracle_price_validity.serialize(ref calldata);
+        self.deposit_grace_period.serialize(ref calldata);
+        self.fee_position_owner_account.serialize(ref calldata);
+        self.fee_position_owner_public_key.serialize(ref calldata);
+        self.insurance_fund_position_owner_account.serialize(ref calldata);
+        self.insurance_fund_position_owner_public_key.serialize(ref calldata);
+
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
-        let core = CoreState { address: core_contract_address };
+        let core = PerpetualsInitState { address: core_contract_address };
         core
     }
 
-    fn dispatcher(self: CoreState) -> ICoreDispatcher {
-        ICoreDispatcher { contract_address: self.address }
+    fn safe_dispatcher(self: PerpetualsInitState) -> ICoreSafeDispatcher {
+        ICoreSafeDispatcher { contract_address: self.address }
     }
 }
-
 
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
     fn default() -> PerpetualsInitConfig {
         PerpetualsInitConfig {
             governance_admin: GOVERNANCE_ADMIN(),
+            upgrade_delay: UPGRADE_DELAY,
             app_role_admin: APP_ROLE_ADMIN(),
             app_governor: APP_GOVERNOR(),
             operator: OPERATOR(),
@@ -175,6 +193,11 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             max_price_interval: MAX_PRICE_INTERVAL,
             max_funding_rate: MAX_FUNDING_RATE,
             max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
+            deposit_grace_period: Time::weeks(1),
+            fee_position_owner_account: OPERATOR(),
+            fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
+            insurance_fund_position_owner_account: OPERATOR(),
+            insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
             collateral_cfg: CollateralCfg {
                 token_cfg: TokenConfig {
                     name: COLLATERAL_NAME(),
@@ -208,32 +231,6 @@ pub struct CollateralCfg {
 #[derive(Drop)]
 pub struct SyntheticCfg {
     pub synthetic_id: AssetId,
-}
-
-/// The `SystemConfig` struct represents the configuration settings for the entire system.
-/// It includes configurations for the token, core,
-#[derive(Drop)]
-struct SystemConfig {
-    pub token: TokenConfig,
-    pub core: CoreConfig,
-}
-
-/// The `SystemState` struct represents the state of the entire system.
-/// It includes the state for the token and core contracts,
-#[derive(Drop, Copy)]
-pub struct SystemState {
-    pub token: TokenState,
-    pub core: CoreState,
-}
-
-#[generate_trait]
-pub impl SystemImpl of SystemTrait {
-    /// Deploys the system configuration and returns the system state.
-    fn deploy(self: SystemConfig) -> SystemState {
-        let token = self.token.deploy();
-        let core = self.core.deploy();
-        SystemState { token, core }
-    }
 }
 
 // Internal functions.
@@ -515,4 +512,34 @@ pub fn deposit_hash(
         .update_with(value: quantized_amount)
         .update_with(value: salt)
         .finalize()
+}
+
+
+// Utils for dispatcher usage.
+
+pub fn set_roles_by_dispatcher(state: @PerpetualsInitState, cfg: @PerpetualsInitConfig) {
+    let contract_address = *state.address;
+    let dispatcher = IRolesDispatcher { contract_address };
+
+    cheat_caller_address_once(
+        contract_address: contract_address, caller_address: *cfg.governance_admin,
+    );
+    dispatcher.register_app_role_admin(account: *cfg.app_role_admin);
+    cheat_caller_address_once(
+        contract_address: contract_address, caller_address: *cfg.app_role_admin,
+    );
+    dispatcher.register_app_governor(account: *cfg.app_governor);
+    cheat_caller_address_once(
+        contract_address: contract_address, caller_address: *cfg.app_role_admin,
+    );
+    dispatcher.register_operator(account: *cfg.operator);
+}
+
+pub fn init_by_dispatcher() -> (PerpetualsInitConfig, PerpetualsInitState, ICoreSafeDispatcher) {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let state = CoreTrait::deploy(@cfg);
+    let dispatcher = state.safe_dispatcher();
+    set_roles_by_dispatcher(state: @state, cfg: @cfg);
+
+    (cfg, state, dispatcher)
 }

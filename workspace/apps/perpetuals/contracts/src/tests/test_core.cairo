@@ -4,9 +4,12 @@ use contracts_commons::components::request_approvals::interface::RequestStatus;
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::{MAX_U128, TEN_POW_15, TWO_POW_32};
 use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::{Deployable, TokenTrait, cheat_caller_address_once};
+use contracts_commons::test_utils::{
+    Deployable, TokenTrait, assert_panic_with_felt_error, cheat_caller_address_once,
+};
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
+use perpetuals::core::components::assets::errors::COLLATERAL_ALREADY_EXISTS;
 use perpetuals::core::components::assets::interface::IAssets;
 use perpetuals::core::components::positions::Positions::POSITION_VERSION;
 use perpetuals::core::components::positions::interface::IPositions;
@@ -14,7 +17,7 @@ use perpetuals::core::components::positions::{
     Positions, Positions::InternalTrait as PositionsInternal,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::interface::ICore;
+use perpetuals::core::interface::{ICore, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::AssetIdTrait;
 use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::funding::{FundingIndex, FundingTick};
@@ -41,8 +44,8 @@ use perpetuals::tests::event_test_utils::{
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
-    check_synthetic_asset, deposit_hash, init_position, init_position_with_owner,
-    initialized_contract_state, set_roles, setup_state_with_active_asset,
+    check_synthetic_asset, deposit_hash, init_by_dispatcher, init_position,
+    init_position_with_owner, initialized_contract_state, set_roles, setup_state_with_active_asset,
     setup_state_with_pending_asset, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
@@ -130,12 +133,9 @@ fn test_successful_register_collateral() {
 }
 
 #[test]
-#[should_panic(expected: 'COLLATERAL_ALREADY_EXISTS')]
-fn test_register_existed_collateral() {
-    // Setup state, token:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+fn test_register_collateral_failures() {
+    // Setup:
+    let (cfg, state, dispatcher) = init_by_dispatcher();
 
     // Parameters:
     // `collateral_id` is already registered in the setup.
@@ -143,27 +143,21 @@ fn test_register_existed_collateral() {
     let quantum = COLLATERAL_QUANTUM;
     let token_address = cfg.collateral_cfg.token_cfg.owner;
 
-    // Test.
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state.register_collateral(:asset_id, :token_address, :quantum);
-}
+    // Register collateral for the first time.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher.register_collateral(:asset_id, :token_address, :quantum);
+    assert!(result.is_ok());
 
-#[test]
-#[should_panic(expected: 'COLLATERAL_ALREADY_EXISTS')]
-fn test_register_another_collateral() {
-    // Setup state, token:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    // Register the same collateral asset.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher.register_collateral(:asset_id, :token_address, :quantum);
+    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_EXISTS);
 
-    // Parameters:
-    let asset_id = AssetIdTrait::new(value: selector!("NEW_COLLATERAL_ASSET_ID"));
-    let quantum = COLLATERAL_QUANTUM;
-    let token_address = cfg.collateral_cfg.token_cfg.owner;
-
-    // Test.
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state.register_collateral(:asset_id, :token_address, :quantum);
+    // Register new collateral asset.
+    let new_asset_id = AssetIdTrait::new(value: selector!("NEW_COLLATERAL_ASSET_ID"));
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher.register_collateral(asset_id: new_asset_id, :token_address, :quantum);
+    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_EXISTS);
 }
 
 // New position tests.
