@@ -229,7 +229,7 @@ pub(crate) mod Positions {
             new_public_key: PublicKey,
             expiration: Timestamp,
         ) {
-            let position = self._get_position_const(:position_id);
+            let position = self._get_position_snapshot(:position_id);
             let owner_account = position.owner_account.read();
             let old_public_key = position.owner_public_key.read();
             assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
@@ -353,10 +353,10 @@ pub(crate) mod Positions {
             }
         }
 
-        fn get_position_const(
+        fn get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
-            self._get_position_const(:position_id)
+            self._get_position_snapshot(:position_id)
         }
 
         /// Returns the position at the given `position_id`.
@@ -375,7 +375,7 @@ pub(crate) mod Positions {
                 self._get_provisional_main_collateral_balance(:position_id)
             } else if assets.is_synthetic(:asset_id) {
                 self
-                    ._get_position_const(:position_id)
+                    ._get_position_snapshot(:position_id)
                     .synthetic_assets
                     .entry(asset_id)
                     .balance
@@ -419,7 +419,7 @@ pub(crate) mod Positions {
             synthetic_id: AssetId,
             curr_funding_index: FundingIndex,
         ) -> Balance {
-            let position = self._get_position_const(:position_id);
+            let position = self._get_position_snapshot(:position_id);
             let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
             let synthetic_balance = synthetic_asset.balance.read();
             let last_funding_index = synthetic_asset.funding_index.read();
@@ -436,7 +436,7 @@ pub(crate) mod Positions {
             position
         }
 
-        fn _get_position_const(
+        fn _get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
             let position = self.positions.entry(position_id);
@@ -450,7 +450,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
-            let position = self._get_position_const(:position_id);
+            let position = self._get_position_snapshot(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
                 .entry(assets.get_main_collateral_asset_id())
@@ -469,7 +469,7 @@ pub(crate) mod Positions {
         fn _validate_position_exists(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) {
-            self._get_position_const(:position_id);
+            self._get_position_snapshot(:position_id);
         }
 
         fn _collect_position_collaterals(
@@ -495,7 +495,7 @@ pub(crate) mod Positions {
             collaterals: bool,
         ) {
             let assets = get_dep_component!(self, Assets);
-            let position = self._get_position_const(:position_id);
+            let position = self._get_position_snapshot(:position_id);
             let mut asset_id_opt = if collaterals {
                 position.collateral_assets_head.read()
             } else {

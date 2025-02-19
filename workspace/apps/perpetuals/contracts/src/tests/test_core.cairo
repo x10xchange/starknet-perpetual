@@ -67,7 +67,7 @@ fn test_constructor() {
     assert_eq!(
         state
             .positions
-            .get_position_const(position_id: Positions::FEE_POSITION)
+            .get_position_snapshot(position_id: Positions::FEE_POSITION)
             .owner_account
             .read(),
         OPERATOR(),
@@ -75,7 +75,7 @@ fn test_constructor() {
     assert_eq!(
         state
             .positions
-            .get_position_const(position_id: Positions::FEE_POSITION)
+            .get_position_snapshot(position_id: Positions::FEE_POSITION)
             .owner_public_key
             .read(),
         OPERATOR_PUBLIC_KEY(),
@@ -83,7 +83,7 @@ fn test_constructor() {
     assert_eq!(
         state
             .positions
-            .get_position_const(position_id: Positions::INSURANCE_FUND_POSITION)
+            .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION)
             .owner_account
             .read(),
         OPERATOR(),
@@ -91,7 +91,7 @@ fn test_constructor() {
     assert_eq!(
         state
             .positions
-            .get_position_const(position_id: Positions::INSURANCE_FUND_POSITION)
+            .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION)
             .owner_public_key
             .read(),
         OPERATOR_PUBLIC_KEY(),
@@ -189,12 +189,15 @@ fn test_new_position() {
     );
 
     // Check.
-    assert_eq!(state.positions.get_position_const(:position_id).version.read(), POSITION_VERSION);
     assert_eq!(
-        state.positions.get_position_const(:position_id).owner_public_key.read(), owner_public_key,
+        state.positions.get_position_snapshot(:position_id).version.read(), POSITION_VERSION,
     );
     assert_eq!(
-        state.positions.get_position_const(:position_id).owner_account.read(), owner_account,
+        state.positions.get_position_snapshot(:position_id).owner_public_key.read(),
+        owner_public_key,
+    );
+    assert_eq!(
+        state.positions.get_position_snapshot(:position_id).owner_account.read(), owner_account,
     );
 }
 
@@ -249,7 +252,7 @@ fn test_successful_set_owner_account() {
 
     // Check.
     assert_eq!(
-        state.positions.get_position_const(:position_id).owner_account.read(), new_owner_account,
+        state.positions.get_position_snapshot(:position_id).owner_account.read(), new_owner_account,
     );
 }
 
@@ -1358,10 +1361,10 @@ fn test_successful_deleverage() {
     // Check:
     let deleveraged_position = state
         .positions
-        .get_position_const(position_id: deleveraged.position_id);
+        .get_position_snapshot(position_id: deleveraged.position_id);
     let deleverager_position = state
         .positions
-        .get_position_const(position_id: deleverager.position_id);
+        .get_position_snapshot(position_id: deleverager.position_id);
 
     let deleveraged_collateral_balance = deleveraged_position
         .collateral_assets
@@ -1533,10 +1536,10 @@ fn test_successful_liquidate() {
     // Check:
     let liquidated_position = state
         .positions
-        .get_position_const(position_id: liquidated.position_id);
+        .get_position_snapshot(position_id: liquidated.position_id);
     let liquidator_position = state
         .positions
-        .get_position_const(position_id: liquidator.position_id);
+        .get_position_snapshot(position_id: liquidator.position_id);
 
     let liquidated_collateral_balance = liquidated_position
         .collateral_assets
@@ -1691,7 +1694,11 @@ fn test_successful_set_public_key() {
     // Check:
     assert_eq!(
         user.get_public_key(),
-        state.positions.get_position_const(position_id: user.position_id).owner_public_key.read(),
+        state
+            .positions
+            .get_position_snapshot(position_id: user.position_id)
+            .owner_public_key
+            .read(),
     );
 }
 

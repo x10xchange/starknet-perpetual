@@ -275,7 +275,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let position = self.positions.get_position_const(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
@@ -333,7 +333,7 @@ pub mod Core {
                 ._validate_withdraw(
                     :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
                 );
-            let position = self.positions.get_position_const(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
             let hash = self
                 .request_approvals
                 .consume_approved_request(
@@ -397,7 +397,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let position = self.positions.get_position_const(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
@@ -445,7 +445,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let position = self.positions.get_position_const(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
             self
                 ._validate_transfer(
                     :operator_nonce,
@@ -896,6 +896,7 @@ pub mod Core {
             self.roles.only_operator();
             self.nonce.use_checked_nonce(nonce: operator_nonce);
             self.assets.validate_price_tick(:asset_id, :price, :signed_prices);
+
             let synthetic_config = self.assets.get_synthetic_config(synthetic_id: asset_id);
             let converted_price = price.convert(resolution: synthetic_config.resolution);
             self.assets.set_price(:asset_id, price: converted_price);
@@ -1343,7 +1344,7 @@ pub mod Core {
         fn _validate_order_signature(
             self: @ContractState, position_id: PositionId, order: Order, signature: Signature,
         ) -> HashType {
-            let position = self.positions.get_position_const(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
             let public_key = position.owner_public_key.read();
             let msg_hash = order.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);
@@ -1351,7 +1352,7 @@ pub mod Core {
         }
 
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
-            self.positions.get_position_const(:position_id);
+            self.positions.get_position_snapshot(:position_id);
         }
 
         fn _validate_transfer(
