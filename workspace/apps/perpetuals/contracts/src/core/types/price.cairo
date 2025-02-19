@@ -82,6 +82,11 @@ pub impl PriceImpl of PriceTrait {
         Price { value: value }
     }
 
+    fn build(integer_part: u32, fractional_part: u32) -> Price {
+        assert(fractional_part.into() < TWO_POW_28, 'Value must be < 2^28');
+        Self::new(integer_part.into() * TWO_POW_28 + fractional_part.into())
+    }
+
     fn value(self: @Price) -> u64 {
         *self.value
     }
@@ -173,6 +178,18 @@ mod tests {
     #[should_panic(expected: 'Value must be < 2^56')]
     fn test_new_price_over_limit() {
         let _price = PriceTrait::new(LIMIT);
+    }
+
+    #[test]
+    fn test_build_price() {
+        let price = PriceTrait::build(100, 100);
+        assert_eq!(price.value, 100 * TWO_POW_28 + 100);
+    }
+
+    #[test]
+    #[should_panic(expected: 'Value must be < 2^28')]
+    fn test_build_price_over_limit() {
+        let _price = PriceTrait::build(100, TWO_POW_28.try_into().unwrap());
     }
 
     #[test]
