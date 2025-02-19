@@ -349,7 +349,7 @@ pub mod Core {
             };
             let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
             self
-                ._validate_sufficent_funds(
+                ._validate_sufficient_funds(
                     :token_contract, :collateral_id, amount: withdraw_unquantized_amount,
                 );
             /// Execution - Withdraw:
@@ -622,7 +622,7 @@ pub mod Core {
         /// - Ensures the liquidator order fulfillment amount do not exceed its limit.
         /// - Validates that the fee ratio does not increase.
         /// - Ensures the base-to-quote amount ratio does not decrease.
-        /// - Validates liqudated position is liquidatable.
+        /// - Validates liquidated position is liquidatable.
         ///
         /// Execution:
         /// - Subtract the fees from each position's collateral.
@@ -1375,7 +1375,7 @@ pub mod Core {
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
         }
 
-        fn _validate_sufficent_funds(
+        fn _validate_sufficient_funds(
             self: @ContractState,
             token_contract: IERC20Dispatcher,
             collateral_id: AssetId,

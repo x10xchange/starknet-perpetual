@@ -41,7 +41,7 @@ fn mul<
     (*self.value).into() * rhs.into() / TWO_POW_28.into()
 }
 
-impl PricePartialord of PartialOrd<Price> {
+impl PricePartialOrd of PartialOrd<Price> {
     fn lt(lhs: Price, rhs: Price) -> bool {
         lhs.value < rhs.value
     }

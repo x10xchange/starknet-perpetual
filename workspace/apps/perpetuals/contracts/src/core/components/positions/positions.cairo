@@ -7,7 +7,7 @@ pub(crate) mod Positions {
     use contracts_commons::components::request_approvals::RequestApprovalsComponent;
     use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInteral;
+    use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::Timestamp;
     use contracts_commons::types::{PublicKey, Signature};
