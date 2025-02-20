@@ -1277,13 +1277,13 @@ General component registeration of requests and validate. In charge of approving
 #[starknet::interface]
 pub trait IRequestApprovals<TContractState> {
     /// Returns the status of a request.
-    fn get_request_status(self: @TContractState, request_hash: felt252) -> RequestStatus;
+    fn get_request_status(self: @TContractState, request_hash: HashType) -> RequestStatus;
 }
 
-#[derive(Debug, Drop, PartialEq, Serde)]
 pub enum RequestStatus {
-    NOT_EXIST,
-    DONE,
+    #[default]
+    NOT_REGISTERED,
+    PROCESSED,
     PENDING,
 }
 ```
@@ -1297,7 +1297,6 @@ pub struct Storage {
 #### Errors
 ```rust
 pub const CALLER_IS_NOT_OWNER_ACCOUNT: felt252 = 'CALLER_IS_NOT_OWNER_ACCOUNT';
-pub const INVALID_STATUS: felt252 = 'INVALID_STATUS';
 pub const REQUEST_ALREADY_PROCESSED: felt252 = 'REQUEST_ALREADY_PROCESSED';
 pub const REQUEST_ALREADY_REGISTERED: felt252 = 'REQUEST_ALREADY_REGISTERED';
 pub const REQUEST_NOT_REGISTERED: felt252 = 'REQUEST_NOT_REGISTERED';
