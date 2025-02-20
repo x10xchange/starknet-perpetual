@@ -9,7 +9,9 @@ struct Fraction<N, D> {
 }
 
 #[generate_trait]
-pub impl FractionImpl<N, D, +Drop<N>, +Drop<D>, +Zero<D>> of FractionTrait<N, D> {
+pub impl FractionImpl<
+    N, D, +Drop<N>, +Drop<D>, +Zero<D>, +Copy<N>, +Copy<D>,
+> of FractionTrait<N, D> {
     fn new<N1, D1, +Into<N1, N>, +Into<D1, D>, +Drop<D1>>(
         numerator: N1, denominator: D1,
     ) -> Fraction<N, D> {
@@ -18,6 +20,14 @@ pub impl FractionImpl<N, D, +Drop<N>, +Drop<D>, +Zero<D>> of FractionTrait<N, D>
         let denominator = denominator.into();
         assert(denominator.is_non_zero(), 'Denominator must be non-zero');
         Fraction { numerator, denominator }
+    }
+
+    fn numerator(self: @Fraction<N, D>) -> N {
+        *self.numerator
+    }
+
+    fn denominator(self: @Fraction<N, D>) -> D {
+        *self.denominator
     }
 }
 
@@ -185,5 +195,17 @@ mod tests {
         assert!(-f1 < -f2, "Fraction partial ord failed");
         assert!(f2 <= f1, "Fraction partial ord failed");
         assert!(-f1 <= -f2, "Fraction partial ord failed");
+    }
+
+    #[test]
+    fn fraction_numerator_test() {
+        let f: Fraction<u8, u8> = FractionTrait::new(numerator: 1_u8, denominator: 2_u8);
+        assert_eq!(f.numerator(), 1_u8);
+    }
+
+    #[test]
+    fn fraction_denominator_test() {
+        let f: Fraction<u8, u8> = FractionTrait::new(numerator: 1_u8, denominator: 2_u8);
+        assert_eq!(f.denominator(), 2_u8);
     }
 }
