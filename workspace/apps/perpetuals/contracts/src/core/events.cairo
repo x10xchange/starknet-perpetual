@@ -93,9 +93,9 @@ pub struct Deleverage {
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct TransferRequest {
     #[key]
-    pub position_id: PositionId,
-    #[key]
     pub recipient: PositionId,
+    #[key]
+    pub position_id: PositionId,
     pub collateral_id: AssetId,
     pub amount: u64,
     pub expiration: Timestamp,
@@ -106,9 +106,9 @@ pub struct TransferRequest {
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Transfer {
     #[key]
-    pub position_id: PositionId,
-    #[key]
     pub recipient: PositionId,
+    #[key]
+    pub position_id: PositionId,
     pub collateral_id: AssetId,
     pub amount: u64,
     pub expiration: Timestamp,

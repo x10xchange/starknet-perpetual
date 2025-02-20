@@ -449,27 +449,27 @@ pub mod Core {
             self
                 ._validate_transfer(
                     :operator_nonce,
-                    :position_id,
                     :recipient,
-                    :salt,
-                    :expiration,
+                    :position_id,
                     :collateral_id,
                     :amount,
+                    :expiration,
+                    :salt,
                 );
-            self._execute_transfer(:position_id, :recipient, :collateral_id, :amount);
+            self._execute_transfer(:recipient, :position_id, :collateral_id, :amount);
             let hash = self
                 .request_approvals
                 .consume_approved_request(
                     args: TransferArgs {
-                        position_id, recipient, salt, expiration, collateral_id, amount,
+                        recipient, position_id, collateral_id, amount, expiration, salt,
                     },
                     public_key: position.owner_public_key.read(),
                 );
             self
                 .emit(
                     events::Transfer {
-                        position_id,
                         recipient,
+                        position_id,
                         collateral_id,
                         amount,
                         expiration,
@@ -1071,8 +1071,8 @@ pub mod Core {
 
         fn _execute_transfer(
             ref self: ContractState,
-            position_id: PositionId,
             recipient: PositionId,
+            position_id: PositionId,
             collateral_id: AssetId,
             amount: u64,
         ) {
@@ -1358,12 +1358,12 @@ pub mod Core {
         fn _validate_transfer(
             ref self: ContractState,
             operator_nonce: u64,
-            position_id: PositionId,
             recipient: PositionId,
-            salt: felt252,
-            expiration: Timestamp,
+            position_id: PositionId,
             collateral_id: AssetId,
             amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
         ) {
             self._validate_operator_flow(:operator_nonce);
             // Check positions.
