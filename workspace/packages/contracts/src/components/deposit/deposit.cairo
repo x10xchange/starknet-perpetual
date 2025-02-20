@@ -59,7 +59,7 @@ pub(crate) mod Deposit {
             assert(quantized_amount > 0, errors::ZERO_AMOUNT);
             let caller_address = get_caller_address();
             let deposit_hash = deposit_hash(
-                signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
+                depositor: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
             );
             assert(
                 self._get_deposit_status(:deposit_hash) == DepositStatus::NOT_EXIST,
@@ -82,7 +82,7 @@ pub(crate) mod Deposit {
             self
                 .emit(
                     events::Deposit {
-                        position_id: beneficiary,
+                        beneficiary,
                         depositing_address: caller_address,
                         asset_id,
                         quantized_amount,
@@ -113,7 +113,7 @@ pub(crate) mod Deposit {
         ) {
             let caller_address = get_caller_address();
             let deposit_hash = deposit_hash(
-                signer: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
+                depositor: caller_address, :beneficiary, :asset_id, :quantized_amount, :salt,
             );
 
             // Validations
@@ -137,7 +137,7 @@ pub(crate) mod Deposit {
             self
                 .emit(
                     events::DepositCanceled {
-                        position_id: beneficiary,
+                        beneficiary,
                         depositing_address: caller_address,
                         asset_id,
                         quantized_amount,
@@ -195,7 +195,7 @@ pub(crate) mod Deposit {
         ) {
             assert(quantized_amount > 0, errors::ZERO_AMOUNT);
             let deposit_hash = deposit_hash(
-                signer: depositor, :beneficiary, :asset_id, :quantized_amount, :salt,
+                :depositor, :beneficiary, :asset_id, :quantized_amount, :salt,
             );
             let deposit_status = self._get_deposit_status(:deposit_hash);
             match deposit_status {
@@ -213,7 +213,7 @@ pub(crate) mod Deposit {
                     self
                         .emit(
                             events::DepositProcessed {
-                                position_id: beneficiary,
+                                beneficiary,
                                 depositing_address: depositor,
                                 asset_id,
                                 quantized_amount,
@@ -246,14 +246,14 @@ pub(crate) mod Deposit {
     }
 
     fn deposit_hash(
-        signer: ContractAddress,
+        depositor: ContractAddress,
         beneficiary: u32,
         asset_id: felt252,
         quantized_amount: u128,
         salt: felt252,
     ) -> HashType {
         PoseidonTrait::new()
-            .update_with(value: signer)
+            .update_with(value: depositor)
             .update_with(value: beneficiary)
             .update_with(value: asset_id)
             .update_with(value: quantized_amount)

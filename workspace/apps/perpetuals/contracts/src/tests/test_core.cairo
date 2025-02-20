@@ -579,7 +579,7 @@ fn test_successful_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        signer: user.address,
+        depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -590,7 +590,7 @@ fn test_successful_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_event_with_expected(
         spied_event: events[0],
-        position_id: user.position_id.value,
+        beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -682,7 +682,7 @@ fn test_successful_process_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        signer: user.address,
+        depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -705,7 +705,7 @@ fn test_successful_process_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_processed_event_with_expected(
         spied_event: events[0],
-        position_id: user.position_id.value,
+        beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -747,7 +747,7 @@ fn test_successful_cancel_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        signer: user.address,
+        depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -781,7 +781,7 @@ fn test_successful_cancel_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_canceled_event_with_expected(
         spied_event: events[0],
-        position_id: user.position_id.value,
+        beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,

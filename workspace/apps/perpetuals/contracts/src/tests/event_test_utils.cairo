@@ -35,7 +35,7 @@ pub fn assert_new_position_event_with_expected(
 
 pub fn assert_deposit_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    position_id: u32,
+    beneficiary: u32,
     depositing_address: ContractAddress,
     asset_id: felt252,
     quantized_amount: u128,
@@ -43,7 +43,7 @@ pub fn assert_deposit_event_with_expected(
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::Deposit {
-        position_id,
+        beneficiary,
         depositing_address,
         asset_id,
         quantized_amount,
@@ -61,7 +61,7 @@ pub fn assert_deposit_event_with_expected(
 
 pub fn assert_deposit_canceled_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    position_id: u32,
+    beneficiary: u32,
     depositing_address: ContractAddress,
     asset_id: felt252,
     quantized_amount: u128,
@@ -69,7 +69,7 @@ pub fn assert_deposit_canceled_event_with_expected(
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositCanceled {
-        position_id,
+        beneficiary,
         depositing_address,
         asset_id,
         quantized_amount,
@@ -86,7 +86,7 @@ pub fn assert_deposit_canceled_event_with_expected(
 
 pub fn assert_deposit_processed_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    position_id: u32,
+    beneficiary: u32,
     depositing_address: ContractAddress,
     asset_id: felt252,
     quantized_amount: u128,
@@ -94,7 +94,7 @@ pub fn assert_deposit_processed_event_with_expected(
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositProcessed {
-        position_id,
+        beneficiary,
         depositing_address,
         asset_id,
         quantized_amount,

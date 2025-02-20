@@ -62,7 +62,7 @@ pub mod AssetsComponent {
         pub synthetic_timely_data_head: Option<AssetId>,
         pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
         pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
-        oracles: Map<AssetId, Map<PublicKey, felt252>>,
+        asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
     }
 
@@ -110,7 +110,7 @@ pub mod AssetsComponent {
             roles.only_app_governor();
 
             // Validate the oracle does not exist.
-            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
+            let oracle_inner_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
             assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
 
             assert(oracle_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
@@ -325,10 +325,10 @@ pub mod AssetsComponent {
         ) {
             let roles = get_dep_component!(@self, Roles);
             roles.only_app_governor();
-            let oracle_inner_entry = self.oracles.entry(asset_id).entry(oracle_public_key);
+            let oracle_inner_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
             // Validate the oracle exists.
             assert(oracle_inner_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
-            self.oracles.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
+            self.asset_oracle.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
             self.emit(events::RemoveOracle { asset_id, oracle_public_key });
         }
 
@@ -605,7 +605,7 @@ pub mod AssetsComponent {
             self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
         ) {
             let packed_asset_oracle = self
-                .oracles
+                .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
             let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
@@ -731,7 +731,7 @@ pub mod AssetsComponent {
             self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
         ) {
             let packed_asset_oracle = self
-                .oracles
+                .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
             let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()

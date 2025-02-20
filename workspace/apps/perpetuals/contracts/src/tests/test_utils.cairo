@@ -499,14 +499,14 @@ pub fn validate_balance(token_state: TokenState, address: ContractAddress, expec
 }
 
 pub fn deposit_hash(
-    signer: ContractAddress,
+    depositor: ContractAddress,
     beneficiary: u32,
     asset_id: felt252,
     quantized_amount: u128,
     salt: felt252,
 ) -> HashType {
     PoseidonTrait::new()
-        .update_with(value: signer)
+        .update_with(value: depositor)
         .update_with(value: beneficiary)
         .update_with(value: asset_id)
         .update_with(value: quantized_amount)
