@@ -2,7 +2,7 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::constants::{MAX_U32, MINUTE, TWO_POW_128, TWO_POW_32};
+    use contracts_commons::constants::{MAX_U32, MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
     use contracts_commons::math::abs::Abs;
     use contracts_commons::types::PublicKey;
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
@@ -117,7 +117,6 @@ pub mod AssetsComponent {
             assert(asset_name.is_non_zero(), INVALID_ZERO_ASSET_NAME);
             assert(oracle_name.is_non_zero(), INVALID_ZERO_ORACLE_NAME);
 
-            const TWO_POW_40: u64 = 0x100_0000_0000;
             // Validate the size of the oracle name.
             if let Option::Some(oracle_name) = oracle_name.try_into() {
                 assert(oracle_name < TWO_POW_40, ORACLE_NAME_TOO_LONG);
