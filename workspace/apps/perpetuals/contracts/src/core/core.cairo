@@ -7,6 +7,7 @@ pub mod Core {
     use contracts_commons::components::pausable::PausableComponent;
     use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use contracts_commons::components::replaceability::ReplaceabilityComponent;
+    use contracts_commons::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
     use contracts_commons::components::request_approvals::RequestApprovalsComponent;
     use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
@@ -189,7 +190,7 @@ pub mod Core {
         insurance_fund_position_owner_public_key: PublicKey,
     ) {
         self.roles.initialize(:governance_admin);
-        self.replaceability.upgrade_delay.write(upgrade_delay);
+        self.replaceability.initialize(:upgrade_delay);
         self
             .assets
             .initialize(

@@ -10,6 +10,9 @@ pub(crate) mod Deposit {
     use core::panic_with_felt252;
     use core::poseidon::PoseidonTrait;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use starknet::storage::StorageMapWriteAccess;
+    use starknet::storage::StoragePointerReadAccess;
+    use starknet::storage::StoragePointerWriteAccess;
     use starknet::storage::{Map, StorageMapReadAccess, StoragePathEntry};
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
 

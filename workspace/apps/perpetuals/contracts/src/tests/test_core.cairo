@@ -1,6 +1,7 @@
 use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit};
 use contracts_commons::components::nonce::interface::INonce;
-use contracts_commons::components::request_approvals::interface::RequestStatus;
+use contracts_commons::components::replaceability::interface::IReplaceable;
+use contracts_commons::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::{MAX_U128, TEN_POW_15, TWO_POW_32};
 use contracts_commons::message_hash::OffchainMessageHash;
@@ -60,7 +61,7 @@ use starknet::storage::{
 fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(state.replaceability.upgrade_delay.read(), UPGRADE_DELAY);
+    assert_eq!(state.replaceability.get_upgrade_delay(), UPGRADE_DELAY);
     assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
 
@@ -607,7 +608,7 @@ fn test_successful_deposit() {
         test_address(),
         (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
     );
-    let status = state.deposits.registered_deposits.entry(deposit_hash).read();
+    let status = state.deposits.get_deposit_status(:deposit_hash);
     if let DepositStatus::PENDING(timestamp) = status {
         assert_eq!(timestamp, expected_time);
     } else {
@@ -713,7 +714,7 @@ fn test_successful_process_deposit() {
         deposit_request_hash: deposit_hash,
     );
 
-    let status = state.deposits.registered_deposits.entry(deposit_hash).read();
+    let status = state.deposits.get_deposit_status(:deposit_hash);
     assert_eq!(status, DepositStatus::DONE, "Deposit not processed");
 }
 
@@ -1235,7 +1236,7 @@ fn test_successful_withdraw_request_with_public_key() {
         );
 
     // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
     assert_eq!(status, RequestStatus::PENDING);
 }
 
@@ -1280,7 +1281,7 @@ fn test_successful_withdraw_request_with_owner() {
         );
 
     // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
     assert_eq!(status, RequestStatus::PENDING);
 }
 
@@ -1624,7 +1625,7 @@ fn test_successful_set_public_key_request() {
         );
 
     // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
     assert_eq!(status, RequestStatus::PENDING);
 }
 
@@ -1845,7 +1846,7 @@ fn test_successful_transfer_request_using_public_key() {
         );
 
     // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
     assert_eq!(status, RequestStatus::PENDING);
 }
 
@@ -1889,7 +1890,7 @@ fn test_successful_transfer_request_with_owner() {
         );
 
     // Check:
-    let status = state.request_approvals.approved_requests.entry(msg_hash).read();
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
     assert_eq!(status, RequestStatus::PENDING);
 }
 
