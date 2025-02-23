@@ -119,7 +119,6 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
             let mut position_data = array![];
-            self._validate_position_exists(:position_id);
             self._collect_position_collaterals(ref :position_data, :position_id);
             self._collect_position_synthetics(ref :position_data, :position_id);
             position_data.span()
