@@ -21,7 +21,8 @@ pub mod AssetsComponent {
         INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
         ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
         SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
-        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL,
+        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
 
     use perpetuals::core::components::assets::events;
@@ -378,10 +379,16 @@ pub mod AssetsComponent {
         ) {
             // Checks that the component has not been initialized yet.
             assert(self.max_price_interval.read().is_zero(), ALREADY_INITIALIZED);
+            assert(max_price_interval.is_non_zero(), ZERO_MAX_PRICE_INTERVAL);
+            assert(max_funding_interval.is_non_zero(), ZERO_MAX_FUNDING_INTERVAL);
+            assert(max_funding_rate.is_non_zero(), ZERO_MAX_FUNDING_RATE);
+            assert(max_oracle_price_validity.is_non_zero(), ZERO_MAX_ORACLE_PRICE);
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);
             self.max_oracle_price_validity.write(max_oracle_price_validity);
+            self.last_funding_tick.write(Time::now());
+            self.last_price_validation.write(Time::now());
         }
 
 
