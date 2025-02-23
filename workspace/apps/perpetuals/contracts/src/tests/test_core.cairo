@@ -6,19 +6,25 @@ use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{
-    Deployable, TokenTrait, assert_panic_with_felt_error, cheat_caller_address_once,
+    Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
+    cheat_caller_address_once,
 };
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
-use perpetuals::core::components::assets::errors::COLLATERAL_ALREADY_EXISTS;
-use perpetuals::core::components::assets::interface::IAssets;
+use perpetuals::core::components::assets::errors::{COLLATERAL_ALREADY_EXISTS};
+use perpetuals::core::components::assets::interface::{
+    IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
+};
 use perpetuals::core::components::positions::Positions::POSITION_VERSION;
-use perpetuals::core::components::positions::interface::IPositions;
+use perpetuals::core::components::positions::errors::INVALID_POSITION;
+use perpetuals::core::components::positions::interface::{
+    IPositions, IPositionsSafeDispatcher, IPositionsSafeDispatcherTrait,
+};
 use perpetuals::core::components::positions::{
     Positions, Positions::InternalTrait as PositionsInternal,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::interface::{ICore, ICoreSafeDispatcherTrait};
+use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::{AssetIdTrait, AssetStatus};
 use perpetuals::core::types::funding::{FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
@@ -97,6 +103,218 @@ fn test_constructor() {
         OPERATOR_PUBLIC_KEY(),
     );
 }
+
+
+// Invalid cases tests.
+
+#[test]
+fn test_caller_failures() {
+    // Setup:
+    let (cfg, state, _) = init_by_dispatcher();
+
+    let dispatcher = ICoreSafeDispatcher { contract_address: state.address };
+
+    let result = dispatcher
+        .process_deposit(
+            operator_nonce: Zero::zero(),
+            depositor: test_address(),
+            position_id: POSITION_ID_1,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: DEPOSIT_AMOUNT,
+            salt: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .withdraw_request(
+            signature: array![].span(),
+            recipient: test_address(),
+            position_id: POSITION_ID_1,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: WITHDRAW_AMOUNT.into(),
+            expiration: Time::now(),
+            salt: 0,
+        );
+    // Means that any one can call this ABI.
+    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+
+    let result = dispatcher
+        .withdraw(
+            operator_nonce: Zero::zero(),
+            recipient: test_address(),
+            position_id: POSITION_ID_1,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: WITHDRAW_AMOUNT.into(),
+            expiration: Time::now(),
+            salt: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .transfer_request(
+            signature: array![].span(),
+            recipient: POSITION_ID_1,
+            position_id: POSITION_ID_2,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: TRANSFER_AMOUNT.into(),
+            expiration: Time::now(),
+            salt: 0,
+        );
+    // Means that any one can call this ABI.
+    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+
+    let result = dispatcher
+        .transfer(
+            operator_nonce: Zero::zero(),
+            recipient: POSITION_ID_1,
+            position_id: POSITION_ID_2,
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            amount: TRANSFER_AMOUNT.into(),
+            expiration: Time::now(),
+            salt: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let default_order = Order {
+        position_id: POSITION_ID_1,
+        base_asset_id: cfg.collateral_cfg.collateral_id,
+        base_amount: 0,
+        quote_asset_id: cfg.collateral_cfg.collateral_id,
+        quote_amount: 0,
+        fee_asset_id: cfg.collateral_cfg.collateral_id,
+        fee_amount: 0,
+        expiration: Time::now(),
+        salt: 0,
+    };
+
+    let result = dispatcher
+        .trade(
+            operator_nonce: Zero::zero(),
+            signature_a: array![].span(),
+            signature_b: array![].span(),
+            order_a: default_order,
+            order_b: default_order,
+            actual_amount_base_a: 0,
+            actual_amount_quote_a: 0,
+            actual_fee_a: 0,
+            actual_fee_b: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .liquidate(
+            operator_nonce: Zero::zero(),
+            liquidator_signature: array![].span(),
+            liquidated_position_id: POSITION_ID_1,
+            liquidator_order: default_order,
+            actual_amount_base_liquidated: 0,
+            actual_amount_quote_liquidated: 0,
+            actual_liquidator_fee: 0,
+            fee_asset_id: cfg.collateral_cfg.collateral_id,
+            fee_amount: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .deleverage(
+            operator_nonce: Zero::zero(),
+            deleveraged_position: POSITION_ID_1,
+            deleverager_position: POSITION_ID_1,
+            deleveraged_base_asset_id: cfg.collateral_cfg.collateral_id,
+            deleveraged_base_amount: 0,
+            deleveraged_quote_asset_id: cfg.collateral_cfg.collateral_id,
+            deleveraged_quote_amount: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .register_collateral(
+            asset_id: cfg.collateral_cfg.collateral_id,
+            token_address: Zero::zero(),
+            quantum: Zero::zero(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
+
+    let result = dispatcher
+        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span());
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .price_tick(
+            operator_nonce: Zero::zero(),
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            price: Zero::zero(),
+            signed_prices: array![].span(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
+
+    let result = dispatcher
+        .add_oracle_to_asset(
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            oracle_public_key: Zero::zero(),
+            oracle_name: Zero::zero(),
+            asset_name: Zero::zero(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
+
+    let result = dispatcher
+        .add_synthetic_asset(
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            risk_factor_tiers: array![].span(),
+            risk_factor_first_tier_boundary: Zero::zero(),
+            risk_factor_tier_size: Zero::zero(),
+            quorum: 0,
+            resolution: 0,
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
+
+    let result = dispatcher.deactivate_synthetic(synthetic_id: cfg.synthetic_cfg.synthetic_id);
+    assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
+
+    let dispatcher = IPositionsSafeDispatcher { contract_address: state.address };
+
+    let result = dispatcher
+        .new_position(
+            operator_nonce: Zero::zero(),
+            position_id: POSITION_ID_1,
+            owner_public_key: Zero::zero(),
+            owner_account: Zero::zero(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .set_owner_account(
+            operator_nonce: Zero::zero(),
+            signature: array![].span(),
+            position_id: POSITION_ID_1,
+            public_key: Zero::zero(),
+            new_owner_account: Zero::zero(),
+            expiration: Time::now(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+
+    let result = dispatcher
+        .set_public_key_request(
+            signature: array![].span(),
+            position_id: POSITION_ID_1,
+            new_public_key: Zero::zero(),
+            expiration: Time::now(),
+        );
+    // Means that any one can call this ABI.
+    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+
+    let result = dispatcher
+        .set_public_key(
+            operator_nonce: Zero::zero(),
+            position_id: POSITION_ID_1,
+            new_public_key: Zero::zero(),
+            expiration: Time::now(),
+        );
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
+}
+
 
 // Add collateral tests.
 

@@ -443,7 +443,6 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let position = self.positions.get_position_snapshot(:position_id);
             self
                 ._validate_transfer(
                     :operator_nonce,
@@ -454,6 +453,7 @@ pub mod Core {
                     :expiration,
                     :salt,
                 );
+            let position = self.positions.get_position_snapshot(:position_id);
             self._execute_transfer(:recipient, :position_id, :collateral_id, :amount);
             let hash = self
                 .request_approvals
@@ -1364,8 +1364,6 @@ pub mod Core {
             salt: felt252,
         ) {
             self._validate_operator_flow(:operator_nonce);
-            // Check positions.
-            self._validate_position_exists(position_id: recipient);
 
             // Validate collateral.
             self.assets.validate_collateral_active(:collateral_id);
