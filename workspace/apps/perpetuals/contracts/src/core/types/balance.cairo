@@ -54,13 +54,6 @@ pub impl U64IntoBalance of Into<u64, Balance> {
     }
 }
 
-pub impl U128IntoBalance of Into<u128, Balance> {
-    fn into(self: u128) -> Balance {
-        let value: i64 = self.try_into().expect('Balance value doesn\'t fit i64');
-        Balance { value }
-    }
-}
-
 pub impl BalanceIntoI164 of Into<Balance, i64> {
     fn into(self: Balance) -> i64 {
         self.value

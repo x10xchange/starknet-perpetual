@@ -553,7 +553,7 @@ fn test_successful_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user = Default::default();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
 
     // Fund user.
@@ -575,14 +575,14 @@ fn test_successful_deposit() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
+        quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
 
@@ -593,8 +593,8 @@ fn test_successful_deposit() {
         beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT.into(),
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
     );
 
@@ -624,7 +624,7 @@ fn test_deposit_already_registered() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user = Default::default();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
 
     // Fund user.
@@ -641,14 +641,14 @@ fn test_deposit_already_registered() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     state
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 }
@@ -662,7 +662,7 @@ fn test_successful_process_deposit() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -678,14 +678,14 @@ fn test_successful_process_deposit() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
+        quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
     let mut spy = snforge_std::spy_events();
@@ -708,8 +708,8 @@ fn test_successful_process_deposit() {
         beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT.into(),
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
     );
 
@@ -728,7 +728,7 @@ fn test_successful_cancel_deposit() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -743,14 +743,14 @@ fn test_successful_cancel_deposit() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
         beneficiary: user.position_id.value,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
+        quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
     let mut spy = snforge_std::spy_events();
@@ -773,7 +773,7 @@ fn test_successful_cancel_deposit() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -784,8 +784,8 @@ fn test_successful_cancel_deposit() {
         beneficiary: user.position_id.value,
         depositing_address: user.address,
         asset_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT.into(),
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
     );
 
@@ -809,7 +809,7 @@ fn test_cancel_non_registered_deposit() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: cfg.collateral_cfg.collateral_id.into(),
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 }
@@ -824,7 +824,7 @@ fn test_cancel_deposit_different_hash() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -839,7 +839,7 @@ fn test_cancel_deposit_different_hash() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -847,7 +847,7 @@ fn test_cancel_deposit_different_hash() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter + 1,
         );
 }
@@ -862,7 +862,7 @@ fn test_cancel_already_done_deposit() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -879,7 +879,7 @@ fn test_cancel_already_done_deposit() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -902,7 +902,7 @@ fn test_cancel_already_done_deposit() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 }
@@ -917,7 +917,7 @@ fn test_double_cancel_deposit() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -934,7 +934,7 @@ fn test_double_cancel_deposit() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -945,14 +945,14 @@ fn test_double_cancel_deposit() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     state
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 }
@@ -967,7 +967,7 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
-    let user_deposit_amount = DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
     token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
@@ -984,7 +984,7 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
         .deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -992,7 +992,7 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
         .cancel_deposit(
             beneficiary: user.position_id.value,
             asset_id: collateral_cfg_id,
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 }
@@ -2045,7 +2045,7 @@ fn test_validate_synthetic_prices_expired() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
@@ -2056,7 +2056,7 @@ fn test_validate_synthetic_prices_expired() {
         .deposit(
             beneficiary: user.position_id.into(),
             asset_id: cfg.collateral_cfg.collateral_id.into(),
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2086,7 +2086,7 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     state
         .assets
@@ -2103,7 +2103,7 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
         .deposit(
             beneficiary: user.position_id.into(),
             asset_id: cfg.collateral_cfg.collateral_id.into(),
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2134,7 +2134,7 @@ fn test_validate_prices() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     let new_time = Time::now().add(delta: Time::days(count: 1));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
@@ -2144,7 +2144,7 @@ fn test_validate_prices() {
         .deposit(
             beneficiary: user.position_id.into(),
             asset_id: cfg.collateral_cfg.collateral_id.into(),
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2174,7 +2174,7 @@ fn test_validate_prices_no_update_needed() {
         .approve(
             owner: user.address,
             spender: test_address(),
-            amount: DEPOSIT_AMOUNT * cfg.collateral_cfg.quantum.into(),
+            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     let old_time = Time::now();
     assert_eq!(state.assets.last_price_validation.read(), old_time);
@@ -2185,7 +2185,7 @@ fn test_validate_prices_no_update_needed() {
         .deposit(
             beneficiary: user.position_id.into(),
             asset_id: cfg.collateral_cfg.collateral_id.into(),
-            quantized_amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);

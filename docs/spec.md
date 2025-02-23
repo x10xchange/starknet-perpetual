@@ -1152,9 +1152,9 @@ pub enum DepositStatus {
 pub struct Storage {
     registered_deposits: Map<HashType, DepositStatus>,
     // aggregate_pending_deposit is in unquantized amount
-    pub aggregate_pending_deposit: Map<felt252, u128>,
-    pub asset_info: Map<felt252, (ContractAddress, u64)>,
-    pub deposit_grace_period: TimeDelta,
+    aggregate_quantized_pending_deposits: Map<felt252, u128>,
+    asset_info: Map<felt252, (ContractAddress, u64)>,
+    deposit_grace_period: TimeDelta,
 }
 ```
 #### Events
@@ -1270,7 +1270,7 @@ pub enum Event {
 
 ### Requests
 
-General component registeration of requests and validate. In charge of approving user requests for Transfer, Withdraw, and Set Public Key flows before the operator can execute them.
+General component registration of requests and validate. In charge of approving user requests for Transfer, Withdraw, and Set Public Key flows before the operator can execute them.
 #### Interface
 
 ```rust
@@ -1291,7 +1291,7 @@ pub enum RequestStatus {
 ```rust
 #[storage]
 pub struct Storage {
-    pub approved_requests: Map<HashType, RequestStatus>,
+    approved_requests: Map<HashType, RequestStatus>,
 }
 ```
 #### Errors
@@ -2159,7 +2159,7 @@ fn process_deposit(
     depositor: ContractAddress,
     position_id: PositionId,
     collateral_id: AssetId,
-    amount: i64,
+    amount: u64,
     salt: felt252,
 )
 ```

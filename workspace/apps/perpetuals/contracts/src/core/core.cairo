@@ -55,8 +55,7 @@ pub mod Core {
     };
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_contract_address};
 
@@ -235,7 +234,7 @@ pub mod Core {
             depositor: ContractAddress,
             position_id: PositionId,
             collateral_id: AssetId,
-            amount: u128,
+            amount: u64,
             salt: felt252,
         ) {
             self._validate_deposit(:operator_nonce, :position_id, :collateral_id, :amount);
@@ -245,7 +244,7 @@ pub mod Core {
                     :depositor,
                     beneficiary: position_id.into(),
                     asset_id: collateral_id.into(),
-                    quantized_amount: amount,
+                    quantized_amount: amount.into(),
                     :salt,
                 );
             let position_diff = self
@@ -340,7 +339,7 @@ pub mod Core {
             let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
             self
                 ._validate_sufficient_funds(
-                    :token_contract, :collateral_id, amount: withdraw_unquantized_amount,
+                    :token_contract, :collateral_id, :withdraw_unquantized_amount,
                 );
             /// Execution - Withdraw:
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
@@ -1121,7 +1120,7 @@ pub mod Core {
             operator_nonce: u64,
             position_id: PositionId,
             collateral_id: AssetId,
-            amount: u128,
+            amount: u64,
         ) {
             self._validate_operator_flow(:operator_nonce);
             self._validate_position_exists(:position_id);
@@ -1379,15 +1378,17 @@ pub mod Core {
             self: @ContractState,
             token_contract: IERC20Dispatcher,
             collateral_id: AssetId,
-            amount: u64,
+            withdraw_unquantized_amount: u64,
         ) {
-            let pending_unquantized_amount = self
+            let pending_quantized_amount = self
                 .deposits
-                .aggregate_pending_deposit
-                .read(collateral_id.into());
+                .get_asset_aggregate_quantized_pending_deposits(asset_id: collateral_id.into());
+            let (_, quantum) = self.deposits.get_asset_info(asset_id: collateral_id.into());
             let erc20_balance = token_contract.balance_of(get_contract_address());
+            let pending_unquantized_amount = pending_quantized_amount * quantum.into();
             assert(
-                erc20_balance >= amount.into() + pending_unquantized_amount.into(),
+                erc20_balance >= withdraw_unquantized_amount.into()
+                    + pending_unquantized_amount.into(),
                 INSUFFICIENT_FUNDS,
             );
         }

@@ -16,7 +16,7 @@ pub trait ICore<TContractState> {
         depositor: ContractAddress,
         position_id: PositionId,
         collateral_id: AssetId,
-        amount: u128,
+        amount: u64,
         salt: felt252,
     );
     fn withdraw_request(
