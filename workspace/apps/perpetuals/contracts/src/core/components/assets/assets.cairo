@@ -108,6 +108,9 @@ pub mod AssetsComponent {
             let roles = get_dep_component!(@self, Roles);
             roles.only_app_governor();
 
+            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
+            assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
+
             // Validate the oracle does not exist.
             let oracle_inner_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
             assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);

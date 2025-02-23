@@ -197,7 +197,7 @@ classDiagram
         synthetic_timely_data_head: Option[AssetId]
         synthetic_timely_data: Map< AssetId, SyntheticTimelyData>
         risk_factor_tiers: Map< AssetId, Vec[FixedTwoDecimal]>
-        oracles: Map< AssetId, Map[PublicKey, felt252]>
+        asset_oracle: Map< AssetId, Map[PublicKey, felt252]>
         max_oracle_price_validity: TimeDelta
 
         add_oracle_to_asset()
@@ -354,8 +354,8 @@ classDiagram
 
 [Same as in StarkEx](https://docs.starkware.co/starkex/perpetual/perpetual_overview.html#total_value_total_risk)
 
-The *total value* of a position is the sum of the value of the position’s collateral and synthetic assets, expressed in the collateral currency.   
-The *total risk* is a measurement that includes the total value of all synthetic assets in a position, and also takes into account a predetermined *risk factor* for each synthetic asset. As the risk factor increases, so does the total risk.  
+The *total value* of a position is the sum of the value of the position’s collateral and synthetic assets, expressed in the collateral currency.
+The *total risk* is a measurement that includes the total value of all synthetic assets in a position, and also takes into account a predetermined *risk factor* for each synthetic asset. As the risk factor increases, so does the total risk.
 Example:
 
 ## Structs
@@ -391,17 +391,17 @@ pub enum PositionState {
 
 ### Deleveragable
 
-A position is in deleveragable state when:  
+A position is in deleveragable state when:
 $TV < 0$
 
 ### Liquidatable
 
-A position is in liquidatable state when:  
+A position is in liquidatable state when:
 $|TV| < TR$
 
 ### Healthy
 
-A position is in a healthy state when:  
+A position is in a healthy state when:
 $|TV| \geq TR$
 
 ### ChangeEffects
@@ -416,8 +416,8 @@ pub struct ChangeEffects {
 ### Is Healthier
 
 $$ ( \frac{TV}{TR} )\_{new}\leq(\frac{TV}{TR})\_{old} $$
-   
-   **AND**  
+
+   **AND**
 
 $$ TR_{new}<TR_{old} $$
 
@@ -425,7 +425,7 @@ $$ TR_{new}<TR_{old} $$
 
 $$ \frac{TV\_{new}-1USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}{TR}\_{new} $$
 
-Deleveragerer should be [healthy](#healthy) or [healthier](#is-healthier).  
+Deleveragerer should be [healthy](#healthy) or [healthier](#is-healthier).
 Deleveragree should be ([healthy](#healthy) or [healthier](#is-healthier)) **and** [is fair deleverage](#is-fair-deleverage)
 
 ### PositionChangeResult
@@ -452,19 +452,19 @@ fn evaluate_position_change(
 
 #### Logic
 
-1. Initialize total\_value\_before \= 0  
-2. Initialize total\_risk\_before \= 0  
-3. Iterate over `position.asset_entries`:  
-   1. total\_value\_before+= asset\_price\*asset\_balance  
-   2. total\_risk\_before+= asset\_price\*asset\_balance\*asset\_risk\_factor  
-4. Initialize total\_value\_after \= total\_value\_before  
-5. Initialize total\_risk\_after \= total\_risk\_before  
-6. Iterate over `position_diff`:  
-   1. total\_value\_after \+= price\*balance\_after \- price\*balance\_before  
-   2. total\_risk\_after \+= risk\_factor \* (price\*balance\_after \- price\*balance\_before)  
+1. Initialize total\_value\_before \= 0
+2. Initialize total\_risk\_before \= 0
+3. Iterate over `position.asset_entries`:
+   1. total\_value\_before+= asset\_price\*asset\_balance
+   2. total\_risk\_before+= asset\_price\*asset\_balance\*asset\_risk\_factor
+4. Initialize total\_value\_after \= total\_value\_before
+5. Initialize total\_risk\_after \= total\_risk\_before
+6. Iterate over `position_diff`:
+   1. total\_value\_after \+= price\*balance\_after \- price\*balance\_before
+   2. total\_risk\_after \+= risk\_factor \* (price\*balance\_after \- price\*balance\_before)
 7. Return the [`PositionChangeResult`](#positionchangeresult) according to the Total Risk and Total Value.
 
-## Structs 
+## Structs
 
 ### Signature
 
@@ -487,7 +487,7 @@ pub type HashType = felt252;
 ### AssetId
 
 ```rust
-pub struct AssetId { 
+pub struct AssetId {
     pub value: felt252,
 }
 ```
@@ -527,28 +527,28 @@ pub struct AssetDiffEntry {
 pub type PositionDiff = Span<AssetDiffEntry>;
 ```
 
-### PositionId 
+### PositionId
 
 ```rust
-struct PositionId { 
+struct PositionId {
     value: u32,
 }
 ```
 
-### FundingIndex 
+### FundingIndex
 
 ```rust
 pub struct FundingIndex {
     /// Signed 64-bit fixed-point number:
     /// 1 sign bit, 31-bits integer part, 32-bits fractional part.
-    pub value: i64 
+    pub value: i64
 }
 ```
 
 ### Balance
 
 ```rust
-pub struct Balance { 
+pub struct Balance {
     pub value: i64
 }
 ```
@@ -559,14 +559,14 @@ pub struct Balance {
 pub struct Price {
 	// Unsigned 28-bit fixed point decimal percision.
     // 28-bit for the integer part and 28-bit for the fractional part.
-    pub value: u64 
+    pub value: u64
 }
 ```
 
 ### Timestamp
 
 ```rust
-pub struct Timestamp { 
+pub struct Timestamp {
     pub seconds: u64
 }
 ```
@@ -574,7 +574,7 @@ pub struct Timestamp {
 ### TimeDelta
 
 ```rust
-pub struct TimeDelta { 
+pub struct TimeDelta {
     pub seconds: u64
 }
 ```
@@ -588,7 +588,7 @@ pub struct FundingTick {
 }
 ```
 
-### PriceTick 
+### PriceTick
 
 ```rust
 pub struct PriceTick {
@@ -599,12 +599,12 @@ pub struct PriceTick {
 }
 ```
 
-### FixedTwoDecimal 
+### FixedTwoDecimal
 
 ```rust
-// Fixed-point decimal with 2 decimal places. 
+// Fixed-point decimal with 2 decimal places.
 // Example: 0.75 is represented as 75.
-pub struct FixedTwoDecimal { 
+pub struct FixedTwoDecimal {
     pub value: u8 // Stores number * 100
 }
 ```
@@ -705,7 +705,7 @@ struct SyntheticConfig {
 }
 ```
 
-### CollateralTimelyData 
+### CollateralTimelyData
 
 ```rust
 struct CollateralTimelyData {
@@ -718,7 +718,7 @@ struct CollateralTimelyData {
 
 ### SyntheticTimelyData
 
-```rust 
+```rust
 struct SyntheticTimelyData {
     pub version: u8,
     pub price: Price,
@@ -728,7 +728,7 @@ struct SyntheticTimelyData {
 }
 ```
 
-## Get Message Hash 
+## Get Message Hash
 
 Hash on the following args are done according to [SNIP-12](https://github.com/starknet-io/SNIPs/blob/main/SNIPS/snip-12.md).
 
@@ -763,15 +763,15 @@ fn hash_struct(self: @TYPE) -> HashType {
 
 ```
 
-The `StarknetDomain` values are:  
- 
+The `StarknetDomain` values are:
+
 
 ```rust
 const NAME: felt252 = 'Perpetuals';
 const VERSION: felt252 = 'v0';
 ```
 
-And the `StarknetDomain` type hash is:  
+And the `StarknetDomain` type hash is:
 
 ```rust
 // selector!(
@@ -946,7 +946,7 @@ impl StructHashImpl of StructHash<SetOwnerAccountArgs> {
 
 ```
 
-### Order 
+### Order
 
 ```rust
 pub struct Order {
@@ -995,7 +995,7 @@ impl StructHashImpl of StructHash<Order> {
 
 ```
 
-## Components 
+## Components
 
 ### Assets
 
@@ -1063,7 +1063,7 @@ Struct Storage {
     pub synthetic_timely_data_head: Option<AssetId>,
     pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
     pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
-    oracles: Map<AssetId, Map<PublicKey, felt252>>,
+    asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
     max_oracle_price_validity: TimeDelta,
 }
 ```
@@ -1111,7 +1111,7 @@ pub const SYNTHETIC_NOT_EXISTS: felt252 = 'SYNTHETIC_NOT_EXISTS';
 pub const INVALID_STATUS: felt252 = 'INVALID_STATUS';
 ```
 
-### Deposit 
+### Deposit
 
 General component for deposit, process, and cancellation.
 
@@ -1181,7 +1181,7 @@ pub const INVALID_DEPOSIT_GRACE_PERIOD: felt252 = 'INVALID_DEPOSIT_GRACE_PERIOD'
 pub const ZERO_AMOUNT: felt252 = 'ZERO_AMOUNT';
 ```
 
-### Nonce 
+### Nonce
 
 General component for deposit, process, and cancellation.
 #### Interface
@@ -1514,13 +1514,13 @@ Checking that the contract is not paused. This is done using [SW pausable compon
 self.pausable.assert_not_paused()
 ```
 
-### Position 
+### Position
 
 Checking that the position exists in the system.
 
 ### Operator Nonce
 
-Checking that the caller of the function is the Operator. This is done using [SW roles component](https://github.com/starkware-industries/starknet-apps/blob/dev/workspace/packages/contracts/src/components/roles/roles.cairo):  
+Checking that the caller of the function is the Operator. This is done using [SW roles component](https://github.com/starkware-industries/starknet-apps/blob/dev/workspace/packages/contracts/src/components/roles/roles.cairo):
 Check that the system nonce sent is the same as the contract nonce. This is done using Nonce component:
 
 ```rust
@@ -1552,7 +1552,7 @@ Checking that the expiration timestamp of the transaction hasn’t expired:
 expiration < get_block_timestamp()
 ```
 
-### Requests 
+### Requests
 
 Checking if there’s an approved request in the [requests component](#requests) ([deposit component](#deposit)) for the current (deposit) flow.
 
@@ -1560,7 +1560,7 @@ Checking if there’s an approved request in the [requests component](#requests)
 self.request_approvals.consume_approved_request(hash);
 ```
 
-### Funding 
+### Funding
 
 For each funding tick we update all the synthetic funding indexes and the storage timestamp of `last_funding_tick`. Each time we validate funding, we check that:
 
@@ -1568,7 +1568,7 @@ For each funding tick we update all the synthetic funding indexes and the storag
 get_block_timestamp() - self.last_funding_tick.read() < self.funding_validation_interval.read()
 ```
 
-### Price 
+### Price
 
 At the start of each flow, we check if `price_validation_interval` has passed since the `last price validation.` If that’s the case, we iterate through the active synthetic and collateral assets in the system and check if any asset has expired. Then, we update the `last_price_validation`.
 
@@ -1581,23 +1581,23 @@ For asset in <synthetic_timely_data/collateral_timely_data>:
     self.last_price_validation.write(get_block_timestamp())
 ```
 
-### Amount 
+### Amount
 
 Validate that the amount is positive/negative according to the flow.
 
-### Asset 
+### Asset
 
-Checking that the asset exists in the system and is not delisted. 
+Checking that the asset exists in the system and is not delisted.
 
-- Withdraw, Deposit asset\_ids must be collaterals  
-- Trade, Liquidate \- quote, fee asset\_ids must be collaterals  
+- Withdraw, Deposit asset\_ids must be collaterals
+- Trade, Liquidate \- quote, fee asset\_ids must be collaterals
 - Deleverage \- quote is active collateral. base must be synthetic, it can be deactivated.
 
-### Fulfillment 
+### Fulfillment
 
 Check whether the transaction hasn’t already been completed by checking whether the fulfillment storage map value of the message hash is 0 or not entirely fulfilled.
 
-### Fundamental 
+### Fundamental
 
 Position after the change is [healthy](#healthy) or [is healthier](#is-healthier) after change.
 
@@ -1654,7 +1654,7 @@ pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
 }
 
 ```
-## Events 
+## Events
 
 #### NewPosition
 
@@ -1684,7 +1684,7 @@ pub struct SetOwnerAccount {
     pub set_owner_account_hash: felt252,
 }
 ```
-#### SetPublicKeyRequest 
+#### SetPublicKeyRequest
 
 ```rust
 #[derive(starknet::Event)]
@@ -1699,7 +1699,7 @@ pub struct SetPublicKeyRequest {
     pub set_public_key_request_hash: felt252,
 }
 ```
-#### SetPublicKey 
+#### SetPublicKey
 
 ```rust
 #[derive(starknet::Event)]
@@ -1714,12 +1714,12 @@ pub struct SetPublicKey {
     pub set_public_key_request_hash: felt252,
 }
 ```
-#### Deposit 
+#### Deposit
 ```rust
 #[derive(starknet::Event)]
 pub struct Deposit {
     #[key]
-    pub position_id: u32,
+    pub beneficiary: u32,
     #[key]
     pub depositing_address: ContractAddress,
     pub asset_id: felt252,
@@ -1729,13 +1729,13 @@ pub struct Deposit {
     pub deposit_request_hash: felt252,
 }
 ```
-#### DepositCanceled 
+#### DepositCanceled
 
 ```rust
 #[derive(starknet::Event)]
 pub struct DepositCanceled {
     #[key]
-    pub position_id: u32,
+    pub beneficiary: u32,
     #[key]
     pub depositing_address: ContractAddress,
     pub asset_id: felt252,
@@ -1745,12 +1745,12 @@ pub struct DepositCanceled {
     pub deposit_request_hash: felt252,
 }
 ```
-#### DepositProcessed 
+#### DepositProcessed
 ```rust
 #[derive(starknet::Event)]
 pub struct DepositProcessed {
     #[key]
-    pub position_id: u32,
+    pub beneficiary: u32,
     #[key]
     pub depositing_address: ContractAddress,
     pub asset_id: felt252,
@@ -1761,7 +1761,7 @@ pub struct DepositProcessed {
 }
 ```
 
-#### WithdrawRequest 
+#### WithdrawRequest
 
 ```rust
 #[derive(starknet::Event)]
@@ -1778,7 +1778,7 @@ pub struct WithdrawRequest {
 }
 ```
 
-#### Withdraw 
+#### Withdraw
 
 ```rust
 #[derive(starknet::Event)]
@@ -1795,7 +1795,7 @@ pub struct Withdraw {
 }
 ```
 
-#### Trade 
+#### Trade
 ```rust
 #[derive(starknet::Event)]
 pub struct Trade {
@@ -1831,9 +1831,9 @@ pub struct Trade {
 #[derive(starknet::Event)]
 pub struct TransferRequest {
     #[key]
-    pub position_id: PositionId,
-    #[key]
     pub recipient: PositionId,
+    #[key]
+    pub position_id: PositionId,
     pub collateral_id: AssetId,
     pub amount: u64,
     pub expiration: Timestamp,
@@ -1842,15 +1842,15 @@ pub struct TransferRequest {
 }
 ```
 
-#### Transfer 
+#### Transfer
 
 ```rust
 #[derive(starknet::Event)]
 pub struct Transfer {
     #[key]
-    pub position_id: PositionId,
-    #[key]
     pub recipient: PositionId,
+    #[key]
+    pub position_id: PositionId,
     pub collateral_id: AssetId,
     pub amount: u64,
     pub expiration: Timestamp,
@@ -1859,7 +1859,7 @@ pub struct Transfer {
 }
 ```
 
-#### Liquidate 
+#### Liquidate
 ```rust
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Liquidate {
@@ -1883,7 +1883,7 @@ pub struct Liquidate {
 }
 ```
 
-#### Deleverage 
+#### Deleverage
 ```rust
 #[derive(starknet::Event)]
 pub struct Deleverage {
@@ -1910,7 +1910,7 @@ pub struct FundingTick {
 }
 ```
 
-#### PriceTick 
+#### PriceTick
 
 ```rust
 #[derive(starknet::Event)]
@@ -1921,7 +1921,7 @@ pub struct PriceTick {
 }
 ```
 
-#### AssetActivated 
+#### AssetActivated
 ```rust
 #[derive(starknet::Event)]
 pub struct AssetActivated {
@@ -1930,7 +1930,7 @@ pub struct AssetActivated {
 }
 ```
 
-#### AddSynthetic 
+#### AddSynthetic
 
 ```rust
 #[derive(starknet::Event)]
@@ -1945,7 +1945,7 @@ pub struct AddSynthetic {
 }
 ```
 
-#### DeactivateSyntheticAsset 
+#### DeactivateSyntheticAsset
 
 ```rust
 #[derive(starknet::Event)]
@@ -1955,7 +1955,7 @@ pub struct DeactivateSyntheticAsset {
 }
 ```
 
-#### UpdateOracleQuorum 
+#### UpdateOracleQuorum
 
 ```rust
 #[derive(starknet::Event)]
@@ -1967,7 +1967,7 @@ pub struct UpdateAssetQuorum {
 }
 ```
 
-#### RemoveOracle 
+#### RemoveOracle
 
 ```rust
 #[derive(starknet::Event)]
@@ -1979,7 +1979,7 @@ pub struct RemoveOracle {
 }
 ```
 
-#### AddOracle 
+#### AddOracle
 ```rust
 #[derive(starknet::Event)]
 pub struct AddOracle {
@@ -1989,7 +1989,7 @@ pub struct AddOracle {
     pub oracle_public_key: PublicKey,
 }
 ```
-#### RegisterCollateral 
+#### RegisterCollateral
 ```rust
 #[derive(starknet::Event)]
 pub struct RegisterCollateral {
@@ -2001,11 +2001,11 @@ pub struct RegisterCollateral {
 }
 ```
 
-#### 
+####
 
 ## Constructor
 
-#### Description 
+#### Description
 
 It only runs once when deploying the contract and is used to initialize the state of the contract.
 
@@ -2026,14 +2026,14 @@ fn constructor(
 )
 ```
 
-#### Validations 
+#### Validations
 
-#### Logic 
+#### Logic
 
-1. Initialize roles with governance\_admin address.  
-2. Update replaceability upgrade delay.  
+1. Initialize roles with governance\_admin address.
+2. Update replaceability upgrade delay.
 3. Initialize assets: set max\_price\_interval, max\_funding\_interval, and max\_funding\_rate.
-4. Initialize deposits.  
+4. Initialize deposits.
 5. Initialize positions: create fee and insurance fund positions.
 
 ## Public Functions
@@ -2058,17 +2058,17 @@ Only the Operator can execute.
 
 #### Hash
 
-#### Validations 
+#### Validations
 
 1. [Pausable check](#pausable)
-2. [Operator Nonce check](#operator-nonce)  
+2. [Operator Nonce check](#operator-nonce)
 3. Check that the `position_id` doesn’t exist
 4. Check that `owner_public_key` is not zero
 
-#### Logic 
+#### Logic
 
 6. [Run open position validations](#validations-2)
-7. `self.positions[positionId].owner_public_key = owner_public_key`  
+7. `self.positions[positionId].owner_public_key = owner_public_key`
 8. `self.positions[positionId].owner_account = owner_account`
 
 #### Errors
@@ -2125,15 +2125,15 @@ fn deposit_hash(
 
 ```
 
-#### Validations 
+#### Validations
 
-1. `quantized_amount>0`  
+1. `quantized_amount>0`
 2. deposit\_hash not exists in registered\_deposits
 
-#### Logic 
+#### Logic
 
-1. `self.registered_deposits.write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));`  
-2. Add `quantized_amount` to pending deposits  
+1. `self.registered_deposits.write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));`
+2. Add `quantized_amount` to pending deposits
 3. Transfer `quantized_amount*asset_id.quantum` from `get_caller_address()` to `get_contract_address()`
 
 #### Errors
@@ -2190,24 +2190,24 @@ fn deposit_hash(
 
 ```
 
-#### Validations 
+#### Validations
 
 We assume that the position is always healthier for deposit
 
-1. [Position check](#position)  
-2. [Pausable check](#pausable)  
-3. [Operator Nonce check](#operator-nonce)  
-4. [Funding validation](#funding)  
-5. [Price validation](#price)  
-6. [Collateral amount is positive](#amount)  
-7. [Collateral check](#asset)  
+1. [Position check](#position)
+2. [Pausable check](#pausable)
+3. [Operator Nonce check](#operator-nonce)
+4. [Funding validation](#funding)
+5. [Price validation](#price)
+6. [Collateral amount is positive](#amount)
+7. [Collateral check](#asset)
 8. [Request approval check on deposit message](#requests)
 
-#### Logic 
+#### Logic
 
 1. Run deposit validations
-2. Add the amount to the collateral balance in the position.   
-3. Mark deposit request as done   
+2. Add the amount to the collateral balance in the position.
+3. Mark deposit request as done
 4. Subtruct amount from pending deposits
 
 #### Errors
@@ -2217,11 +2217,11 @@ We assume that the position is always healthier for deposit
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
 - INVALID\_ZERO\_AMOUNT
-- COLLATERAL\_NOT\_ACTIVE  
+- COLLATERAL\_NOT\_ACTIVE
 - DEPOSIT\_NOT\_REGISTERED
 - DEPOSIT\_ALREADY\_PROCESSED
 - DEPOSIT\_ALREADY\_CANCELED
@@ -2250,7 +2250,7 @@ fn cancel_pending_deposit(
 
 #### Access Control
 
-Anyone can execute. 
+Anyone can execute.
 
 #### Hash
 
@@ -2274,17 +2274,17 @@ fn deposit_hash(
 
 ```
 
-#### Validations 
+#### Validations
 
-1. deposit\_hash is in `DepositStatus::PENDING` in registered\_deposits  
+1. deposit\_hash is in `DepositStatus::PENDING` in registered\_deposits
 2. `self.approved_deposits[deposit_msg_hash].time + cancellation_time < Time::now()`
 
-#### Logic 
+#### Logic
 
-1. Run validations  
-2. `self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED;`  
-3. remove `quantized_amount` from pending deposits  
-4. Transfer `asset_id` ERC-20 `amount * asset_id.quantum` to `get_caller_address()` 
+1. Run validations
+2. `self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED;`
+3. remove `quantized_amount` from pending deposits
+4. Transfer `asset_id` ERC-20 `amount * asset_id.quantum` to `get_caller_address()`
 
 #### Errors
 - DEPOSIT_NOT_CANCELABLE
@@ -2325,14 +2325,14 @@ Anyone can execute.
 
 [get\_message\_hash](#get-message-hash) on [WithdrawArgs](#withdrawargs) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [signature validation](#signature)  
+1. [signature validation](#signature)
 2. Request is new
 
-#### Logic 
+#### Logic
 
-1. [Run validation](#validations-6)  
+1. [Run validation](#validations-6)
 2. Register a request to the requests component
 
 #### Errors
@@ -2375,26 +2375,26 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [WithdrawArgs](#withdrawargs) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Funding validation](#funding)  
-4. [Price validation](#price)  
-5. [Collateral amount is positive](#amount)  
-6. [Expiration validation](#expiration)  
-7. [Collateral check](#asset)  
-8. [Request approval check on withdraw message](#requests-1)  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [Collateral amount is positive](#amount)
+6. [Expiration validation](#expiration)
+7. [Collateral check](#asset)
+8. [Request approval check on withdraw message](#requests-1)
 9. `collateral.asset_id.balance_of(perps contract) - collateral.amount * collateral.asset_id.quantum >= pending_deposits[collateral.asset_id] * collateral.asset_id.quantum`
 
 This means that the withdraw is not taking money from the `pending_deposits`
 
-#### Logic 
+#### Logic
 
-1. Run [withdraw validations](#validations-7)  
-3. Remove the amount from the position collateral.  
-4. `ERC20::transfer(recipient, amount * collateral.asset_id.quantum)`  
-5. Mark withdraw request done in the requests component  
+1. Run [withdraw validations](#validations-7)
+3. Remove the amount from the position collateral.
+4. `ERC20::transfer(recipient, amount * collateral.asset_id.quantum)`
+5. Mark withdraw request done in the requests component
 6. [Fundamental validation](#fundamental)
 
 #### Errors
@@ -2404,7 +2404,7 @@ This means that the withdraw is not taking money from the `pending_deposits`
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
 - INVALID\_ZERO\_AMOUNT
@@ -2415,8 +2415,8 @@ This means that the withdraw is not taking money from the `pending_deposits`
 - REQUEST_ALREADY_PROCESSED
 - INSUFFICIENT_FUNDS
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
-- APPLY\_DIFF\_MISMATCH  
-- ASSET\_NOT\_EXISTS  
+- APPLY\_DIFF\_MISMATCH
+- ASSET\_NOT\_EXISTS
 - NOT_SYNTHETIC
 
 #### Emits
@@ -2449,14 +2449,14 @@ Anyone can execute.
 
 [get\_message\_hash](#get-message-hash) on [TransferArgs](#transferargs) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [signature validation](#signature)  
+1. [signature validation](#signature)
 2. Request is new
 
-#### Logic 
+#### Logic
 
-1. [Run validation](#validations-10)  
+1. [Run validation](#validations-10)
 2. Register a request to transfer using the requests component
 
 #### Emits
@@ -2467,11 +2467,11 @@ Anyone can execute.
 
 - INVALID\_POSITION
 - REQUEST_ALREADY_REGISTERED
-- CALLER\_IS\_NOT\_OWNER\_ACCOUNT  
-- INVALID\_STARK\_KEY\_SIGNATURE  
+- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
+- INVALID\_STARK\_KEY\_SIGNATURE
 - INVALID\_ZERO\_AMOUNT
 
-### 
+###
 
 ### Transfer
 
@@ -2499,26 +2499,26 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [TransferArgs](#transferargs) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Funding validation](#funding)  
-4. [Price validation](#price)  
-5. [Position check](#position) for `transfer_args.position_id`  and `transfer_args.recipient`   
-6. [Collateral amount is positive](#amount)  
-7. [Expiration validation](#expiration)  
-8. [Collateral check](#asset)  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [Position check](#position) for `transfer_args.position_id`  and `transfer_args.recipient`
+6. [Collateral amount is positive](#amount)
+7. [Expiration validation](#expiration)
+8. [Collateral check](#asset)
 9. [Request approval check on transfer message](#requests-1)
 
 #### Logic
 
 1. Run transfer validations
-2. `positions[position_a].collateral_asset[collateral.asset_id] -= amount`  
-3. `positions[position_b].collateral_asset[collateral.asset_id] += amount`  
+2. `positions[position_a].collateral_asset[collateral.asset_id] -= amount`
+3. `positions[position_b].collateral_asset[collateral.asset_id] += amount`
 4. [Fundamental validation](#fundamental) for `position_a` in transfer.
 
-#### Emits 
+#### Emits
 
 [Transfer](#transfer)
 
@@ -2529,7 +2529,7 @@ Only the Operator can execute.
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
 - INVALID\_ZERO\_AMOUNT
@@ -2539,7 +2539,7 @@ Only the Operator can execute.
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
-- APPLY\_DIFF\_MISMATCH  
+- APPLY\_DIFF\_MISMATCH
 - ASSET\_NOT\_EXISTS
 - NOT_SYNTHETIC
 
@@ -2573,46 +2573,46 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [Order](#order) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Funding validation](#funding)  
-4. [Price validation](#price)  
-5. [public key signature](#public-key-signature) on each `Order`  
-6. [All fee amounts are positive (actuals and order)](#amounts)  
-7. [Expiration validation](#expiration)  
-8. [Assets check](#asset)  
-9. `order_a.quote.amount` and `order_a.base.amount` have opposite signs and are non-zero.  
-10. `order_b.quote.amount` and `order_b.base.amount` have opposite signs and are non-zero.  
-11. `quote.asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) registered and active collateral.  
-12. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active collateral/synthetic.  
-13. `order_a.quote.amount` and `order_b.quote.amount` have opposite sign  
-14. `actual_amount_base_a and actual_amount_quote_a are non-zero.`  
-15. `order_a.base.amount` and `actual_amount_base_a` have the same sign.  
-16. `order_a.quote.amount` and `actual_amount_quote` have the same sign.  
-17. `|fulfillment[order_a_hash]|+|actual_amount_base_a|≤|order_a.base.amount|`  
-18. `|fulfillment[order_b_hash]|+|actual_amount_base_a|≤|order_b.base.amount|`  
-19. `actual_fee_a / |actual_amount_quote_a| ≤ order_a.fee.amount / |order_a.quote.amount|`  
-20. `actual_fee_b / |actual_amount_quote_a| ≤ order_b.fee.amount / |order_b.quote.amount|`  
-21. `order_a.base.amount/|order_a.quote.amount|≤actual_amount_base_a/|actual_amount_quote_a|`  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [public key signature](#public-key-signature) on each `Order`
+6. [All fee amounts are positive (actuals and order)](#amounts)
+7. [Expiration validation](#expiration)
+8. [Assets check](#asset)
+9. `order_a.quote.amount` and `order_a.base.amount` have opposite signs and are non-zero.
+10. `order_b.quote.amount` and `order_b.base.amount` have opposite signs and are non-zero.
+11. `quote.asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) registered and active collateral.
+12. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active collateral/synthetic.
+13. `order_a.quote.amount` and `order_b.quote.amount` have opposite sign
+14. `actual_amount_base_a and actual_amount_quote_a are non-zero.`
+15. `order_a.base.amount` and `actual_amount_base_a` have the same sign.
+16. `order_a.quote.amount` and `actual_amount_quote` have the same sign.
+17. `|fulfillment[order_a_hash]|+|actual_amount_base_a|≤|order_a.base.amount|`
+18. `|fulfillment[order_b_hash]|+|actual_amount_base_a|≤|order_b.base.amount|`
+19. `actual_fee_a / |actual_amount_quote_a| ≤ order_a.fee.amount / |order_a.quote.amount|`
+20. `actual_fee_b / |actual_amount_quote_a| ≤ order_b.fee.amount / |order_b.quote.amount|`
+21. `order_a.base.amount/|order_a.quote.amount|≤actual_amount_base_a/|actual_amount_quote_a|`
 22. `order_b.base.amount/|order_b.quote.amount|≤-actual_amount_base_a/|actual_amount_quote_a|`
 
 #### Logic
 
-1. Run validations  
-2. Subtract the fees from each position collateral.  
-3. Add the fees to the fee\_position.  
-4. If `order_X.base_type.asset_id` is synthetic:  
-   1. Add the `actual_amount_base_a` to the `order_a` position synthetic.  
-   2. Subtract the `actual_amount_base_a` from the `order_b` position synthetic.  
-5. Else:  
-   1. Add the `actual_amount_base_a` to the `order_a` position collateral.  
-   2. Subtract the `actual_amount_base_a` from the `order_b` position collateral.  
-6. Add the `actual_amount_quote_a` to the `order_a` position collateral.  
-7. Subtract the `actual_amount_quote_a` from the `order_b` position collateral.  
-8. [Fundamental validation](#fundamental) for both positions in trade.  
-9. `fulfillment[order_a_hash]+=actual_amount_base_a`  
+1. Run validations
+2. Subtract the fees from each position collateral.
+3. Add the fees to the fee\_position.
+4. If `order_X.base_type.asset_id` is synthetic:
+   1. Add the `actual_amount_base_a` to the `order_a` position synthetic.
+   2. Subtract the `actual_amount_base_a` from the `order_b` position synthetic.
+5. Else:
+   1. Add the `actual_amount_base_a` to the `order_a` position collateral.
+   2. Subtract the `actual_amount_base_a` from the `order_b` position collateral.
+6. Add the `actual_amount_quote_a` to the `order_a` position collateral.
+7. Subtract the `actual_amount_quote_a` from the `order_b` position collateral.
+8. [Fundamental validation](#fundamental) for both positions in trade.
+9. `fulfillment[order_a_hash]+=actual_amount_base_a`
 10. `fulfillment[order_b_hash]-=actual_amount_base_a`
 
 #### Emits
@@ -2625,7 +2625,7 @@ Only the Operator can execute.
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - INVALID_STARK_KEY_SIGNATURE
 - FULFILLMENT_EXCEEDED
@@ -2637,14 +2637,14 @@ Only the Operator can execute.
 - INVALID_TRADE_WRONG_AMOUNT_SIGN
 - ASSET_NOT_ACTIVE
 - NOT_SYNTHETIC
-- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN  
-- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN  
-- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN  
-- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO  
-- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO  
-- DIFFERENT\_QUOTE\_ASSET\_IDS  
-- DIFFERENT\_BASE\_ASSET\_IDS  
-- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN  
+- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN
+- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN
+- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN
+- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO
+- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO
+- DIFFERENT\_QUOTE\_ASSET\_IDS
+- DIFFERENT\_BASE\_ASSET\_IDS
+- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN
 - ASSET\_NOT\_EXISTS
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
@@ -2677,42 +2677,42 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [Order](#order) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [All fees amounts are non negative (actuals and order)](#amounts)  
-4. [Expiration validation](#expiration)  
-5. [Assets check](#asset)  
-6. [Funding validation](#funding)  
-7. [Price validation](#price)  
-8. [public key signature](#public-key-signature) on `liquidator_order`  
-9. `liquidator_order.quote_type.asset_id` is registered and active collateral  
-10. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.  
-11. `liquidated_position_id.is_liquidatable()==true`  
-12. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.  
-13. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.  
-14. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.  
-15. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`  
-16. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [All fees amounts are non negative (actuals and order)](#amounts)
+4. [Expiration validation](#expiration)
+5. [Assets check](#asset)
+6. [Funding validation](#funding)
+7. [Price validation](#price)
+8. [public key signature](#public-key-signature) on `liquidator_order`
+9. `liquidator_order.quote_type.asset_id` is registered and active collateral
+10. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
+11. `liquidated_position_id.is_liquidatable()==true`
+12. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
+13. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
+14. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
+15. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
+16. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
 17. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
 
 #### Logic
 
 1. Run validations
-2. If `liquidator_order.base.asset_id` is synthetic:  
-   1. `positions[liquidated_position_id].syntethic_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`  
-   2. `positions[liquidator_order.position_id].syntethic_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`  
-3. Else:  
-   1. `positions[liquidated_position].collateral_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`  
-   2. `positions[liquidator_order.position_id].collateral_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`  
-4. `positions[liquidated_position].collateral_assets[liquidator_order.quote.asset_id] += actual_amount_quote_liquidated`  
-5. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.quote.asset_id] -= actual_amount_quote_liquidated`  
-6. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.fee.asset_id] -= liquidator_fee`  
-7. `positions[fee_position].collateral_assets[liquidator_position.fee.asset_id] += liquidator_fee`  
-8. `positions[liquidated_position].collateral_assets[insurance_fund_fee.asset_id] -= insurance_fund_fee_amount`  
-9. `positions[insurance_fund].collateral_assets[insurance_fund_fee.asset_id] += insurance_fund_fee_amount`  
-10. `fulfillment[liquidator_order_hash] -= actual_amount_base_liquidated`  
+2. If `liquidator_order.base.asset_id` is synthetic:
+   1. `positions[liquidated_position_id].syntethic_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`
+   2. `positions[liquidator_order.position_id].syntethic_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`
+3. Else:
+   1. `positions[liquidated_position].collateral_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`
+   2. `positions[liquidator_order.position_id].collateral_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`
+4. `positions[liquidated_position].collateral_assets[liquidator_order.quote.asset_id] += actual_amount_quote_liquidated`
+5. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.quote.asset_id] -= actual_amount_quote_liquidated`
+6. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.fee.asset_id] -= liquidator_fee`
+7. `positions[fee_position].collateral_assets[liquidator_position.fee.asset_id] += liquidator_fee`
+8. `positions[liquidated_position].collateral_assets[insurance_fund_fee.asset_id] -= insurance_fund_fee_amount`
+9. `positions[insurance_fund].collateral_assets[insurance_fund_fee.asset_id] += insurance_fund_fee_amount`
+10. `fulfillment[liquidator_order_hash] -= actual_amount_base_liquidated`
 11. [Fundamental validation](#fundamental) for both positions.
 
 #### Emits
@@ -2725,7 +2725,7 @@ Only the Operator can execute.
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - INVALID_STARK_KEY_SIGNATURE
 - FULFILLMENT_EXCEEDED
@@ -2737,14 +2737,14 @@ Only the Operator can execute.
 - INVALID_TRADE_WRONG_AMOUNT_SIGN
 - NOT_SYNTHETIC
 - ASSET_NOT_ACTIVE
-- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN  
-- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN  
-- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN  
-- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO  
-- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO  
-- DIFFERENT\_QUOTE\_ASSET\_IDS  
-- DIFFERENT\_BASE\_ASSET\_IDS  
-- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN  
+- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN
+- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN
+- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN
+- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO
+- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO
+- DIFFERENT\_QUOTE\_ASSET\_IDS
+- DIFFERENT\_BASE\_ASSET\_IDS
+- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN
 - ASSET\_NOT\_EXISTS
 - POSITION_IS_NOT_LIQUIDATABLE
 - POSITION_IS_NOT_HEALTHIER
@@ -2773,28 +2773,28 @@ fn deleverage(
 
 Only the Operator can execute.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Assets check](#asset)   
-4. [Funding validation](#funding)  
-5. [Price validation](#price)  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Assets check](#asset)
+4. [Funding validation](#funding)
+5. [Price validation](#price)
 6. deleveraged\_base.asset\_id must be a registered synthetic and can be either active or inactive.
 7. deleveraged\_quote.asset\_id must be a registered collateral.
 8. If base\_asset\_id is active:
    1. deleveraged\_position.is\_deleveragable() \== true
 9. base\_deleveraged.amount and quote\_deleveraged.amount have opposite signs.
-10. `deleveraged_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleveraged_position.balance|, and` both should `have the same sign.`   
+10. `deleveraged_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleveraged_position.balance|, and` both should `have the same sign.`
 11. `deleverager_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleverager_position.balance|, and both should have opposite sign.`
 
 #### Logic
 
-1. [Run Validations](#validations-12).  
-2. `positions[position_delevereged].syntethic_assets[base_delevereged.asset_id] += base_delevereged.amount`  
-3. `positions[position_deleverager].syntethic_assets[base_delevereged.asset_id] -= base_delevereged.amount`  
-4. `positions[position_delevereged].collateral_assets[quote_delevereged.asset_id] += quote_delevereged.amount`  
-5. `positions[position_deleverager].collateral_assets[quote_delevereged.asset_id] -= quote_delevereged.amount`  
+1. [Run Validations](#validations-12).
+2. `positions[position_delevereged].syntethic_assets[base_delevereged.asset_id] += base_delevereged.amount`
+3. `positions[position_deleverager].syntethic_assets[base_delevereged.asset_id] -= base_delevereged.amount`
+4. `positions[position_delevereged].collateral_assets[quote_delevereged.asset_id] += quote_delevereged.amount`
+5. `positions[position_deleverager].collateral_assets[quote_delevereged.asset_id] -= quote_delevereged.amount`
 6. [Fundamental validation](#fundamental) for both positions.
 
 #### Emits
@@ -2806,7 +2806,7 @@ Only the Operator can execute.
 - INVALID\_NONCE
 - FUNDING\_EXPIRED
 - SYNTHETIC\_NOT\_EXISTS
-- SYNTHETIC\_EXPIRED\_PRICE  
+- SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - INVALID_ZERO_AMOUNT
 - COLLATERAL_NOT_EXISTS
@@ -2824,7 +2824,7 @@ Only the Operator can execute.
 - CANT_DELEVERAGE_PENDING_ASSET
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
-### 
+###
 
 ### Set Owner Account
 
@@ -2853,27 +2853,27 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [SetOwnerAccountArgs](#setowneraccountargs) with position `public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Expiration validation](#expiration)  
-4. [Position check](#position-1)  
-5. Self.positions\[position\_id\].owner \== NO\_OWNER  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Expiration validation](#expiration)
+4. [Position check](#position-1)
+5. Self.positions\[position\_id\].owner \== NO\_OWNER
 6. [public key signature](#public-key-signature)
 
 #### Logic
 
-1. Run [validations](#validations-13)  
+1. Run [validations](#validations-13)
 2. Self.positions\[position\_id\].owner \= owner
 
 #### Errors
 
 - PAUSED
-- ONLY\_OPERATOR  
-- INVALID\_NONCE  
+- ONLY\_OPERATOR
+- INVALID\_NONCE
 - SET_POSITION_OWNER_EXPIRED
-- INVALID\_POSITION  
+- INVALID\_POSITION
 - POSITION_HAS_OWNER_ACCOUNT
 - INVALID\_STARK\_SIGNATURE
 
@@ -2905,10 +2905,10 @@ Anyone can execute.
 
 [get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
 
-#### Validations 
+#### Validations
 
-1. [signature validation](#signature)  
-2. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER  
+1. [signature validation](#signature)
+2. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER
 3. Request is new
 
 #### Logic
@@ -2921,7 +2921,7 @@ Anyone can execute.
 - INVALID\_POSITION
 - REQUEST_ALREADY_REGISTERED
 - CALLER\_IS\_NOT\_OWNER\_ACCOUNT
-- INVALID\_STARK\_KEY\_SIGNATURE  
+- INVALID\_STARK\_KEY\_SIGNATURE
 
 #### Emits
 
@@ -2952,28 +2952,28 @@ Only the Operator can execute.
 
 [get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. [Expiration validation](#expiration)  
-4. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Expiration validation](#expiration)
+4. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER
 5. [Request approval check on set public key message](#requests-1)
 
 #### Logic
 
-1. Run [validations](#validations-15)  
-2. `self.positions[position_id].public_key.write(new_public_key)`  
-3. Mark request as done  
-   
+1. Run [validations](#validations-15)
+2. `self.positions[position_id].public_key.write(new_public_key)`
+3. Mark request as done
+
 
 #### Errors
 
 - PAUSED
-- INVALID\_NONCE  
-- ONLY\_OPERATOR  
-- SET\_PUBLIC\_KEY\_EXPIRED  
-- INVALID\_POSITION  
+- INVALID\_NONCE
+- ONLY\_OPERATOR
+- SET\_PUBLIC\_KEY\_EXPIRED
+- INVALID\_POSITION
 - NO\_OWNER\_ACCOUNT
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
@@ -3004,31 +3004,31 @@ Funding is calculated on the go and applied during any flow that requires checki
 
 Add `change` to the collateral balance (notice that `change` can be positive or negative)
 
-2. Update the cached\_funding\_index of the synthetic asset  
+2. Update the cached\_funding\_index of the synthetic asset
 3. Update the synthetic balance.
 
 #### Access Control
 
 Only the Operator can execute.
 
-#### Validations 
+#### Validations
 
-1. [Pausable check](#pausable)  
+1. [Pausable check](#pausable)
 2. [Operator Nonce check](#operator-nonce)
 
 #### Logic
 
 1. Run Validations
-2. Validate that we get funding tick for all active synthetic assets in the system  
-3. Initialize prev\_asset\_id to 0 (prev\_asset\_id is required for the ascending order check)  
-4. Iterate over the funding ticks:  
-   1. Verify that the assets are sorted in ascending order \- no duplicates.  
-   2. **max\_funding\_rate validation**:  
-      For **one** time unit, the following should be held: prev \- newprice%permitted   
-      In practice, we would check:  
-      prev\_idx-new\_idxmax\_funding\_rateblock\_timestamp-prev\_funding\_timeasset\_price  
-   3. Update asset funding index if asset is active else panic.  
-   4. prev\_asset\_id \= curr\_tick.asset\_id  
+2. Validate that we get funding tick for all active synthetic assets in the system
+3. Initialize prev\_asset\_id to 0 (prev\_asset\_id is required for the ascending order check)
+4. Iterate over the funding ticks:
+   1. Verify that the assets are sorted in ascending order \- no duplicates.
+   2. **max\_funding\_rate validation**:
+      For **one** time unit, the following should be held: prev \- newprice%permitted
+      In practice, we would check:
+      prev\_idx-new\_idxmax\_funding\_rateblock\_timestamp-prev\_funding\_timeasset\_price
+   3. Update asset funding index if asset is active else panic.
+   4. prev\_asset\_id \= curr\_tick.asset\_id
 5. Update global last\_funding\_tick timestamp in storage
 
 pseudo-code:
@@ -3042,7 +3042,7 @@ for tick in ticks:
 if self.synthetic_configs[tick.asset_id].status.read() == AssetStatus::ACTIVATED:
 self.synthetic_timely_data[tick.asset_id].funding_index.write(tick.funding_index)
 else:
-	//also not all active assets got funding tick 
+	//also not all active assets got funding tick
 	panic()
 	prev_asset_id = tick.asset_id
 self.last_funding_tick.write(get_block_timestamp())
@@ -3050,20 +3050,20 @@ self.last_funding_tick.write(get_block_timestamp())
 
 #### Errors
 - PAUSED
-- INVALID\_NONCE  
+- INVALID\_NONCE
 - ONLY\_OPERATOR
 - INVALID\_FUNDING\_TICK\_LEN
-- FUNDING_TICKS_NOT_SORTED 
+- FUNDING_TICKS_NOT_SORTED
 - SYNTHETIC_NOT_EXISTS
 - SYNTHETIC\_NOT\_ACTIVE
 - NOT_SYNTHETIC
 - INVALID_FUNDING_RATE
- 
+
 #### Emits
 
 For each element in `funding_ticks`: [FundingTick](#fundingtick-1)
 
-### 
+###
 
 ### Add Oracle To Asset
 
@@ -3083,17 +3083,17 @@ fn add_oracle_to_asset(
 
 Only APP\_GOVERNOR can execute.
 
-#### Validations 
+#### Validations
 
-1. `self.roles.only_app_governor()`  
-2. `oracle_public_key` does not exist in the Oracles map  
-3. `asset_name` is 128 bits  
+1. `self.roles.only_app_governor()`
+2. `oracle_public_key` does not exist in the Oracles map
+3. `asset_name` is 128 bits
 4. `oracle_name` is 40 bits
 
 #### Logic
 
-1. Run validations  
-2. `shifted_asset_name = TWO_POW_40 * asset_name`  
+1. Run validations
+2. `shifted_asset_name = TWO_POW_40 * asset_name`
 3. `self.assets.oracles.write(asset_id,(oracle_public_key, shifted_asset_name + oracle_name))`
 
 #### Emits
@@ -3122,14 +3122,14 @@ fn remove_oracle_from_asset(
 
 Only APP\_GOVERNOR can execute.
 
-#### Validations 
+#### Validations
 
-1. `self.roles.only_app_governor()`  
+1. `self.roles.only_app_governor()`
 2. `oracle_public_key` exist in the Oracles map
 
-#### Logic 
+#### Logic
 
-1. Run validations  
+1. Run validations
 2. `self.assets.oracles.write(asset_id,(oracle_public_key, Zero::zero())`
 
 #### Emits
@@ -3156,16 +3156,16 @@ fn update_synthetic_quorum(
 
 Only APP\_GOVERNOR can execute.
 
-#### Validations 
+#### Validations
 
-1. `self.roles.only_app_governor()`  
-2. Check that quorum is non zero  
-3. [Asset](#asset) check \- `synthetic_id` exists and active  
+1. `self.roles.only_app_governor()`
+2. Check that quorum is non zero
+3. [Asset](#asset) check \- `synthetic_id` exists and active
 4. Should we add a check the the quorum is ≤ the numbers of oracles for the asset
 
-#### Logic 
+#### Logic
 
-1. Run validations  
+1. Run validations
 2. `self.assets.synthetic_configs[synthetic_id].quorum = quorum`
 
 #### Emits
@@ -3183,7 +3183,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Description
 
-Price tick for an asset to update its’ price.  
+Price tick for an asset to update its’ price.
 **price\_tick span must be sorted according to the signers public keys**
 
 ```rust
@@ -3202,19 +3202,19 @@ Only the Operator can execute.
 
 #### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. Timestamps are at most `max_oracle_price_validity`  
-4. `price_ticks length >= synthetic_config[asset_id].quorum`  
-5. Prices array is sorted according o the signers public key  
-6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. Timestamps are at most `max_oracle_price_validity`
+4. `price_ticks length >= synthetic_config[asset_id].quorum`
+5. Prices array is sorted according o the signers public key
+6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`
 7. Calculated `median_price`256
 
-#### Logic 
+#### Logic
 
-1. For each `price_tick` in `price_ticks`:  
-   1. Validate stark signature on:  
-      `pedersen(oracles[price_ticks[i].signer_public_key],0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits))`  
+1. For each `price_tick` in `price_ticks`:
+   1. Validate stark signature on:
+      `pedersen(oracles[price_ticks[i].signer_public_key],0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits))`
 2. $ median\_price = \frac {price*2^{28}}{asset\_id.resolution\_factor*10^{12}}  $
 3. `self.synthetic_timely_data[asset_id].price = media_price`
 
@@ -3226,7 +3226,7 @@ Only the Operator can execute.
 
    $ 10^{12}:\ converting\ 18\ decimals\ to\ 6\ USDC\ decimals $
 
-4. `self.synthetic_timely_data[asset_id].last_price_update = Time::now()`  
+4. `self.synthetic_timely_data[asset_id].last_price_update = Time::now()`
 5. if asset_id is not active:
    1. Set asset_id status = AssetStatus::ACTIVATED
    2. num_of_active_synthetic_asset+=1
@@ -3234,7 +3234,7 @@ Only the Operator can execute.
 
 #### Emits
 
-[PriceTick](#pricetick-1)  
+[PriceTick](#pricetick-1)
 [AssetActivated](#assetactivated)
 
 #### Errors
@@ -3269,23 +3269,23 @@ Only APP\_GOVERNOR can execute.
 
 #### Validations
 
-1. `self.roles.only_app_governor()`  
-2. asset\_id does not exist in the system.  
+1. `self.roles.only_app_governor()`
+2. asset\_id does not exist in the system.
 3. There's no collateral asset in the system.
 
-#### Logic 
+#### Logic
 
 4. Run validations
-5. Add a new entry to collateral\_config:  
-   1. Set version=COLLATERAL\_VERSION.  
-   2. Initialize status AssetStatus::ACTIVATED  
-   3. quorum=0  
-   4. risk\_factor \= 0  
-6. Set as the head of collateral\_timely\_data:  
-   1. Set version=COLLATERAL\_VERSION.  
-   2. Initialize price to “One” (TWO\_POW\_28).  
-   3. Set last\_price\_update \= Zero::zero()  
-7. Register the collateral token in the deposits component:  
+5. Add a new entry to collateral\_config:
+   1. Set version=COLLATERAL\_VERSION.
+   2. Initialize status AssetStatus::ACTIVATED
+   3. quorum=0
+   4. risk\_factor \= 0
+6. Set as the head of collateral\_timely\_data:
+   1. Set version=COLLATERAL\_VERSION.
+   2. Initialize price to “One” (TWO\_POW\_28).
+   3. Set last\_price\_update \= Zero::zero()
+7. Register the collateral token in the deposits component:
    1. Set asset\_id \-\> (token\_address, quantum) in the asset\_info map
 
 #### Emits
@@ -3303,18 +3303,18 @@ Only APP\_GOVERNOR can execute.
 
 Add a synthetic asset.
 
-Risk factor tiers example:  
-**risk\_factor\_tiers \= \[1, 2, 3, 5, 10, 20, 40\]**  
-**risk\_factor\_first\_tier\_boundary \= 10,000**  
-**risk\_factor\_tier\_size \= 20,000**  
+Risk factor tiers example:
+**risk\_factor\_tiers \= \[1, 2, 3, 5, 10, 20, 40\]**
+**risk\_factor\_first\_tier\_boundary \= 10,000**
+**risk\_factor\_tier\_size \= 20,000**
 which means:
 
-- 0 \- 10,000 \-\> 1%  
-- 10,000 \- 30,000 \-\> 2%  
-- 30,000 \- 50,000 \-\> 3%  
-- 50,000 \- 70,000 \-\> 5%  
-- 70,000 \- 90,000 \-\> 10%  
-- 90,000 \- 110,000 \-\> 20%  
+- 0 \- 10,000 \-\> 1%
+- 10,000 \- 30,000 \-\> 2%
+- 30,000 \- 50,000 \-\> 3%
+- 50,000 \- 70,000 \-\> 5%
+- 70,000 \- 90,000 \-\> 10%
+- 90,000 \- 110,000 \-\> 20%
 - 110,000+ \-\> 40%
 
 ```rust
@@ -3335,25 +3335,25 @@ Only APP\_GOVERNOR can execute.
 
 #### Validations
 
-1. `self.roles.only_app_governor()`  
-2. asset\_id does not exist in the system.  
-3. All values in `risk_factor_tiers`\<= 100\.  
+1. `self.roles.only_app_governor()`
+2. asset\_id does not exist in the system.
+3. All values in `risk_factor_tiers`\<= 100\.
 4. Quorum \> 0
 
-#### Logic 
+#### Logic
 
-1. Run [validations](#validations-22).  
-2. Add a new entry to synthetic\_config with the params sent:  
-   2. Set version=SYNTHETIC\_VERSION.  
-   3. Initialize status \= AssetStatus::PENDING. It will be updated during the next price tick of this asset.  
-   4.   
-3. Add a new entry at the beginning of synthetic\_timely\_data:  
-   1. Set version=SYNTHETIC\_VERSION.  
-   2. Initialize price to 0\.  
-   3. Initialize funding\_index to 0\.  
-   4. Set last\_price\_update \= Zero::zero().  
-   5. Set next to the current synthetic\_timely\_data\_head.  
-4. Add the `risk_factor_tiers` to the assets risk\_factor map.  
+1. Run [validations](#validations-22).
+2. Add a new entry to synthetic\_config with the params sent:
+   2. Set version=SYNTHETIC\_VERSION.
+   3. Initialize status \= AssetStatus::PENDING. It will be updated during the next price tick of this asset.
+   4.
+3. Add a new entry at the beginning of synthetic\_timely\_data:
+   1. Set version=SYNTHETIC\_VERSION.
+   2. Initialize price to 0\.
+   3. Initialize funding\_index to 0\.
+   4. Set last\_price\_update \= Zero::zero().
+   5. Set next to the current synthetic\_timely\_data\_head.
+4. Add the `risk_factor_tiers` to the assets risk\_factor map.
 5. Update synthetic\_timely\_data\_head to point to the new entry.
 
 #### Emits
@@ -3384,10 +3384,10 @@ Only the App governor can execute.
 
 #### Validations
 
-1. `self.roles.only_app_governor()`  
+1. `self.roles.only_app_governor()`
 2. [Asset](#asset)
 
-#### Logic 
+#### Logic
 
 1. `synthetic_config[asset_id].status=AssetStatus::DEACTIVATED`
 2. `num_of_active_synthetic_assets -= 1`
