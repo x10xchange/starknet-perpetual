@@ -503,8 +503,8 @@ pub(crate) mod Positions {
             };
             while let Option::Some(asset_id) = asset_id_opt {
                 let balance = self.get_provisional_balance(:position_id, :asset_id);
-                let price = assets.get_asset_price(:asset_id);
                 if balance.is_non_zero() {
+                    let price = assets.get_asset_price(:asset_id);
                     position_data
                         .append(
                             Asset {
