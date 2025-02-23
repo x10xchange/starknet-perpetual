@@ -3,7 +3,7 @@ use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::replaceability::interface::IReplaceable;
 use contracts_commons::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::{MAX_U128, TEN_POW_15, TWO_POW_32};
+use contracts_commons::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{
     Deployable, TokenTrait, assert_panic_with_felt_error, cheat_caller_address_once,
@@ -2210,12 +2210,12 @@ fn test_funding_tick_basic() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let new_time = Time::now().add(Time::days(1));
+    let new_time = Time::now().add(Time::seconds(HOUR));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    // Funding index is 12.
-    let new_funding_index = FundingIndex { value: 12 * TWO_POW_32.try_into().unwrap() };
+    // Funding index is 3.
+    let new_funding_index = FundingIndex { value: 3 * TWO_POW_32.try_into().unwrap() };
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2224,9 +2224,9 @@ fn test_funding_tick_basic() {
     // Test:
 
     // The funding index must be within the max funding rate:
-    // |prev_funding_index-new_funding_index| = |0 - 12| = 12.
-    // synthetic_price * max_funding_rate * time_diff = 100 * 12% per day * 1 day = 12.
-    // 12 <= 12.
+    // |prev_funding_index-new_funding_index| = |0 - 3| = 3.
+    // synthetic_price * max_funding_rate * time_diff = 100 * 3% per hour * 1 hour = 3.
+    // 3 <= 3.
     let mut spy = snforge_std::spy_events();
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
@@ -2253,12 +2253,12 @@ fn test_invalid_funding_rate() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
-    let new_time = Time::now().add(Time::days(1));
+    let new_time = Time::now().add(Time::seconds(HOUR));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    // Funding index is 13.
-    let new_funding_index = FundingIndex { value: 13 * TWO_POW_32.try_into().unwrap() };
+    // Funding index is 4.
+    let new_funding_index = FundingIndex { value: 4 * TWO_POW_32.try_into().unwrap() };
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2267,9 +2267,9 @@ fn test_invalid_funding_rate() {
     // Test:
 
     // The funding index must be within the max funding rate:
-    // |prev_funding_index-new_funding_index| = |0 - 13| = 13.
-    // synthetic_price * max_funding_rate * time_diff = 100 * 13% per day * 1 day = 13.
-    // 13 > 12.
+    // |prev_funding_index-new_funding_index| = |0 - 4| = 4.
+    // synthetic_price * max_funding_rate * time_diff = 100 * 3% per hour * 1 hour = 3.
+    // 3 > 4.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
 }
