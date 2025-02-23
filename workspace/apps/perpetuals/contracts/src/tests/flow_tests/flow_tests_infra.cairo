@@ -13,7 +13,7 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
-use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::tests::constants;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
@@ -151,7 +151,7 @@ pub struct SyntheticConfig {
 pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
     SyntheticConfig {
         asset_name,
-        asset_id: AssetId { value: asset_name },
+        asset_id: AssetIdTrait::new(value: asset_name),
         risk_factor_tiers: array![50].span(),
         risk_factor_first_tier_boundary: MAX_U128,
         risk_factor_tier_size: Zero::zero(),

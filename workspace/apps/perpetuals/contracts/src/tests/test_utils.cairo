@@ -25,11 +25,10 @@ use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreSafeDispatcher;
 use perpetuals::core::types::PositionId;
-use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
-use perpetuals::core::types::asset::status::AssetStatus;
+use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::tests::constants::*;
@@ -394,7 +393,7 @@ pub fn generate_collateral(
             version: *collateral_cfg.version,
             token_address: *token_state.address,
             quantum: *collateral_cfg.quantum,
-            status: AssetStatus::ACTIVATED,
+            status: AssetStatus::ACTIVE,
             risk_factor: *collateral_cfg.risk_factor,
             quorum: *collateral_cfg.quorum,
         },

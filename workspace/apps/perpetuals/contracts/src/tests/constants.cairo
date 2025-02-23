@@ -7,12 +7,11 @@ use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::collateral::{
     CollateralTimelyData, VERSION as COLLATERAL_VERSION,
 };
-use perpetuals::core::types::asset::status::AssetStatus;
 use perpetuals::core::types::asset::synthetic::{
     SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
 };
 
-use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
+use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::{ContractAddress, contract_address_const};
@@ -68,7 +67,7 @@ pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
     SyntheticConfig {
         version: SYNTHETIC_VERSION,
         resolution: SYNTHETIC_RESOLUTION,
-        status: AssetStatus::ACTIVATED,
+        status: AssetStatus::ACTIVE,
         risk_factor_first_tier_boundary: MAX_U128,
         risk_factor_tier_size: Zero::zero(),
         quorum: SYNTHETIC_QUORUM,

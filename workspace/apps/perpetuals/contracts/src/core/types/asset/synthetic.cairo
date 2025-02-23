@@ -1,6 +1,5 @@
 use contracts_commons::types::time::time::Timestamp;
-use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::status::AssetStatus;
+use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;

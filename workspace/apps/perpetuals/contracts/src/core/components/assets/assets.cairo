@@ -26,14 +26,13 @@ pub mod AssetsComponent {
 
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::collateral::{
         CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
     };
-    use perpetuals::core::types::asset::status::AssetStatus;
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
     };
+    use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::{Price, PriceMulTrait, SignedPrice};
@@ -405,7 +404,7 @@ pub mod AssetsComponent {
                         CollateralConfig {
                             version: COLLATERAL_VERSION,
                             token_address,
-                            status: AssetStatus::ACTIVATED,
+                            status: AssetStatus::ACTIVE,
                             risk_factor: Zero::zero(),
                             quantum,
                             quorum,
@@ -555,7 +554,7 @@ pub mod AssetsComponent {
                     .entry(asset_id)
                     .write(
                         Option::Some(
-                            SyntheticConfig { status: AssetStatus::ACTIVATED, ..synthetic_config },
+                            SyntheticConfig { status: AssetStatus::ACTIVE, ..synthetic_config },
                         ),
                     );
                 self.emit(events::AssetActivated { asset_id });
@@ -566,12 +565,12 @@ pub mod AssetsComponent {
         fn validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
             let collateral_config = self.collateral_config.read(asset_id);
             let is_collateral_active = match collateral_config {
-                Option::Some(config) => config.status == AssetStatus::ACTIVATED,
+                Option::Some(config) => config.status == AssetStatus::ACTIVE,
                 Option::None => false,
             };
             let synthetic_config = self.synthetic_config.read(asset_id);
             let is_synthetic_active = match synthetic_config {
-                Option::Some(config) => config.status == AssetStatus::ACTIVATED,
+                Option::Some(config) => config.status == AssetStatus::ACTIVE,
                 Option::None => false,
             };
             assert(is_collateral_active || is_synthetic_active, ASSET_NOT_ACTIVE);
@@ -595,7 +594,7 @@ pub mod AssetsComponent {
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) {
             assert(
-                self._get_collateral_config(collateral_id).status == AssetStatus::ACTIVATED,
+                self._get_collateral_config(collateral_id).status == AssetStatus::ACTIVE,
                 COLLATERAL_NOT_ACTIVE,
             );
         }
@@ -757,7 +756,7 @@ pub mod AssetsComponent {
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) {
             assert(
-                self._get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED,
+                self._get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE,
                 SYNTHETIC_NOT_ACTIVE,
             );
         }
@@ -769,7 +768,7 @@ pub mod AssetsComponent {
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let synthetic_timely_data = self.synthetic_timely_data.read(synthetic_id);
                 // Validate only active asset
-                if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVATED {
+                if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVE {
                     assert(
                         now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
                         SYNTHETIC_EXPIRED_PRICE,

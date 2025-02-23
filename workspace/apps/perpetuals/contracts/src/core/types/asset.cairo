@@ -1,12 +1,19 @@
 use core::num::traits::zero::Zero;
 
 pub mod collateral;
-pub mod status;
 pub mod synthetic;
 
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct AssetId {
-    pub value: felt252,
+    value: felt252,
+}
+
+#[derive(Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+pub enum AssetStatus {
+    #[default]
+    PENDING,
+    ACTIVE,
+    DEACTIVATED,
 }
 
 #[generate_trait]

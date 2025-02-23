@@ -19,8 +19,7 @@ use perpetuals::core::components::positions::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcherTrait};
-use perpetuals::core::types::asset::AssetIdTrait;
-use perpetuals::core::types::asset::status::AssetStatus;
+use perpetuals::core::types::asset::{AssetIdTrait, AssetStatus};
 use perpetuals::core::types::funding::{FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
@@ -421,7 +420,7 @@ fn test_successful_deactivate_synthetic_asset() {
             .entry(synthetic_id)
             .read()
             .unwrap()
-            .status == AssetStatus::ACTIVATED,
+            .status == AssetStatus::ACTIVE,
     );
 
     // Test:
@@ -2350,7 +2349,7 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(268),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
 
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
@@ -2416,7 +2415,7 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
     let data = state.assets.synthetic_timely_data.read(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
@@ -2470,7 +2469,7 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVATED);
+    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
 
     let data = state.assets.synthetic_timely_data.read(synthetic_id);

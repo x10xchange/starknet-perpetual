@@ -41,9 +41,7 @@ pub mod Core {
 
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::asset::AssetId;
-
-    use perpetuals::core::types::asset::status::AssetStatus;
+    use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::{Order, OrderTrait};
@@ -334,15 +332,6 @@ pub mod Core {
                 ._validate_withdraw(
                     :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
                 );
-            let position = self.positions.get_position_snapshot(:position_id);
-            let hash = self
-                .request_approvals
-                .consume_approved_request(
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                    public_key: position.owner_public_key.read(),
-                );
             /// Validation - Not withdrawing from pending deposits:
             let collateral_cfg = self.assets.get_collateral_config(:collateral_id);
             let token_contract = IERC20Dispatcher {
@@ -363,6 +352,15 @@ pub mod Core {
 
             validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);
             self.positions.apply_diff(:position_id, :position_diff);
+            let position = self.positions.get_position_snapshot(:position_id);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: WithdrawArgs {
+                        position_id, salt, expiration, collateral_id, amount, recipient,
+                    },
+                    public_key: position.owner_public_key.read(),
+                );
             self
                 .emit(
                     events::Withdraw {
@@ -1319,7 +1317,7 @@ pub mod Core {
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVATED => validate_deleveraged_position(
+                AssetStatus::ACTIVE => validate_deleveraged_position(
                     position_id: deleveraged_position,
                     position_data: deleveraged_position_data,
                     position_diff: deleveraged_position_diff,
