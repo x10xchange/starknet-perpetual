@@ -489,25 +489,25 @@ pub mod AssetsComponent {
         fn get_risk_factor(
             self: @ComponentState<TContractState>, asset_id: AssetId, balance: Balance,
         ) -> FixedTwoDecimal {
-            if self.is_collateral(:asset_id) {
-                self._get_collateral_config(collateral_id: asset_id).risk_factor
-            } else if self.is_synthetic(:asset_id) {
-                let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
+            if let Option::Some(collateral_config) = self.collateral_config.read(asset_id) {
+                collateral_config.risk_factor
+            } else if let Option::Some(synthetic_config) = self.synthetic_config.read(asset_id) {
                 let price = self.get_synthetic_price(synthetic_id: asset_id);
                 let synthetic_value: u128 = price.mul(rhs: balance).abs();
                 let mut index = if synthetic_value <= synthetic_config
                     .risk_factor_first_tier_boundary {
-                    0_u64
+                    0_u128
                 } else {
-                    ((synthetic_value - synthetic_config.risk_factor_first_tier_boundary)
-                        / synthetic_config.risk_factor_tier_size)
-                        .try_into()
-                        .expect('INDEX_OVERFLOW')
+                    let tier_size = synthetic_config.risk_factor_tier_size;
+                    let first_tier_offset = synthetic_value
+                        - synthetic_config.risk_factor_first_tier_boundary;
+                    1_u128 + (first_tier_offset / tier_size)
                 };
-                if index >= self.risk_factor_tiers.entry(asset_id).len().into() {
-                    index = self.risk_factor_tiers.entry(asset_id).len() - 1;
-                }
-                self.risk_factor_tiers.entry(asset_id).at(index).read()
+                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
+                index = min(index, asset_risk_factor_tiers.len().into() - 1);
+                asset_risk_factor_tiers
+                    .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
+                    .read()
             } else {
                 panic_with_felt252(ASSET_NOT_EXISTS)
             }
