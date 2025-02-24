@@ -1,7 +1,7 @@
 use contracts_commons::errors::assert_with_byte_array;
 
 use contracts_commons::math::abs::Abs;
-use contracts_commons::math::fraction::FractionTrait;
+use contracts_commons::math::fraction::FractionTraitI128U128 as FractionTrait;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
 use perpetuals::core::errors::{
     POSITION_IS_NOT_DELEVERAGABLE, POSITION_IS_NOT_FAIR_DELEVERAGE, POSITION_IS_NOT_HEALTHIER,
