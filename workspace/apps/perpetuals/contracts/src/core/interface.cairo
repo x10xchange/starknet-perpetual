@@ -2,7 +2,6 @@ use contracts_commons::types::Signature;
 use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::price::SignedPrice;
 use starknet::ContractAddress;
@@ -98,9 +97,6 @@ pub trait ICore<TContractState> {
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
     );
     // Ticks
-    fn funding_tick(
-        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
-    );
     fn price_tick(
         ref self: TContractState,
         operator_nonce: u64,

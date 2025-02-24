@@ -1,6 +1,10 @@
 #[starknet::component]
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
+    use contracts_commons::components::nonce::NonceComponent;
+    use contracts_commons::components::nonce::NonceComponent::InternalTrait as NonceInternal;
+    use contracts_commons::components::pausable::PausableComponent;
+    use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::constants::{MAX_U32, MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
     use contracts_commons::math::abs::Abs;
@@ -16,13 +20,13 @@ pub mod AssetsComponent {
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
         COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET, FUNDING_EXPIRED,
-        FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
-        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
+        INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
+        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
+        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL,
+        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
 
     use perpetuals::core::components::assets::events;
@@ -86,6 +90,8 @@ pub mod AssetsComponent {
         +HasComponent<TContractState>,
         +Drop<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl Pause: PausableComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
@@ -256,6 +262,47 @@ pub mod AssetsComponent {
             self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
             self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
+        }
+
+        /// Funding tick is called by the operator to update the funding index of all synthetic
+        /// assets.
+        ///
+        /// Funding ticks asset ids MUST be in ascending order.
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The system nonce must be valid.
+        /// - The number of funding ticks must be equal to the number of active synthetic assets.
+        ///
+        /// Execution:
+        /// - Initialize the previous asset id to zero.
+        /// - For each funding tick in funding_ticks:
+        ///     - Validate the the funding tick asset_id is larger then the previous asset id.
+        ///     - The funding tick synthetic asset_id asset exists in the system.
+        ///     - The funding tick synthetic asset_id asset is active.
+        ///     - The funding index must be within the max funding rate using the following formula:
+        ///         |prev_funding_index-new_funding_index| <= max_funding_rate * time_diff *
+        ///         synthetic_price
+        ///    - Update the synthetic asset's funding index.
+        ///    - Update the previous asset id to the current funding tick asset id.
+        /// - Update the last funding tick time.
+        fn funding_tick(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            funding_ticks: Span<FundingTick>,
+        ) {
+            // Validations:
+            get_dep_component!(@self, Pause).assert_not_paused();
+            get_dep_component!(@self, Roles).only_operator();
+            let mut nonce = get_dep_component_mut!(ref self, Nonce);
+            nonce.use_checked_nonce(nonce: operator_nonce);
+
+            assert(
+                funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
+                INVALID_FUNDING_TICK_LEN,
+            );
+
+            self._execute_funding_tick(:funding_ticks);
         }
 
         fn get_collateral_config(
@@ -431,24 +478,6 @@ pub mod AssetsComponent {
             self.emit(events::RegisterCollateral { asset_id, token_address, quantum });
         }
 
-        fn execute_funding_tick(
-            ref self: ComponentState<TContractState>, funding_ticks: Span<FundingTick>,
-        ) {
-            let now = Time::now();
-            let mut prev_synthetic_id: AssetId = Zero::zero();
-            for funding_tick in funding_ticks {
-                let synthetic_id = *funding_tick.asset_id;
-                assert(synthetic_id > prev_synthetic_id, FUNDING_TICKS_NOT_SORTED);
-                self._validate_synthetic_active(:synthetic_id);
-                self
-                    ._process_funding_tick(
-                        :now, new_funding_index: *funding_tick.funding_index, :synthetic_id,
-                    );
-                prev_synthetic_id = synthetic_id;
-            };
-            self.last_funding_tick.write(now);
-        }
-
         fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
             if self.is_collateral(:asset_id) {
                 self.get_collateral_price(collateral_id: asset_id)
@@ -540,7 +569,6 @@ pub mod AssetsComponent {
         fn is_synthetic(self: @ComponentState<TContractState>, asset_id: AssetId) -> bool {
             self.synthetic_config.read(asset_id).is_some()
         }
-
 
         fn set_price(ref self: ComponentState<TContractState>, asset_id: AssetId, price: Price) {
             let now = Time::now();
@@ -701,6 +729,24 @@ pub mod AssetsComponent {
         ) -> SyntheticTimelyData {
             self._get_synthetic_config(:synthetic_id);
             self.synthetic_timely_data.read(synthetic_id)
+        }
+
+        fn _execute_funding_tick(
+            ref self: ComponentState<TContractState>, funding_ticks: Span<FundingTick>,
+        ) {
+            let now = Time::now();
+            let mut prev_synthetic_id: AssetId = Zero::zero();
+            for funding_tick in funding_ticks {
+                let synthetic_id = *funding_tick.asset_id;
+                assert(synthetic_id > prev_synthetic_id, FUNDING_TICKS_NOT_SORTED);
+                self._validate_synthetic_active(:synthetic_id);
+                self
+                    ._process_funding_tick(
+                        :now, new_funding_index: *funding_tick.funding_index, :synthetic_id,
+                    );
+                prev_synthetic_id = synthetic_id;
+            };
+            self.last_funding_tick.write(now);
         }
 
         fn _process_funding_tick(

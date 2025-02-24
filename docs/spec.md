@@ -160,7 +160,6 @@ classDiagram
         liquidate()
         deleverage()
         register_collateral()
-        funding_tick()
         price_tick()
     }
     class Position{
@@ -216,6 +215,7 @@ classDiagram
         get_risk_factor_tiers()
         remove_oracle_from_asset()
         update_synthetic_quorum()
+        funding_tick()
     }
     class Deposit{
         registered_deposits: Map< HashType, DepositStatus>
@@ -1023,6 +1023,9 @@ pub trait IAssets<TContractState> {
         resolution: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
+    fn funding_tick(
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
+    );
     fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;
     fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
@@ -3015,13 +3018,13 @@ Only the Operator can execute.
 
 1. [Pausable check](#pausable)
 2. [Operator Nonce check](#operator-nonce)
+3. funding ticks len equals to `num_of_active_synthetic_assets`.
 
 #### Logic
 
 1. Run Validations
-2. Validate that we get funding tick for all active synthetic assets in the system
-3. Initialize prev\_asset\_id to 0 (prev\_asset\_id is required for the ascending order check)
-4. Iterate over the funding ticks:
+2. Initialize prev\_asset\_id to 0 (prev\_asset\_id is required for the ascending order check)
+3. Iterate over the funding ticks:
    1. Verify that the assets are sorted in ascending order \- no duplicates.
    2. **max\_funding\_rate validation**:
       For **one** time unit, the following should be held: prev \- newprice%permitted
@@ -3029,7 +3032,7 @@ Only the Operator can execute.
       prev\_idx-new\_idxmax\_funding\_rateblock\_timestamp-prev\_funding\_timeasset\_price
    3. Update asset funding index if asset is active else panic.
    4. prev\_asset\_id \= curr\_tick.asset\_id
-5. Update global last\_funding\_tick timestamp in storage
+4. Update global last\_funding\_tick timestamp in storage
 
 pseudo-code:
 

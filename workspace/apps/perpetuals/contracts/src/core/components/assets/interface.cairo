@@ -4,6 +4,7 @@ use contracts_commons::types::time::time::{TimeDelta, Timestamp};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralConfig;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::funding::FundingTick;
 
 
 #[starknet::interface]
@@ -25,6 +26,9 @@ pub trait IAssets<TContractState> {
         resolution: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
+    fn funding_tick(
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
+    );
     fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;
     fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;

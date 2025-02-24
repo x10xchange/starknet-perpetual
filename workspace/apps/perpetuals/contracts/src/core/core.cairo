@@ -34,18 +34,16 @@ pub mod Core {
     use perpetuals::core::errors::{
         ASSET_ALREADY_EXISTS, CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
-        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
-        INVALID_ZERO_AMOUNT, INVALID_ZERO_ASSET_ID, INVALID_ZERO_QUANTUM,
-        INVALID_ZERO_TOKEN_ADDRESS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        order_expired_err,
+        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
+        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
+        INVALID_ZERO_ASSET_ID, INVALID_ZERO_QUANTUM, INVALID_ZERO_TOKEN_ADDRESS, TRANSFER_EXPIRED,
+        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
 
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
-    use perpetuals::core::types::funding::FundingTick;
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::price::{PriceTrait, SignedPrice};
     use perpetuals::core::types::transfer::TransferArgs;
@@ -852,36 +850,6 @@ pub mod Core {
             self.deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum)
         }
 
-
-        /// Funding tick is called by the operator to update the funding index of all synthetic
-        /// assets.
-        ///
-        /// Funding ticks asset ids MUST be in ascending order.
-        /// Validations:
-        /// - Only the operator can call this function.
-        /// - The contract must not be paused.
-        /// - The system nonce must be valid.
-        /// - The number of funding ticks must be equal to the number of active synthetic assets.
-        ///
-        /// Execution:
-        /// - Initialize the previous asset id to zero.
-        /// - For each funding tick in funding_ticks:
-        ///     - Validate the the funding tick asset_id is larger then the previous asset id.
-        ///     - The funding tick synthetic asset_id asset exists in the system.
-        ///     - The funding tick synthetic asset_id asset is active.
-        ///     - The funding index must be within the max funding rate using the following formula:
-        ///         |prev_funding_index-new_funding_index| <= max_funding_rate * time_diff *
-        ///         synthetic_price
-        ///    - Update the synthetic asset's funding index.
-        ///    - Update the previous asset id to the current funding tick asset id.
-        /// - Update the last funding tick time.
-        fn funding_tick(
-            ref self: ContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
-        ) {
-            self._validate_funding_tick(:funding_ticks, :operator_nonce);
-            self.assets.execute_funding_tick(:funding_ticks);
-        }
-
         /// Price tick for an asset to update the price of the asset.
         ///
         /// Validations:
@@ -1171,18 +1139,6 @@ pub mod Core {
             assert(
                 !have_same_sign(a: order.quote_amount, b: order.base_amount),
                 INVALID_WRONG_AMOUNT_SIGN,
-            );
-        }
-
-        fn _validate_funding_tick(
-            ref self: ContractState, funding_ticks: Span<FundingTick>, operator_nonce: u64,
-        ) {
-            self.pausable.assert_not_paused();
-            self.roles.only_operator();
-            self.nonce.use_checked_nonce(nonce: operator_nonce);
-            assert(
-                funding_ticks.len() == self.assets.get_num_of_active_synthetic_assets(),
-                INVALID_FUNDING_TICK_LEN,
             );
         }
 

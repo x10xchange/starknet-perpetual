@@ -236,10 +236,6 @@ fn test_caller_failures() {
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
 
     let result = dispatcher
-        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span());
-    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
-
-    let result = dispatcher
         .price_tick(
             operator_nonce: Zero::zero(),
             asset_id: cfg.synthetic_cfg.synthetic_id,
@@ -272,6 +268,10 @@ fn test_caller_failures() {
 
     let result = dispatcher.deactivate_synthetic(synthetic_id: cfg.synthetic_cfg.synthetic_id);
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
+
+    let result = dispatcher
+        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span());
+    assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
     let dispatcher = IPositionsSafeDispatcher { contract_address: state.address };
 
