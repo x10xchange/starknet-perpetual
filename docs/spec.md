@@ -1988,8 +1988,10 @@ pub struct RemoveOracle {
 pub struct AddOracle {
     #[key]
     pub asset_id: AssetId,
+    pub asset_name: felt252,
     #[key]
     pub oracle_public_key: PublicKey,
+    pub oracle_name: felt252,
 }
 ```
 #### RegisterCollateral
@@ -3090,8 +3092,10 @@ Only APP\_GOVERNOR can execute.
 
 1. `self.roles.only_app_governor()`
 2. `oracle_public_key` does not exist in the Oracles map
-3. `asset_name` is 128 bits
-4. `oracle_name` is 40 bits
+3. check inputs are non-zero: `asset_id`, `oracle_public_key`, `oracle_name`, and `asset_name`.
+4. `asset_name` is 128 bits
+5. `oracle_name` is 40 bits
+
 
 #### Logic
 

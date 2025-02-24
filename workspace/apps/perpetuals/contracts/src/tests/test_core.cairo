@@ -2560,7 +2560,9 @@ fn test_price_tick_basic() {
     assert_add_oracle_event_with_expected(
         spied_event: events[0],
         asset_id: synthetic_id,
+        :asset_name,
         oracle_public_key: oracle1.key_pair.public_key,
+        oracle_name: oracle1_name,
     );
     assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: synthetic_id);
     assert_price_tick_event_with_expected(
@@ -2921,7 +2923,11 @@ fn test_successful_add_and_remove_oracle() {
 
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_add_oracle_event_with_expected(
-        spied_event: events[1], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,
+        spied_event: events[1],
+        asset_id: synthetic_id,
+        :asset_name,
+        oracle_public_key: key_pair.public_key,
+        :oracle_name,
     );
     assert_remove_oracle_event_with_expected(
         spied_event: events[2], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,

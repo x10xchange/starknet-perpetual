@@ -453,9 +453,15 @@ pub fn assert_remove_oracle_event_with_expected(
 }
 
 pub fn assert_add_oracle_event_with_expected(
-    spied_event: @(ContractAddress, Event), asset_id: AssetId, oracle_public_key: PublicKey,
+    spied_event: @(ContractAddress, Event),
+    asset_id: AssetId,
+    asset_name: felt252,
+    oracle_public_key: PublicKey,
+    oracle_name: felt252,
 ) {
-    let expected_event = assets_events::AddOracle { asset_id, oracle_public_key };
+    let expected_event = assets_events::AddOracle {
+        asset_id, asset_name, oracle_public_key, oracle_name,
+    };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,

@@ -47,7 +47,6 @@ pub mod AssetsComponent {
         StoragePointerWriteAccess, Vec, VecTrait,
     };
 
-
     #[storage]
     pub struct Storage {
         /// 32-bit fixed-point number with a 32-bit fractional part.
@@ -119,8 +118,9 @@ pub mod AssetsComponent {
             assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
 
             // Validate the oracle does not exist.
-            let oracle_inner_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
-            assert(oracle_inner_entry.read().is_zero(), ORACLE_ALREADY_EXISTS);
+            let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
+            let asset_oracle_data = asset_oracle_entry.read();
+            assert(asset_oracle_data.is_zero(), ORACLE_ALREADY_EXISTS);
 
             assert(oracle_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
             assert(asset_name.is_non_zero(), INVALID_ZERO_ASSET_NAME);
@@ -138,8 +138,8 @@ pub mod AssetsComponent {
 
             // Add the oracle to the asset.
             let shifted_asset_name = TWO_POW_40.into() * asset_name;
-            oracle_inner_entry.write(shifted_asset_name + oracle_name);
-            self.emit(events::AddOracle { asset_id, oracle_public_key });
+            asset_oracle_entry.write(shifted_asset_name + oracle_name);
+            self.emit(events::AddOracle { asset_id, asset_name, oracle_public_key, oracle_name });
         }
 
         /// Add asset is called by the operator to add a new synthetic asset.
@@ -374,10 +374,11 @@ pub mod AssetsComponent {
         ) {
             let roles = get_dep_component!(@self, Roles);
             roles.only_app_governor();
-            let oracle_inner_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
+
             // Validate the oracle exists.
-            assert(oracle_inner_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
-            self.asset_oracle.entry(asset_id).entry(oracle_public_key).write(Zero::zero());
+            let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
+            assert(asset_oracle_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
+            asset_oracle_entry.write(Zero::zero());
             self.emit(events::RemoveOracle { asset_id, oracle_public_key });
         }
 

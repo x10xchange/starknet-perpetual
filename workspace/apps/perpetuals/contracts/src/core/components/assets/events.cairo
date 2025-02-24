@@ -8,8 +8,10 @@ use starknet::ContractAddress;
 pub struct AddOracle {
     #[key]
     pub asset_id: AssetId,
+    pub asset_name: felt252,
     #[key]
     pub oracle_public_key: PublicKey,
+    pub oracle_name: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
