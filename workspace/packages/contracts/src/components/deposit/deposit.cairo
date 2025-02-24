@@ -210,27 +210,26 @@ pub(crate) mod Deposit {
                 DepositStatus::NOT_EXIST => { panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED) },
                 DepositStatus::DONE => { panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED) },
                 DepositStatus::CANCELED => { panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED) },
-                DepositStatus::PENDING(_) => {
-                    self.registered_deposits.write(deposit_hash, DepositStatus::DONE);
-                    let (_, quantum) = self._get_asset_info(:asset_id);
-                    self
-                        .aggregate_quantized_pending_deposits
-                        .entry(asset_id)
-                        .sub_and_write(quantized_amount);
-                    let unquantized_amount = quantized_amount * quantum.into();
-                    self
-                        .emit(
-                            events::DepositProcessed {
-                                beneficiary,
-                                depositing_address: depositor,
-                                asset_id,
-                                quantized_amount,
-                                unquantized_amount,
-                                deposit_request_hash: deposit_hash,
-                            },
-                        );
-                },
+                DepositStatus::PENDING(_) => {},
             };
+            let (_, quantum) = self._get_asset_info(:asset_id);
+            self
+                .aggregate_quantized_pending_deposits
+                .entry(asset_id)
+                .sub_and_write(quantized_amount);
+            let unquantized_amount = quantized_amount * quantum.into();
+            self
+                .emit(
+                    events::DepositProcessed {
+                        beneficiary,
+                        depositing_address: depositor,
+                        asset_id,
+                        quantized_amount,
+                        unquantized_amount,
+                        deposit_request_hash: deposit_hash,
+                    },
+                );
+            self.registered_deposits.write(deposit_hash, DepositStatus::DONE);
         }
 
         fn get_asset_aggregate_quantized_pending_deposits(
