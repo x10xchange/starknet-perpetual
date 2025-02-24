@@ -45,7 +45,6 @@ pub struct SetPublicKey {
     #[key]
     pub new_public_key: PublicKey,
     pub old_public_key: PublicKey,
-    pub expiration: Timestamp,
     #[key]
     pub set_public_key_request_hash: felt252,
 }

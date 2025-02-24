@@ -22,7 +22,8 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_POSITION,
         INVALID_PUBLIC_KEY, INVALID_ZERO_OWNER_ACCOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
-        POSITION_HAS_OWNER_ACCOUNT, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
+        POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -240,6 +241,7 @@ pub(crate) mod Positions {
             let owner_account = position.owner_account.read();
             let old_public_key = position.owner_public_key.read();
             assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            assert(new_public_key != old_public_key, SAME_PUBLIC_KEY);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .register_approval(
@@ -256,7 +258,7 @@ pub(crate) mod Positions {
                         position_id,
                         new_public_key,
                         old_public_key,
-                        expiration: expiration,
+                        expiration,
                         set_public_key_request_hash: hash,
                     },
                 );
@@ -301,7 +303,6 @@ pub(crate) mod Positions {
                         position_id,
                         new_public_key,
                         old_public_key,
-                        expiration: expiration,
                         set_public_key_request_hash: hash,
                     },
                 );

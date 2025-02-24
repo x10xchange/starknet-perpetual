@@ -1901,7 +1901,6 @@ fn test_successful_set_public_key() {
         position_id: set_public_key_args.position_id,
         old_public_key: set_public_key_args.old_public_key,
         new_public_key: set_public_key_args.new_public_key,
-        expiration: set_public_key_args.expiration,
         set_public_key_request_hash: msg_hash,
     );
 
