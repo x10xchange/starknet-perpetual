@@ -15,14 +15,14 @@ pub mod AssetsComponent {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
-        COLLATERAL_ALREADY_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET,
-        FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
-        INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
-        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
-        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
-        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL,
-        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET, FUNDING_EXPIRED,
+        FUNDING_TICKS_NOT_SORTED, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
+        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
+        INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
+        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
+        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
 
     use perpetuals::core::components::assets::events;
@@ -392,7 +392,7 @@ pub mod AssetsComponent {
         }
 
 
-        fn add_collateral(
+        fn store_collateral(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
             token_address: ContractAddress,
@@ -400,12 +400,6 @@ pub mod AssetsComponent {
             quantum: u64,
             quorum: u8,
         ) {
-            assert(
-                self.collateral_config.entry(asset_id).read().is_none(), COLLATERAL_ALREADY_EXISTS,
-            );
-            // We currently support only one collateral asset.
-            assert(self.collateral_timely_data_head.read().is_none(), COLLATERAL_ALREADY_EXISTS);
-
             self
                 .collateral_config
                 .entry(asset_id)

@@ -32,11 +32,13 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
-        FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS, INVALID_DELEVERAGE_BASE_CHANGE,
-        INVALID_FUNDING_TICK_LEN, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
-        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED,
-        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        ASSET_ALREADY_EXISTS, CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS,
+        DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
+        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_FUNDING_TICK_LEN, INVALID_NON_SYNTHETIC_ASSET,
+        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
+        INVALID_ZERO_AMOUNT, INVALID_ZERO_ASSET_ID, INVALID_ZERO_QUANTUM,
+        INVALID_ZERO_TOKEN_ADDRESS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -826,10 +828,21 @@ pub mod Core {
             // Validations:
             self.roles.only_app_governor();
 
+            // An asset cannot be both collateral and synthetic.
+            assert(
+                self.assets.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS,
+            );
+            // We currently support only one collateral asset.
+            assert(self.assets.collateral_timely_data_head.read().is_none(), ASSET_ALREADY_EXISTS);
+
+            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(token_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
+            assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
+
             // Execution:
             self
                 .assets
-                .add_collateral(
+                .store_collateral(
                     :asset_id,
                     :token_address,
                     risk_factor: Zero::zero(),

@@ -3270,8 +3270,9 @@ Only APP\_GOVERNOR can execute.
 #### Validations
 
 1. `self.roles.only_app_governor()`
-2. asset\_id does not exist in the system.
+2. asset\_id does not exist in the system - check existance in both collateral and synthetic config.
 3. There's no collateral asset in the system.
+4. inputs are non-zero: `asset_id`, `token_address`, and `quantum`.
 
 #### Logic
 

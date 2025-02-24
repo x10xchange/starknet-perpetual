@@ -11,7 +11,6 @@ use contracts_commons::test_utils::{
 };
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
-use perpetuals::core::components::assets::errors::{COLLATERAL_ALREADY_EXISTS};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
 };
@@ -24,6 +23,7 @@ use perpetuals::core::components::positions::{
     Positions, Positions::InternalTrait as PositionsInternal,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::errors::ASSET_ALREADY_EXISTS;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::{AssetIdTrait, AssetStatus};
 use perpetuals::core::types::funding::{FundingIndex, FundingTick};
@@ -369,13 +369,13 @@ fn test_register_collateral_failures() {
     // Register the same collateral asset.
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
     let result = dispatcher.register_collateral(:asset_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_EXISTS);
+    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
 
     // Register new collateral asset.
     let new_asset_id = AssetIdTrait::new(value: selector!("NEW_COLLATERAL_ASSET_ID"));
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
     let result = dispatcher.register_collateral(asset_id: new_asset_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_EXISTS);
+    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
 }
 
 // New position tests.
