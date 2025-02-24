@@ -23,7 +23,6 @@ pub struct SetOwnerAccount {
     pub public_key: PublicKey,
     #[key]
     pub new_owner_account: ContractAddress,
-    pub expiration: Timestamp,
     pub set_owner_account_hash: felt252,
 }
 

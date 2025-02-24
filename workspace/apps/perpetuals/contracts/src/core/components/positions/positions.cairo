@@ -21,8 +21,8 @@ pub(crate) mod Positions {
     use perpetuals::core::components::assets::errors::ASSET_NOT_EXISTS;
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_POSITION,
-        INVALID_PUBLIC_KEY, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
+        INVALID_PUBLIC_KEY, INVALID_ZERO_OWNER_ACCOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
+        POSITION_HAS_OWNER_ACCOUNT, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -192,7 +192,6 @@ pub(crate) mod Positions {
             operator_nonce: u64,
             signature: Signature,
             position_id: PositionId,
-            public_key: PublicKey,
             new_owner_account: ContractAddress,
             expiration: Timestamp,
         ) {
@@ -203,22 +202,18 @@ pub(crate) mod Positions {
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self._get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
+            assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
+            let public_key = position.owner_public_key.read();
             let hash = SetOwnerAccountArgs {
                 position_id, public_key, new_owner_account, expiration,
             }
-                .get_message_hash(public_key: position.owner_public_key.read());
-            validate_stark_signature(
-                public_key: position.owner_public_key.read(), msg_hash: hash, signature: signature,
-            );
+                .get_message_hash(:public_key);
+            validate_stark_signature(:public_key, msg_hash: hash, :signature);
             position.owner_account.write(new_owner_account);
             self
                 .emit(
                     events::SetOwnerAccount {
-                        position_id: position_id,
-                        public_key,
-                        new_owner_account,
-                        expiration: expiration,
-                        set_owner_account_hash: hash,
+                        position_id, public_key, new_owner_account, set_owner_account_hash: hash,
                     },
                 );
         }

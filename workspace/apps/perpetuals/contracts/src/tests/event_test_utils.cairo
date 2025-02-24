@@ -313,11 +313,10 @@ pub fn assert_set_owner_account_event_with_expected(
     position_id: PositionId,
     public_key: PublicKey,
     new_owner_account: ContractAddress,
-    expiration: Timestamp,
     set_owner_account_hash: felt252,
 ) {
     let expected_event = positions_events::SetOwnerAccount {
-        position_id, public_key, new_owner_account, expiration, set_owner_account_hash,
+        position_id, public_key, new_owner_account, set_owner_account_hash,
     };
     assert_expected_event_emitted(
         :spied_event,

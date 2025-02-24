@@ -1407,7 +1407,6 @@ pub trait IPositions<TContractState> {
         operator_nonce: u64,
         signature: Signature,
         position_id: PositionId,
-        public_key: PublicKey,
         new_owner_account: ContractAddress,
         expiration: Timestamp,
     );
@@ -1683,7 +1682,6 @@ pub struct SetOwnerAccount {
     pub public_key: PublicKey,
     #[key]
     pub new_owner_account: ContractAddress,
-    pub expiration: Timestamp,
     pub set_owner_account_hash: felt252,
 }
 ```

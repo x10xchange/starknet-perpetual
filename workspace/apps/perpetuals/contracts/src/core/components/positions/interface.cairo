@@ -24,7 +24,6 @@ pub trait IPositions<TContractState> {
         operator_nonce: u64,
         signature: Signature,
         position_id: PositionId,
-        public_key: PublicKey,
         new_owner_account: ContractAddress,
         expiration: Timestamp,
     );

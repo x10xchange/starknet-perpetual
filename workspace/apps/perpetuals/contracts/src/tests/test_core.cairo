@@ -289,7 +289,6 @@ fn test_caller_failures() {
             operator_nonce: Zero::zero(),
             signature: array![].span(),
             position_id: POSITION_ID_1,
-            public_key: Zero::zero(),
             new_owner_account: Zero::zero(),
             expiration: Time::now(),
         );
@@ -452,7 +451,6 @@ fn test_successful_set_owner_account() {
             operator_nonce: state.nonce(),
             :signature,
             :position_id,
-            :public_key,
             :new_owner_account,
             :expiration,
         );
@@ -464,7 +462,6 @@ fn test_successful_set_owner_account() {
         :position_id,
         :public_key,
         :new_owner_account,
-        :expiration,
         :set_owner_account_hash,
     );
 
@@ -505,7 +502,6 @@ fn test_set_existed_owner_account() {
             operator_nonce: state.nonce(),
             :signature,
             :position_id,
-            :public_key,
             :new_owner_account,
             :expiration,
         );
