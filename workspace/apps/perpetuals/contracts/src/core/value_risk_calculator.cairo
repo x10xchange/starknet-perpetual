@@ -89,6 +89,10 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
 }
 
 
+pub fn evaluate_position(position_data: PositionData) -> PositionChangeResult {
+    evaluate_position_change(:position_data, position_diff: array![].span())
+}
+
 pub fn evaluate_position_change(
     position_data: PositionData, position_diff: PositionDiff,
 ) -> PositionChangeResult {
@@ -166,6 +170,9 @@ pub fn validate_deleveraged_position(
     }
 }
 
+pub fn calculate_position_tvtr(position_data: PositionData) -> PositionTVTR {
+    calculate_position_tvtr_change(:position_data, position_diff: array![].span()).before
+}
 
 fn calculate_position_tvtr_change(
     position_data: PositionData, position_diff: PositionDiff,

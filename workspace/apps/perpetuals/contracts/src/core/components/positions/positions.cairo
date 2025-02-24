@@ -37,7 +37,10 @@ pub(crate) mod Positions {
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId};
-    use perpetuals::core::value_risk_calculator::{PositionState, evaluate_position_change};
+    use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use perpetuals::core::value_risk_calculator::{
+        PositionState, calculate_position_tvtr, evaluate_position,
+    };
     use starknet::storage::{
         Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -88,6 +91,25 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
+        fn get_position_data(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> PositionData {
+            let mut position_data = array![];
+            self._validate_position_exists(:position_id);
+            self._collect_position_collaterals(ref :position_data, :position_id);
+            self._collect_position_synthetics(ref :position_data, :position_id);
+            position_data.span()
+        }
+
+        /// This function is primarily used as a view function—knowing the total value and/or
+        /// total risk without context is unnecessary.
+        fn get_position_tv_tr(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> PositionTVTR {
+            let position_data = self.get_position_data(:position_id);
+            calculate_position_tvtr(:position_data)
+        }
+
         /// This function is mostly used as view function - it's better to use the
         /// `evaluate_position_change` function as it gives all the information needed at the same
         /// cost.
@@ -113,15 +135,6 @@ pub(crate) mod Positions {
         ) -> bool {
             let position_state = self._get_position_state(:position_id);
             position_state == PositionState::Deleveragable
-        }
-
-        fn get_position_data(
-            self: @ComponentState<TContractState>, position_id: PositionId,
-        ) -> PositionData {
-            let mut position_data = array![];
-            self._collect_position_collaterals(ref :position_data, :position_id);
-            self._collect_position_synthetics(ref :position_data, :position_id);
-            position_data.span()
         }
 
         /// Adds a new position to the system.
@@ -605,9 +618,7 @@ pub(crate) mod Positions {
         ) -> PositionState {
             let position_data = self.get_position_data(:position_id);
 
-            let position_change_result = evaluate_position_change(
-                :position_data, position_diff: array![].span(),
-            );
+            let position_change_result = evaluate_position(:position_data);
             position_change_result.position_state_after_change
         }
     }
