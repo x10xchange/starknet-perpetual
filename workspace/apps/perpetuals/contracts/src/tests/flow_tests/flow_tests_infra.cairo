@@ -341,7 +341,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
-        ICoreDispatcher { contract_address: self.perpetuals_contract }
+        IAssetsDispatcher { contract_address: self.perpetuals_contract }
             .price_tick(
                 :operator_nonce, asset_id: *synthetic_config.asset_id, :price, :signed_prices,
             );

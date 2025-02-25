@@ -3,7 +3,6 @@ use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::Order;
-use perpetuals::core::types::price::SignedPrice;
 use starknet::ContractAddress;
 
 
@@ -95,13 +94,5 @@ pub trait ICore<TContractState> {
     // Asset Flows
     fn register_collateral(
         ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
-    );
-    // Ticks
-    fn price_tick(
-        ref self: TContractState,
-        operator_nonce: u64,
-        asset_id: AssetId,
-        price: u128,
-        signed_prices: Span<SignedPrice>,
     );
 }

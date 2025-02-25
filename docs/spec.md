@@ -160,7 +160,6 @@ classDiagram
         liquidate()
         deleverage()
         register_collateral()
-        price_tick()
     }
     class Position{
         version: u8
@@ -216,6 +215,7 @@ classDiagram
         remove_oracle_from_asset()
         update_synthetic_quorum()
         funding_tick()
+        price_tick()
     }
     class Deposit{
         registered_deposits: Map< HashType, DepositStatus>

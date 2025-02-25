@@ -40,7 +40,7 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::{Price, PriceMulTrait, SignedPrice};
+    use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -303,6 +303,40 @@ pub mod AssetsComponent {
             );
 
             self._execute_funding_tick(:funding_ticks);
+        }
+
+        /// Price tick for an asset to update the price of the asset.
+        ///
+        /// Validations:
+        /// - Contract is not paused
+        /// - Only the operator can call this function.
+        /// - Operator nonce is valid.
+        /// - Prices array is sorted according to the signer public key.
+        /// - The price is the median of the prices.
+        /// - The signature is valid.
+        /// - The timestamp is valid(less than the max oracle price validity).
+        ///
+        /// Execution:
+        /// - Update the asset price.
+        ///     The updated price is: (price * 2^28)/ (resolution_factor * 10^12).
+        fn price_tick(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            asset_id: AssetId,
+            price: u128,
+            signed_prices: Span<SignedPrice>,
+        ) {
+            // Validations:
+            get_dep_component!(@self, Pause).assert_not_paused();
+            get_dep_component!(@self, Roles).only_operator();
+            let mut nonce = get_dep_component_mut!(ref self, Nonce);
+            nonce.use_checked_nonce(nonce: operator_nonce);
+
+            self._validate_price_tick(:asset_id, :price, :signed_prices);
+
+            let synthetic_config = self.get_synthetic_config(synthetic_id: asset_id);
+            let converted_price = price.convert(resolution: synthetic_config.resolution);
+            self._set_price(:asset_id, price: converted_price);
         }
 
         fn get_collateral_config(
@@ -571,30 +605,6 @@ pub mod AssetsComponent {
             self.synthetic_config.read(asset_id).is_some()
         }
 
-        fn set_price(ref self: ComponentState<TContractState>, asset_id: AssetId, price: Price) {
-            let now = Time::now();
-            let synthetic_timely_data = self.synthetic_timely_data.entry(asset_id);
-            synthetic_timely_data.price.write(price);
-            synthetic_timely_data.last_price_update.write(now);
-
-            let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
-            // If the asset is not active, it'll be activated.
-            if synthetic_config.status == AssetStatus::PENDING {
-                // Activates the synthetic asset.
-                self.num_of_active_synthetic_assets.add_and_write(1);
-                self
-                    .synthetic_config
-                    .entry(asset_id)
-                    .write(
-                        Option::Some(
-                            SyntheticConfig { status: AssetStatus::ACTIVE, ..synthetic_config },
-                        ),
-                    );
-                self.emit(events::AssetActivated { asset_id });
-            }
-            self.emit(events::PriceTick { asset_id, price });
-        }
-
         fn validate_asset_active(self: @ComponentState<TContractState>, asset_id: AssetId) {
             let collateral_config = self.collateral_config.read(asset_id);
             let is_collateral_active = match collateral_config {
@@ -646,64 +656,6 @@ pub mod AssetsComponent {
                 public_key: signed_price.signer_public_key,
                 :msg_hash,
                 signature: signed_price.signature,
-            );
-        }
-
-        /// Validates a price tick.
-        /// - The signed prices must be sorted by the public key.
-        /// - The signed prices are signed by the oracles.
-        /// - The number of signed prices (i.e. signing oracles) must not be smaller than the
-        /// quorum.
-        /// - The signed price time must not be in the future, and must not lag more than
-        /// `max_oracle_price_validity`.
-        /// - The `price` is the median of the signed_prices.
-        fn validate_price_tick(
-            self: @ComponentState<TContractState>,
-            asset_id: AssetId,
-            price: u128,
-            signed_prices: Span<SignedPrice>,
-        ) {
-            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
-            assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
-            assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
-
-            let mut min_timestamp = MAX_U32;
-            let mut lower_amount: usize = 0;
-            let mut higher_amount: usize = 0;
-            let mut equal_amount: usize = 0;
-
-            let mut previous_public_key_opt: Option<PublicKey> = Option::None;
-            for signed_price in signed_prices {
-                if *signed_price.price < price {
-                    lower_amount += 1;
-                } else if *signed_price.price > price {
-                    higher_amount += 1;
-                } else {
-                    equal_amount += 1;
-                }
-
-                min_timestamp = min(min_timestamp, (*signed_price).timestamp);
-                self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
-
-                if let Option::Some(previous_public_key) = previous_public_key_opt {
-                    let prev: u256 = previous_public_key.into();
-                    let current: u256 = (*signed_price.signer_public_key).into();
-                    assert(prev < current, SIGNED_PRICES_UNSORTED);
-                }
-                previous_public_key_opt = Option::Some((*signed_price.signer_public_key));
-            };
-
-            assert(2 * (lower_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
-            assert(2 * (higher_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
-            let now: u64 = Time::now().into();
-            let max_oracle_price_validity = self.max_oracle_price_validity.read();
-            let from = now - max_oracle_price_validity.into();
-            // Add 2 minutes to allow timestamps that were signed after the block timestamp as the
-            // timestamp is the open block timestamp and there could be a scenario where the oracle
-            // signed the price after the block was opened and still got into the block.
-            let to = now + 2 * MINUTE;
-            assert(
-                from <= min_timestamp.into() && min_timestamp.into() < to, INVALID_PRICE_TIMESTAMP,
             );
         }
     }
@@ -774,6 +726,88 @@ pub mod AssetsComponent {
                         asset_id: synthetic_id, funding_index: new_funding_index,
                     },
                 );
+        }
+
+        /// Validates a price tick.
+        /// - The signed prices must be sorted by the public key.
+        /// - The signed prices are signed by the oracles.
+        /// - The number of signed prices (i.e. signing oracles) must not be smaller than the
+        /// quorum.
+        /// - The signed price time must not be in the future, and must not lag more than
+        /// `max_oracle_price_validity`.
+        /// - The `price` is the median of the signed_prices.
+        fn _validate_price_tick(
+            self: @ComponentState<TContractState>,
+            asset_id: AssetId,
+            price: u128,
+            signed_prices: Span<SignedPrice>,
+        ) {
+            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
+            assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
+            assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
+
+            let mut min_timestamp = MAX_U32;
+            let mut lower_amount: usize = 0;
+            let mut higher_amount: usize = 0;
+            let mut equal_amount: usize = 0;
+
+            let mut previous_public_key_opt: Option<PublicKey> = Option::None;
+            for signed_price in signed_prices {
+                if *signed_price.price < price {
+                    lower_amount += 1;
+                } else if *signed_price.price > price {
+                    higher_amount += 1;
+                } else {
+                    equal_amount += 1;
+                }
+
+                min_timestamp = min(min_timestamp, (*signed_price).timestamp);
+                self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
+
+                if let Option::Some(previous_public_key) = previous_public_key_opt {
+                    let prev: u256 = previous_public_key.into();
+                    let current: u256 = (*signed_price.signer_public_key).into();
+                    assert(prev < current, SIGNED_PRICES_UNSORTED);
+                }
+                previous_public_key_opt = Option::Some((*signed_price.signer_public_key));
+            };
+
+            assert(2 * (lower_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
+            assert(2 * (higher_amount + equal_amount) >= signed_prices.len(), INVALID_MEDIAN);
+            let now: u64 = Time::now().into();
+            let max_oracle_price_validity = self.max_oracle_price_validity.read();
+            let from = now - max_oracle_price_validity.into();
+            // Add 2 minutes to allow timestamps that were signed after the block timestamp as the
+            // timestamp is the open block timestamp and there could be a scenario where the oracle
+            // signed the price after the block was opened and still got into the block.
+            let to = now + 2 * MINUTE;
+            assert(
+                from <= min_timestamp.into() && min_timestamp.into() < to, INVALID_PRICE_TIMESTAMP,
+            );
+        }
+
+        fn _set_price(ref self: ComponentState<TContractState>, asset_id: AssetId, price: Price) {
+            let now = Time::now();
+            let synthetic_timely_data = self.synthetic_timely_data.entry(asset_id);
+            synthetic_timely_data.price.write(price);
+            synthetic_timely_data.last_price_update.write(now);
+
+            let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
+            // If the asset is not active, it'll be activated.
+            if synthetic_config.status == AssetStatus::PENDING {
+                // Activates the synthetic asset.
+                self.num_of_active_synthetic_assets.add_and_write(1);
+                self
+                    .synthetic_config
+                    .entry(asset_id)
+                    .write(
+                        Option::Some(
+                            SyntheticConfig { status: AssetStatus::ACTIVE, ..synthetic_config },
+                        ),
+                    );
+                self.emit(events::AssetActivated { asset_id });
+            }
+            self.emit(events::PriceTick { asset_id, price });
         }
 
         fn _validate_oracle_signature(
