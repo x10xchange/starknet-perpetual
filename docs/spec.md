@@ -159,7 +159,6 @@ classDiagram
         trade()
         liquidate()
         deleverage()
-        register_collateral()
     }
     class Position{
         version: u8
@@ -198,6 +197,7 @@ classDiagram
         asset_oracle: Map< AssetId, Map[PublicKey, felt252]>
         max_oracle_price_validity: TimeDelta
 
+        register_collateral()
         add_oracle_to_asset()
         add_synthetic_asset()
         deactivate_synthetic()
@@ -391,17 +391,17 @@ pub enum PositionState {
 
 ### Deleveragable
 
-A position is in deleveragable state when:  
+A position is in deleveragable state when:
 $TV<0 $
 
 ### Liquidatable
 
-A position is in liquidatable state when:  
+A position is in liquidatable state when:
 $TV<TR $
 
 ### Healthy
 
-A position is in a healthy state when:  
+A position is in a healthy state when:
 $TV\geq TR $
 
 ### ChangeEffects
@@ -416,8 +416,8 @@ pub struct ChangeEffects {
 ### Is Healthier
 
 $$ ( \frac{TV}{TR})\_{new} \geq (\frac{TV}{TR})\_{old} $$
-   
-   **AND**  
+
+   **AND**
 
 $$ {TR}\_{new} \lt {TR\_{old}} $$
 
@@ -3207,22 +3207,22 @@ Only the Operator can execute.
 
 #### Validations
 
-1. [Pausable check](#pausable)  
-2. [Operator Nonce check](#operator-nonce)  
-3. Timestamps are at most `max_oracle_price_validity`  
-4. `price_ticks length >= synthetic_config[asset_id].quorum`  
-5. Prices array is sorted according o the signers public key  
-6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`  
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. Timestamps are at most `max_oracle_price_validity`
+4. `price_ticks length >= synthetic_config[asset_id].quorum`
+5. Prices array is sorted according o the signers public key
+6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`
 7. Calculated $median\\_price \leq 2^{56}$
 
 #### Logic
 
-1. For each `price_tick` in `price_ticks`:  
-   1. Validate stark signature on:  
-      `pedersen(`  
-&nbsp;&nbsp;&nbsp;&nbsp;`oracles[price_ticks[i].signer_public_key],`  
-&nbsp;&nbsp;&nbsp;&nbsp;`0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits)`  
-      `)` 
+1. For each `price_tick` in `price_ticks`:
+   1. Validate stark signature on:
+      `pedersen(`
+&nbsp;&nbsp;&nbsp;&nbsp;`oracles[price_ticks[i].signer_public_key],`
+&nbsp;&nbsp;&nbsp;&nbsp;`0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits)`
+      `)`
 2. calculate median price using the formula: $median\_price= \frac{price*2^{28}}{asset\_id.resolution_factor*10^{12}}$
 3. `self.synthetic_timely_data[asset_id].price = median_price`
 

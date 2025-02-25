@@ -11,6 +11,7 @@ use contracts_commons::test_utils::{
 };
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
+use perpetuals::core::components::assets::errors::ASSET_ALREADY_EXISTS;
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
 };
@@ -23,7 +24,6 @@ use perpetuals::core::components::positions::{
     Positions, Positions::InternalTrait as PositionsInternal,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::errors::ASSET_ALREADY_EXISTS;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::{AssetIdTrait, AssetStatus};
 use perpetuals::core::types::funding::{FundingIndex, FundingTick};
@@ -227,6 +227,8 @@ fn test_caller_failures() {
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
+    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
+
     let result = dispatcher
         .register_collateral(
             asset_id: cfg.collateral_cfg.collateral_id,
@@ -234,8 +236,6 @@ fn test_caller_failures() {
             quantum: Zero::zero(),
         );
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
-
-    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
 
     let result = dispatcher
         .add_oracle_to_asset(
@@ -352,7 +352,8 @@ fn test_successful_register_collateral() {
 #[test]
 fn test_register_collateral_failures() {
     // Setup:
-    let (cfg, state, dispatcher) = init_by_dispatcher();
+    let (cfg, state, _) = init_by_dispatcher();
+    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
 
     // Parameters:
     // `collateral_id` is already registered in the setup.

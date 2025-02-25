@@ -1,6 +1,8 @@
 #[starknet::component]
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
+    use contracts_commons::components::deposit::Deposit;
+    use contracts_commons::components::deposit::Deposit::InternalTrait as DepositTrait;
     use contracts_commons::components::nonce::NonceComponent;
     use contracts_commons::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use contracts_commons::components::pausable::PausableComponent;
@@ -18,15 +20,17 @@ pub mod AssetsComponent {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
-        ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
-        COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET, FUNDING_EXPIRED,
-        FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
-        INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUORUM, NOT_COLLATERAL, NOT_SYNTHETIC,
-        ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED,
-        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
-        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, ZERO_MAX_FUNDING_INTERVAL,
-        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        ALREADY_INITIALIZED, ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE,
+        ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET,
+        FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
+        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
+        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
+        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL,
+        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
+        ZERO_MAX_PRICE_INTERVAL,
     };
 
     use perpetuals::core::components::assets::events;
@@ -91,9 +95,51 @@ pub mod AssetsComponent {
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl Pause: PausableComponent::HasComponent<TContractState>,
         impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Deposits: Deposit::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
+        /// Add collateral asset is called by the operator to add a new collateral asset.
+        /// We only have one collateral asset.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The asset does not exists.
+        /// - There's no collateral asset in the system.
+        ///
+        /// Execution:
+        /// - Adds a new entry to collateral_config.
+        /// - Adds a new entry at the beginning of collateral_timely_data
+        ///     - Sets the price to TWO_POW_28.
+        ///     - Sets the `last_price_update` to zero.
+        ///     - Sets the risk factor to zero.
+        ///     - Sets the quorum to zero.
+        /// - Registers the token to deposits component.
+        fn register_collateral(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            token_address: ContractAddress,
+            quantum: u64,
+        ) {
+            // Validations:
+            get_dep_component!(@self, Roles).only_app_governor();
+
+            // An asset cannot be both collateral and synthetic.
+            assert(self.synthetic_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
+            // We currently support only one collateral asset.
+            assert(self.collateral_timely_data_head.read().is_none(), ASSET_ALREADY_EXISTS);
+
+            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(token_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
+            assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
+
+            // Execution:
+            self._store_collateral(:asset_id, :token_address, :quantum);
+
+            let mut deposits = get_dep_component_mut!(ref self, Deposits);
+            deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum);
+        }
+
         /// Add oracle to a synthetic asset.
         ///
         /// Validations:
@@ -184,6 +230,7 @@ pub mod AssetsComponent {
             assert(
                 self.synthetic_config.entry(asset_id).read().is_none(), SYNTHETIC_ALREADY_EXISTS,
             );
+            assert(self.collateral_config.entry(asset_id).read().is_none(), ASSET_ALREADY_EXISTS);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             self
                 .synthetic_config
@@ -660,11 +707,47 @@ pub mod AssetsComponent {
         }
     }
 
-
     #[generate_trait]
     impl PrivateImpl<
         TContractState, +HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
+        fn _store_collateral(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            token_address: ContractAddress,
+            quantum: u64,
+        ) {
+            self
+                .collateral_config
+                .entry(asset_id)
+                .write(
+                    Option::Some(
+                        CollateralConfig {
+                            version: COLLATERAL_VERSION,
+                            token_address,
+                            status: AssetStatus::ACTIVE,
+                            risk_factor: Zero::zero(),
+                            quantum,
+                            quorum: Zero::zero(),
+                        },
+                    ),
+                );
+
+            self
+                .collateral_timely_data
+                .entry(asset_id)
+                .write(
+                    CollateralTimelyData {
+                        version: COLLATERAL_VERSION,
+                        next: self.collateral_timely_data_head.read(),
+                        price: One::one(),
+                        last_price_update: Zero::zero(),
+                    },
+                );
+            self.collateral_timely_data_head.write(Option::Some(asset_id));
+            self.emit(events::CollateralRegistered { asset_id, token_address, quantum });
+        }
+
         fn _get_collateral_config(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> CollateralConfig {

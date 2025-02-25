@@ -91,8 +91,4 @@ pub trait ICore<TContractState> {
         deleveraged_quote_asset_id: AssetId,
         deleveraged_quote_amount: i64,
     );
-    // Asset Flows
-    fn register_collateral(
-        ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
-    );
 }

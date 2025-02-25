@@ -12,7 +12,6 @@ use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssets
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::tests::constants;
@@ -217,7 +216,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
     }
 
     fn register_collateral(self: @FlowTestState) {
-        let dispatcher = ICoreDispatcher { contract_address: *self.perpetuals_contract };
+        let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
 
         self.set_app_governor_as_caller();
         dispatcher
