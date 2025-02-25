@@ -20,9 +20,9 @@ pub(crate) mod Positions {
     use perpetuals::core::components::assets::errors::ASSET_NOT_EXISTS;
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_POSITION,
-        INVALID_PUBLIC_KEY, INVALID_ZERO_OWNER_ACCOUNT, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS,
-        POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_POSITION_OWNER_EXPIRED,
-        SET_PUBLIC_KEY_EXPIRED,
+        INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT,
+        POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -165,7 +165,7 @@ pub(crate) mod Positions {
             nonce.use_checked_nonce(nonce: operator_nonce);
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
-            assert(owner_public_key.is_non_zero(), INVALID_PUBLIC_KEY);
+            assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
             position.owner_account.write(owner_account);
@@ -371,22 +371,23 @@ pub(crate) mod Positions {
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
-            fee_position_owner_account: ContractAddress,
             fee_position_owner_public_key: PublicKey,
-            insurance_fund_position_owner_account: ContractAddress,
             insurance_fund_position_owner_public_key: PublicKey,
         ) {
-            let fee_position = self.positions.entry(FEE_POSITION);
             // Checks that the component has not been initialized yet.
-            assert(fee_position.version.read().is_zero(), ALREADY_INITIALIZED);
+            let fee_position = self.positions.entry(FEE_POSITION);
+            assert(fee_position.owner_public_key.read().is_zero(), ALREADY_INITIALIZED);
+
+            // Checks that the input public keys are non-zero.
+            assert(fee_position_owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
+            assert(insurance_fund_position_owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
+
             // Create fee positions.
             fee_position.version.write(POSITION_VERSION);
-            fee_position.owner_account.write(fee_position_owner_account);
             fee_position.owner_public_key.write(fee_position_owner_public_key);
 
             let insurance_fund_position = self.positions.entry(INSURANCE_FUND_POSITION);
             insurance_fund_position.version.write(POSITION_VERSION);
-            insurance_fund_position.owner_account.write(insurance_fund_position_owner_account);
             insurance_fund_position
                 .owner_public_key
                 .write(insurance_fund_position_owner_public_key);

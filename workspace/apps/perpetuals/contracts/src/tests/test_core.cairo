@@ -76,25 +76,9 @@ fn test_constructor() {
         state
             .positions
             .get_position_snapshot(position_id: Positions::FEE_POSITION)
-            .owner_account
-            .read(),
-        OPERATOR(),
-    );
-    assert_eq!(
-        state
-            .positions
-            .get_position_snapshot(position_id: Positions::FEE_POSITION)
             .owner_public_key
             .read(),
         OPERATOR_PUBLIC_KEY(),
-    );
-    assert_eq!(
-        state
-            .positions
-            .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION)
-            .owner_account
-            .read(),
-        OPERATOR(),
     );
     assert_eq!(
         state

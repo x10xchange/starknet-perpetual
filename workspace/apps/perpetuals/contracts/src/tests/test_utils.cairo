@@ -163,9 +163,7 @@ pub impl CoreImpl of CoreTrait {
         self.max_funding_rate.serialize(ref calldata);
         self.max_oracle_price_validity.serialize(ref calldata);
         self.deposit_grace_period.serialize(ref calldata);
-        self.fee_position_owner_account.serialize(ref calldata);
         self.fee_position_owner_public_key.serialize(ref calldata);
-        self.insurance_fund_position_owner_account.serialize(ref calldata);
         self.insurance_fund_position_owner_public_key.serialize(ref calldata);
 
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
@@ -362,9 +360,7 @@ pub fn initialized_contract_state() -> Core::ContractState {
         max_funding_rate: MAX_FUNDING_RATE,
         max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
         deposit_grace_period: Time::weeks(1),
-        fee_position_owner_account: OPERATOR(),
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
-        insurance_fund_position_owner_account: OPERATOR(),
         insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
     );
     state

@@ -179,9 +179,7 @@ pub mod Core {
         max_funding_rate: u32,
         max_oracle_price_validity: TimeDelta,
         deposit_grace_period: TimeDelta,
-        fee_position_owner_account: ContractAddress,
         fee_position_owner_public_key: PublicKey,
-        insurance_fund_position_owner_account: ContractAddress,
         insurance_fund_position_owner_public_key: PublicKey,
     ) {
         self.roles.initialize(:governance_admin);
@@ -197,12 +195,7 @@ pub mod Core {
         self.deposits.initialize(deposit_grace_period);
         self
             .positions
-            .initialize(
-                :fee_position_owner_account,
-                :fee_position_owner_public_key,
-                :insurance_fund_position_owner_account,
-                :insurance_fund_position_owner_public_key,
-            );
+            .initialize(:fee_position_owner_public_key, :insurance_fund_position_owner_public_key);
     }
 
     #[abi(embed_v0)]
