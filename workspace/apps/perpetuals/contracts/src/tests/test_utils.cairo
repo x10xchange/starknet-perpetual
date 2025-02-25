@@ -120,14 +120,17 @@ pub impl OracleImpl of OracleTrait {
         const TWO_POW_40: felt252 = 0x100_0000_0000;
         *self.asset_name * TWO_POW_40 + *self.oracle_name
     }
-    fn get_signed_price(self: Oracle, price: u128, timestamp: u32) -> SignedPrice {
+    fn get_signed_price(self: Oracle, oracle_price: u128, timestamp: u32) -> SignedPrice {
         let message = core::pedersen::pedersen(
             self.get_oracle_name_asset_name_concat(),
-            (price * TWO_POW_32.into() + timestamp.into()).into(),
+            (oracle_price * TWO_POW_32.into() + timestamp.into()).into(),
         );
         let (r, s) = self.key_pair.sign(message).unwrap();
         SignedPrice {
-            signature: [r, s].span(), signer_public_key: self.key_pair.public_key, timestamp, price,
+            signature: [r, s].span(),
+            signer_public_key: self.key_pair.public_key,
+            timestamp,
+            oracle_price,
         }
     }
 }

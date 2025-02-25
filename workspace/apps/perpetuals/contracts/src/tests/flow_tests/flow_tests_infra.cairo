@@ -37,16 +37,18 @@ struct Oracle {
 
 #[generate_trait]
 impl OracleImpl of OracleTrait {
-    fn sign_price(self: @Oracle, price: u128, timestamp: u32, asset_name: felt252) -> SignedPrice {
+    fn sign_price(
+        self: @Oracle, oracle_price: u128, timestamp: u32, asset_name: felt252,
+    ) -> SignedPrice {
         const TWO_POW_40: felt252 = 0x100_0000_0000;
-        let packed_timestamp_price = (timestamp.into() + price * TWO_POW_32.into()).into();
+        let packed_timestamp_price = (timestamp.into() + oracle_price * TWO_POW_32.into()).into();
         let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40;
         let msg_hash = core::pedersen::pedersen(oracle_name_asset_name, packed_timestamp_price);
         SignedPrice {
             signature: self.account.sign_message(msg_hash),
             signer_public_key: *self.account.key_pair.public_key,
             timestamp,
-            price,
+            oracle_price,
         }
     }
 }
@@ -327,14 +329,14 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         User { position_id, account }
     }
 
-    fn price_tick(ref self: FlowTestState, synthetic_config: @SyntheticConfig, price: u128) {
+    fn price_tick(ref self: FlowTestState, synthetic_config: @SyntheticConfig, oracle_price: u128) {
         let timestamp = Time::now().seconds.try_into().unwrap();
         let oracle_a_signed_price = self
             .oracle_a
-            .sign_price(:price, :timestamp, asset_name: *synthetic_config.asset_name);
+            .sign_price(:oracle_price, :timestamp, asset_name: *synthetic_config.asset_name);
         let oracle_b_signed_price = self
             .oracle_b
-            .sign_price(:price, :timestamp, asset_name: *synthetic_config.asset_name);
+            .sign_price(:oracle_price, :timestamp, asset_name: *synthetic_config.asset_name);
         let signed_prices = array![oracle_a_signed_price, oracle_b_signed_price].span();
         advance_time(TIME_STEP);
 
@@ -342,7 +344,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
         IAssetsDispatcher { contract_address: self.perpetuals_contract }
             .price_tick(
-                :operator_nonce, asset_id: *synthetic_config.asset_id, :price, :signed_prices,
+                :operator_nonce,
+                asset_id: *synthetic_config.asset_id,
+                :oracle_price,
+                :signed_prices,
             );
     }
     /// TODO: add all the necessary functions to interact with the contract.

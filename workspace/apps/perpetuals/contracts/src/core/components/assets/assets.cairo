@@ -17,7 +17,7 @@ pub mod AssetsComponent {
     use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
     use contracts_commons::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
-    use core::cmp::min;
+    use core::cmp::{max, min};
     use core::num::traits::{One, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -361,7 +361,7 @@ pub mod AssetsComponent {
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
             asset_id: AssetId,
-            price: u128,
+            oracle_price: u128,
             signed_prices: Span<SignedPrice>,
         ) {
             // Validations:
@@ -370,11 +370,11 @@ pub mod AssetsComponent {
             let mut nonce = get_dep_component_mut!(ref self, Nonce);
             nonce.use_checked_nonce(nonce: operator_nonce);
 
-            self._validate_price_tick(:asset_id, :price, :signed_prices);
+            self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
 
             let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
-            let converted_price = price.convert(resolution: synthetic_config.resolution);
-            self._set_price(:asset_id, price: converted_price);
+            let price = oracle_price.convert(resolution: synthetic_config.resolution);
+            self._set_price(:asset_id, :price);
         }
 
         fn get_collateral_config(
@@ -645,7 +645,8 @@ pub mod AssetsComponent {
                 .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
-            let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
+            let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
+                * TWO_POW_32.into()
                 + signed_price.timestamp.into();
             let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
             validate_stark_signature(
@@ -757,11 +758,11 @@ pub mod AssetsComponent {
         /// quorum.
         /// - The signed price time must not be in the future, and must not lag more than
         /// `max_oracle_price_validity`.
-        /// - The `price` is the median of the signed_prices.
+        /// - The `oracle_price` is the median of the signed_prices.
         fn _validate_price_tick(
             self: @ComponentState<TContractState>,
             asset_id: AssetId,
-            price: u128,
+            oracle_price: u128,
             signed_prices: Span<SignedPrice>,
         ) {
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
@@ -769,21 +770,23 @@ pub mod AssetsComponent {
             assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
 
             let mut min_timestamp = MAX_U32;
+            let mut max_timestamp = Zero::zero();
             let mut lower_amount: usize = 0;
             let mut higher_amount: usize = 0;
             let mut equal_amount: usize = 0;
 
             let mut previous_public_key_opt: Option<PublicKey> = Option::None;
             for signed_price in signed_prices {
-                if *signed_price.price < price {
+                if *signed_price.oracle_price < oracle_price {
                     lower_amount += 1;
-                } else if *signed_price.price > price {
+                } else if *signed_price.oracle_price > oracle_price {
                     higher_amount += 1;
                 } else {
                     equal_amount += 1;
                 }
 
                 min_timestamp = min(min_timestamp, (*signed_price).timestamp);
+                max_timestamp = max(max_timestamp, (*signed_price).timestamp);
                 self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
 
                 if let Option::Some(previous_public_key) = previous_public_key_opt {
@@ -804,7 +807,7 @@ pub mod AssetsComponent {
             // signed the price after the block was opened and still got into the block.
             let to = now + 2 * MINUTE;
             assert(
-                from <= min_timestamp.into() && min_timestamp.into() < to, INVALID_PRICE_TIMESTAMP,
+                from <= min_timestamp.into() && max_timestamp.into() <= to, INVALID_PRICE_TIMESTAMP,
             );
         }
 
@@ -833,7 +836,8 @@ pub mod AssetsComponent {
                 .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
-            let packed_price_timestamp: felt252 = signed_price.price.into() * TWO_POW_32.into()
+            let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
+                * TWO_POW_32.into()
                 + signed_price.timestamp.into();
             let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
             validate_stark_signature(

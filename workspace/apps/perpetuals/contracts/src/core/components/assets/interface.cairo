@@ -38,7 +38,7 @@ pub trait IAssets<TContractState> {
         ref self: TContractState,
         operator_nonce: u64,
         asset_id: AssetId,
-        price: u128,
+        oracle_price: u128,
         signed_prices: Span<SignedPrice>,
     );
     fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;

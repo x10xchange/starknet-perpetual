@@ -1,4 +1,3 @@
-use contracts_commons::constants::TEN_POW_12;
 use contracts_commons::types::{PublicKey, Signature};
 use core::num::traits::{One, WideMul, Zero};
 use perpetuals::core::types::balance::Balance;
@@ -8,6 +7,10 @@ pub const TWO_POW_28: u64 = 0x10000000;
 
 // 2^56
 const LIMIT: u64 = 0x100000000000000;
+// Oracle always sign the price with 18 decimal places.
+const ORACLE_SCALE: u256 = 1_000_000_000_000_000_000;
+// StarkNet Perps scale is with 6 decimal places.
+const SN_PERPS_SCALE: u256 = 1_000_000;
 
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Price {
@@ -22,7 +25,7 @@ pub struct SignedPrice {
     pub signature: Signature,
     pub signer_public_key: PublicKey,
     pub timestamp: u32,
-    pub price: u128,
+    pub oracle_price: u128,
 }
 
 fn mul<
@@ -93,8 +96,9 @@ pub impl PriceImpl of PriceTrait {
 
     fn convert(self: u128, resolution: u64) -> Price {
         let mut converted_price = self.wide_mul(TWO_POW_28.into());
+        converted_price *= SN_PERPS_SCALE;
         converted_price /= resolution.into();
-        converted_price /= TEN_POW_12.into();
+        converted_price /= ORACLE_SCALE;
         converted_price.into()
     }
 }

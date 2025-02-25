@@ -254,7 +254,7 @@ fn test_caller_failures() {
         .price_tick(
             operator_nonce: Zero::zero(),
             asset_id: cfg.synthetic_cfg.synthetic_id,
-            price: Zero::zero(),
+            oracle_price: Zero::zero(),
             signed_prices: array![].span(),
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
@@ -2578,15 +2578,15 @@ fn test_price_tick_basic() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [
-                oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
+                oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
             ]
                 .span(),
         );
@@ -2657,17 +2657,23 @@ fn test_price_tick_odd() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [
-                oracle2.get_signed_price(:price, timestamp: old_time.try_into().unwrap()),
-                oracle3.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
-                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
+                oracle2.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap()),
+                oracle3
+                    .get_signed_price(
+                        oracle_price: oracle_price + 1, timestamp: old_time.try_into().unwrap(),
+                    ),
+                oracle1
+                    .get_signed_price(
+                        oracle_price: oracle_price - 1, timestamp: old_time.try_into().unwrap(),
+                    ),
             ]
                 .span(),
         );
@@ -2712,16 +2718,22 @@ fn test_price_tick_even() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [
-                oracle3.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
-                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
+                oracle3
+                    .get_signed_price(
+                        oracle_price: oracle_price + 1, timestamp: old_time.try_into().unwrap(),
+                    ),
+                oracle1
+                    .get_signed_price(
+                        oracle_price: oracle_price - 1, timestamp: old_time.try_into().unwrap(),
+                    ),
             ]
                 .span(),
         );
@@ -2745,7 +2757,7 @@ fn test_price_tick_no_quorum() {
         .price_tick(
             :operator_nonce,
             asset_id: cfg.synthetic_cfg.synthetic_id,
-            price: Zero::zero(),
+            oracle_price: Zero::zero(),
             signed_prices: [].span(),
         );
 }
@@ -2781,16 +2793,22 @@ fn test_price_tick_unsorted() {
     let old_time: u64 = Time::now().into();
     state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = TEN_POW_15.into();
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [
-                oracle1.get_signed_price(price: price - 1, timestamp: old_time.try_into().unwrap()),
-                oracle2.get_signed_price(price: price + 1, timestamp: old_time.try_into().unwrap()),
+                oracle1
+                    .get_signed_price(
+                        oracle_price: oracle_price - 1, timestamp: old_time.try_into().unwrap(),
+                    ),
+                oracle2
+                    .get_signed_price(
+                        oracle_price: oracle_price + 1, timestamp: old_time.try_into().unwrap(),
+                    ),
             ]
                 .span(),
         );
@@ -2818,15 +2836,15 @@ fn test_price_tick_old_oracle() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY + Time::seconds(1));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let price = 1000;
+    let oracle_price = 1000;
     let operator_nonce = state.nonce();
     state
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [
-                oracle1.get_signed_price(:price, timestamp: old_time.try_into().unwrap())
+                oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
             ]
                 .span(),
         );
@@ -2869,7 +2887,7 @@ fn test_price_tick_golden() {
         );
 
     let timestamp: u32 = 1737451956;
-    let price = 23953641840000000;
+    let oracle_price = 23953641840000000;
     let signed_price0 = SignedPrice {
         signature: [
             0x23120d436ab1e115f883fd495206b80c9a9928f94df89c2bb63eb1997cc13d5,
@@ -2878,7 +2896,7 @@ fn test_price_tick_golden() {
             .span(),
         signer_public_key: 0x1f191d23b8825dcc3dba839b6a7155ea07ad0b42af76394097786aca0d9975c,
         timestamp,
-        price,
+        oracle_price,
     };
     let signed_price1 = SignedPrice {
         signature: [
@@ -2888,7 +2906,7 @@ fn test_price_tick_golden() {
             .span(),
         signer_public_key: 0xcc85afe4ca87f9628370c432c447e569a01dc96d160015c8039959db8521c4,
         timestamp,
-        price,
+        oracle_price,
     };
     let signed_price2 = SignedPrice {
         signature: [
@@ -2898,7 +2916,7 @@ fn test_price_tick_golden() {
             .span(),
         signer_public_key: 0x41dbe627aeab66504b837b3abd88ae2f58ba6d98ee7bbd7f226c4684d9e6225,
         timestamp,
-        price,
+        oracle_price,
     };
     start_cheat_block_timestamp_global(
         block_timestamp: Timestamp { seconds: timestamp.into() + 1 }.into(),
@@ -2909,7 +2927,7 @@ fn test_price_tick_golden() {
         .price_tick(
             :operator_nonce,
             asset_id: synthetic_id,
-            :price,
+            :oracle_price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
