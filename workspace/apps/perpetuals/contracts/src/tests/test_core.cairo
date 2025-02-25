@@ -204,8 +204,8 @@ fn test_caller_failures() {
     let result = dispatcher
         .deleverage(
             operator_nonce: Zero::zero(),
-            deleveraged_position: POSITION_ID_1,
-            deleverager_position: POSITION_ID_1,
+            deleveraged_position_id: POSITION_ID_1,
+            deleverager_position_id: POSITION_ID_1,
             deleveraged_base_asset_id: cfg.collateral_cfg.collateral_id,
             deleveraged_base_amount: 0,
             deleveraged_quote_asset_id: cfg.collateral_cfg.collateral_id,
@@ -1355,31 +1355,34 @@ fn test_successful_trade() {
     );
 
     // Check:
+    let position_a = state.positions.get_position_snapshot(position_id: user_a.position_id);
     let user_a_collateral_balance = state
         .positions
-        .get_provisional_balance(position_id: user_a.position_id, asset_id: collateral_id);
+        .get_provisional_balance(position: position_a, asset_id: collateral_id);
     let user_a_synthetic_balance = state
         .positions
-        .get_provisional_balance(position_id: user_a.position_id, asset_id: synthetic_id);
+        .get_provisional_balance(position: position_a, asset_id: synthetic_id);
     assert_eq!(
         user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
     );
     assert_eq!(user_a_synthetic_balance, (BASE).into());
 
+    let position_b = state.positions.get_position_snapshot(position_id: user_b.position_id);
     let user_b_collateral_balance = state
         .positions
-        .get_provisional_balance(position_id: user_b.position_id, asset_id: collateral_id);
+        .get_provisional_balance(position: position_b, asset_id: collateral_id);
     let user_b_synthetic_balance = state
         .positions
-        .get_provisional_balance(position_id: user_b.position_id, asset_id: synthetic_id);
+        .get_provisional_balance(position: position_b, asset_id: synthetic_id);
     assert_eq!(
         user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
     );
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
 
+    let position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
     let fee_position_balance = state
         .positions
-        .get_provisional_balance(position_id: Positions::FEE_POSITION, asset_id: collateral_id);
+        .get_provisional_balance(:position, asset_id: collateral_id);
     assert_eq!(fee_position_balance, (FEE + FEE).into());
 }
 
@@ -1597,8 +1600,8 @@ fn test_successful_deleverage() {
     state
         .deleverage(
             :operator_nonce,
-            deleveraged_position: deleveraged.position_id,
-            deleverager_position: deleverager.position_id,
+            deleveraged_position_id: deleveraged.position_id,
+            deleverager_position_id: deleverager.position_id,
             deleveraged_base_asset_id: synthetic_id,
             deleveraged_base_amount: BASE,
             deleveraged_quote_asset_id: collateral_id,
@@ -1609,8 +1612,8 @@ fn test_successful_deleverage() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deleverage_event_with_expected(
         spied_event: events[0],
-        deleveraged_position: deleveraged.position_id,
-        deleverager_position: deleverager.position_id,
+        deleveraged_position_id: deleveraged.position_id,
+        deleverager_position_id: deleverager.position_id,
         deleveraged_base_asset_id: synthetic_id,
         deleveraged_base_amount: BASE,
         deleveraged_quote_asset_id: collateral_id,
@@ -1702,8 +1705,8 @@ fn test_unfair_deleverage() {
     state
         .deleverage(
             :operator_nonce,
-            deleveraged_position: deleveraged.position_id,
-            deleverager_position: deleverager.position_id,
+            deleveraged_position_id: deleveraged.position_id,
+            deleverager_position_id: deleverager.position_id,
             deleveraged_base_asset_id: synthetic_id,
             deleveraged_base_amount: BASE,
             deleveraged_quote_asset_id: collateral_id,
@@ -1832,16 +1835,18 @@ fn test_successful_liquidate() {
     );
     assert_eq!(liquidator_synthetic_balance, (-BASE).into());
 
+    let fee_position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
     let fee_position_balance = state
         .positions
-        .get_provisional_balance(position_id: Positions::FEE_POSITION, asset_id: collateral_id);
+        .get_provisional_balance(position: fee_position, asset_id: collateral_id);
     assert_eq!(fee_position_balance, FEE.into());
 
+    let insurance_fund_position = state
+        .positions
+        .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION);
     let insurance_position_balance = state
         .positions
-        .get_provisional_balance(
-            position_id: Positions::INSURANCE_FUND_POSITION, asset_id: collateral_id,
-        );
+        .get_provisional_balance(position: insurance_fund_position, asset_id: collateral_id);
     assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
 }
 
@@ -2227,16 +2232,20 @@ fn test_successful_transfer() {
     );
 
     // Check:
+    let sender_position = state.positions.get_position_snapshot(position_id: sender.position_id);
     let sender_collateral_balance = state
         .positions
-        .get_provisional_balance(position_id: sender.position_id, asset_id: collateral_id);
+        .get_provisional_balance(position: sender_position, asset_id: collateral_id);
     assert_eq!(
         sender_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into(),
     );
 
+    let recipient_position = state
+        .positions
+        .get_position_snapshot(position_id: recipient.position_id);
     let recipient_collateral_balance = state
         .positions
-        .get_provisional_balance(position_id: recipient.position_id, asset_id: collateral_id);
+        .get_provisional_balance(position: recipient_position, asset_id: collateral_id);
     assert_eq!(
         recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
     );

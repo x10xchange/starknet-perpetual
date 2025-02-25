@@ -81,9 +81,9 @@ pub struct Liquidate {
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Deleverage {
     #[key]
-    pub deleveraged_position: PositionId,
+    pub deleveraged_position_id: PositionId,
     #[key]
-    pub deleverager_position: PositionId,
+    pub deleverager_position_id: PositionId,
     pub deleveraged_base_asset_id: AssetId,
     pub deleveraged_base_amount: i64,
     pub deleveraged_quote_asset_id: AssetId,

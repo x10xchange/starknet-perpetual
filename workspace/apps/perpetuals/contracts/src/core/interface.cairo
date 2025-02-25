@@ -84,8 +84,8 @@ pub trait ICore<TContractState> {
     fn deleverage(
         ref self: TContractState,
         operator_nonce: u64,
-        deleveraged_position: PositionId,
-        deleverager_position: PositionId,
+        deleveraged_position_id: PositionId,
+        deleverager_position_id: PositionId,
         deleveraged_base_asset_id: AssetId,
         deleveraged_base_amount: i64,
         deleveraged_quote_asset_id: AssetId,

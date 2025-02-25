@@ -92,14 +92,10 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
-        fn get_position_data(
+        fn get_position_assets(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
-            let mut position_data = array![];
-            self._validate_position_exists(:position_id);
-            self._collect_position_collaterals(ref :position_data, :position_id);
-            self._collect_position_synthetics(ref :position_data, :position_id);
-            position_data.span()
+            self.get_position_data(position: self._get_position_snapshot(:position_id))
         }
 
         /// This function is primarily used as a view function—knowing the total value and/or
@@ -107,7 +103,8 @@ pub(crate) mod Positions {
         fn get_position_tv_tr(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionTVTR {
-            let position_data = self.get_position_data(:position_id);
+            let position = self._get_position_snapshot(:position_id);
+            let position_data = self.get_position_data(:position);
             calculate_position_tvtr(:position_data)
         }
 
@@ -398,13 +395,15 @@ pub(crate) mod Positions {
             position_id: PositionId,
             position_diff: PositionDiff,
         ) {
+            let position = self._get_position_snapshot(:position_id);
+            let position_mut = self._get_position_mut(:position_id);
             for diff in position_diff {
                 let asset_id = *diff.id;
-                let balance = self.get_provisional_balance(:position_id, :asset_id);
+                let balance = self.get_provisional_balance(:position, :asset_id);
                 assert(*diff.balance_before == balance, APPLY_DIFF_MISMATCH);
                 self
                     ._apply_funding_and_set_balance(
-                        :position_id, :asset_id, balance: *diff.balance_after,
+                        position: position_mut, :asset_id, balance: *diff.balance_after,
                     );
             }
         }
@@ -424,21 +423,27 @@ pub(crate) mod Positions {
         }
 
         fn get_provisional_balance(
-            self: @ComponentState<TContractState>, position_id: PositionId, asset_id: AssetId,
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            asset_id: AssetId,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
             if assets.is_collateral(:asset_id) {
-                self._get_provisional_main_collateral_balance(:position_id)
+                self._get_provisional_main_collateral_balance(:position)
             } else if assets.is_synthetic(:asset_id) {
-                self
-                    ._get_position_snapshot(:position_id)
-                    .synthetic_assets
-                    .entry(asset_id)
-                    .balance
-                    .read()
+                position.synthetic_assets.entry(asset_id).balance.read()
             } else {
                 panic_with_felt252(ASSET_NOT_EXISTS)
             }
+        }
+
+        fn get_position_data(
+            self: @ComponentState<TContractState>, position: StoragePath<Position>,
+        ) -> PositionData {
+            let mut position_data = array![];
+            self._collect_position_collaterals(:position, ref :position_data);
+            self._collect_position_synthetics(:position, ref :position_data);
+            position_data.span()
         }
     }
 
@@ -455,19 +460,6 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        fn _calc_funding(
-            self: @ComponentState<TContractState>,
-            position_id: PositionId,
-            synthetic_id: AssetId,
-            curr_funding_index: FundingIndex,
-        ) -> Balance {
-            let position = self._get_position_snapshot(:position_id);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-            let synthetic_balance = synthetic_asset.balance.read();
-            let last_funding_index = synthetic_asset.funding_index.read();
-            (curr_funding_index - last_funding_index).mul(synthetic_balance)
-        }
-
         /// Returns the position at the given `position_id`.
         /// The function asserts that the position exists and has a non-zero owner public key.
         fn _get_position_mut(
@@ -489,10 +481,9 @@ pub(crate) mod Positions {
         /// Returns the main collateral balance of a position while taking into account the funding
         /// of all synthetic assets in the position.
         fn _get_provisional_main_collateral_balance(
-            self: @ComponentState<TContractState>, position_id: PositionId,
+            self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
-            let position = self._get_position_snapshot(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
                 .entry(assets.get_main_collateral_asset_id())
@@ -501,7 +492,9 @@ pub(crate) mod Positions {
             let mut asset_id_opt = position.synthetic_assets_head.read();
             while let Option::Some(synthetic_id) = asset_id_opt {
                 let curr_funding_index = assets.get_funding_index(:synthetic_id);
-                let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
+                let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+                let funding = (curr_funding_index - synthetic_asset.funding_index.read())
+                    .mul(synthetic_asset.balance.read());
                 main_collateral_balance += funding;
                 asset_id_opt = position.synthetic_assets.entry(synthetic_id).next.read();
             };
@@ -516,54 +509,48 @@ pub(crate) mod Positions {
 
         fn _collect_position_collaterals(
             self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
             ref position_data: Array<Asset>,
-            position_id: PositionId,
         ) {
-            self._collect_position_assets(ref :position_data, :position_id, collaterals: true);
+            let mut asset_id_opt = position.collateral_assets_head.read();
+            while let Option::Some(asset_id) = asset_id_opt {
+                self._collect_position_asset(:asset_id, :position, ref :position_data);
+                asset_id_opt = position.collateral_assets.read(asset_id).next;
+            }
         }
 
         fn _collect_position_synthetics(
             self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
             ref position_data: Array<Asset>,
-            position_id: PositionId,
         ) {
-            self._collect_position_assets(ref :position_data, :position_id, collaterals: false);
+            let mut asset_id_opt = position.synthetic_assets_head.read();
+            while let Option::Some(asset_id) = asset_id_opt {
+                self._collect_position_asset(:asset_id, :position, ref :position_data);
+                asset_id_opt = position.synthetic_assets.read(asset_id).next;
+            }
         }
 
-        fn _collect_position_assets(
+        fn _collect_position_asset(
             self: @ComponentState<TContractState>,
+            asset_id: AssetId,
+            position: StoragePath<Position>,
             ref position_data: Array<Asset>,
-            position_id: PositionId,
-            collaterals: bool,
         ) {
             let assets = get_dep_component!(self, Assets);
-            let position = self._get_position_snapshot(:position_id);
-            let mut asset_id_opt = if collaterals {
-                position.collateral_assets_head.read()
-            } else {
-                position.synthetic_assets_head.read()
-            };
-            while let Option::Some(asset_id) = asset_id_opt {
-                let balance = self.get_provisional_balance(:position_id, :asset_id);
-                if balance.is_non_zero() {
-                    let price = assets.get_asset_price(:asset_id);
-                    position_data
-                        .append(
-                            Asset {
-                                id: asset_id,
-                                balance,
-                                price,
-                                risk_factor: assets.get_risk_factor(:asset_id, :balance),
-                            },
-                        );
-                }
-                asset_id_opt =
-                    if collaterals {
-                        position.collateral_assets.read(asset_id).next
-                    } else {
-                        position.synthetic_assets.read(asset_id).next
-                    };
-            };
+            let balance = self.get_provisional_balance(:position, :asset_id);
+            if balance.is_non_zero() {
+                let price = assets.get_asset_price(:asset_id);
+                position_data
+                    .append(
+                        Asset {
+                            id: asset_id,
+                            balance,
+                            price,
+                            risk_factor: assets.get_risk_factor(:asset_id, :balance),
+                        },
+                    );
+            }
         }
 
         fn _update_collateral_in_position(
@@ -602,18 +589,17 @@ pub(crate) mod Positions {
         /// and applying the appropriate logic.
         fn _apply_funding_and_set_balance(
             ref self: ComponentState<TContractState>,
-            position_id: PositionId,
+            position: StoragePath<Mutable<Position>>,
             asset_id: AssetId,
             balance: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
             if assets.is_collateral(:asset_id) {
-                let mut position = self._get_position_mut(:position_id);
                 self._update_collateral_in_position(position, collateral_id: asset_id, :balance);
             } else {
                 self
                     ._update_synthetic_balance_and_funding(
-                        :position_id, synthetic_id: asset_id, :balance,
+                        :position, synthetic_id: asset_id, :balance,
                     );
             }
         }
@@ -642,18 +628,19 @@ pub(crate) mod Positions {
         ///
         fn _update_synthetic_balance_and_funding(
             ref self: ComponentState<TContractState>,
-            position_id: PositionId,
+            position: StoragePath<Mutable<Position>>,
             synthetic_id: AssetId,
             balance: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
-            let position = self._get_position_mut(:position_id);
             let mut main_collateral_balance = position
                 .collateral_assets
                 .entry(assets.get_main_collateral_asset_id())
                 .balance;
             let curr_funding_index = assets.get_funding_index(:synthetic_id);
-            let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+            let funding = (curr_funding_index - synthetic_asset.funding_index.read())
+                .mul(synthetic_asset.balance.read());
             main_collateral_balance.add_and_write(funding);
             self
                 ._update_synthetic_in_position(
@@ -664,7 +651,8 @@ pub(crate) mod Positions {
         fn _get_position_state(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionState {
-            let position_data = self.get_position_data(:position_id);
+            let position = self._get_position_snapshot(:position_id);
+            let position_data = self.get_position_data(:position);
 
             let position_change_result = evaluate_position(:position_data);
             position_change_result.position_state_after_change

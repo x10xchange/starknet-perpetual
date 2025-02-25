@@ -29,7 +29,7 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::positions::Positions;
     use perpetuals::core::components::positions::Positions::{
-        FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
+        FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait, Position,
     };
     use perpetuals::core::errors::{
         CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
@@ -53,7 +53,7 @@ pub mod Core {
     };
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+        Map, StoragePath, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_contract_address};
 
@@ -238,8 +238,9 @@ pub mod Core {
                     quantized_amount: amount.into(),
                     :salt,
                 );
+            let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_position_diff(:position_id, asset_id: collateral_id, diff: amount.into());
+                ._create_position_diff(:position, asset_id: collateral_id, diff: amount.into());
             self.positions.apply_diff(:position_id, :position_diff);
         }
 
@@ -336,9 +337,10 @@ pub mod Core {
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             /// Validations - Fundamentals:
+            let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_position_diff(:position_id, asset_id: collateral_id, diff: amount.into());
-            let position_data = self.positions.get_position_data(:position_id);
+                ._create_position_diff(:position, asset_id: collateral_id, diff: amount.into());
+            let position_data = self.positions.get_position_data(:position);
 
             validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);
             self.positions.apply_diff(:position_id, :position_diff);
@@ -543,8 +545,10 @@ pub mod Core {
                 );
 
             /// Execution:
-            let position_data_a = self.positions.get_position_data(position_id: position_id_a);
-            let position_data_b = self.positions.get_position_data(position_id: position_id_b);
+            let position_a = self.positions.get_position_snapshot(position_id_a);
+            let position_b = self.positions.get_position_snapshot(position_id_a);
+            let position_data_a = self.positions.get_position_data(position: position_a);
+            let position_data_b = self.positions.get_position_data(position: position_b);
 
             let (position_diff_a, position_diff_b) = self
                 ._update_positions(
@@ -554,8 +558,8 @@ pub mod Core {
                     :actual_amount_quote_a,
                     :actual_fee_a,
                     :actual_fee_b,
-                    fee_position_a: FEE_POSITION,
-                    fee_position_b: FEE_POSITION,
+                    fee_a_position_id: FEE_POSITION,
+                    fee_b_position_id: FEE_POSITION,
                 );
 
             /// Validations - Fundamentals:
@@ -679,12 +683,18 @@ pub mod Core {
                 );
 
             /// Execution:
+            let liquidated_position = self
+                .positions
+                .get_position_snapshot(position_id: liquidated_position_id);
+            let liquidator_position = self
+                .positions
+                .get_position_snapshot(position_id: liquidator_position_id);
             let liquidated_position_data = self
                 .positions
-                .get_position_data(position_id: liquidated_position_id);
+                .get_position_data(position: liquidated_position);
             let liquidator_position_data = self
                 .positions
-                .get_position_data(position_id: liquidator_position_id);
+                .get_position_data(position: liquidator_position);
 
             let (liquidated_position_diff, liquidator_position_diff) = self
                 ._update_positions(
@@ -694,8 +704,8 @@ pub mod Core {
                     actual_amount_quote_a: actual_amount_quote_liquidated,
                     actual_fee_a: fee_amount,
                     actual_fee_b: actual_liquidator_fee,
-                    fee_position_a: INSURANCE_FUND_POSITION,
-                    fee_position_b: FEE_POSITION,
+                    fee_a_position_id: INSURANCE_FUND_POSITION,
+                    fee_b_position_id: FEE_POSITION,
                 );
 
             /// Validations - Fundamentals:
@@ -748,8 +758,8 @@ pub mod Core {
         fn deleverage(
             ref self: ContractState,
             operator_nonce: u64,
-            deleveraged_position: PositionId,
-            deleverager_position: PositionId,
+            deleveraged_position_id: PositionId,
+            deleverager_position_id: PositionId,
             deleveraged_base_asset_id: AssetId,
             deleveraged_base_amount: i64,
             deleveraged_quote_asset_id: AssetId,
@@ -757,6 +767,13 @@ pub mod Core {
         ) {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
+
+            let deleveraged_position = self
+                .positions
+                .get_position_snapshot(position_id: deleveraged_position_id);
+            let deleverager_position = self
+                .positions
+                .get_position_snapshot(position_id: deleverager_position_id);
 
             self
                 ._validate_deleverage(
@@ -771,8 +788,8 @@ pub mod Core {
             /// Execution:
             self
                 ._execute_deleverage(
-                    :deleveraged_position,
-                    :deleverager_position,
+                    :deleveraged_position_id,
+                    :deleverager_position_id,
                     :deleveraged_base_asset_id,
                     :deleveraged_base_amount,
                     :deleveraged_quote_asset_id,
@@ -782,8 +799,8 @@ pub mod Core {
             self
                 .emit(
                     events::Deleverage {
-                        deleveraged_position,
-                        deleverager_position,
+                        deleveraged_position_id,
+                        deleverager_position_id,
                         deleveraged_base_asset_id,
                         deleveraged_base_amount,
                         deleveraged_quote_asset_id,
@@ -796,17 +813,17 @@ pub mod Core {
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
         fn _create_position_diff(
-            self: @ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
+            self: @ContractState, position: StoragePath<Position>, asset_id: AssetId, diff: Balance,
         ) -> PositionDiff {
-            array![self._create_asset_diff(:position_id, :asset_id, :diff)].span()
+            array![self._create_asset_diff(:position, :asset_id, :diff)].span()
         }
 
         fn _create_asset_diff(
-            self: @ContractState, position_id: PositionId, asset_id: AssetId, diff: Balance,
+            self: @ContractState, position: StoragePath<Position>, asset_id: AssetId, diff: Balance,
         ) -> AssetDiff {
             let position_asset_balance = self
                 .positions
-                .get_provisional_balance(:position_id, :asset_id);
+                .get_provisional_balance(:position, :asset_id);
             let price = self.assets.get_asset_price(:asset_id);
             let balance_before = position_asset_balance;
             let balance_after = position_asset_balance + diff;
@@ -830,9 +847,10 @@ pub mod Core {
             actual_amount_quote: i64,
             actual_fee: u64,
         ) -> PositionDiff {
+            let position = self.positions.get_position_snapshot(position_id: order.position_id);
             self
                 ._create_position_diff_from_asset_amounts(
-                    position_id: order.position_id,
+                    :position,
                     base_id: order.base_asset_id,
                     base_amount: actual_amount_base,
                     quote_id: order.quote_asset_id,
@@ -844,7 +862,7 @@ pub mod Core {
 
         fn _create_position_diff_from_asset_amounts(
             ref self: ContractState,
-            position_id: PositionId,
+            position: StoragePath<Position>,
             base_id: AssetId,
             base_amount: i64,
             quote_id: AssetId,
@@ -862,7 +880,7 @@ pub mod Core {
                 fee_asset_id = fee_id;
                 fee_diff = self
                     ._create_asset_diff(
-                        :position_id, asset_id: fee_asset_id, diff: -(fee_amount.into()),
+                        :position, asset_id: fee_asset_id, diff: -(fee_amount.into()),
                     );
             }
 
@@ -873,9 +891,7 @@ pub mod Core {
                 fee_diff.balance_after += quote_amount.into();
             } else {
                 quote_diff = self
-                    ._create_asset_diff(
-                        :position_id, asset_id: quote_id, diff: quote_amount.into(),
-                    );
+                    ._create_asset_diff(:position, asset_id: quote_id, diff: quote_amount.into());
             }
 
             // Base asset.
@@ -887,7 +903,7 @@ pub mod Core {
                 quote_diff.balance_after += base_amount.into();
             } else {
                 base_diff = self
-                    ._create_asset_diff(:position_id, asset_id: base_id, diff: base_amount.into());
+                    ._create_asset_diff(:position, asset_id: base_id, diff: base_amount.into());
             }
 
             // Build position diff.
@@ -908,8 +924,8 @@ pub mod Core {
             actual_amount_quote_a: i64,
             actual_fee_a: u64,
             actual_fee_b: u64,
-            fee_position_a: PositionId,
-            fee_position_b: PositionId,
+            fee_a_position_id: PositionId,
+            fee_b_position_id: PositionId,
         ) -> (PositionDiff, PositionDiff) {
             let position_diff_a = self
                 ._create_position_diff_from_order(
@@ -936,25 +952,31 @@ pub mod Core {
                 .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
 
             // Update fee positions.
+            let fee_position_a = self
+                .positions
+                .get_position_snapshot(position_id: fee_a_position_id);
             let fee_position_diff_a = self
                 ._create_position_diff(
-                    position_id: fee_position_a,
+                    position: fee_position_a,
                     asset_id: order_a.fee_asset_id,
                     diff: actual_fee_a.into(),
                 );
             self
                 .positions
-                .apply_diff(position_id: fee_position_a, position_diff: fee_position_diff_a);
+                .apply_diff(position_id: fee_a_position_id, position_diff: fee_position_diff_a);
 
+            let fee_position_b = self
+                .positions
+                .get_position_snapshot(position_id: fee_b_position_id);
             let fee_position_diff_b = self
                 ._create_position_diff(
-                    position_id: fee_position_b,
+                    position: fee_position_b,
                     asset_id: order_b.fee_asset_id,
                     diff: actual_fee_b.into(),
                 );
             self
                 .positions
-                .apply_diff(position_id: fee_position_b, position_diff: fee_position_diff_b);
+                .apply_diff(position_id: fee_b_position_id, position_diff: fee_position_diff_b);
 
             (position_diff_a, position_diff_b)
         }
@@ -967,14 +989,14 @@ pub mod Core {
             amount: u64,
         ) {
             // Parameters
-            let sender_position_data = self.positions.get_position_data(:position_id);
+            let position = self.positions.get_position_snapshot(:position_id);
+            let sender_position_data = self.positions.get_position_data(:position);
             let position_diff_sender = self
-                ._create_position_diff(
-                    :position_id, asset_id: collateral_id, diff: -(amount.into()),
-                );
+                ._create_position_diff(:position, asset_id: collateral_id, diff: -(amount.into()));
+            let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let position_diff_recipient = self
                 ._create_position_diff(
-                    position_id: recipient, asset_id: collateral_id, diff: amount.into(),
+                    position: recipient_position, asset_id: collateral_id, diff: amount.into(),
                 );
 
             // Execute transfer
@@ -1091,11 +1113,14 @@ pub mod Core {
         }
 
         fn validate_deleverage_base_shrinks(
-            ref self: ContractState, position_id: PositionId, asset_id: AssetId, amount: i64,
+            ref self: ContractState,
+            position: StoragePath<Position>,
+            asset_id: AssetId,
+            amount: i64,
         ) {
             let position_base_balance: i64 = self
                 .positions
-                .get_provisional_balance(:position_id, :asset_id)
+                .get_provisional_balance(:position, :asset_id)
                 .into();
 
             assert(!have_same_sign(a: amount, b: position_base_balance), INVALID_WRONG_AMOUNT_SIGN);
@@ -1104,8 +1129,8 @@ pub mod Core {
 
         fn _validate_deleverage(
             ref self: ContractState,
-            deleveraged_position: PositionId,
-            deleverager_position: PositionId,
+            deleveraged_position: StoragePath<Position>,
+            deleverager_position: StoragePath<Position>,
             deleveraged_base_asset_id: AssetId,
             deleveraged_base_amount: i64,
             deleveraged_quote_asset_id: AssetId,
@@ -1131,13 +1156,13 @@ pub mod Core {
             // Ensure that TR does not increase and that the base amount retains the same sign.
             self
                 .validate_deleverage_base_shrinks(
-                    position_id: deleveraged_position,
+                    position: deleveraged_position,
                     asset_id: deleveraged_base_asset_id,
                     amount: deleveraged_base_amount,
                 );
             self
                 .validate_deleverage_base_shrinks(
-                    position_id: deleverager_position,
+                    position: deleverager_position,
                     asset_id: deleveraged_base_asset_id,
                     amount: -deleveraged_base_amount,
                 );
@@ -1145,19 +1170,22 @@ pub mod Core {
 
         fn _execute_deleverage(
             ref self: ContractState,
-            deleveraged_position: PositionId,
-            deleverager_position: PositionId,
+            deleveraged_position_id: PositionId,
+            deleverager_position_id: PositionId,
             deleveraged_base_asset_id: AssetId,
             deleveraged_base_amount: i64,
             deleveraged_quote_asset_id: AssetId,
             deleveraged_quote_amount: i64,
         ) {
+            let deleveraged_position = self
+                .positions
+                .get_position_snapshot(position_id: deleveraged_position_id);
             let deleveraged_position_data = self
                 .positions
-                .get_position_data(position_id: deleveraged_position);
+                .get_position_data(position: deleveraged_position);
             let deleveraged_position_diff = self
                 ._create_position_diff_from_asset_amounts(
-                    position_id: deleveraged_position,
+                    position: deleveraged_position,
                     base_id: deleveraged_base_asset_id,
                     base_amount: deleveraged_base_amount,
                     quote_id: deleveraged_quote_asset_id,
@@ -1166,12 +1194,15 @@ pub mod Core {
                     fee_amount: Option::None,
                 );
 
+            let deleverager_position = self
+                .positions
+                .get_position_snapshot(position_id: deleverager_position_id);
             let deleverager_position_data = self
                 .positions
-                .get_position_data(position_id: deleverager_position);
+                .get_position_data(position: deleverager_position);
             let deleverager_position_diff = self
                 ._create_position_diff_from_asset_amounts(
-                    position_id: deleverager_position,
+                    position: deleverager_position,
                     base_id: deleveraged_base_asset_id,
                     // Passing the negative of actual amounts to deleverager as it is linked to
                     // deleveraged.
@@ -1185,26 +1216,26 @@ pub mod Core {
             self
                 .positions
                 .apply_diff(
-                    position_id: deleveraged_position, position_diff: deleveraged_position_diff,
+                    position_id: deleveraged_position_id, position_diff: deleveraged_position_diff,
                 );
             self
                 .positions
                 .apply_diff(
-                    position_id: deleverager_position, position_diff: deleverager_position_diff,
+                    position_id: deleverager_position_id, position_diff: deleverager_position_diff,
                 );
 
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
                 AssetStatus::ACTIVE => validate_deleveraged_position(
-                    position_id: deleveraged_position,
+                    position_id: deleveraged_position_id,
                     position_data: deleveraged_position_data,
                     position_diff: deleveraged_position_diff,
                 ),
                 // In case of deactivated synthetic asset, the position should change to healthy or
                 // healthier.
                 AssetStatus::DEACTIVATED => validate_position_is_healthy_or_healthier(
-                    position_id: deleveraged_position,
+                    position_id: deleveraged_position_id,
                     position_data: deleveraged_position_data,
                     position_diff: deleveraged_position_diff,
                 ),
@@ -1213,7 +1244,7 @@ pub mod Core {
             };
 
             validate_position_is_healthy_or_healthier(
-                position_id: deleverager_position,
+                position_id: deleverager_position_id,
                 position_data: deleverager_position_data,
                 position_diff: deleverager_position_diff,
             );

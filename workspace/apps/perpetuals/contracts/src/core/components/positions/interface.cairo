@@ -6,7 +6,7 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IPositions<TContractState> {
-    fn get_position_data(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn get_position_assets(self: @TContractState, position_id: PositionId) -> PositionData;
     fn get_position_tv_tr(self: @TContractState, position_id: PositionId) -> PositionTVTR;
     fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
     fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
