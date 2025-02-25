@@ -72,15 +72,15 @@ pub mod AssetsComponent {
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
-        AddOracle: events::AddOracle,
-        AddSynthetic: events::AddSynthetic,
+        OracleAdded: events::OracleAdded,
+        SyntheticAdded: events::SyntheticAdded,
         AssetActivated: events::AssetActivated,
-        DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
+        SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
-        RegisterCollateral: events::RegisterCollateral,
-        RemoveOracle: events::RemoveOracle,
-        UpdateAssetQuorum: events::UpdateAssetQuorum,
+        CollateralRegistered: events::CollateralRegistered,
+        OracleRemoved: events::OracleRemoved,
+        AssetQuorumUpdated: events::AssetQuorumUpdated,
     }
 
     #[embeddable_as(AssetsImpl)]
@@ -139,7 +139,7 @@ pub mod AssetsComponent {
             // Add the oracle to the asset.
             let shifted_asset_name = TWO_POW_40.into() * asset_name;
             asset_oracle_entry.write(shifted_asset_name + oracle_name);
-            self.emit(events::AddOracle { asset_id, asset_name, oracle_public_key, oracle_name });
+            self.emit(events::OracleAdded { asset_id, asset_name, oracle_public_key, oracle_name });
         }
 
         /// Add asset is called by the operator to add a new synthetic asset.
@@ -227,7 +227,7 @@ pub mod AssetsComponent {
             };
             self
                 .emit(
-                    events::AddSynthetic {
+                    events::SyntheticAdded {
                         asset_id,
                         risk_factor_tiers,
                         risk_factor_first_tier_boundary,
@@ -261,7 +261,7 @@ pub mod AssetsComponent {
             config.status = AssetStatus::DEACTIVATED;
             self.synthetic_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
-            self.emit(events::DeactivateSyntheticAsset { asset_id: synthetic_id });
+            self.emit(events::SyntheticAssetDeactivated { asset_id: synthetic_id });
         }
 
         /// Funding tick is called by the operator to update the funding index of all synthetic
@@ -400,7 +400,7 @@ pub mod AssetsComponent {
         ///
         /// Execution:
         /// - Remove the oracle from the asset.
-        /// - Emit RemoveOracle event.
+        /// - Emit `OracleRemoved` event.
         fn remove_oracle_from_asset(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
@@ -413,7 +413,7 @@ pub mod AssetsComponent {
             let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
             assert(asset_oracle_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
             asset_oracle_entry.write(Zero::zero());
-            self.emit(events::RemoveOracle { asset_id, oracle_public_key });
+            self.emit(events::OracleRemoved { asset_id, oracle_public_key });
         }
 
         /// Update synthetic quorum.
@@ -426,7 +426,7 @@ pub mod AssetsComponent {
         ///
         /// Execution:
         /// - Update the quorum.
-        /// - Emit UpdateAssetQuorum event.
+        /// - Emit AssetQuorumUpdated event.
         fn update_synthetic_quorum(
             ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
         ) {
@@ -441,7 +441,7 @@ pub mod AssetsComponent {
             self.synthetic_config.entry(synthetic_id).write(Option::Some(synthetic_config));
             self
                 .emit(
-                    events::UpdateAssetQuorum {
+                    events::AssetQuorumUpdated {
                         asset_id: synthetic_id, new_quorum: quorum, old_quorum,
                     },
                 );
@@ -510,7 +510,7 @@ pub mod AssetsComponent {
                     },
                 );
             self.collateral_timely_data_head.write(Option::Some(asset_id));
-            self.emit(events::RegisterCollateral { asset_id, token_address, quantum });
+            self.emit(events::CollateralRegistered { asset_id, token_address, quantum });
         }
 
         fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {

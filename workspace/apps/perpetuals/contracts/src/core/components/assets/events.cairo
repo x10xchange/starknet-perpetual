@@ -5,7 +5,7 @@ use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct AddOracle {
+pub struct OracleAdded {
     #[key]
     pub asset_id: AssetId,
     pub asset_name: felt252,
@@ -15,7 +15,7 @@ pub struct AddOracle {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct AddSynthetic {
+pub struct SyntheticAdded {
     #[key]
     pub asset_id: AssetId,
     pub risk_factor_tiers: Span<u8>,
@@ -32,7 +32,7 @@ pub struct AssetActivated {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct DeactivateSyntheticAsset {
+pub struct SyntheticAssetDeactivated {
     #[key]
     pub asset_id: AssetId,
 }
@@ -52,7 +52,7 @@ pub struct PriceTick {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct RegisterCollateral {
+pub struct CollateralRegistered {
     #[key]
     pub asset_id: AssetId,
     #[key]
@@ -61,7 +61,7 @@ pub struct RegisterCollateral {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct RemoveOracle {
+pub struct OracleRemoved {
     #[key]
     pub asset_id: AssetId,
     #[key]
@@ -69,7 +69,7 @@ pub struct RemoveOracle {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct UpdateAssetQuorum {
+pub struct AssetQuorumUpdated {
     #[key]
     pub asset_id: AssetId,
     pub new_quorum: u8,

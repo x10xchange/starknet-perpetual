@@ -99,12 +99,12 @@
         - [FundingTick](#fundingtick-1)
         - [PriceTick](#pricetick-1)
         - [AssetActivated](#assetactivated)
-        - [AddSynthetic](#addsynthetic)
-        - [DeactivateSyntheticAsset](#deactivatesyntheticasset)
-        - [UpdateOracleQuorum](#updateoraclequorum)
-        - [RemoveOracle](#removeoracle)
-        - [AddOracle](#addoracle)
-        - [RegisterCollateral](#registercollateral)
+        - [SyntheticAdded](#syntheticadded)
+        - [SyntheticAssetDeactivated](#syntheticassetdeactivated)
+        - [AssetQuorumUpdated](#assetquorumupdated)
+        - [OracleRemoved](#oracleremoved)
+        - [OracleAdded](#oracleadded)
+        - [CollateralRegistered](#collateralregistered)
     - [Constructor](#constructor)
     - [Public Functions](#public-functions)
         - [New Position](#new-position)
@@ -391,18 +391,18 @@ pub enum PositionState {
 
 ### Deleveragable
 
-A position is in deleveragable state when:
-$TV < 0$
+A position is in deleveragable state when:  
+$TV<0 $
 
 ### Liquidatable
 
-A position is in liquidatable state when:
-$|TV| < TR$
+A position is in liquidatable state when:  
+$TV<TR $
 
 ### Healthy
 
-A position is in a healthy state when:
-$|TV| \geq TR$
+A position is in a healthy state when:  
+$TV\geq TR $
 
 ### ChangeEffects
 
@@ -415,15 +415,15 @@ pub struct ChangeEffects {
 
 ### Is Healthier
 
-$$ ( \frac{TV}{TR} )\_{new}\leq(\frac{TV}{TR})\_{old} $$
+$$ ( \frac{TV}{TR})\_{new} \geq (\frac{TV}{TR})\_{old} $$
+   
+   **AND**  
 
-   **AND**
-
-$$ TR_{new}<TR_{old} $$
+$$ {TR}\_{new} \lt {TR\_{old}} $$
 
 ### Is Fair Deleverage
 
-$$ \frac{TV\_{new}-1USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}{TR}\_{new} $$
+$$ \frac{TV\_{new}-1e^{-6}USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}{TR}\_{new} $$
 
 Deleveragerer should be [healthy](#healthy) or [healthier](#is-healthier).
 Deleveragree should be ([healthy](#healthy) or [healthier](#is-healthier)) **and** [is fair deleverage](#is-fair-deleverage)
@@ -1074,15 +1074,15 @@ Struct Storage {
 
 ```rust
 pub enum Event {
-    AddOracle: events::AddOracle,
-    AddSynthetic: events::AddSynthetic,
+    OracleAdded: events::OracleAdded,
+    SyntheticAdded: events::SyntheticAdded,
     AssetActivated: events::AssetActivated,
-    DeactivateSyntheticAsset: events::DeactivateSyntheticAsset,
+    SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
     FundingTick: events::FundingTick,
     PriceTick: events::PriceTick,
-    RegisterCollateral: events::RegisterCollateral,
-    RemoveOracle: events::RemoveOracle,
-    UpdateAssetQuorum: events::UpdateAssetQuorum,
+    CollateralRegistered: events::CollateralRegistered,
+    OracleRemoved: events::OracleRemoved,
+    AssetQuorumUpdated: events::AssetQuorumUpdated,
 }
 ```
 
@@ -1930,11 +1930,11 @@ pub struct AssetActivated {
 }
 ```
 
-#### AddSynthetic
+#### SyntheticAdded
 
 ```rust
 #[derive(starknet::Event)]
-pub struct AddSynthetic {
+pub struct SyntheticAdded {
     #[key]
     pub asset_id: AssetId,
     pub risk_factor_tiers: Span<u8>,
@@ -1945,21 +1945,21 @@ pub struct AddSynthetic {
 }
 ```
 
-#### DeactivateSyntheticAsset
+#### SyntheticAssetDeactivated
 
 ```rust
 #[derive(starknet::Event)]
-pub struct DeactivateSyntheticAsset {
+pub struct SyntheticAssetDeactivated {
     #[key]
     pub asset_id: AssetId,
 }
 ```
 
-#### UpdateOracleQuorum
+#### AssetQuorumUpdated
 
 ```rust
 #[derive(starknet::Event)]
-pub struct UpdateAssetQuorum {
+pub struct AssetQuorumUpdated {
     #[key]
     pub asset_id: AssetId,
     pub new_quorum: u8,
@@ -1967,11 +1967,11 @@ pub struct UpdateAssetQuorum {
 }
 ```
 
-#### RemoveOracle
+#### OracleRemoved
 
 ```rust
 #[derive(starknet::Event)]
-pub struct RemoveOracle {
+pub struct OracleRemoved {
     #[key]
     pub asset_id: AssetId,
     #[key]
@@ -1979,10 +1979,10 @@ pub struct RemoveOracle {
 }
 ```
 
-#### AddOracle
+#### OracleAdded
 ```rust
 #[derive(starknet::Event)]
-pub struct AddOracle {
+pub struct OracleAdded {
     #[key]
     pub asset_id: AssetId,
     pub asset_name: felt252,
@@ -1991,10 +1991,11 @@ pub struct AddOracle {
     pub oracle_name: felt252,
 }
 ```
-#### RegisterCollateral
+
+#### CollateralRegistered
 ```rust
 #[derive(starknet::Event)]
-pub struct RegisterCollateral {
+pub struct CollateralRegistered {
     #[key]
     pub asset_id: AssetId,
     #[key]
@@ -3102,7 +3103,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Emits
 
-[AddOracle](#addoracle)
+[OracleAdded](#oracleadded)
 
 #### Errors
 - ONLY\_APP\_GOVERNOR
@@ -3138,7 +3139,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Emits
 
-[RemoveOracle](#removeoracle)
+[OracleRemoved](#oracleremoved)
 
 #### Errors
 - ONLY\_APP\_GOVERNOR
@@ -3174,7 +3175,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Emits
 
-[UpdateOracleQuorum](#updateoraclequorum)
+[AssetQuorumUpdated](#assetquorumupdated)
 
 #### Errors
 - ONLY\_APP\_GOVERNOR
@@ -3206,29 +3207,32 @@ Only the Operator can execute.
 
 #### Validations
 
-1. [Pausable check](#pausable)
-2. [Operator Nonce check](#operator-nonce)
-3. Timestamps are at most `max_oracle_price_validity`
-4. `price_ticks length >= synthetic_config[asset_id].quorum`
-5. Prices array is sorted according o the signers public key
-6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`
-7. Calculated `median_price`256
+1. [Pausable check](#pausable)  
+2. [Operator Nonce check](#operator-nonce)  
+3. Timestamps are at most `max_oracle_price_validity`  
+4. `price_ticks length >= synthetic_config[asset_id].quorum`  
+5. Prices array is sorted according o the signers public key  
+6. `Validate that the median_price accepted is actually the median price (odd: the middle; even: between middles)`  
+7. Calculated $median\\_price \leq 2^{56}$
 
 #### Logic
 
-1. For each `price_tick` in `price_ticks`:
-   1. Validate stark signature on:
-      `pedersen(oracles[price_ticks[i].signer_public_key],0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits))`
-2. $ median\_price = \frac {price*2^{28}}{asset\_id.resolution\_factor*10^{12}}  $
-3. `self.synthetic_timely_data[asset_id].price = media_price`
+1. For each `price_tick` in `price_ticks`:  
+   1. Validate stark signature on:  
+      `pedersen(`  
+&nbsp;&nbsp;&nbsp;&nbsp;`oracles[price_ticks[i].signer_public_key],`  
+&nbsp;&nbsp;&nbsp;&nbsp;`0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits)`  
+      `)` 
+2. calculate median price using the formula: $median\_price= \frac{price*2^{28}}{asset\_id.resolution_factor*10^{12}}$
+3. `self.synthetic_timely_data[asset_id].price = median_price`
 
-   Explanation: Oracles sign prices in the same format as StarkEx \- they sign proces of major unit with 18 decimals precision. So to ge the asset price of 1 Starknet unit of synthetic asset:
+   Explanation: Oracles sign prices in the same format as StarkEx \- they sign process of major unit with 18 decimals precision. So to ge the asset price of 1 Starknet unit of synthetic asset:
 
-   $ SN\_asset\_price = \frac {oracle\_asset\_price * 2^{28}} {resolution\_factor * 10^{12}} $
+   $SN\\_asset\\_price=\frac{oracle\\_asset\\_price*2^{28}}{resolution\\_factor *10^{12} }$
 
-   $ 2^{28}:\ price\ has\ 28-bit\ precision $
+   $2^{28}: \text{price has\ 28-bit\ precision}$
 
-   $ 10^{12}:\ converting\ 18\ decimals\ to\ 6\ USDC\ decimals $
+   $10^{12}: \text{converting\ 18\ decimals\ to\ 6\ USDC\ decimals}$
 
 4. `self.synthetic_timely_data[asset_id].last_price_update = Time::now()`
 5. if asset_id is not active:
@@ -3295,7 +3299,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Emits
 
-[RegisterCollateral](#registercollateral)
+[CollateralRegistered](#collateralregistered)
 
 #### Errors
 - ONLY_APP_GOVERNOR
@@ -3363,7 +3367,7 @@ Only APP\_GOVERNOR can execute.
 
 #### Emits
 
-[AddSynthetic](#addsynthetic)
+[SyntheticAdded](#syntheticadded)
 
 #### Errors
 - ONLY_APP_GOVERNOR
@@ -3399,7 +3403,7 @@ Only the App governor can execute.
 
 #### Emits
 
-[DeactivateSyntheticAsset](#deactivatesyntheticasset)
+[SyntheticAssetDeactivated](#syntheticassetdeactivated)
 
 #### Errors
 - ONLY_APP_GOVERNOR

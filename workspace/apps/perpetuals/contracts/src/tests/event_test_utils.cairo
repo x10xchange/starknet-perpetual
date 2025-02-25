@@ -409,7 +409,7 @@ pub fn assert_add_synthetic_event_with_expected(
     resolution: u64,
     quorum: u8,
 ) {
-    let expected_event = assets_events::AddSynthetic {
+    let expected_event = assets_events::SyntheticAdded {
         asset_id,
         risk_factor_tiers,
         risk_factor_first_tier_boundary,
@@ -420,20 +420,20 @@ pub fn assert_add_synthetic_event_with_expected(
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,
-        expected_event_selector: @selector!("AddSynthetic"),
-        expected_event_name: "AddSynthetic",
+        expected_event_selector: @selector!("SyntheticAdded"),
+        expected_event_name: "SyntheticAdded",
     );
 }
 
 pub fn assert_deactivate_synthetic_asset_event_with_expected(
     spied_event: @(ContractAddress, Event), asset_id: AssetId,
 ) {
-    let expected_event = assets_events::DeactivateSyntheticAsset { asset_id };
+    let expected_event = assets_events::SyntheticAssetDeactivated { asset_id };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,
-        expected_event_selector: @selector!("DeactivateSyntheticAsset"),
-        expected_event_name: "DeactivateSyntheticAsset",
+        expected_event_selector: @selector!("SyntheticAssetDeactivated"),
+        expected_event_name: "SyntheticAssetDeactivated",
     );
 }
 
@@ -441,12 +441,12 @@ pub fn assert_deactivate_synthetic_asset_event_with_expected(
 pub fn assert_remove_oracle_event_with_expected(
     spied_event: @(ContractAddress, Event), asset_id: AssetId, oracle_public_key: PublicKey,
 ) {
-    let expected_event = assets_events::RemoveOracle { asset_id, oracle_public_key };
+    let expected_event = assets_events::OracleRemoved { asset_id, oracle_public_key };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,
-        expected_event_selector: @selector!("RemoveOracle"),
-        expected_event_name: "RemoveOracle",
+        expected_event_selector: @selector!("OracleRemoved"),
+        expected_event_name: "OracleRemoved",
     );
 }
 
@@ -457,14 +457,14 @@ pub fn assert_add_oracle_event_with_expected(
     oracle_public_key: PublicKey,
     oracle_name: felt252,
 ) {
-    let expected_event = assets_events::AddOracle {
+    let expected_event = assets_events::OracleAdded {
         asset_id, asset_name, oracle_public_key, oracle_name,
     };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,
-        expected_event_selector: @selector!("AddOracle"),
-        expected_event_name: "AddOracle",
+        expected_event_selector: @selector!("OracleAdded"),
+        expected_event_name: "OracleAdded",
     );
 }
 
@@ -474,11 +474,11 @@ pub fn assert_register_collateral_event_with_expected(
     token_address: ContractAddress,
     quantum: u64,
 ) {
-    let expected_event = assets_events::RegisterCollateral { asset_id, token_address, quantum };
+    let expected_event = assets_events::CollateralRegistered { asset_id, token_address, quantum };
     assert_expected_event_emitted(
         :spied_event,
         :expected_event,
-        expected_event_selector: @selector!("RegisterCollateral"),
-        expected_event_name: "RegisterCollateral",
+        expected_event_selector: @selector!("CollateralRegistered"),
+        expected_event_name: "CollateralRegistered",
     );
 }
