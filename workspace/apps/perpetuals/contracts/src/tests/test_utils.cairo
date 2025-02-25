@@ -1,10 +1,10 @@
 use Core::InternalCoreFunctionsTrait;
-use contracts_commons::components::deposit::Deposit::InternalTrait;
 use contracts_commons::components::nonce::interface::INonce;
 use contracts_commons::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
 use contracts_commons::constants::TWO_POW_32;
+use contracts_commons::iterable_map::*;
 use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
@@ -36,8 +36,7 @@ use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
 use starknet::ContractAddress;
 use starknet::storage::{
-    MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
-    StoragePointerWriteAccess,
+    MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerWriteAccess,
 };
 
 
@@ -281,7 +280,6 @@ pub fn setup_state_with_active_asset(
         .assets
         .synthetic_timely_data
         .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
-    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
     state.assets.num_of_active_synthetic_assets.write(1);
     state
 }
@@ -299,29 +297,16 @@ pub fn setup_state_with_pending_asset(
         .assets
         .synthetic_timely_data
         .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
-    state.assets.synthetic_timely_data_head.write(Option::Some(*cfg.synthetic_cfg.synthetic_id));
     state
 }
 
 pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
     let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
-    // Collateral asset configs.
-    let (collateral_config, collateral_timely_data) = generate_collateral(
-        collateral_cfg: cfg.collateral_cfg, :token_state,
-    );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     state
         .assets
-        .collateral_config
-        .write(*cfg.collateral_cfg.collateral_id, Option::Some(collateral_config));
-    state
-        .assets
-        .collateral_timely_data
-        .write(*cfg.collateral_cfg.collateral_id, collateral_timely_data);
-    state.assets.collateral_timely_data_head.write(Option::Some(*cfg.collateral_cfg.collateral_id));
-    state
-        .deposits
-        .register_token(
+        .register_collateral(
             asset_id: (*cfg.collateral_cfg.collateral_id).into(),
             token_address: *token_state.address,
             quantum: *cfg.collateral_cfg.quantum,
@@ -411,7 +396,7 @@ pub fn check_synthetic_config(
     quorum: u8,
     resolution: u64,
 ) {
-    let synthetic_config = state.assets.synthetic_config.entry(synthetic_id).read().unwrap();
+    let synthetic_config = state.assets.get_synthetic_config(synthetic_id);
     assert_eq!(synthetic_config.status, status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {
@@ -430,7 +415,7 @@ pub fn check_synthetic_timely_data(
     last_price_update: Timestamp,
     funding_index: FundingIndex,
 ) {
-    let synthetic_timely_data = state.assets.synthetic_timely_data.entry(synthetic_id).read();
+    let synthetic_timely_data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert_eq!(synthetic_timely_data.price, price);
     assert_eq!(synthetic_timely_data.last_price_update, last_price_update);
     assert_eq!(synthetic_timely_data.funding_index, funding_index);
@@ -441,19 +426,11 @@ pub fn is_asset_in_synthetic_timely_data_list(
 ) -> bool {
     let mut flag = false;
 
-    let mut current_asset_id_opt = state.assets.synthetic_timely_data_head.read();
-    while let Option::Some(current_asset_id) = current_asset_id_opt {
-        if current_asset_id == synthetic_id {
+    for (asset_id, _) in state.assets.synthetic_timely_data {
+        if asset_id == synthetic_id {
             flag = true;
             break;
         }
-
-        current_asset_id_opt = state
-            .assets
-            .synthetic_timely_data
-            .entry(current_asset_id)
-            .next
-            .read();
     };
     flag
 }

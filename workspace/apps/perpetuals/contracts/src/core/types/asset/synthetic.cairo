@@ -24,7 +24,6 @@ pub struct SyntheticTimelyData {
     pub price: Price,
     pub last_price_update: Timestamp,
     pub funding_index: FundingIndex,
-    pub next: Option<AssetId>,
 }
 
 /// Synthetic asset in a position.

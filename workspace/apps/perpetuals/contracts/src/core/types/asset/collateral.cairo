@@ -26,7 +26,6 @@ pub struct CollateralTimelyData {
     pub version: u8,
     pub price: Price,
     pub last_price_update: Timestamp,
-    pub next: Option<AssetId>,
 }
 
 /// Collateral asset in a position.

@@ -330,11 +330,11 @@ pub mod Core {
                     :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
                 );
             /// Validation - Not withdrawing from pending deposits:
-            let collateral_cfg = self.assets.get_collateral_config(:collateral_id);
+            let collateral_config = self.assets.get_collateral_config(:collateral_id);
             let token_contract = IERC20Dispatcher {
-                contract_address: collateral_cfg.token_address,
+                contract_address: collateral_config.token_address,
             };
-            let withdraw_unquantized_amount = collateral_cfg.quantum * amount;
+            let withdraw_unquantized_amount = collateral_config.quantum * amount;
             self
                 ._validate_sufficient_funds(
                     :token_contract, :collateral_id, :withdraw_unquantized_amount,

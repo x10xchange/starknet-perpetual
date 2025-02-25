@@ -56,10 +56,7 @@ pub fn OPERATOR() -> ContractAddress {
 
 pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
     CollateralTimelyData {
-        version: COLLATERAL_VERSION,
-        price: One::one(),
-        last_price_update: Time::now(),
-        next: Option::None,
+        version: COLLATERAL_VERSION, price: One::one(), last_price_update: Time::now(),
     }
 }
 
@@ -92,7 +89,6 @@ pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
         // Pass non default timestamp.
         last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
         funding_index: Zero::zero(),
-        next: Option::None,
     }
 }
 

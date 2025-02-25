@@ -4,6 +4,7 @@ use contracts_commons::components::replaceability::interface::IReplaceable;
 use contracts_commons::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use contracts_commons::components::roles::interface::IRoles;
 use contracts_commons::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
+use contracts_commons::iterable_map::*;
 use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::{
     Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
@@ -11,6 +12,7 @@ use contracts_commons::test_utils::{
 };
 use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
+use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::assets::errors::ASSET_ALREADY_EXISTS;
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
@@ -344,7 +346,8 @@ fn test_successful_register_collateral() {
 
     // Check.
     let collateral_config = state.assets.get_collateral_config(collateral_id: asset_id);
-    assert_eq!(state.assets.collateral_timely_data_head.read(), Option::Some(asset_id));
+    assert!(state.assets.collateral_timely_data.read(asset_id).is_some());
+    assert!(state.assets.get_main_collateral_asset_id() == asset_id);
     assert_eq!(collateral_config.quantum, quantum);
     assert_eq!(collateral_config.token_address, token_address);
 }
@@ -2302,12 +2305,9 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
             spender: test_address(),
             amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
-    state
-        .assets
-        .synthetic_timely_data
-        .entry(cfg.synthetic_cfg.synthetic_id)
-        .last_price_update
-        .write(Time::now());
+    let mut synthetic_timely_data = SYNTHETIC_TIMELY_DATA();
+    synthetic_timely_data.last_price_update = Time::now();
+    state.assets.synthetic_timely_data.write(cfg.synthetic_cfg.synthetic_id, synthetic_timely_data);
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
     start_cheat_block_timestamp_global(block_timestamp: now.into());
@@ -2453,8 +2453,7 @@ fn test_funding_tick_basic() {
 
     // Check:
     assert_eq!(
-        state.assets.synthetic_timely_data.entry(synthetic_id).funding_index.read(),
-        new_funding_index,
+        state.assets.get_synthetic_timely_data(synthetic_id).funding_index, new_funding_index,
     );
 }
 
@@ -2568,7 +2567,7 @@ fn test_price_tick_basic() {
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
 
-    let data = state.assets.synthetic_timely_data.read(synthetic_id);
+    let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
 }
@@ -2633,7 +2632,7 @@ fn test_price_tick_odd() {
         );
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
-    let data = state.assets.synthetic_timely_data.read(synthetic_id);
+    let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
 }
@@ -2688,7 +2687,7 @@ fn test_price_tick_even() {
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
 
-    let data = state.assets.synthetic_timely_data.read(synthetic_id);
+    let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert_eq!(data.last_price_update, new_time);
     assert_eq!(data.price.value(), 268);
 }
@@ -2872,7 +2871,7 @@ fn test_price_tick_golden() {
             :price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
-    let data = state.assets.synthetic_timely_data.read(synthetic_id);
+    let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert_eq!(data.last_price_update, Time::now());
     assert_eq!(data.price.value(), 6430);
 }
