@@ -392,20 +392,6 @@ pub(crate) mod Positions {
                 panic_with_felt252(ASSET_NOT_EXISTS)
             }
         }
-
-
-        fn update_collateral_in_position(
-            ref self: ComponentState<TContractState>,
-            position: StoragePath<Mutable<Position>>,
-            collateral_id: AssetId,
-        ) {
-            let collateral_entry = position.collateral_assets.entry(collateral_id);
-            if (collateral_entry.version.read().is_zero()) {
-                collateral_entry.version.write(COLLATERAL_VERSION);
-                collateral_entry.next.write(position.collateral_assets_head.read());
-                position.collateral_assets_head.write(Option::Some(collateral_id));
-            }
-        }
     }
 
     #[generate_trait]
@@ -532,17 +518,36 @@ pub(crate) mod Positions {
             };
         }
 
+        fn _update_collateral_in_position(
+            ref self: ComponentState<TContractState>,
+            position: StoragePath<Mutable<Position>>,
+            collateral_id: AssetId,
+            balance: Balance,
+        ) {
+            let collateral_asset = position.collateral_assets.entry(collateral_id);
+            if (collateral_asset.version.read().is_zero()) {
+                collateral_asset.version.write(COLLATERAL_VERSION);
+                collateral_asset.next.write(position.collateral_assets_head.read());
+                position.collateral_assets_head.write(Option::Some(collateral_id));
+            }
+            collateral_asset.balance.write(balance);
+        }
+
         fn _update_synthetic_in_position(
             ref self: ComponentState<TContractState>,
             position: StoragePath<Mutable<Position>>,
             synthetic_id: AssetId,
+            balance: Balance,
+            funding_index: FundingIndex,
         ) {
-            let synthetic_entry = position.synthetic_assets.entry(synthetic_id);
-            if (synthetic_entry.version.read().is_zero()) {
-                synthetic_entry.version.write(SYNTHETIC_VERSION);
-                synthetic_entry.next.write(position.synthetic_assets_head.read());
+            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
+            if (synthetic_asset.version.read().is_zero()) {
+                synthetic_asset.version.write(SYNTHETIC_VERSION);
+                synthetic_asset.next.write(position.synthetic_assets_head.read());
                 position.synthetic_assets_head.write(Option::Some(synthetic_id));
             }
+            synthetic_asset.balance.write(balance);
+            synthetic_asset.funding_index.write(funding_index);
         }
 
         /// Updates the balance of a given asset, determining its type (collateral or synthetic)
@@ -556,8 +561,7 @@ pub(crate) mod Positions {
             let assets = get_dep_component!(@self, Assets);
             if assets.is_collateral(:asset_id) {
                 let mut position = self._get_position_mut(:position_id);
-                self.update_collateral_in_position(position, collateral_id: asset_id);
-                position.collateral_assets.entry(asset_id).balance.write(balance);
+                self._update_collateral_in_position(position, collateral_id: asset_id, :balance);
             } else {
                 self
                     ._update_synthetic_balance_and_funding(
@@ -603,10 +607,10 @@ pub(crate) mod Positions {
             let curr_funding_index = assets.get_funding_index(:synthetic_id);
             let funding = self._calc_funding(:position_id, :synthetic_id, :curr_funding_index);
             main_collateral_balance.add_and_write(funding);
-            self._update_synthetic_in_position(:position, :synthetic_id);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-            synthetic_asset.balance.write(balance);
-            synthetic_asset.funding_index.write(curr_funding_index);
+            self
+                ._update_synthetic_in_position(
+                    :position, :synthetic_id, :balance, funding_index: curr_funding_index,
+                );
         }
 
         fn _get_position_state(
