@@ -176,6 +176,7 @@ classDiagram
         is_healthy() -> bool
         is_liquidatable() -> bool
         new_position()
+        set_owner_account_request()
         set_owner_account()
         set_public_key_request()
         set_public_key()
@@ -1402,10 +1403,16 @@ pub trait IPositions<TContractState> {
         owner_public_key: PublicKey,
         owner_account: ContractAddress,
     );
+    fn set_owner_account_request(
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        new_owner_account: ContractAddress,
+        expiration: Timestamp,
+    );
     fn set_owner_account(
         ref self: TContractState,
         operator_nonce: u64,
-        signature: Signature,
         position_id: PositionId,
         new_owner_account: ContractAddress,
         expiration: Timestamp,
@@ -1454,6 +1461,7 @@ pub struct Storage {
 #[derive(Drop, PartialEq, starknet::Event)]
 pub enum Event {
     NewPosition: events::NewPosition,
+    SetOwnerAccountRequest: events::SetOwnerAccountRequest,
     SetOwnerAccount: events::SetOwnerAccount,
     SetPublicKey: events::SetPublicKey,
     SetPublicKeyRequest: events::SetPublicKeyRequest,
@@ -1672,6 +1680,20 @@ pub struct NewPosition {
 }
 ```
 
+#### SetOwnerAccountRequest
+```rust
+#[derive(starknet::Event)]
+pub struct SetOwnerAccount {
+    #[key]
+    pub position_id: PositionId,
+    #[key]
+    pub public_key: PublicKey,
+    #[key]
+    pub new_owner_account: ContractAddress,
+    pub set_owner_account_hash: felt252,
+}
+
+```
 #### SetOwnerAccount
 ```rust
 #[derive(starknet::Event)]
@@ -2827,7 +2849,52 @@ Only the Operator can execute.
 - CANT_DELEVERAGE_PENDING_ASSET
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
-###
+### Set Owner Account Request
+
+#### Description
+
+The user registers an set position owner account request by registering a fact.
+
+```rust
+fn set_owner_account_request(
+    ref self: ComponentState<TContractState>,
+    signature: Signature,
+    position_id: PositionId,
+    new_owner_account: ContractAddress,
+    expiration: Timestamp,
+) 
+```
+
+#### Access Control
+
+Anyone can execute.
+
+#### Hash
+
+[get\_message\_hash](#get-message-hash) on [SetOwnerAccount](#setowneraccount) with `new_public_key`.
+
+#### Validations
+
+1. [signature validation](#signature)
+2. self.positions\[`update_position_public_key_message.position_id`\].owner \ == NO\_OWNER
+3. Request is new
+4. caller address is `new_owner_account`
+
+#### Logic
+
+1. Run validation
+2. Register a request to set owner account using the requests component
+
+#### Errors
+
+- INVALID\_POSITION
+- REQUEST_ALREADY_REGISTERED
+- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
+- INVALID\_STARK\_KEY\_SIGNATURE
+
+#### Emits
+
+[SetOwnerAccountRequest](#setowneraccountrequest)
 
 ### Set Owner Account
 
@@ -2839,7 +2906,6 @@ Updates the account owner only for a no-owner position.
 fn set_owner_account(
     ref self: ContractState,
     operator_nonce: u64,
-    signature: Signature,
     // SetOwnerAccountArgs
     position_id: PositionId,
     public_key: felt252,
@@ -2863,7 +2929,7 @@ Only the Operator can execute.
 3. [Expiration validation](#expiration)
 4. [Position check](#position-1)
 5. Self.positions\[position\_id\].owner \== NO\_OWNER
-6. [public key signature](#public-key-signature)
+6. [Request approval check on set public key message](#requests-1)
 
 #### Logic
 
@@ -2882,7 +2948,7 @@ Only the Operator can execute.
 
 #### Emits
 
-[SetPositionOwner](#setowneraccount)
+[SetOwnerAccount](#setowneraccount)
 
 ### Set Public Key Request
 

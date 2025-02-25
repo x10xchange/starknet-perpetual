@@ -14,6 +14,17 @@ pub struct NewPosition {
     pub owner_account: ContractAddress,
 }
 
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct SetOwnerAccountRequest {
+    #[key]
+    pub position_id: PositionId,
+    #[key]
+    pub public_key: PublicKey,
+    #[key]
+    pub new_owner_account: ContractAddress,
+    pub expiration: Timestamp,
+    pub set_owner_account_hash: felt252,
+}
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct SetOwnerAccount {

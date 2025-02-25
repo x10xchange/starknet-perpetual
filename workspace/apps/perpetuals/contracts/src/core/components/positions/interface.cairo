@@ -19,10 +19,16 @@ pub trait IPositions<TContractState> {
         owner_public_key: PublicKey,
         owner_account: ContractAddress,
     );
+    fn set_owner_account_request(
+        ref self: TContractState,
+        signature: Signature,
+        position_id: PositionId,
+        new_owner_account: ContractAddress,
+        expiration: Timestamp,
+    );
     fn set_owner_account(
         ref self: TContractState,
         operator_nonce: u64,
-        signature: Signature,
         position_id: PositionId,
         new_owner_account: ContractAddress,
         expiration: Timestamp,

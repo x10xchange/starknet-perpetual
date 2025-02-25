@@ -289,7 +289,6 @@ fn test_caller_failures() {
     let result = dispatcher
         .set_owner_account(
             operator_nonce: Zero::zero(),
-            signature: array![].span(),
             position_id: POSITION_ID_1,
             new_owner_account: Zero::zero(),
             expiration: Time::now(),
@@ -425,6 +424,75 @@ fn test_new_position() {
 // Set owner account tests.
 
 #[test]
+fn test_successful_set_owner_account_request_using_public_key() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        public_key: user.get_public_key(),
+        new_owner_account: user.address,
+        position_id: user.position_id,
+        expiration,
+    };
+    let msg_hash = set_owner_account_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .positions
+        .set_owner_account_request(
+            :signature, position_id: user.position_id, new_owner_account: user.address, :expiration,
+        );
+
+    // Check:
+    let status = state.request_approvals.get_request_status(request_hash: msg_hash);
+    assert_eq!(status, RequestStatus::PENDING);
+}
+
+#[test]
+#[should_panic(expected: 'POSITION_HAS_OWNER_ACCOUNT')]
+fn test_set_owner_account_request_position_has_owner() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        public_key: user.get_public_key(),
+        new_owner_account: user.address,
+        position_id: user.position_id,
+        expiration,
+    };
+    let msg_hash = set_owner_account_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .positions
+        .set_owner_account_request(
+            :signature, position_id: user.position_id, new_owner_account: user.address, :expiration,
+        );
+}
+
+#[test]
 fn test_successful_set_owner_account() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -435,9 +503,9 @@ fn test_successful_set_owner_account() {
     init_position(cfg: @cfg, ref :state, :user);
 
     // Parameters:
-    let position_id = POSITION_ID_1;
-    let public_key = KEY_PAIR_1().public_key;
-    let new_owner_account = POSITION_OWNER_1();
+    let position_id = user.position_id;
+    let public_key = user.get_public_key();
+    let new_owner_account = user.address;
     let expiration = Time::now().add(Time::days(1));
 
     let set_owner_account_args = SetOwnerAccountArgs {
@@ -445,6 +513,10 @@ fn test_successful_set_owner_account() {
     };
     let set_owner_account_hash = set_owner_account_args.get_message_hash(user.get_public_key());
     let signature = user.sign_message(set_owner_account_hash);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .positions
+        .set_owner_account_request(:signature, :position_id, :new_owner_account, :expiration);
 
     // Test.
     let mut spy = snforge_std::spy_events();
@@ -452,11 +524,7 @@ fn test_successful_set_owner_account() {
     state
         .positions
         .set_owner_account(
-            operator_nonce: state.nonce(),
-            :signature,
-            :position_id,
-            :new_owner_account,
-            :expiration,
+            operator_nonce: state.nonce(), :position_id, :new_owner_account, :expiration,
         );
 
     // Catch the event.
@@ -488,26 +556,15 @@ fn test_set_existed_owner_account() {
 
     // Parameters:
     let position_id = POSITION_ID_1;
-    let public_key = KEY_PAIR_1().public_key;
     let new_owner_account = POSITION_OWNER_1();
     let expiration = Time::now().add(Time::days(1));
-
-    let set_owner_account_args = SetOwnerAccountArgs {
-        position_id, public_key, new_owner_account, expiration,
-    };
-    let set_owner_account_hash = set_owner_account_args.get_message_hash(user.get_public_key());
-    let signature = user.sign_message(set_owner_account_hash);
 
     // Test.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .positions
         .set_owner_account(
-            operator_nonce: state.nonce(),
-            :signature,
-            :position_id,
-            :new_owner_account,
-            :expiration,
+            operator_nonce: state.nonce(), :position_id, :new_owner_account, :expiration,
         );
 }
 

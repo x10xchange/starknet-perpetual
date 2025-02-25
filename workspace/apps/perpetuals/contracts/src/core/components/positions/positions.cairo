@@ -8,10 +8,9 @@ pub(crate) mod Positions {
     use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use contracts_commons::message_hash::OffchainMessageHash;
     use contracts_commons::types::time::time::Timestamp;
     use contracts_commons::types::{PublicKey, Signature};
-    use contracts_commons::utils::{AddToStorage, validate_expiration, validate_stark_signature};
+    use contracts_commons::utils::{AddToStorage, validate_expiration};
     use core::num::traits::zero::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -75,6 +74,7 @@ pub(crate) mod Positions {
     pub enum Event {
         NewPosition: events::NewPosition,
         SetOwnerAccount: events::SetOwnerAccount,
+        SetOwnerAccountRequest: events::SetOwnerAccountRequest,
         SetPublicKey: events::SetPublicKey,
         SetPublicKeyRequest: events::SetPublicKeyRequest,
     }
@@ -179,6 +179,52 @@ pub(crate) mod Positions {
                 );
         }
 
+        /// Registers a request to set the position's owner_account.
+        ///
+        /// Validations:
+        /// - Validates the signature.
+        /// - Validates the position exists.
+        /// - Validates the caller is the new_owner_account.
+        /// - Validates the request does not exist.
+        ///
+        /// Execution:
+        /// - Registers the set owner account request.
+        /// - Emits a `SetOwnerAccountRequest` event.
+        fn set_owner_account_request(
+            ref self: ComponentState<TContractState>,
+            signature: Signature,
+            position_id: PositionId,
+            new_owner_account: ContractAddress,
+            expiration: Timestamp,
+        ) {
+            let position = self._get_position_snapshot(:position_id);
+            let owner_account = position.owner_account.read();
+            assert(owner_account.is_zero(), POSITION_HAS_OWNER_ACCOUNT);
+            assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
+            let public_key = position.owner_public_key.read();
+            let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
+            let hash = request_approvals
+                .register_approval(
+                    owner_account: new_owner_account,
+                    :public_key,
+                    :signature,
+                    args: SetOwnerAccountArgs {
+                        position_id, public_key, new_owner_account, expiration,
+                    },
+                );
+            self
+                .emit(
+                    events::SetOwnerAccountRequest {
+                        position_id,
+                        public_key,
+                        new_owner_account,
+                        expiration,
+                        set_owner_account_hash: hash,
+                    },
+                );
+        }
+
+
         /// Sets the owner of a position to a new account owner.
         ///
         /// Validations:
@@ -191,7 +237,6 @@ pub(crate) mod Positions {
         fn set_owner_account(
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
-            signature: Signature,
             position_id: PositionId,
             new_owner_account: ContractAddress,
             expiration: Timestamp,
@@ -203,13 +248,15 @@ pub(crate) mod Positions {
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self._get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
-            assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
+            let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let public_key = position.owner_public_key.read();
-            let hash = SetOwnerAccountArgs {
-                position_id, public_key, new_owner_account, expiration,
-            }
-                .get_message_hash(:public_key);
-            validate_stark_signature(:public_key, msg_hash: hash, :signature);
+            let hash = request_approvals
+                .consume_approved_request(
+                    args: SetOwnerAccountArgs {
+                        position_id, public_key, new_owner_account, expiration,
+                    },
+                    :public_key,
+                );
             position.owner_account.write(new_owner_account);
             self
                 .emit(
@@ -224,7 +271,7 @@ pub(crate) mod Positions {
         /// Validations:
         /// - Validates the signature.
         /// - Validates the position exists.
-        /// - Validates the called is the owner of the position.
+        /// - Validates the caller is the owner of the position.
         /// - Validates the request does not exist.
         ///
         /// Execution:
