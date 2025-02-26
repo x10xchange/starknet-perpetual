@@ -1657,7 +1657,7 @@ fn test_successful_deleverage() {
 }
 
 #[test]
-#[should_panic(expected: 'POSITION_IS_NOT_FAIR_DELEVERAGE')]
+#[should_panic(expected: "POSITION_IS_NOT_FAIR_DELEVERAGE position_id: PositionId { value: 2 }")]
 fn test_unfair_deleverage() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();

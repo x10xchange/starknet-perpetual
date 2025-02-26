@@ -15,10 +15,6 @@ pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_QUOTE_AMOUNT_SIGN'
 pub const INVALID_SAME_POSITIONS: felt252 = 'INVALID_TRADE_SAME_POSITIONS';
 pub const INVALID_WRONG_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_WRONG_AMOUNT_SIGN';
 pub const INVALID_ZERO_AMOUNT: felt252 = 'INVALID_ZERO_AMOUNT';
-pub const POSITION_IS_NOT_DELEVERAGABLE: felt252 = 'POSITION_IS_NOT_DELEVERAGABLE';
-pub const POSITION_IS_NOT_FAIR_DELEVERAGE: felt252 = 'POSITION_IS_NOT_FAIR_DELEVERAGE';
-pub const POSITION_IS_NOT_HEALTHIER: felt252 = 'POSITION_IS_NOT_HEALTHIER';
-pub const POSITION_IS_NOT_LIQUIDATABLE: felt252 = 'POSITION_IS_NOT_LIQUIDATABLE';
 pub const POSITION_UNHEALTHY: felt252 = 'POSITION_UNHEALTHY';
 pub const TRANSFER_EXPIRED: felt252 = 'TRANSFER_EXPIRED';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
@@ -43,6 +39,18 @@ pub fn order_expired_err(position_id: PositionId) -> ByteArray {
     format!("ORDER_EXPIRED position_id: {:?}", position_id)
 }
 
+pub fn position_not_deleveragable(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_DELEVERAGABLE position_id: {:?}", position_id)
+}
+
+pub fn position_not_fair_deleverage(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_FAIR_DELEVERAGE position_id: {:?}", position_id)
+}
+
 pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
     format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
+}
+
+pub fn position_not_liquidatable(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_LIQUIDATABLE position_id: {:?}", position_id)
 }

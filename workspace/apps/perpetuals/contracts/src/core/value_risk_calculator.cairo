@@ -1,18 +1,23 @@
 use contracts_commons::errors::assert_with_byte_array;
-
 use contracts_commons::math::abs::Abs;
 use contracts_commons::math::fraction::FractionTraitI128U128 as FractionTrait;
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
+use core::num::traits::Zero;
+use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
-    POSITION_IS_NOT_DELEVERAGABLE, POSITION_IS_NOT_FAIR_DELEVERAGE, POSITION_IS_NOT_HEALTHIER,
-    POSITION_IS_NOT_LIQUIDATABLE, position_not_healthy_nor_healthier,
+    position_not_deleveragable, position_not_fair_deleverage, position_not_healthy_nor_healthier,
+    position_not_liquidatable,
 };
-use perpetuals::core::types::AssetDiff;
 use perpetuals::core::types::price::PriceMulTrait;
+use perpetuals::core::types::{Asset, AssetDiff};
 use perpetuals::core::types::{PositionData, PositionDiff, PositionId};
 
+// This is the result of Price::One().mul(balance: 1)
+// which is actually 1e-6 USDC * 2^28 / 2^28 = 1
+const EPSILON: i128 = 1_i128;
 
-#[derive(Drop, Debug, PartialEq, Serde)]
+
+#[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub enum PositionState {
     Healthy,
     Liquidatable,
@@ -53,14 +58,14 @@ pub impl PositionStateImpl of PositionStateTrait {
 ///     The position is healthier if the risk has decreased.
 /// - `is_fair_deleverage`:
 ///     Indicates whether the deleveraging process is fair.
-#[derive(Debug, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct ChangeEffects {
     pub is_healthier: bool,
     pub is_fair_deleverage: bool,
 }
 
 /// Representing the evaluation of position's state and the effects of a proposed change.
-#[derive(Debug, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionChangeResult {
     pub position_state_before_change: PositionState,
     pub position_state_after_change: PositionState,
@@ -68,24 +73,34 @@ pub struct PositionChangeResult {
 }
 
 
-/// The position is fair if the total_value divided by the total_risk is the same
-/// before and after the change.
+/// The position is fair if the total_value divided by the total_risk is the almost before and after
+/// the change - the before_ratio needs to be between after_ratio-epsilon and after ratio.
 fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
-    let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
-    let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
-    let after_minus_one_ratio = FractionTrait::new(after.total_value - 1, after.total_risk);
-    after_minus_one_ratio < before_ratio && before_ratio <= after_ratio
+    let before_ratio = FractionTrait::new(
+        numerator: before.total_value, denominator: before.total_risk,
+    );
+    let after_ratio = FractionTrait::new(
+        numerator: after.total_value, denominator: after.total_risk,
+    );
+    let after_minus_epsilon_ratio = FractionTrait::new(
+        numerator: after.total_value - EPSILON, denominator: after.total_risk,
+    );
+    after_minus_epsilon_ratio < before_ratio && before_ratio <= after_ratio
 }
 
+/// This is checked only when the before is not healthy:
 /// The position is healthier if the total_value divided by the total_risk
-/// is higher after the change and the total_risk is lower.
+/// is equal or higher after the change and the total_risk is lower.
 /// Formal definition:
-/// total_value_after / total_risk_after > total_value_before / total_risk_before
+/// total_value_after / total_risk_after >= total_value_before / total_risk_before
 /// AND total_risk_after < total_risk_before.
 fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
+    if after.total_risk >= before.total_risk {
+        return false;
+    }
     let before_ratio = FractionTrait::new(before.total_value, before.total_risk);
     let after_ratio = FractionTrait::new(after.total_value, after.total_risk);
-    after_ratio >= before_ratio && after.total_risk < before.total_risk
+    after_ratio >= before_ratio
 }
 
 
@@ -98,7 +113,11 @@ pub fn evaluate_position_change(
 ) -> PositionChangeResult {
     let tvtr = calculate_position_tvtr_change(:position_data, :position_diff);
 
-    let change_effects = if tvtr.before.total_risk != 0 && tvtr.after.total_risk != 0 {
+    // When the position has zero total risk (either before or after the change), metrics like
+    // "healthier" or "fair deleverage" are not applicable. This happens when a position has no
+    // synthetic assets.
+    let change_effects = if tvtr.before.total_risk.is_non_zero()
+        && tvtr.after.total_risk.is_non_zero() {
         Option::Some(
             ChangeEffects {
                 is_healthier: is_healthier(before: tvtr.before, after: tvtr.after),
@@ -108,6 +127,7 @@ pub fn evaluate_position_change(
     } else {
         Option::None
     };
+
     PositionChangeResult {
         position_state_before_change: PositionStateTrait::new(tvtr.before),
         position_state_after_change: PositionStateTrait::new(tvtr.after),
@@ -119,54 +139,60 @@ pub fn validate_position_is_healthy_or_healthier(
     position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
 ) {
     let position_change_result = evaluate_position_change(:position_data, :position_diff);
-
-    let position_is_healthier = if let Option::Some(change_effects) = position_change_result
-        .change_effects {
-        change_effects.is_healthier
-    } else {
-        false
-    };
-    let position_is_healthy = position_change_result
-        .position_state_after_change == PositionState::Healthy;
-    assert_with_byte_array(
-        position_is_healthier || position_is_healthy,
-        position_not_healthy_nor_healthier(position_id),
-    );
+    assert_healthy_or_healthier(:position_id, :position_change_result);
 }
 
-pub fn validate_liquidated_position(
-    position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
+pub fn assert_healthy_or_healthier(
+    position_id: PositionId, position_change_result: PositionChangeResult,
 ) {
-    let position_change_result = evaluate_position_change(:position_data, :position_diff);
+    // If the position is healthy we can return.
+    if position_change_result.position_state_after_change == PositionState::Healthy {
+        return;
+    }
 
-    assert(
-        position_change_result.position_state_before_change == PositionState::Liquidatable
-            || position_change_result.position_state_before_change == PositionState::Deleveragable,
-        POSITION_IS_NOT_LIQUIDATABLE,
-    );
-
-    // None means the position is empty; transitioning from liquidatable to empty is
-    // allowed.
-    if let Option::Some(change_effects) = position_change_result.change_effects {
-        assert(change_effects.is_healthier, POSITION_IS_NOT_HEALTHIER);
+    match position_change_result.change_effects {
+        Option::Some(change_effects) => {
+            assert_with_byte_array(
+                change_effects.is_healthier, position_not_healthy_nor_healthier(:position_id),
+            );
+        },
+        Option::None => {
+            // None indicates that the position total risk before or after is 0 (no synthetic
+            // assets), thus we must be healthy.
+            panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id));
+        },
     }
 }
 
-pub fn validate_deleveraged_position(
+pub fn liquidated_position_validations(
     position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
 ) {
     let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
-    assert(
-        position_change_result.position_state_before_change == PositionState::Deleveragable,
-        POSITION_IS_NOT_DELEVERAGABLE,
+    assert_with_byte_array(
+        position_change_result.position_state_before_change == PositionState::Liquidatable
+            || position_change_result.position_state_before_change == PositionState::Deleveragable,
+        position_not_liquidatable(:position_id),
     );
 
-    // None means the position is empty; transitioning from deleveragable to empty is
-    // allowed.
+    assert_healthy_or_healthier(:position_id, :position_change_result);
+}
+
+pub fn deleveraged_position_validations(
+    position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
+) {
+    let position_change_result = evaluate_position_change(:position_data, :position_diff);
+
+    assert_with_byte_array(
+        position_change_result.position_state_before_change == PositionState::Deleveragable,
+        position_not_deleveragable(:position_id),
+    );
+
+    assert_healthy_or_healthier(:position_id, :position_change_result);
     if let Option::Some(change_effects) = position_change_result.change_effects {
-        assert(change_effects.is_fair_deleverage, POSITION_IS_NOT_FAIR_DELEVERAGE);
-        assert(change_effects.is_healthier, POSITION_IS_NOT_HEALTHIER);
+        assert_with_byte_array(
+            change_effects.is_fair_deleverage, position_not_fair_deleverage(:position_id),
+        );
     }
 }
 
@@ -181,9 +207,7 @@ fn calculate_position_tvtr_change(
     let mut total_value_before = 0_i128;
     let mut total_risk_before = 0_u128;
     for asset in position_data {
-        let balance = *asset.balance;
-        let price = *asset.price;
-        let risk_factor = *asset.risk_factor;
+        let Asset { id: _, balance, price, risk_factor } = *asset;
         let asset_value: i128 = price.mul(rhs: balance);
 
         // Update the total value and total risk.
@@ -193,23 +217,23 @@ fn calculate_position_tvtr_change(
 
     // Calculate the total value and total risk - after (i.e. counting diff as applied).
     let mut total_value_after = total_value_before;
-    let mut total_risk_after: u128 = total_risk_before;
+    let mut total_risk_after = total_risk_before;
     for asset_diff in position_diff {
-        let risk_factor_before = *asset_diff.risk_factor_before;
-        let risk_factor_after = *asset_diff.risk_factor_after;
-        let price = *asset_diff.price;
-        let balance_before = *asset_diff.balance_before;
-        let balance_after = *asset_diff.balance_after;
-        let asset_value_before = price.mul(rhs: balance_before);
-        let asset_value_after = price.mul(rhs: balance_after);
+        let AssetDiff {
+            id: _, balance_before, balance_after, price, risk_factor_before, risk_factor_after,
+        } = *asset_diff;
 
         /// Update the total value.
-        total_value_after += asset_value_after;
+        let asset_value_before = price.mul(rhs: balance_before);
+        let asset_value_after = price.mul(rhs: balance_after);
         total_value_after -= asset_value_before;
+        total_value_after += asset_value_after;
 
         /// Update the total risk.
-        total_risk_after += risk_factor_after.mul(asset_value_after.abs());
-        total_risk_after -= risk_factor_before.mul(asset_value_before.abs());
+        let asset_risk_before = risk_factor_before.mul(asset_value_before.abs());
+        let asset_risk_after = risk_factor_after.mul(asset_value_after.abs());
+        total_risk_after -= asset_risk_before;
+        total_risk_after += asset_risk_after;
     };
 
     // Return the total value and total risk before and after the diff.

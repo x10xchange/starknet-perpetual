@@ -48,7 +48,7 @@ pub mod Core {
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::types::{AssetDiff, PositionDiff, PositionId};
     use perpetuals::core::value_risk_calculator::{
-        validate_deleveraged_position, validate_liquidated_position,
+        deleveraged_position_validations, liquidated_position_validations,
         validate_position_is_healthy_or_healthier,
     };
     use starknet::event::EventEmitter;
@@ -709,7 +709,7 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
-            validate_liquidated_position(
+            liquidated_position_validations(
                 position_id: liquidated_position_id,
                 position_data: liquidated_position_data,
                 position_diff: liquidated_position_diff,
@@ -1227,7 +1227,7 @@ pub mod Core {
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVE => validate_deleveraged_position(
+                AssetStatus::ACTIVE => deleveraged_position_validations(
                     position_id: deleveraged_position_id,
                     position_data: deleveraged_position_data,
                     position_diff: deleveraged_position_diff,
