@@ -18,7 +18,7 @@ use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
 };
 use perpetuals::core::components::positions::Positions::POSITION_VERSION;
-use perpetuals::core::components::positions::errors::INVALID_POSITION;
+use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
 use perpetuals::core::components::positions::interface::{
     IPositions, IPositionsSafeDispatcher, IPositionsSafeDispatcherTrait,
 };
@@ -122,7 +122,7 @@ fn test_caller_failures() {
             salt: 0,
         );
     // Means that any one can call this ABI.
-    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+    assert_panic_with_felt_error(:result, expected_error: POSITION_DOESNT_EXIST);
 
     let result = dispatcher
         .withdraw(
@@ -147,7 +147,7 @@ fn test_caller_failures() {
             salt: 0,
         );
     // Means that any one can call this ABI.
-    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+    assert_panic_with_felt_error(:result, expected_error: POSITION_DOESNT_EXIST);
 
     let result = dispatcher
         .transfer(
@@ -287,7 +287,7 @@ fn test_caller_failures() {
             expiration: Time::now(),
         );
     // Means that any one can call this ABI.
-    assert_panic_with_felt_error(:result, expected_error: INVALID_POSITION);
+    assert_panic_with_felt_error(:result, expected_error: POSITION_DOESNT_EXIST);
 
     let result = dispatcher
         .set_public_key(
@@ -2045,7 +2045,7 @@ fn test_invalid_set_public_key_request_wrong_owner() {
 }
 
 #[test]
-#[should_panic(expected: 'INVALID_POSITION')]
+#[should_panic(expected: 'POSITION_DOESNT_EXIST')]
 fn test_set_public_key_request_position_not_exist() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();

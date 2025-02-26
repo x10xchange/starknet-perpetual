@@ -19,9 +19,9 @@ pub(crate) mod Positions {
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
     use perpetuals::core::components::assets::errors::ASSET_NOT_EXISTS;
     use perpetuals::core::components::positions::errors::{
-        ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_POSITION,
+        ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
         INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT,
-        POSITION_ALREADY_EXISTS, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
+        POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
     };
     use perpetuals::core::components::positions::events;
@@ -466,7 +466,7 @@ pub(crate) mod Positions {
             ref self: ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
             let mut position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            assert(position.owner_public_key.read().is_non_zero(), POSITION_DOESNT_EXIST);
             position
         }
 
@@ -474,7 +474,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
             let position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), INVALID_POSITION);
+            assert(position.owner_public_key.read().is_non_zero(), POSITION_DOESNT_EXIST);
             position
         }
 
