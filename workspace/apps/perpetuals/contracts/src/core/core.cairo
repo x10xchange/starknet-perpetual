@@ -339,7 +339,7 @@ pub mod Core {
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_position_diff(:position, asset_id: collateral_id, diff: amount.into());
+                ._create_position_diff(:position, asset_id: collateral_id, diff: -(amount.into()));
             let position_data = self.positions.get_position_data(:position);
 
             validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);

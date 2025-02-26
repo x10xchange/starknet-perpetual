@@ -706,7 +706,7 @@ fn test_successful_deactivate_synthetic_asset() {
 
 #[test]
 #[should_panic(expected: 'SYNTHETIC_NOT_EXISTS')]
-fn test_deactivate_unexisted_synthetic_asset() {
+fn test_deactivate_nonexistent_synthetic_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -800,6 +800,15 @@ fn test_successful_withdraw() {
     assert_eq!(user_balance, onchain_amount.into());
     let contract_state_balance = token_state.balance_of(test_address());
     assert_eq!(contract_state_balance, (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
+    assert_eq!(
+        state
+            .positions
+            .get_provisional_balance(
+                position: state.positions.get_position_snapshot(position_id: user.position_id),
+                asset_id: cfg.collateral_cfg.collateral_id,
+            ),
+        COLLATERAL_BALANCE_AMOUNT.into() - WITHDRAW_AMOUNT.into(),
+    );
 }
 
 // Deposit tests.
@@ -1048,7 +1057,7 @@ fn test_successful_cancel_deposit() {
         deposit_request_hash: deposit_hash,
     );
 
-    // Check after deposit cancelation:
+    // Check after deposit cancellation:
     validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
     validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
 }
@@ -3081,7 +3090,7 @@ fn test_add_existed_oracle() {
 
 #[test]
 #[should_panic(expected: 'ORACLE_NOT_EXISTS')]
-fn test_successful_remove_unexisted_oracle() {
+fn test_successful_remove_nonexistent_oracle() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
