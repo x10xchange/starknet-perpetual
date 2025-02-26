@@ -566,7 +566,7 @@ fn test_successful_add_synthetic_asset() {
     let synthetic_id_1 = SYNTHETIC_ASSET_ID_2();
     let synthetic_id_2 = SYNTHETIC_ASSET_ID_3();
     let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = Zero::zero();
+    let risk_factor_tier_size = 1;
     let risk_factor_1 = array![10].span();
     let risk_factor_2 = array![20].span();
     let quorum_1 = 1_u8;
@@ -652,11 +652,11 @@ fn test_add_synthetic_asset_existed_asset() {
         .add_synthetic_asset(
             // Setup state already added `SYNTHETIC_ASSET_ID_1`.
             asset_id: SYNTHETIC_ASSET_ID_1(),
-            risk_factor_tiers: array![].span(),
+            risk_factor_tiers: array![10].span(),
             risk_factor_first_tier_boundary: MAX_U128,
-            risk_factor_tier_size: Zero::zero(),
-            quorum: Zero::zero(),
-            resolution: Zero::zero(),
+            risk_factor_tier_size: 1,
+            quorum: 13,
+            resolution: 10000000,
         );
 }
 

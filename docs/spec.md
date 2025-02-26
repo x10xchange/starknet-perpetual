@@ -2862,7 +2862,7 @@ fn set_owner_account_request(
     position_id: PositionId,
     new_owner_account: ContractAddress,
     expiration: Timestamp,
-) 
+)
 ```
 
 #### Access Control
@@ -3411,9 +3411,13 @@ Only APP\_GOVERNOR can execute.
 #### Validations
 
 1. `self.roles.only_app_governor()`
-2. asset\_id does not exist in the system.
-3. All values in `risk_factor_tiers`\<= 100\.
-4. Quorum \> 0
+2. asset\_id does not exist in the system - check existance in both collateral and synthetic config.
+3. Lenght of `risk_factor_tiers` is non zero.
+4. `risk_factor_first_tier_boundary`, `risk_factor_tier_size`, `quorum`, and `resolution` are non zero.
+5. Lenght of `risk_factor_tiers` is non zero.
+6. All values in 0\<= \`risk_factor_tiers`\<= 100\.
+7. `risk_factor_tiers` is sorted.
+
 
 #### Logic
 

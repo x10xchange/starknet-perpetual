@@ -28,12 +28,13 @@ pub mod AssetsComponent {
         FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
         INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
         INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
-        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL,
-        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
-        ZERO_MAX_PRICE_INTERVAL,
+        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
+        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
+        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
+        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
 
     use perpetuals::core::components::assets::events;
@@ -228,11 +229,36 @@ pub mod AssetsComponent {
             quorum: u8,
             resolution: u64,
         ) {
-            let roles = get_dep_component!(@self, Roles);
-            roles.only_app_governor();
-            assert(self.synthetic_config.read(asset_id).is_none(), SYNTHETIC_ALREADY_EXISTS);
+            /// Validations:
+            get_dep_component!(@self, Roles).only_app_governor();
+
+            let synthetic_entry = self.synthetic_config.entry(asset_id);
+            assert(synthetic_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
+            // The asset id cannot be a collateral asset.
             assert(self.collateral_config.read(asset_id).is_none(), ASSET_ALREADY_EXISTS);
+
+            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
+            assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
+            assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
+            assert(resolution.is_non_zero(), INVALID_ZERO_RESOLUTION);
+
+            synthetic_entry
+                .write(
+                    Option::Some(
+                        SyntheticConfig {
+                            version: SYNTHETIC_VERSION,
+                            // It'll be active in the next price tick.
+                            status: AssetStatus::PENDING,
+                            // It validates the range of the risk factor.
+                            risk_factor_first_tier_boundary,
+                            risk_factor_tier_size,
+                            quorum,
+                            resolution,
+                        },
+                    ),
+                );
 
             let synthetic_config = SyntheticConfig {
                 version: SYNTHETIC_VERSION,
@@ -256,11 +282,14 @@ pub mod AssetsComponent {
             };
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
+            let prev_risk_factor = 0_u8;
             for risk_factor in risk_factor_tiers {
+                assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
                 self
                     .risk_factor_tiers
                     .entry(asset_id)
                     .append()
+                    // New function checks that `risk_factor` is lower than 100.
                     .write(FixedTwoDecimalTrait::new(*risk_factor));
             };
             self
