@@ -1,6 +1,6 @@
 use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
 use contracts_commons::types::time::time::Timestamp;
-use perpetuals::core::types::asset::{AssetId, AssetStatus};
+use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
@@ -35,5 +35,4 @@ pub struct CollateralTimelyData {
 pub struct CollateralAsset {
     pub version: u8,
     pub balance: Balance,
-    pub next: Option<AssetId>,
 }

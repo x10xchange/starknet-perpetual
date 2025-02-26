@@ -1637,29 +1637,21 @@ fn test_successful_deleverage() {
         .positions
         .get_position_snapshot(position_id: deleverager.position_id);
 
-    let deleveraged_collateral_balance = deleveraged_position
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let deleveraged_synthetic_balance = deleveraged_position
-        .synthetic_assets
-        .entry(synthetic_id)
-        .balance
-        .read();
+    let deleveraged_collateral_balance = state
+        .positions
+        .get_provisional_balance(position: deleveraged_position, asset_id: collateral_id);
+    let deleveraged_synthetic_balance = state
+        .positions
+        .get_provisional_balance(position: deleveraged_position, asset_id: synthetic_id);
     assert_eq!(deleveraged_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + QUOTE).into());
     assert_eq!(deleveraged_synthetic_balance, (-2 * SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
-    let deleverager_collateral_balance = deleverager_position
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let deleverager_synthetic_balance = deleverager_position
-        .synthetic_assets
-        .entry(synthetic_id)
-        .balance
-        .read();
+    let deleverager_collateral_balance = state
+        .positions
+        .get_provisional_balance(position: deleverager_position, asset_id: collateral_id);
+    let deleverager_synthetic_balance = state
+        .positions
+        .get_provisional_balance(position: deleverager_position, asset_id: synthetic_id);
     assert_eq!(deleverager_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - QUOTE).into());
     assert_eq!(deleverager_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
 }
@@ -1812,32 +1804,24 @@ fn test_successful_liquidate() {
         .positions
         .get_position_snapshot(position_id: liquidator.position_id);
 
-    let liquidated_collateral_balance = liquidated_position
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let liquidated_synthetic_balance = liquidated_position
-        .synthetic_assets
-        .entry(synthetic_id)
-        .balance
-        .read();
+    let liquidated_collateral_balance = state
+        .positions
+        .get_provisional_balance(position: liquidated_position, asset_id: collateral_id);
+    let liquidated_synthetic_balance = state
+        .positions
+        .get_provisional_balance(position: liquidated_position, asset_id: synthetic_id);
     assert_eq!(
         liquidated_collateral_balance,
         (COLLATERAL_BALANCE_AMOUNT.into() - INSURANCE_FEE.into() + QUOTE.into()),
     );
     assert_eq!(liquidated_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
-    let liquidator_collateral_balance = liquidator_position
-        .collateral_assets
-        .entry(collateral_id)
-        .balance
-        .read();
-    let liquidator_synthetic_balance = liquidator_position
-        .synthetic_assets
-        .entry(synthetic_id)
-        .balance
-        .read();
+    let liquidator_collateral_balance = state
+        .positions
+        .get_provisional_balance(position: liquidator_position, asset_id: collateral_id);
+    let liquidator_synthetic_balance = state
+        .positions
+        .get_provisional_balance(position: liquidator_position, asset_id: synthetic_id);
     assert_eq!(
         liquidator_collateral_balance,
         (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),

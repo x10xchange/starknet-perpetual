@@ -8,9 +8,12 @@ pub(crate) mod Positions {
     use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use contracts_commons::components::roles::RolesComponent;
     use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInternal;
+    use contracts_commons::iterable_map::{
+        IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+    };
     use contracts_commons::types::time::time::Timestamp;
     use contracts_commons::types::{PublicKey, Signature};
-    use contracts_commons::utils::{AddToStorage, validate_expiration};
+    use contracts_commons::utils::validate_expiration;
     use core::num::traits::zero::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -33,7 +36,7 @@ pub(crate) mod Positions {
     };
     use perpetuals::core::types::asset::synthetic::{SyntheticAsset, VERSION as SYNTHETIC_VERSION};
     use perpetuals::core::types::balance::Balance;
-    use perpetuals::core::types::funding::{FundingIndex, FundingIndexMulTrait};
+    use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId};
@@ -58,9 +61,9 @@ pub(crate) mod Positions {
         pub owner_account: ContractAddress,
         pub owner_public_key: PublicKey,
         pub collateral_assets_head: Option<AssetId>,
-        pub collateral_assets: Map<AssetId, CollateralAsset>,
+        pub collateral_assets: IterableMap<AssetId, CollateralAsset>,
         pub synthetic_assets_head: Option<AssetId>,
-        pub synthetic_assets: Map<AssetId, SyntheticAsset>,
+        pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
     }
 
 
@@ -431,7 +434,11 @@ pub(crate) mod Positions {
             if assets.is_collateral(:asset_id) {
                 self._get_provisional_main_collateral_balance(:position)
             } else if assets.is_synthetic(:asset_id) {
-                position.synthetic_assets.entry(asset_id).balance.read()
+                let mut balance = 0_i64.into();
+                if let Option::Some(asset) = position.synthetic_assets.read(asset_id) {
+                    balance = asset.balance
+                }
+                balance
             } else {
                 panic_with_felt252(ASSET_NOT_EXISTS)
             }
@@ -441,8 +448,23 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> PositionData {
             let mut position_data = array![];
-            self._collect_position_collaterals(:position, ref :position_data);
-            self._collect_position_synthetics(:position, ref :position_data);
+            let assets = get_dep_component!(self, Assets);
+            let balance = self._get_provisional_main_collateral_balance(position);
+            if balance.is_non_zero() {
+                let main_collateral_id = assets.get_main_collateral_asset_id();
+                let price = assets.get_asset_price(main_collateral_id);
+                let risk_factor = assets.get_risk_factor(main_collateral_id, balance);
+                position_data.append(Asset { id: main_collateral_id, balance, price, risk_factor });
+            }
+            for (synthetic_id, synthetic) in position.synthetic_assets {
+                let balance = synthetic.balance;
+                if balance.is_zero() {
+                    continue;
+                }
+                let price = assets.get_asset_price(synthetic_id);
+                let risk_factor = assets.get_risk_factor(synthetic_id, balance);
+                position_data.append(Asset { id: synthetic_id, balance, price, risk_factor });
+            };
             position_data.span()
         }
     }
@@ -484,105 +506,26 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
-            let mut main_collateral_balance = position
-                .collateral_assets
-                .entry(assets.get_main_collateral_asset_id())
-                .balance
-                .read();
-            let mut asset_id_opt = position.synthetic_assets_head.read();
-            while let Option::Some(synthetic_id) = asset_id_opt {
-                let curr_funding_index = assets.get_funding_index(:synthetic_id);
-                let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-                let funding = (curr_funding_index - synthetic_asset.funding_index.read())
-                    .mul(synthetic_asset.balance.read());
-                main_collateral_balance += funding;
-                asset_id_opt = position.synthetic_assets.entry(synthetic_id).next.read();
+            let mut provisional_main_collateral_balance = 0_i64.into();
+            let main_collateral_id = assets.get_main_collateral_asset_id();
+            if let Option::Some(collateral) = position.collateral_assets.read(main_collateral_id) {
+                provisional_main_collateral_balance += collateral.balance;
             };
-            main_collateral_balance
+            for (synthetic_id, synthetic) in position.synthetic_assets {
+                if synthetic.balance.is_zero() {
+                    continue;
+                }
+                let funding_index = assets.get_funding_index(synthetic_id);
+                provisional_main_collateral_balance +=
+                    calculate_funding(synthetic.funding_index, funding_index, synthetic.balance);
+            };
+            provisional_main_collateral_balance
         }
 
         fn _validate_position_exists(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) {
             self._get_position_snapshot(:position_id);
-        }
-
-        fn _collect_position_collaterals(
-            self: @ComponentState<TContractState>,
-            position: StoragePath<Position>,
-            ref position_data: Array<Asset>,
-        ) {
-            let mut asset_id_opt = position.collateral_assets_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                self._collect_position_asset(:asset_id, :position, ref :position_data);
-                asset_id_opt = position.collateral_assets.read(asset_id).next;
-            }
-        }
-
-        fn _collect_position_synthetics(
-            self: @ComponentState<TContractState>,
-            position: StoragePath<Position>,
-            ref position_data: Array<Asset>,
-        ) {
-            let mut asset_id_opt = position.synthetic_assets_head.read();
-            while let Option::Some(asset_id) = asset_id_opt {
-                self._collect_position_asset(:asset_id, :position, ref :position_data);
-                asset_id_opt = position.synthetic_assets.read(asset_id).next;
-            }
-        }
-
-        fn _collect_position_asset(
-            self: @ComponentState<TContractState>,
-            asset_id: AssetId,
-            position: StoragePath<Position>,
-            ref position_data: Array<Asset>,
-        ) {
-            let assets = get_dep_component!(self, Assets);
-            let balance = self.get_provisional_balance(:position, :asset_id);
-            if balance.is_non_zero() {
-                let price = assets.get_asset_price(:asset_id);
-                position_data
-                    .append(
-                        Asset {
-                            id: asset_id,
-                            balance,
-                            price,
-                            risk_factor: assets.get_risk_factor(:asset_id, :balance),
-                        },
-                    );
-            }
-        }
-
-        fn _update_collateral_in_position(
-            ref self: ComponentState<TContractState>,
-            position: StoragePath<Mutable<Position>>,
-            collateral_id: AssetId,
-            balance: Balance,
-        ) {
-            let collateral_asset = position.collateral_assets.entry(collateral_id);
-            if (collateral_asset.version.read().is_zero()) {
-                collateral_asset.version.write(COLLATERAL_VERSION);
-                collateral_asset.next.write(position.collateral_assets_head.read());
-                position.collateral_assets_head.write(Option::Some(collateral_id));
-            }
-            collateral_asset.balance.write(balance);
-        }
-
-        fn _update_synthetic_in_position(
-            ref self: ComponentState<TContractState>,
-            position: StoragePath<Mutable<Position>>,
-            synthetic_id: AssetId,
-            balance: Balance,
-            funding_index: FundingIndex,
-        ) {
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-            if (synthetic_asset.version.read().is_zero()) {
-                synthetic_asset.version.write(SYNTHETIC_VERSION);
-                synthetic_asset.next.write(position.synthetic_assets_head.read());
-                position.synthetic_assets_head.write(Option::Some(synthetic_id));
-            }
-            synthetic_asset.balance.write(balance);
-            synthetic_asset.funding_index.write(funding_index);
         }
 
         /// Updates the balance of a given asset, determining its type (collateral or synthetic)
@@ -595,7 +538,8 @@ pub(crate) mod Positions {
         ) {
             let assets = get_dep_component!(@self, Assets);
             if assets.is_collateral(:asset_id) {
-                self._update_collateral_in_position(position, collateral_id: asset_id, :balance);
+                let collateral_asset = CollateralAsset { version: COLLATERAL_VERSION, balance };
+                position.collateral_assets.write(asset_id, collateral_asset);
             } else {
                 self
                     ._update_synthetic_balance_and_funding(
@@ -633,19 +577,32 @@ pub(crate) mod Positions {
             balance: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
-            let mut main_collateral_balance = position
-                .collateral_assets
-                .entry(assets.get_main_collateral_asset_id())
-                .balance;
-            let curr_funding_index = assets.get_funding_index(:synthetic_id);
-            let synthetic_asset = position.synthetic_assets.entry(synthetic_id);
-            let funding = (curr_funding_index - synthetic_asset.funding_index.read())
-                .mul(synthetic_asset.balance.read());
-            main_collateral_balance.add_and_write(funding);
-            self
-                ._update_synthetic_in_position(
-                    :position, :synthetic_id, :balance, funding_index: curr_funding_index,
-                );
+            let funding_index = assets.get_funding_index(:synthetic_id);
+
+            // Adjusts the main collateral balance accordingly:
+            let mut collateral_balance = 0_i64.into();
+            if let Option::Some(synthetic) = position.synthetic_assets.read(synthetic_id) {
+                if synthetic.balance.is_non_zero() {
+                    collateral_balance +=
+                        calculate_funding(
+                            synthetic.funding_index, funding_index, synthetic.balance,
+                        );
+                }
+            };
+            let main_collateral_id = assets.get_main_collateral_asset_id();
+            if let Option::Some(collateral) = position.collateral_assets.read(main_collateral_id) {
+                collateral_balance += collateral.balance
+            };
+            let collateral_asset = CollateralAsset {
+                version: COLLATERAL_VERSION, balance: collateral_balance,
+            };
+            position.collateral_assets.write(main_collateral_id, collateral_asset);
+
+            // Updates the synthetic balance and funding index:
+            let synthetic_asset = SyntheticAsset {
+                version: SYNTHETIC_VERSION, balance, funding_index,
+            };
+            position.synthetic_assets.write(synthetic_id, synthetic_asset);
         }
 
         fn _get_position_state(

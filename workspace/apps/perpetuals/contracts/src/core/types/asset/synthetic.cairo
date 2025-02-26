@@ -1,5 +1,5 @@
 use contracts_commons::types::time::time::Timestamp;
-use perpetuals::core::types::asset::{AssetId, AssetStatus};
+use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
@@ -35,5 +35,4 @@ pub struct SyntheticAsset {
     pub version: u8,
     pub balance: Balance,
     pub funding_index: FundingIndex,
-    pub next: Option<AssetId>,
 }

@@ -28,6 +28,12 @@ impl FundingIndexMul of FundingIndexMulTrait {
     }
 }
 
+pub fn calculate_funding(
+    old_funding_index: FundingIndex, new_funding_index: FundingIndex, balance: Balance,
+) -> Balance {
+    (old_funding_index - new_funding_index).mul(balance)
+}
+
 #[derive(Copy, Drop, starknet::Store, Serde)]
 pub struct FundingTick {
     pub asset_id: AssetId,
