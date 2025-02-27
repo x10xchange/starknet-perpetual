@@ -815,7 +815,14 @@ pub mod Core {
         fn _create_position_diff(
             self: @ContractState, position: StoragePath<Position>, asset_id: AssetId, diff: Balance,
         ) -> PositionDiff {
-            array![self._create_asset_diff(:position, :asset_id, :diff)].span()
+            let mut collaterals = array![];
+            let mut synthetics = array![];
+            if self.assets.is_collateral(asset_id) {
+                collaterals.append(self._create_asset_diff(:position, :asset_id, :diff));
+            } else {
+                synthetics.append(self._create_asset_diff(:position, :asset_id, :diff));
+            }
+            PositionDiff { collaterals: collaterals.span(), synthetics: synthetics.span() }
         }
 
         fn _create_asset_diff(
@@ -907,13 +914,22 @@ pub mod Core {
             }
 
             // Build position diff.
-            let mut position_diff = array![];
+            let mut collaterals_diff = array![];
+            let mut synthetics_diff = array![];
             for asset_diff in array![fee_diff, quote_diff, base_diff] {
-                if asset_diff.id != Default::default() {
-                    position_diff.append(asset_diff);
+                if asset_diff.id == Default::default() {
+                    continue;
+                }
+                if self.assets.is_collateral(asset_diff.id) {
+                    collaterals_diff.append(asset_diff);
+                } else {
+                    synthetics_diff.append(asset_diff);
                 }
             };
-            position_diff.span()
+
+            PositionDiff {
+                collaterals: collaterals_diff.span(), synthetics: synthetics_diff.span(),
+            }
         }
 
         fn _update_positions(

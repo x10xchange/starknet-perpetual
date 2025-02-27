@@ -49,4 +49,14 @@ pub struct AssetDiff {
     pub risk_factor_after: FixedTwoDecimal,
 }
 
-pub type PositionDiff = Span<AssetDiff>;
+#[derive(Copy, Debug, Drop, Serde)]
+pub struct PositionDiff {
+    pub collaterals: Span<AssetDiff>,
+    pub synthetics: Span<AssetDiff>,
+}
+
+pub impl DefaultPositionDiffImpl of Default<PositionDiff> {
+    fn default() -> PositionDiff {
+        PositionDiff { collaterals: array![].span(), synthetics: array![].span() }
+    }
+}

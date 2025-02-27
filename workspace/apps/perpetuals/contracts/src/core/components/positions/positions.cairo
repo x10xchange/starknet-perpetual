@@ -400,7 +400,10 @@ pub(crate) mod Positions {
         ) {
             let position = self._get_position_snapshot(:position_id);
             let position_mut = self._get_position_mut(:position_id);
-            for diff in position_diff {
+            let mut all_position_diff = array![];
+            all_position_diff.append_span(position_diff.collaterals);
+            all_position_diff.append_span(position_diff.synthetics);
+            for diff in all_position_diff.span() {
                 let asset_id = *diff.id;
                 let balance = self.get_provisional_balance(:position, :asset_id);
                 assert(*diff.balance_before == balance, APPLY_DIFF_MISMATCH);

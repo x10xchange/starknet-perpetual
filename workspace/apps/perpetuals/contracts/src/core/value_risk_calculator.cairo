@@ -105,7 +105,8 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
 
 
 pub fn evaluate_position(position_data: PositionData) -> PositionChangeResult {
-    evaluate_position_change(:position_data, position_diff: array![].span())
+    let position_diff = Default::default();
+    evaluate_position_change(:position_data, :position_diff)
 }
 
 pub fn evaluate_position_change(
@@ -136,7 +137,7 @@ pub fn evaluate_position_change(
 }
 
 pub fn validate_position_is_healthy_or_healthier(
-    position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
+    position_id: PositionId, position_data: PositionData, position_diff: PositionDiff,
 ) {
     let position_change_result = evaluate_position_change(:position_data, :position_diff);
     assert_healthy_or_healthier(:position_id, :position_change_result);
@@ -165,7 +166,7 @@ pub fn assert_healthy_or_healthier(
 }
 
 pub fn liquidated_position_validations(
-    position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
+    position_id: PositionId, position_data: PositionData, position_diff: PositionDiff,
 ) {
     let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
@@ -179,7 +180,7 @@ pub fn liquidated_position_validations(
 }
 
 pub fn deleveraged_position_validations(
-    position_id: PositionId, position_data: PositionData, position_diff: Span<AssetDiff>,
+    position_id: PositionId, position_data: PositionData, position_diff: PositionDiff,
 ) {
     let position_change_result = evaluate_position_change(:position_data, :position_diff);
 
@@ -197,7 +198,8 @@ pub fn deleveraged_position_validations(
 }
 
 pub fn calculate_position_tvtr(position_data: PositionData) -> PositionTVTR {
-    calculate_position_tvtr_change(:position_data, position_diff: array![].span()).before
+    let position_diff = Default::default();
+    calculate_position_tvtr_change(:position_data, :position_diff).before
 }
 
 fn calculate_position_tvtr_change(
@@ -218,7 +220,10 @@ fn calculate_position_tvtr_change(
     // Calculate the total value and total risk - after (i.e. counting diff as applied).
     let mut total_value_after = total_value_before;
     let mut total_risk_after = total_risk_before;
-    for asset_diff in position_diff {
+    let mut all_position_diff = array![];
+    all_position_diff.append_span(position_diff.collaterals);
+    all_position_diff.append_span(position_diff.synthetics);
+    for asset_diff in all_position_diff.span() {
         let AssetDiff {
             id: _, balance_before, balance_after, price, risk_factor_before, risk_factor_after,
         } = *asset_diff;
@@ -324,7 +329,9 @@ mod tests {
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let position_diff = array![asset_diff].span();
+        let position_diff = PositionDiff {
+            collaterals: array![].span(), synthetics: array![asset_diff].span(),
+        };
 
         let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
 
@@ -373,7 +380,9 @@ mod tests {
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let position_diff = array![asset_diff].span();
+        let position_diff = PositionDiff {
+            collaterals: array![].span(), synthetics: array![asset_diff].span(),
+        };
 
         let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
 
@@ -453,7 +462,9 @@ mod tests {
             risk_factor_before: RISK_FACTOR_2(),
             risk_factor_after: RISK_FACTOR_2(),
         };
-        let position_diff = array![asset_diff_1, asset_diff_2].span();
+        let position_diff = PositionDiff {
+            collaterals: array![].span(), synthetics: array![asset_diff_1, asset_diff_2].span(),
+        };
 
         let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
 
@@ -503,7 +514,7 @@ mod tests {
         let position_data = array![asset].span();
 
         // Create an empty position diff.
-        let position_diff = array![].span();
+        let position_diff = Default::default();
 
         let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
 
@@ -535,7 +546,7 @@ mod tests {
         let position_data = array![].span();
 
         // Create an empty position diff.
-        let position_diff = array![].span();
+        let position_diff = Default::default();
 
         let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
 
@@ -561,7 +572,7 @@ mod tests {
         let position_data = array![].span();
 
         // Create an empty position diff.
-        let position_diff = array![].span();
+        let position_diff = Default::default();
 
         let evaluated_position_change = evaluate_position_change(position_data, position_diff);
 

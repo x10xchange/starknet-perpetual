@@ -32,7 +32,6 @@
         - [AssetEntry](#assetentry)
         - [PositionData](#positiondata)
         - [AssetDiffEntry](#assetdiffentry)
-        - [PositionDiff](#positiondiff)
         - [PositionId](#positionid)
         - [FundingIndex](#fundingindex)
         - [Balance](#balance)
@@ -520,12 +519,6 @@ pub struct AssetDiffEntry {
     pub after: Balance,
     pub price: Price,
 }
-```
-
-### PositionDiff
-
-```rust
-pub type PositionDiff = Span<AssetDiffEntry>;
 ```
 
 ### PositionId
