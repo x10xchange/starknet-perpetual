@@ -253,26 +253,26 @@ mod tests {
     use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
-    use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
+    use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
     use perpetuals::core::types::{Asset, AssetDiff};
     use super::*;
 
 
     /// Prices
     fn PRICE_1() -> Price {
-        PriceTrait::new(900 * TWO_POW_28)
+        PriceTrait::new(900 * PRICE_SCALE)
     }
     fn PRICE_2() -> Price {
-        PriceTrait::new(900 * TWO_POW_28)
+        PriceTrait::new(900 * PRICE_SCALE)
     }
     fn PRICE_3() -> Price {
-        PriceTrait::new(900 * TWO_POW_28)
+        PriceTrait::new(900 * PRICE_SCALE)
     }
     fn PRICE_4() -> Price {
-        PriceTrait::new(900 * TWO_POW_28)
+        PriceTrait::new(900 * PRICE_SCALE)
     }
     fn PRICE_5() -> Price {
-        PriceTrait::new(900 * TWO_POW_28)
+        PriceTrait::new(900 * PRICE_SCALE)
     }
 
     /// Risk factors

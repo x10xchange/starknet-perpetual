@@ -12,7 +12,7 @@ use perpetuals::core::types::asset::synthetic::{
 };
 
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
-use perpetuals::core::types::price::{Price, PriceTrait, TWO_POW_28};
+use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::{ContractAddress, contract_address_const};
 
@@ -141,7 +141,7 @@ pub fn RISK_FACTOR() -> FixedTwoDecimal {
 
 /// Prices
 pub fn SYNTHETIC_PRICE() -> Price {
-    PriceTrait::new(100 * TWO_POW_28)
+    PriceTrait::new(100 * PRICE_SCALE)
 }
 
 /// Assets' metadata
