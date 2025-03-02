@@ -331,8 +331,12 @@ fn test_successful_register_collateral() {
     let collateral_config = state.assets.get_collateral_config(collateral_id: asset_id);
     assert!(state.assets.collateral_timely_data.read(asset_id).is_some());
     assert!(state.assets.get_main_collateral_asset_id() == asset_id);
+    assert_eq!(collateral_config.status, AssetStatus::ACTIVE);
+    assert_eq!(collateral_config.quorum, Zero::zero());
+    assert_eq!(collateral_config.risk_factor, Zero::zero());
     assert_eq!(collateral_config.quantum, quantum);
     assert_eq!(collateral_config.token_address, token_address);
+    assert_eq!(state.deposits.get_asset_info(asset_id: asset_id.into()), (token_address, quantum));
 }
 
 #[test]
@@ -344,13 +348,13 @@ fn test_register_collateral_failures() {
     // Parameters:
     // `collateral_id` is already registered in the setup.
     let asset_id = cfg.collateral_cfg.collateral_id;
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     let quantum = COLLATERAL_QUANTUM;
     let token_address = cfg.collateral_cfg.token_cfg.owner;
 
     // Register collateral for the first time.
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
-    let result = dispatcher.register_collateral(:asset_id, :token_address, :quantum);
-    assert!(result.is_ok());
+    dispatcher.register_collateral(:asset_id, :token_address, :quantum).unwrap();
 
     // Register the same collateral asset.
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
@@ -361,6 +365,23 @@ fn test_register_collateral_failures() {
     let new_asset_id = AssetIdTrait::new(value: selector!("NEW_COLLATERAL_ASSET_ID"));
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
     let result = dispatcher.register_collateral(asset_id: new_asset_id, :token_address, :quantum);
+    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
+
+    // Collateral id already register as synthetic.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    dispatcher
+        .add_synthetic_asset(
+            asset_id: synthetic_id,
+            risk_factor_tiers: array![50].span(),
+            risk_factor_first_tier_boundary: 1000,
+            risk_factor_tier_size: 1,
+            quorum: 1,
+            resolution: 1,
+        )
+        .unwrap();
+
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher.register_collateral(asset_id: synthetic_id, :token_address, :quantum);
     assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
 }
 
@@ -403,6 +424,10 @@ fn test_new_position() {
     assert_eq!(
         state.positions.get_position_snapshot(:position_id).owner_account.read(), owner_account,
     );
+
+    let position_tv_tr = state.positions.get_position_tv_tr(:position_id);
+    assert!(position_tv_tr.total_value.is_zero());
+    assert!(position_tv_tr.total_risk.is_zero());
 }
 
 // Set owner account tests.
@@ -525,6 +550,8 @@ fn test_successful_set_owner_account() {
     assert_eq!(
         state.positions.get_position_snapshot(:position_id).owner_account.read(), new_owner_account,
     );
+    let status = state.request_approvals.get_request_status(request_hash: set_owner_account_hash);
+    assert_eq!(status, RequestStatus::PROCESSED);
 }
 
 #[test]
