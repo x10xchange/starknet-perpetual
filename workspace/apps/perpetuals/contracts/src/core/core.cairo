@@ -777,6 +777,8 @@ pub mod Core {
 
             self
                 ._validate_deleverage(
+                    :deleveraged_position_id,
+                    :deleverager_position_id,
                     :deleveraged_position,
                     :deleverager_position,
                     :deleveraged_base_asset_id,
@@ -1162,6 +1164,8 @@ pub mod Core {
 
         fn _validate_deleverage(
             ref self: ContractState,
+            deleveraged_position_id: PositionId,
+            deleverager_position_id: PositionId,
             deleveraged_position: StoragePath<Position>,
             deleverager_position: StoragePath<Position>,
             deleveraged_base_asset_id: AssetId,
@@ -1169,6 +1173,9 @@ pub mod Core {
             deleveraged_quote_asset_id: AssetId,
             deleveraged_quote_amount: i64,
         ) {
+            // Validate positions.
+            assert(deleveraged_position_id != deleverager_position_id, INVALID_SAME_POSITIONS);
+
             // Non-zero amount check.
             assert(deleveraged_base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             assert(deleveraged_quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
@@ -1314,6 +1321,8 @@ pub mod Core {
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+            // A user cannot transfer to itself.
+            assert(recipient != position_id, INVALID_SAME_POSITIONS);
         }
 
         fn _validate_sufficient_funds(
