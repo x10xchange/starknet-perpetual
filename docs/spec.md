@@ -2603,20 +2603,21 @@ Only the Operator can execute.
 7. [Expiration validation](#expiration)
 8. [Assets check](#asset)
 9. `order_a.position_id != order_b.position_id`
-10. `order_a.quote.amount` and `order_a.base.amount` have opposite signs and are non-zero.
-11. `order_b.quote.amount` and `order_b.base.amount` have opposite signs and are non-zero.
-12. `quote.asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) registered and active collateral.
-13. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active collateral/synthetic.
-14. `order_a.quote.amount` and `order_b.quote.amount` have opposite sign
-15. `actual_amount_base_a and actual_amount_quote_a are non-zero.`
-16. `order_a.base.amount` and `actual_amount_base_a` have the same sign.
-17. `order_a.quote.amount` and `actual_amount_quote` have the same sign.
-18. `|fulfillment[order_a_hash]|+|actual_amount_base_a|≤|order_a.base.amount|`
-19. `|fulfillment[order_b_hash]|+|actual_amount_base_a|≤|order_b.base.amount|`
-20. `actual_fee_a / |actual_amount_quote_a| ≤ order_a.fee.amount / |order_a.quote.amount|`
-21. `actual_fee_b / |actual_amount_quote_a| ≤ order_b.fee.amount / |order_b.quote.amount|`
-22. `order_a.base.amount/|order_a.quote.amount|≤actual_amount_base_a/|actual_amount_quote_a|`
-23. `order_b.base.amount/|order_b.quote.amount|≤-actual_amount_base_a/|actual_amount_quote_a|`
+10. Positions are not `FEE_POSITION`.
+11. `order_a.quote.amount` and `order_a.base.amount` have opposite signs and are non-zero.
+12. `order_b.quote.amount` and `order_b.base.amount` have opposite signs and are non-zero.
+13. `quote.asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) registered and active collateral.
+14. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active collateral/synthetic.
+15. `order_a.quote.amount` and `order_b.quote.amount` have opposite sign
+16. `actual_amount_base_a and actual_amount_quote_a are non-zero.`
+17. `order_a.base.amount` and `actual_amount_base_a` have the same sign.
+18. `order_a.quote.amount` and `actual_amount_quote` have the same sign.
+19. `|fulfillment[order_a_hash]|+|actual_amount_base_a|≤|order_a.base.amount|`
+20. `|fulfillment[order_b_hash]|+|actual_amount_base_a|≤|order_b.base.amount|`
+21. `actual_fee_a / |actual_amount_quote_a| ≤ order_a.fee.amount / |order_a.quote.amount|`
+22. `actual_fee_b / |actual_amount_quote_a| ≤ order_b.fee.amount / |order_b.quote.amount|`
+23. `order_a.base.amount/|order_a.quote.amount|≤actual_amount_base_a/|actual_amount_quote_a|`
+24. `order_b.base.amount/|order_b.quote.amount|≤-actual_amount_base_a/|actual_amount_quote_a|`
 
 #### Logic
 
@@ -2708,15 +2709,16 @@ Only the Operator can execute.
 7. [Price validation](#price)
 8. [public key signature](#public-key-signature) on `liquidator_order`
 9. `liquidated_position_id != liquidator_order.position_id`
-10. `liquidator_order.quote_type.asset_id` is registered and active collateral
-11. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
-12. `liquidated_position_id.is_liquidatable()==true`
-13. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
-14. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
-15. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
-16. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
-17. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
-18. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
+10. Positions are not `FEE_POSITION`.
+11. `liquidator_order.quote_type.asset_id` is registered and active collateral
+12. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
+13. `liquidated_position_id.is_liquidatable()==true`
+14. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
+15. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
+16. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
+17. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
+18. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
+19. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
 
 #### Logic
 

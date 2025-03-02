@@ -32,11 +32,11 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait, Position,
     };
     use perpetuals::core::errors::{
-        CANT_DELEVERAGE_PENDING_ASSET, DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS,
-        FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS, INVALID_DELEVERAGE_BASE_CHANGE,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS,
-        INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err,
+        CANT_DELEVERAGE_PENDING_ASSET, CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS,
+        DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
+        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
+        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED,
+        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -1090,6 +1090,9 @@ pub mod Core {
         }
 
         fn _validate_order(ref self: ContractState, order: Order) {
+            // Verify that position is not fee position.
+            assert(order.position_id != FEE_POSITION, CANT_TRADE_WITH_FEE_POSITION);
+
             // Non-zero amount check.
             assert(order.base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             assert(order.quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
