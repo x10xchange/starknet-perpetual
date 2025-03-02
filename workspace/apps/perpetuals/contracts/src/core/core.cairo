@@ -968,31 +968,48 @@ pub mod Core {
                 .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
 
             // Update fee positions.
-            let fee_position_a = self
-                .positions
-                .get_position_snapshot(position_id: fee_a_position_id);
-            let fee_position_diff_a = self
-                ._create_position_diff(
-                    position: fee_position_a,
-                    asset_id: order_a.fee_asset_id,
-                    diff: actual_fee_a.into(),
-                );
-            self
-                .positions
-                .apply_diff(position_id: fee_a_position_id, position_diff: fee_position_diff_a);
+            if fee_a_position_id == fee_b_position_id {
+                // Note: We assume that fee asset IDs are the same here. This should be updated when
+                // supporting multi-collateral.
+                let fee_position = self
+                    .positions
+                    .get_position_snapshot(position_id: fee_a_position_id);
+                let fee_position_diff = self
+                    ._create_position_diff(
+                        position: fee_position,
+                        asset_id: order_a.fee_asset_id,
+                        diff: (actual_fee_a + actual_fee_b).into(),
+                    );
+                self
+                    .positions
+                    .apply_diff(position_id: fee_a_position_id, position_diff: fee_position_diff);
+            } else {
+                let fee_position_a = self
+                    .positions
+                    .get_position_snapshot(position_id: fee_a_position_id);
+                let fee_position_diff_a = self
+                    ._create_position_diff(
+                        position: fee_position_a,
+                        asset_id: order_a.fee_asset_id,
+                        diff: actual_fee_a.into(),
+                    );
+                self
+                    .positions
+                    .apply_diff(position_id: fee_a_position_id, position_diff: fee_position_diff_a);
 
-            let fee_position_b = self
-                .positions
-                .get_position_snapshot(position_id: fee_b_position_id);
-            let fee_position_diff_b = self
-                ._create_position_diff(
-                    position: fee_position_b,
-                    asset_id: order_b.fee_asset_id,
-                    diff: actual_fee_b.into(),
-                );
-            self
-                .positions
-                .apply_diff(position_id: fee_b_position_id, position_diff: fee_position_diff_b);
+                let fee_position_b = self
+                    .positions
+                    .get_position_snapshot(position_id: fee_b_position_id);
+                let fee_position_diff_b = self
+                    ._create_position_diff(
+                        position: fee_position_b,
+                        asset_id: order_b.fee_asset_id,
+                        diff: actual_fee_b.into(),
+                    );
+                self
+                    .positions
+                    .apply_diff(position_id: fee_b_position_id, position_diff: fee_position_diff_b);
+            }
 
             (position_diff_a, position_diff_b)
         }
