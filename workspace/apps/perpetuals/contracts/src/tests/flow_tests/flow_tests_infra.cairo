@@ -21,6 +21,7 @@ use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
@@ -58,6 +59,15 @@ pub struct WithdrawInfo {
     // recipient can represent a different user than the withdrawer.
     user: User,
     recipient: ContractAddress,
+    amount: u64,
+    expiration: Timestamp,
+    salt: felt252,
+}
+
+#[derive(Drop)]
+pub struct TransferInfo {
+    user: User,
+    recipient: PositionId,
     amount: u64,
     expiration: Timestamp,
     salt: felt252,
@@ -480,11 +490,70 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 salt: withdraw_info.salt,
             );
     }
-    fn withdrraw_in_full(
+    fn withdraw_in_full(
         ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
     ) {
         let withdraw_info = self.withdraw_request(:user, :recipient, :amount, :expiration);
         self.withdraw(withdraw_info);
+    }
+
+    fn transfer_request(
+        ref self: FlowTestState,
+        user: User,
+        recipient: PositionId,
+        amount: u128,
+        expiration: Timestamp,
+    ) -> TransferInfo {
+        let salt = self.generate_salt();
+        let transfer_args = TransferArgs {
+            position_id: user.position_id,
+            salt,
+            expiration,
+            collateral_id: constants::COLLATERAL_ASSET_ID(),
+            amount: amount.try_into().unwrap(),
+            recipient,
+        };
+        let msg_hash = transfer_args.get_message_hash(public_key: user.account.key_pair.public_key);
+        let signature = user.account.sign_message(message: msg_hash);
+
+        user.account.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .transfer_request(
+                signature,
+                :recipient,
+                position_id: user.position_id,
+                collateral_id: constants::COLLATERAL_ASSET_ID(),
+                amount: amount.try_into().unwrap(),
+                :expiration,
+                :salt,
+            );
+        TransferInfo { user, recipient, amount: amount.try_into().unwrap(), expiration, salt }
+    }
+
+    fn transfer(ref self: FlowTestState, transfer_info: TransferInfo) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .transfer(
+                :operator_nonce,
+                recipient: transfer_info.recipient,
+                position_id: transfer_info.user.position_id,
+                collateral_id: constants::COLLATERAL_ASSET_ID(),
+                amount: transfer_info.amount,
+                expiration: transfer_info.expiration,
+                salt: transfer_info.salt,
+            );
+    }
+
+    fn transfer_in_full(
+        ref self: FlowTestState,
+        user: User,
+        recipient: PositionId,
+        amount: u128,
+        expiration: Timestamp,
+    ) {
+        let transfer_info = self.transfer_request(:user, :recipient, :amount, :expiration);
+        self.transfer(transfer_info);
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
