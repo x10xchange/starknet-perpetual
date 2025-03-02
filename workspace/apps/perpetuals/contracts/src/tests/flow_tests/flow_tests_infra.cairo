@@ -4,9 +4,10 @@ use contracts_commons::components::deposit::interface::{
 use contracts_commons::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
 use contracts_commons::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use contracts_commons::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_32};
+use contracts_commons::message_hash::OffchainMessageHash;
 use contracts_commons::test_utils::TokenTrait;
 use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
-use contracts_commons::types::time::time::{Time, TimeDelta};
+use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
 use contracts_commons::types::{PublicKey, Signature};
 use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -15,10 +16,12 @@ use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssets
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
+use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
@@ -47,6 +50,16 @@ pub struct DepositInfo {
     user: User,
     beneficiary: u32,
     amount: u64,
+    salt: felt252,
+}
+
+#[derive(Drop)]
+pub struct WithdrawInfo {
+    // recipient can represent a different user than the withdrawer.
+    user: User,
+    recipient: ContractAddress,
+    amount: u64,
+    expiration: Timestamp,
     salt: felt252,
 }
 
@@ -415,6 +428,63 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn deposit_in_full(ref self: FlowTestState, user: User, reciever: User, amount: u128) {
         let deposit_info = self.deposit(:user, :reciever, :amount);
         self.process_deposit(deposit_info);
+    }
+
+    fn withdraw_request(
+        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
+    ) -> WithdrawInfo {
+        let salt = self.generate_salt();
+        let recipient_address = recipient.account.address;
+        let withdraw_args = WithdrawArgs {
+            position_id: user.position_id,
+            salt,
+            expiration,
+            collateral_id: constants::COLLATERAL_ASSET_ID(),
+            amount: amount.try_into().unwrap(),
+            recipient: recipient_address,
+        };
+        let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
+        let signature = user.account.sign_message(message: msg_hash);
+
+        user.account.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw_request(
+                signature,
+                recipient: recipient_address,
+                position_id: user.position_id,
+                collateral_id: constants::COLLATERAL_ASSET_ID(),
+                amount: amount.try_into().unwrap(),
+                :expiration,
+                :salt,
+            );
+        WithdrawInfo {
+            user,
+            recipient: recipient_address,
+            amount: amount.try_into().unwrap(),
+            expiration,
+            salt,
+        }
+    }
+
+    fn withdraw(ref self: FlowTestState, withdraw_info: WithdrawInfo) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw(
+                :operator_nonce,
+                recipient: withdraw_info.recipient,
+                position_id: withdraw_info.user.position_id,
+                collateral_id: constants::COLLATERAL_ASSET_ID(),
+                amount: withdraw_info.amount.try_into().unwrap(),
+                expiration: withdraw_info.expiration,
+                salt: withdraw_info.salt,
+            );
+    }
+    fn withdrraw_in_full(
+        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
+    ) {
+        let withdraw_info = self.withdraw_request(:user, :recipient, :amount, :expiration);
+        self.withdraw(withdraw_info);
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
