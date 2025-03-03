@@ -832,7 +832,7 @@ fn test_successful_withdraw() {
             .positions
             .get_provisional_balance(
                 position: state.positions.get_position_snapshot(position_id: user.position_id),
-                asset_id: cfg.collateral_cfg.collateral_id,
+                collateral_id: cfg.collateral_cfg.collateral_id,
             ),
         COLLATERAL_BALANCE_AMOUNT.into() - WITHDRAW_AMOUNT.into(),
     );
@@ -1394,10 +1394,10 @@ fn test_successful_trade() {
     let position_a = state.positions.get_position_snapshot(position_id: user_a.position_id);
     let user_a_collateral_balance = state
         .positions
-        .get_provisional_balance(position: position_a, asset_id: collateral_id);
+        .get_provisional_balance(position: position_a, :collateral_id);
     let user_a_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: position_a, asset_id: synthetic_id);
+        .get_synthetic_balance(position: position_a, :synthetic_id);
     assert_eq!(
         user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
     );
@@ -1406,19 +1406,17 @@ fn test_successful_trade() {
     let position_b = state.positions.get_position_snapshot(position_id: user_b.position_id);
     let user_b_collateral_balance = state
         .positions
-        .get_provisional_balance(position: position_b, asset_id: collateral_id);
+        .get_provisional_balance(position: position_b, :collateral_id);
     let user_b_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: position_b, asset_id: synthetic_id);
+        .get_synthetic_balance(position: position_b, :synthetic_id);
     assert_eq!(
         user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
     );
     assert_eq!(user_b_synthetic_balance, (-BASE).into());
 
     let position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
-    let fee_position_balance = state
-        .positions
-        .get_provisional_balance(:position, asset_id: collateral_id);
+    let fee_position_balance = state.positions.get_provisional_balance(:position, :collateral_id);
     assert_eq!(fee_position_balance, (FEE + FEE).into());
 }
 
@@ -1595,7 +1593,7 @@ fn test_successful_deleverage() {
     init_position(cfg: @cfg, ref :state, user: deleveraged);
     add_synthetic_to_position(
         ref :state,
-        asset_id: cfg.synthetic_cfg.synthetic_id,
+        synthetic_id: cfg.synthetic_cfg.synthetic_id,
         position_id: deleveraged.position_id,
         // To make the position deleveragable, the total value must be negative, which requires a
         // negative synthetic balance.
@@ -1606,7 +1604,7 @@ fn test_successful_deleverage() {
     init_position(cfg: @cfg, ref :state, user: deleverager);
     add_synthetic_to_position(
         ref :state,
-        asset_id: cfg.synthetic_cfg.synthetic_id,
+        synthetic_id: cfg.synthetic_cfg.synthetic_id,
         position_id: deleverager.position_id,
         balance: SYNTHETIC_BALANCE_AMOUNT,
     );
@@ -1666,19 +1664,19 @@ fn test_successful_deleverage() {
 
     let deleveraged_collateral_balance = state
         .positions
-        .get_provisional_balance(position: deleveraged_position, asset_id: collateral_id);
+        .get_provisional_balance(position: deleveraged_position, :collateral_id);
     let deleveraged_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: deleveraged_position, asset_id: synthetic_id);
+        .get_synthetic_balance(position: deleveraged_position, :synthetic_id);
     assert_eq!(deleveraged_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + QUOTE).into());
     assert_eq!(deleveraged_synthetic_balance, (-2 * SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
     let deleverager_collateral_balance = state
         .positions
-        .get_provisional_balance(position: deleverager_position, asset_id: collateral_id);
+        .get_provisional_balance(position: deleverager_position, :collateral_id);
     let deleverager_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: deleverager_position, asset_id: synthetic_id);
+        .get_synthetic_balance(position: deleverager_position, :synthetic_id);
     assert_eq!(deleverager_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - QUOTE).into());
     assert_eq!(deleverager_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
 }
@@ -1695,7 +1693,7 @@ fn test_unfair_deleverage() {
     init_position(cfg: @cfg, ref :state, user: deleveraged);
     add_synthetic_to_position(
         ref :state,
-        asset_id: cfg.synthetic_cfg.synthetic_id,
+        synthetic_id: cfg.synthetic_cfg.synthetic_id,
         position_id: deleveraged.position_id,
         // To make the position deleveragable, the total value must be negative, which requires a
         // negative synthetic balance.
@@ -1706,7 +1704,7 @@ fn test_unfair_deleverage() {
     init_position(cfg: @cfg, ref :state, user: deleverager);
     add_synthetic_to_position(
         ref :state,
-        asset_id: cfg.synthetic_cfg.synthetic_id,
+        synthetic_id: cfg.synthetic_cfg.synthetic_id,
         position_id: deleverager.position_id,
         balance: SYNTHETIC_BALANCE_AMOUNT,
     );
@@ -1755,7 +1753,7 @@ fn test_successful_liquidate() {
     init_position(cfg: @cfg, ref :state, user: liquidated);
     add_synthetic_to_position(
         ref :state,
-        asset_id: cfg.synthetic_cfg.synthetic_id,
+        synthetic_id: cfg.synthetic_cfg.synthetic_id,
         position_id: liquidated.position_id,
         balance: -SYNTHETIC_BALANCE_AMOUNT,
     );
@@ -1833,10 +1831,10 @@ fn test_successful_liquidate() {
 
     let liquidated_collateral_balance = state
         .positions
-        .get_provisional_balance(position: liquidated_position, asset_id: collateral_id);
+        .get_provisional_balance(position: liquidated_position, :collateral_id);
     let liquidated_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: liquidated_position, asset_id: synthetic_id);
+        .get_synthetic_balance(position: liquidated_position, :synthetic_id);
     assert_eq!(
         liquidated_collateral_balance,
         (COLLATERAL_BALANCE_AMOUNT.into() - INSURANCE_FEE.into() + QUOTE.into()),
@@ -1845,10 +1843,10 @@ fn test_successful_liquidate() {
 
     let liquidator_collateral_balance = state
         .positions
-        .get_provisional_balance(position: liquidator_position, asset_id: collateral_id);
+        .get_provisional_balance(position: liquidator_position, :collateral_id);
     let liquidator_synthetic_balance = state
         .positions
-        .get_provisional_balance(position: liquidator_position, asset_id: synthetic_id);
+        .get_synthetic_balance(position: liquidator_position, :synthetic_id);
     assert_eq!(
         liquidator_collateral_balance,
         (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
@@ -1858,7 +1856,7 @@ fn test_successful_liquidate() {
     let fee_position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
     let fee_position_balance = state
         .positions
-        .get_provisional_balance(position: fee_position, asset_id: collateral_id);
+        .get_provisional_balance(position: fee_position, :collateral_id);
     assert_eq!(fee_position_balance, FEE.into());
 
     let insurance_fund_position = state
@@ -1866,7 +1864,7 @@ fn test_successful_liquidate() {
         .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION);
     let insurance_position_balance = state
         .positions
-        .get_provisional_balance(position: insurance_fund_position, asset_id: collateral_id);
+        .get_provisional_balance(position: insurance_fund_position, :collateral_id);
     assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
 }
 
@@ -2255,7 +2253,7 @@ fn test_successful_transfer() {
     let sender_position = state.positions.get_position_snapshot(position_id: sender.position_id);
     let sender_collateral_balance = state
         .positions
-        .get_provisional_balance(position: sender_position, asset_id: collateral_id);
+        .get_provisional_balance(position: sender_position, :collateral_id);
     assert_eq!(
         sender_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into(),
     );
@@ -2265,7 +2263,7 @@ fn test_successful_transfer() {
         .get_position_snapshot(position_id: recipient.position_id);
     let recipient_collateral_balance = state
         .positions
-        .get_provisional_balance(position: recipient_position, asset_id: collateral_id);
+        .get_provisional_balance(position: recipient_position, :collateral_id);
     assert_eq!(
         recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
     );

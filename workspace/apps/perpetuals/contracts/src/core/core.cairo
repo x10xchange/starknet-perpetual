@@ -240,7 +240,7 @@ pub mod Core {
                 );
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_position_diff(:position, asset_id: collateral_id, diff: amount.into());
+                ._create_collateral_position_diff(:position, :collateral_id, diff: amount.into());
             self.positions.apply_diff(:position_id, :position_diff);
         }
 
@@ -339,7 +339,9 @@ pub mod Core {
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_position_diff(:position, asset_id: collateral_id, diff: -(amount.into()));
+                ._create_collateral_position_diff(
+                    :position, :collateral_id, diff: -(amount.into()),
+                );
             let position_data = self.positions.get_position_data(:position);
 
             validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);
@@ -814,35 +816,72 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _create_position_diff(
-            self: @ContractState, position: StoragePath<Position>, asset_id: AssetId, diff: Balance,
+        fn _create_collateral_position_diff(
+            self: @ContractState,
+            position: StoragePath<Position>,
+            collateral_id: AssetId,
+            diff: Balance,
         ) -> PositionDiff {
-            let mut collaterals = array![];
-            let mut synthetics = array![];
-            if self.assets.is_collateral(asset_id) {
-                collaterals.append(self._create_asset_diff(:position, :asset_id, :diff));
-            } else {
-                synthetics.append(self._create_asset_diff(:position, :asset_id, :diff));
+            let collateral_diff = self._create_collateral_diff(:position, :collateral_id, :diff);
+
+            PositionDiff {
+                collaterals: array![collateral_diff].span(), synthetics: array![].span(),
             }
-            PositionDiff { collaterals: collaterals.span(), synthetics: synthetics.span() }
+        }
+        fn _create_synthetic_position_diff(
+            self: @ContractState,
+            position: StoragePath<Position>,
+            synthetic_id: AssetId,
+            diff: Balance,
+        ) -> PositionDiff {
+            let synthetic_diff = self._create_synthetic_diff(:position, :synthetic_id, :diff);
+
+            PositionDiff { collaterals: array![].span(), synthetics: array![synthetic_diff].span() }
         }
 
-        fn _create_asset_diff(
-            self: @ContractState, position: StoragePath<Position>, asset_id: AssetId, diff: Balance,
+        fn _create_collateral_diff(
+            self: @ContractState,
+            position: StoragePath<Position>,
+            collateral_id: AssetId,
+            diff: Balance,
         ) -> AssetDiff {
-            let position_asset_balance = self
-                .positions
-                .get_provisional_balance(:position, :asset_id);
-            let price = self.assets.get_asset_price(:asset_id);
-            let balance_before = position_asset_balance;
-            let balance_after = position_asset_balance + diff;
+            let balance_before = self.positions.get_provisional_balance(:position, :collateral_id);
+            let price = self.assets.get_collateral_price(:collateral_id);
+            let balance_after = balance_before + diff;
+            let risk_factor_before = self.assets.get_collateral_risk_factor(:collateral_id);
+            let risk_factor_after = self.assets.get_collateral_risk_factor(:collateral_id);
             AssetDiff {
-                id: asset_id,
+                id: collateral_id,
                 balance_before,
                 balance_after,
                 price,
-                risk_factor_before: self.assets.get_risk_factor(:asset_id, balance: balance_before),
-                risk_factor_after: self.assets.get_risk_factor(:asset_id, balance: balance_after),
+                risk_factor_before,
+                risk_factor_after,
+            }
+        }
+
+        fn _create_synthetic_diff(
+            self: @ContractState,
+            position: StoragePath<Position>,
+            synthetic_id: AssetId,
+            diff: Balance,
+        ) -> AssetDiff {
+            let balance_before = self.positions.get_synthetic_balance(:position, :synthetic_id);
+            let balance_after = balance_before + diff;
+            let price = self.assets.get_synthetic_price(:synthetic_id);
+            let risk_factor_before = self
+                .assets
+                .get_synthetic_risk_factor(:synthetic_id, balance: balance_before, :price);
+            let risk_factor_after = self
+                .assets
+                .get_synthetic_risk_factor(:synthetic_id, balance: balance_after, :price);
+            AssetDiff {
+                id: synthetic_id,
+                balance_before,
+                balance_after,
+                price,
+                risk_factor_before,
+                risk_factor_after,
             }
         }
 
@@ -888,8 +927,8 @@ pub mod Core {
             if let (Option::Some(fee_amount), Option::Some(fee_id)) = (fee_amount, fee_id) {
                 fee_asset_id = fee_id;
                 fee_diff = self
-                    ._create_asset_diff(
-                        :position, asset_id: fee_asset_id, diff: -(fee_amount.into()),
+                    ._create_collateral_diff(
+                        :position, collateral_id: fee_asset_id, diff: -(fee_amount.into()),
                     );
             }
 
@@ -898,40 +937,47 @@ pub mod Core {
 
             if is_fee_exist && (quote_id == fee_asset_id) {
                 fee_diff.balance_after += quote_amount.into();
-                fee_diff
-                    .risk_factor_after = self
-                    .assets
-                    .get_risk_factor(asset_id: fee_asset_id, balance: fee_diff.balance_after);
+                // risk factor after does not change for collateral (=0).
             } else {
                 quote_diff = self
-                    ._create_asset_diff(:position, asset_id: quote_id, diff: quote_amount.into());
+                    ._create_collateral_diff(
+                        :position, collateral_id: quote_id, diff: quote_amount.into(),
+                    );
             }
 
             // Base asset.
             let mut base_diff: AssetDiff = Default::default();
+            let is_base_collateral = self.assets.is_collateral(base_id);
 
             if is_fee_exist && (base_id == fee_asset_id) {
                 fee_diff.balance_after += base_amount.into();
-                fee_diff
-                    .risk_factor_after = self
-                    .assets
-                    .get_risk_factor(asset_id: fee_asset_id, balance: fee_diff.balance_after);
+                // risk factor after does not change for collateral (=0).
+            } else if is_base_collateral {
+                base_diff = self
+                    ._create_collateral_diff(
+                        :position, collateral_id: base_id, diff: base_amount.into(),
+                    );
             } else {
                 base_diff = self
-                    ._create_asset_diff(:position, asset_id: base_id, diff: base_amount.into());
+                    ._create_synthetic_diff(
+                        :position, synthetic_id: base_id, diff: base_amount.into(),
+                    );
             }
 
             // Build position diff.
             let mut collaterals_diff = array![];
             let mut synthetics_diff = array![];
-            for asset_diff in array![fee_diff, quote_diff, base_diff] {
+            for asset_diff in array![fee_diff, quote_diff] {
                 if asset_diff.id == Default::default() {
                     continue;
                 }
-                if self.assets.is_collateral(asset_diff.id) {
-                    collaterals_diff.append(asset_diff);
+                collaterals_diff.append(asset_diff);
+            };
+            if base_diff.id != Default::default() {
+                if is_base_collateral {
+                    collaterals_diff.append(base_diff);
                 } else {
-                    synthetics_diff.append(asset_diff);
+                    synthetics_diff.append(base_diff);
                 }
             };
 
@@ -983,9 +1029,9 @@ pub mod Core {
                     .positions
                     .get_position_snapshot(position_id: fee_a_position_id);
                 let fee_position_diff = self
-                    ._create_position_diff(
+                    ._create_collateral_position_diff(
                         position: fee_position,
-                        asset_id: order_a.fee_asset_id,
+                        collateral_id: order_a.fee_asset_id,
                         diff: (actual_fee_a + actual_fee_b).into(),
                     );
                 self
@@ -996,9 +1042,9 @@ pub mod Core {
                     .positions
                     .get_position_snapshot(position_id: fee_a_position_id);
                 let fee_position_diff_a = self
-                    ._create_position_diff(
+                    ._create_collateral_position_diff(
                         position: fee_position_a,
-                        asset_id: order_a.fee_asset_id,
+                        collateral_id: order_a.fee_asset_id,
                         diff: actual_fee_a.into(),
                     );
                 self
@@ -1009,9 +1055,9 @@ pub mod Core {
                     .positions
                     .get_position_snapshot(position_id: fee_b_position_id);
                 let fee_position_diff_b = self
-                    ._create_position_diff(
+                    ._create_collateral_position_diff(
                         position: fee_position_b,
-                        asset_id: order_b.fee_asset_id,
+                        collateral_id: order_b.fee_asset_id,
                         diff: actual_fee_b.into(),
                     );
                 self
@@ -1033,11 +1079,13 @@ pub mod Core {
             let position = self.positions.get_position_snapshot(:position_id);
             let sender_position_data = self.positions.get_position_data(:position);
             let position_diff_sender = self
-                ._create_position_diff(:position, asset_id: collateral_id, diff: -(amount.into()));
+                ._create_collateral_position_diff(
+                    :position, :collateral_id, diff: -(amount.into()),
+                );
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let position_diff_recipient = self
-                ._create_position_diff(
-                    position: recipient_position, asset_id: collateral_id, diff: amount.into(),
+                ._create_collateral_position_diff(
+                    position: recipient_position, :collateral_id, diff: amount.into(),
                 );
 
             // Execute transfer
@@ -1164,7 +1212,7 @@ pub mod Core {
         ) {
             let position_base_balance: i64 = self
                 .positions
-                .get_provisional_balance(:position, :asset_id)
+                .get_synthetic_balance(:position, synthetic_id: asset_id)
                 .into();
 
             assert(!have_same_sign(a: amount, b: position_base_balance), INVALID_WRONG_AMOUNT_SIGN);

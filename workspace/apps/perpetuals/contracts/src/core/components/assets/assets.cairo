@@ -446,18 +446,12 @@ pub mod AssetsComponent {
         fn get_risk_factor_tiers(
             self: @ComponentState<TContractState>, asset_id: AssetId,
         ) -> Span<FixedTwoDecimal> {
-            if (self.is_collateral(:asset_id)) {
-                panic_with_felt252(NOT_SYNTHETIC)
-            } else if (self.is_synthetic(:asset_id)) {
-                let mut tiers = array![];
-                let risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
-                for i in 0..risk_factor_tiers.len() {
-                    tiers.append(risk_factor_tiers.at(i).read());
-                };
-                tiers.span()
-            } else {
-                panic_with_felt252(ASSET_NOT_EXISTS)
-            }
+            let mut tiers = array![];
+            let risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
+            for i in 0..risk_factor_tiers.len() {
+                tiers.append(risk_factor_tiers.at(i).read());
+            };
+            tiers.span()
         }
 
         /// Remove oracle from asset.
@@ -540,16 +534,6 @@ pub mod AssetsComponent {
             self.last_price_validation.write(Time::now());
         }
 
-        fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
-            if self.is_collateral(:asset_id) {
-                self.get_collateral_price(collateral_id: asset_id)
-            } else if self.is_synthetic(:asset_id) {
-                self.get_synthetic_price(synthetic_id: asset_id)
-            } else {
-                panic_with_felt252(ASSET_NOT_EXISTS)
-            }
-        }
-
         fn get_collateral_price(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> Price {
@@ -570,24 +554,34 @@ pub mod AssetsComponent {
             }
         }
 
-        /// Get the risk factor of an asset.
-        /// - If the asset is a collateral asset, return the risk factor (0).
-        /// - If the asset is a synthetic asset, return the risk factor according to the tier
-        /// corresponding to the synthetic value according to formula:
+        /// Get the risk factor of a collateral asset.
+        /// - return the risk factor (0).
+        /// - If the asset is not collateral, panic.
+        fn get_collateral_risk_factor(
+            self: @ComponentState<TContractState>, collateral_id: AssetId,
+        ) -> FixedTwoDecimal {
+            if let Option::Some(collateral_config) = self.collateral_config.read(collateral_id) {
+                collateral_config.risk_factor
+            } else {
+                panic_with_felt252(NOT_COLLATERAL)
+            }
+        }
+
+        /// Get the risk factor of a synthetic asset.
         ///   - synthetic_value = |price * balance|
         ///   - If the synthetic value is less than or equal to the first tier boundary, return the
         ///   first risk factor.
         ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
         ///   - risk_factor = risk_factor_tiers[index]
         ///   - If the index is out of bounds, return the last risk factor.
-        /// - If the asset does not exist, panic.
-        fn get_risk_factor(
-            self: @ComponentState<TContractState>, asset_id: AssetId, balance: Balance,
+        /// - If the asset is not synthetic, panic.
+        fn get_synthetic_risk_factor(
+            self: @ComponentState<TContractState>,
+            synthetic_id: AssetId,
+            balance: Balance,
+            price: Price,
         ) -> FixedTwoDecimal {
-            if let Option::Some(collateral_config) = self.collateral_config.read(asset_id) {
-                collateral_config.risk_factor
-            } else if let Option::Some(synthetic_config) = self.synthetic_config.read(asset_id) {
-                let price = self.get_synthetic_price(synthetic_id: asset_id);
+            if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let synthetic_value: u128 = price.mul(rhs: balance).abs();
                 let mut index = if synthetic_value <= synthetic_config
                     .risk_factor_first_tier_boundary {
@@ -598,13 +592,13 @@ pub mod AssetsComponent {
                         - synthetic_config.risk_factor_first_tier_boundary;
                     1_u128 + (first_tier_offset / tier_size)
                 };
-                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
+                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
                 index = min(index, asset_risk_factor_tiers.len().into() - 1);
                 asset_risk_factor_tiers
                     .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
                     .read()
             } else {
-                panic_with_felt252(ASSET_NOT_EXISTS)
+                panic_with_felt252(NOT_SYNTHETIC)
             }
         }
 
