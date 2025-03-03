@@ -898,6 +898,10 @@ pub mod Core {
 
             if is_fee_exist && (quote_id == fee_asset_id) {
                 fee_diff.balance_after += quote_amount.into();
+                fee_diff
+                    .risk_factor_after = self
+                    .assets
+                    .get_risk_factor(asset_id: fee_asset_id, balance: fee_diff.balance_after);
             } else {
                 quote_diff = self
                     ._create_asset_diff(:position, asset_id: quote_id, diff: quote_amount.into());
@@ -908,8 +912,10 @@ pub mod Core {
 
             if is_fee_exist && (base_id == fee_asset_id) {
                 fee_diff.balance_after += base_amount.into();
-            } else if base_id == quote_id {
-                quote_diff.balance_after += base_amount.into();
+                fee_diff
+                    .risk_factor_after = self
+                    .assets
+                    .get_risk_factor(asset_id: fee_asset_id, balance: fee_diff.balance_after);
             } else {
                 base_diff = self
                     ._create_asset_diff(:position, asset_id: base_id, diff: base_amount.into());
