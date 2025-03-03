@@ -1,15 +1,11 @@
 use contracts_commons::math::abs::Abs;
-use contracts_commons::math::utils::have_same_sign;
 use contracts_commons::types::HashType;
 use contracts_commons::types::time::time::Timestamp;
 use contracts_commons::utils::validate_ratio;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::errors::{
-    INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN, INVALID_ZERO_AMOUNT,
-    illegal_base_to_quote_ratio_err, illegal_fee_to_quote_ratio_err,
-};
+use perpetuals::core::errors::{illegal_base_to_quote_ratio_err, illegal_fee_to_quote_ratio_err};
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 
@@ -65,19 +61,6 @@ pub impl OrderImpl of OrderTrait {
     fn validate_against_actual_amounts(
         self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
     ) {
-        // Non-zero actual amount check.
-        assert(actual_amount_base != 0, INVALID_ZERO_AMOUNT);
-        assert(actual_amount_quote != 0, INVALID_ZERO_AMOUNT);
-
-        // Sign Validation for amounts.
-        assert(
-            have_same_sign(a: *self.base_amount, b: actual_amount_base), INVALID_ACTUAL_BASE_SIGN,
-        );
-        assert(
-            have_same_sign(a: *self.quote_amount, b: actual_amount_quote),
-            INVALID_ACTUAL_QUOTE_SIGN,
-        );
-
         // Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
         validate_ratio(
             n1: actual_fee,

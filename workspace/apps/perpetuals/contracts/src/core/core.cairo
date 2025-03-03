@@ -34,10 +34,10 @@ pub mod Core {
     use perpetuals::core::errors::{
         CANT_DELEVERAGE_PENDING_ASSET, CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
-        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
-        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
-        SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        order_expired_err,
+        INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE,
+        INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS,
+        INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED,
+        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -1198,6 +1198,24 @@ pub mod Core {
             self._validate_order(order: order_a);
             self._validate_order(order: order_b);
 
+            // Non-zero actual amount check.
+            assert(actual_amount_base_a != 0, INVALID_ZERO_AMOUNT);
+            assert(actual_amount_quote_a != 0, INVALID_ZERO_AMOUNT);
+
+            // Sign Validation for amounts.
+            assert(
+                !have_same_sign(a: order_a.quote_amount, b: order_b.quote_amount),
+                INVALID_QUOTE_AMOUNT_SIGN,
+            );
+            assert(
+                have_same_sign(a: order_a.base_amount, b: actual_amount_base_a),
+                INVALID_ACTUAL_BASE_SIGN,
+            );
+            assert(
+                have_same_sign(a: order_a.quote_amount, b: actual_amount_quote_a),
+                INVALID_ACTUAL_QUOTE_SIGN,
+            );
+
             order_a
                 .validate_against_actual_amounts(
                     actual_amount_base: actual_amount_base_a,
@@ -1219,12 +1237,6 @@ pub mod Core {
             // Assets check.
             self.assets.validate_collateral_active(collateral_id: order_a.quote_asset_id);
             self.assets.validate_asset_active(asset_id: order_a.base_asset_id);
-
-            // Sign Validation for amounts.
-            assert(
-                !have_same_sign(a: order_a.quote_amount, b: order_b.quote_amount),
-                INVALID_QUOTE_AMOUNT_SIGN,
-            );
         }
 
         fn validate_deleverage_base_shrinks(
