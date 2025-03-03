@@ -35,8 +35,9 @@ pub mod Core {
         CANT_DELEVERAGE_PENDING_ASSET, CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS,
         DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
         INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
-        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED,
-        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
+        SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -958,6 +959,7 @@ pub mod Core {
                         :position, collateral_id: base_id, diff: base_amount.into(),
                     );
             } else {
+                // Base and quote assets are different.
                 base_diff = self
                     ._create_synthetic_diff(
                         :position, synthetic_id: base_id, diff: base_amount.into(),
@@ -1157,8 +1159,6 @@ pub mod Core {
 
             // Assets check.
             self.assets.validate_collateral_active(collateral_id: order.fee_asset_id);
-            self.assets.validate_collateral_active(collateral_id: order.quote_asset_id);
-            self.assets.validate_asset_active(asset_id: order.base_asset_id);
 
             // Sign Validation for amounts.
             assert(
@@ -1196,6 +1196,11 @@ pub mod Core {
             // Types validation.
             assert(order_a.quote_asset_id == order_b.quote_asset_id, DIFFERENT_QUOTE_ASSET_IDS);
             assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
+            assert(order_a.base_asset_id != order_a.quote_asset_id, SAME_BASE_QUOTE_ASSET_IDS);
+
+            // Assets check.
+            self.assets.validate_collateral_active(collateral_id: order_a.quote_asset_id);
+            self.assets.validate_asset_active(asset_id: order_a.base_asset_id);
 
             // Sign Validation for amounts.
             assert(
