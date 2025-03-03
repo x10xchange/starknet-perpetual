@@ -227,6 +227,7 @@ classDiagram
         cancel_deposit()
         get_deposit_status()
         get_asset_info()
+        get_deposit_grace_period()
     }
     class Requests{
         approved_requests: Map< HashType, RequestStatus>
@@ -1132,6 +1133,7 @@ pub trait IDeposit<TContractState> {
     );
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_asset_info(self: @TContractState, asset_id: felt252) -> (ContractAddress, u64);
+    fn get_deposit_grace_period(self: @TContractState) -> TimeDelta;
 }
 
 pub enum DepositStatus {

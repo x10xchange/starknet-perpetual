@@ -1,4 +1,4 @@
-use contracts_commons::constants::{DAY, MAX_U128, MINUTE};
+use contracts_commons::constants::{DAY, MAX_U128, MINUTE, WEEK};
 use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use contracts_commons::types::time::time::{Time, TimeDelta};
 use core::num::traits::{One, Zero};
@@ -100,6 +100,7 @@ pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 pub const MAX_FUNDING_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 /// 10 minutes in seconds.
 pub const MAX_ORACLE_PRICE_VALIDITY: TimeDelta = TimeDelta { seconds: 10 * MINUTE };
+pub const DEPOSIT_GRACE_PERIOD: TimeDelta = TimeDelta { seconds: WEEK };
 pub const MAX_FUNDING_RATE: u32 = 35792; // Which is ~3% in an hour.
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1_000;

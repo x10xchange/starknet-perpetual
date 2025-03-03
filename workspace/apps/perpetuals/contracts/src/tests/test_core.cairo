@@ -69,8 +69,13 @@ fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert_eq!(state.replaceability.get_upgrade_delay(), UPGRADE_DELAY);
+    assert_eq!(state.assets.get_price_validation_interval(), MAX_PRICE_INTERVAL);
     assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
     assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
+    assert_eq!(state.assets.get_max_oracle_price_validity(), MAX_ORACLE_PRICE_VALIDITY);
+    assert_eq!(state.deposits.get_deposit_grace_period(), DEPOSIT_GRACE_PERIOD);
+    assert_eq!(state.assets.last_funding_tick.read(), Time::now());
+    assert_eq!(state.assets.last_price_validation.read(), Time::now());
 
     assert_eq!(
         state
