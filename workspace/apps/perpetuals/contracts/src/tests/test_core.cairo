@@ -1426,7 +1426,7 @@ fn test_successful_trade() {
 }
 
 #[test]
-#[should_panic(expected: 'INVALID_TRADE_WRONG_AMOUNT_SIGN')]
+#[should_panic(expected: 'INVALID_WRONG_AMOUNT_SIGN')]
 fn test_invalid_trade_same_base_signs() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
