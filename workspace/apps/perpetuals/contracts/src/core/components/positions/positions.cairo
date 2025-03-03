@@ -11,6 +11,7 @@ pub(crate) mod Positions {
     use contracts_commons::iterable_map::{
         IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
+    use contracts_commons::span_utils::contains;
     use contracts_commons::types::time::time::Timestamp;
     use contracts_commons::types::{PublicKey, Signature};
     use contracts_commons::utils::validate_expiration;
@@ -20,10 +21,10 @@ pub(crate) mod Positions {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
     use perpetuals::core::components::positions::errors::{
-        ALREADY_INITIALIZED, APPLY_DIFF_MISMATCH, CALLER_IS_NOT_OWNER_ACCOUNT,
-        INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT,
-        POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
+        ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT,
+        INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
+        POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_POSITION_OWNER_EXPIRED,
+        SET_PUBLIC_KEY_EXPIRED,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -37,7 +38,7 @@ pub(crate) mod Positions {
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-    use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId};
+    use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId, UnchangedAssets};
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use perpetuals::core::value_risk_calculator::{
         PositionState, calculate_position_tvtr, evaluate_position,
@@ -96,7 +97,8 @@ pub(crate) mod Positions {
         fn get_position_assets(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
-            self.get_position_data(position: self._get_position_snapshot(:position_id))
+            let position = self._get_position_snapshot(:position_id);
+            self.get_position_unchanged_assets(:position, position_diff: Default::default())
         }
 
         /// This function is primarily used as a view function—knowing the total value and/or
@@ -105,7 +107,8 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionTVTR {
             let position = self._get_position_snapshot(:position_id);
-            let position_data = self.get_position_data(:position);
+            let position_data = self
+                .get_position_unchanged_assets(:position, position_diff: Default::default());
             calculate_position_tvtr(:position_data)
         }
 
@@ -396,12 +399,9 @@ pub(crate) mod Positions {
             position_id: PositionId,
             position_diff: PositionDiff,
         ) {
-            let position = self._get_position_snapshot(:position_id);
             let position_mut = self._get_position_mut(:position_id);
             for diff in position_diff.collaterals {
                 let asset_id = *diff.id;
-                let balance = self.get_provisional_balance(:position, collateral_id: asset_id);
-                assert(*diff.balance_before == balance, APPLY_DIFF_MISMATCH);
                 let collateral_asset = CollateralAsset {
                     version: COLLATERAL_VERSION, balance: *diff.balance_after,
                 };
@@ -409,13 +409,11 @@ pub(crate) mod Positions {
             };
             for diff in position_diff.synthetics {
                 let synthetic_id = *diff.id;
-                let balance = self.get_synthetic_balance(:position, :synthetic_id);
-                assert(*diff.balance_before == balance, APPLY_DIFF_MISMATCH);
                 self
                     ._update_synthetic_balance_and_funding(
                         position: position_mut, :synthetic_id, balance: *diff.balance_after,
                     );
-            }
+            };
         }
 
         fn get_position_snapshot(
@@ -452,21 +450,40 @@ pub(crate) mod Positions {
             self._get_provisional_main_collateral_balance(:position)
         }
 
-        fn get_position_data(
-            self: @ComponentState<TContractState>, position: StoragePath<Position>,
-        ) -> PositionData {
+        /// Returns all assets from the position, excluding assets with zero balance
+        /// and those included in `position_diff`.
+        fn get_position_unchanged_assets(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+        ) -> UnchangedAssets {
             let mut position_data = array![];
             let assets = get_dep_component!(self, Assets);
-            let balance = self._get_provisional_main_collateral_balance(position);
-            if balance.is_non_zero() {
-                let main_collateral_id = assets.get_main_collateral_asset_id();
-                let price = assets.get_collateral_price(main_collateral_id);
-                let risk_factor = assets.get_collateral_risk_factor(main_collateral_id);
-                position_data.append(Asset { id: main_collateral_id, balance, price, risk_factor });
+
+            let mut collaterals_diff = array![];
+            let mut synthetics_diff = array![];
+
+            for diff in position_diff.collaterals {
+                collaterals_diff.append(*(diff.id));
+            };
+            for diff in position_diff.synthetics {
+                synthetics_diff.append(*(diff.id));
+            };
+            let main_collateral_id = assets.get_main_collateral_asset_id();
+            if !contains(span: collaterals_diff.span(), element: main_collateral_id) {
+                let balance = self._get_provisional_main_collateral_balance(position);
+                if balance.is_non_zero() {
+                    let price = assets.get_collateral_price(main_collateral_id);
+                    let risk_factor = assets.get_collateral_risk_factor(main_collateral_id);
+                    position_data
+                        .append(Asset { id: main_collateral_id, balance, price, risk_factor })
+                }
             }
+
             for (synthetic_id, synthetic) in position.synthetic_assets {
                 let balance = synthetic.balance;
-                if balance.is_zero() {
+                if balance.is_zero()
+                    || contains(span: synthetics_diff.span(), element: synthetic_id) {
                     continue;
                 }
                 let price = assets.get_synthetic_price(synthetic_id);
@@ -597,7 +614,8 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionState {
             let position = self._get_position_snapshot(:position_id);
-            let position_data = self.get_position_data(:position);
+            let position_diff = Default::default();
+            let position_data = self.get_position_unchanged_assets(:position, :position_diff);
 
             let position_change_result = evaluate_position(:position_data);
             position_change_result.position_state_after_change

@@ -343,9 +343,13 @@ pub mod Core {
                 ._create_collateral_position_diff(
                     :position, :collateral_id, diff: -(amount.into()),
                 );
-            let position_data = self.positions.get_position_data(:position);
+            let position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(:position, :position_diff);
 
-            validate_position_is_healthy_or_healthier(:position_id, :position_data, :position_diff);
+            validate_position_is_healthy_or_healthier(
+                :position_id, unchanged_assets: position_unchanged_assets, :position_diff,
+            );
             self.positions.apply_diff(:position_id, :position_diff);
             let position = self.positions.get_position_snapshot(:position_id);
             let hash = self
@@ -548,11 +552,6 @@ pub mod Core {
                 );
 
             /// Execution:
-            let position_a = self.positions.get_position_snapshot(position_id_a);
-            let position_b = self.positions.get_position_snapshot(position_id_a);
-            let position_data_a = self.positions.get_position_data(position: position_a);
-            let position_data_b = self.positions.get_position_data(position: position_b);
-
             let (position_diff_a, position_diff_b) = self
                 ._update_positions(
                     :order_a,
@@ -565,15 +564,28 @@ pub mod Core {
                     fee_b_position_id: FEE_POSITION,
                 );
 
+            let position_a = self.positions.get_position_snapshot(position_id_a);
+            let position_b = self.positions.get_position_snapshot(position_id_a);
+            let position_unchanged_assets_a = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: position_a, position_diff: position_diff_a,
+                );
+            let position_unchanged_assets_b = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: position_b, position_diff: position_diff_b,
+                );
+
             /// Validations - Fundamentals:
             validate_position_is_healthy_or_healthier(
                 position_id: order_a.position_id,
-                position_data: position_data_a,
+                unchanged_assets: position_unchanged_assets_a,
                 position_diff: position_diff_a,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: order_b.position_id,
-                position_data: position_data_b,
+                unchanged_assets: position_unchanged_assets_b,
                 position_diff: position_diff_b,
             );
 
@@ -686,19 +698,6 @@ pub mod Core {
                 );
 
             /// Execution:
-            let liquidated_position = self
-                .positions
-                .get_position_snapshot(position_id: liquidated_position_id);
-            let liquidator_position = self
-                .positions
-                .get_position_snapshot(position_id: liquidator_position_id);
-            let liquidated_position_data = self
-                .positions
-                .get_position_data(position: liquidated_position);
-            let liquidator_position_data = self
-                .positions
-                .get_position_data(position: liquidator_position);
-
             let (liquidated_position_diff, liquidator_position_diff) = self
                 ._update_positions(
                     order_a: liquidated_order,
@@ -710,16 +709,32 @@ pub mod Core {
                     fee_a_position_id: INSURANCE_FUND_POSITION,
                     fee_b_position_id: FEE_POSITION,
                 );
+            let liquidated_position = self
+                .positions
+                .get_position_snapshot(position_id: liquidated_position_id);
+            let liquidator_position = self
+                .positions
+                .get_position_snapshot(position_id: liquidator_position_id);
+            let liquidated_position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: liquidated_position, position_diff: liquidated_position_diff,
+                );
+            let liquidator_position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: liquidator_position, position_diff: liquidator_position_diff,
+                );
 
             /// Validations - Fundamentals:
             liquidated_position_validations(
                 position_id: liquidated_position_id,
-                position_data: liquidated_position_data,
+                unchanged_assets: liquidated_position_unchanged_assets,
                 position_diff: liquidated_position_diff,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: liquidator_position_id,
-                position_data: liquidator_position_data,
+                unchanged_assets: liquidator_position_unchanged_assets,
                 position_diff: liquidator_position_diff,
             );
 
@@ -1079,11 +1094,14 @@ pub mod Core {
         ) {
             // Parameters
             let position = self.positions.get_position_snapshot(:position_id);
-            let sender_position_data = self.positions.get_position_data(:position);
             let position_diff_sender = self
                 ._create_collateral_position_diff(
                     :position, :collateral_id, diff: -(amount.into()),
                 );
+            let sender_position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(:position, position_diff: position_diff_sender);
+
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let position_diff_recipient = self
                 ._create_collateral_position_diff(
@@ -1100,7 +1118,7 @@ pub mod Core {
             /// Validations - Fundamentals:
             validate_position_is_healthy_or_healthier(
                 :position_id,
-                position_data: sender_position_data,
+                unchanged_assets: sender_position_unchanged_assets,
                 position_diff: position_diff_sender,
             );
         }
@@ -1282,9 +1300,6 @@ pub mod Core {
             let deleveraged_position = self
                 .positions
                 .get_position_snapshot(position_id: deleveraged_position_id);
-            let deleveraged_position_data = self
-                .positions
-                .get_position_data(position: deleveraged_position);
             let deleveraged_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: deleveraged_position,
@@ -1295,13 +1310,16 @@ pub mod Core {
                     fee_id: Option::None,
                     fee_amount: Option::None,
                 );
+            let deleveraged_position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: deleveraged_position, position_diff: deleveraged_position_diff,
+                );
 
             let deleverager_position = self
                 .positions
                 .get_position_snapshot(position_id: deleverager_position_id);
-            let deleverager_position_data = self
-                .positions
-                .get_position_data(position: deleverager_position);
+
             let deleverager_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: deleverager_position,
@@ -1313,6 +1331,11 @@ pub mod Core {
                     quote_amount: -deleveraged_quote_amount,
                     fee_id: Option::None,
                     fee_amount: Option::None,
+                );
+            let deleverager_position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(
+                    position: deleverager_position, position_diff: deleverager_position_diff,
                 );
 
             self
@@ -1331,14 +1354,14 @@ pub mod Core {
                 // and changed to fair deleverage and healthier.
                 AssetStatus::ACTIVE => deleveraged_position_validations(
                     position_id: deleveraged_position_id,
-                    position_data: deleveraged_position_data,
+                    unchanged_assets: deleveraged_position_unchanged_assets,
                     position_diff: deleveraged_position_diff,
                 ),
                 // In case of deactivated synthetic asset, the position should change to healthy or
                 // healthier.
                 AssetStatus::DEACTIVATED => validate_position_is_healthy_or_healthier(
                     position_id: deleveraged_position_id,
-                    position_data: deleveraged_position_data,
+                    unchanged_assets: deleveraged_position_unchanged_assets,
                     position_diff: deleveraged_position_diff,
                 ),
                 // In case of pending synthetic asset, error should be thrown.
@@ -1347,7 +1370,7 @@ pub mod Core {
 
             validate_position_is_healthy_or_healthier(
                 position_id: deleverager_position_id,
-                position_data: deleverager_position_data,
+                unchanged_assets: deleverager_position_unchanged_assets,
                 position_diff: deleverager_position_diff,
             );
         }

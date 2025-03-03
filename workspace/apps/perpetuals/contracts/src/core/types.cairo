@@ -38,6 +38,7 @@ pub struct Asset {
 }
 
 pub type PositionData = Span<Asset>;
+pub type UnchangedAssets = PositionData;
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
 pub struct AssetDiff {

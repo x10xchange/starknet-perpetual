@@ -31,6 +31,7 @@
         - [AssetId](#assetid)
         - [AssetEntry](#assetentry)
         - [PositionData](#positiondata)
+        - [UnchangedAssets](#unchangedassets)
         - [AssetDiffEntry](#assetdiffentry)
         - [PositionId](#positionid)
         - [FundingIndex](#fundingindex)
@@ -170,7 +171,7 @@ classDiagram
     }
     class Positions{
         positions: Map< PositionId, Position>
-        get_position_data() -> PositionData
+        get_position_unchanged_assets() -> UnchangedAssets
         is_deleveragable() -> bool
         is_healthy() -> bool
         is_liquidatable() -> bool
@@ -447,7 +448,7 @@ pub struct PositionChangeResult {
 
 ```rust
 fn evaluate_position_change(
-    self: @ContractState, position: PositionData, position_diff: PositionDiff,
+    self: @ContractState, position: UnchangedAssets, position_diff: PositionDiff,
 ) -> PositionChangeResult
 ```
 
@@ -507,6 +508,14 @@ pub struct AssetEntry {
 
 ```rust
 pub struct PositionData {
+    pub asset_entries: Span<AssetEntry>,
+}
+```
+
+### UnchangedAssets
+
+```rust
+pub struct UnchangedAssets {
     pub asset_entries: Span<AssetEntry>,
 }
 ```
@@ -1386,7 +1395,7 @@ In charge of all position-related.
 ```rust
 #[starknet::interface]
 pub trait IPositions<TContractState> {
-    fn get_position_data(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn get_position_unchanged_assets(self: @TContractState, position_id: PositionId, position_diff: PositionDiff) -> UnchangedAssets;
     fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
     fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
     fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
@@ -1465,7 +1474,6 @@ pub enum Event {
 #### Errors
 
 ```rust
-pub const APPLY_DIFF_MISMATCH: felt252 = 'APPLY_DIFF_MISMATCH';
 pub const INVALID_POSITION: felt252 = 'INVALID_POSITION';
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
 pub const CALLER_IS_NOT_OWNER_ACCOUNT: felt252 = 'CALLER_IS_NOT_OWNER_ACCOUNT';
@@ -2843,7 +2851,6 @@ Only the Operator can execute.
 - INVALID_POSITION
 - ASSET_NOT_EXISTS
 - NOT_SYNTHETIC
-- APPLY_DIFF_MISMATCH
 - POSITION_IS_NOT_DELEVERAGABLE
 - POSITION_IS_NOT_FAIR_DELEVERAGE
 - POSITION_IS_NOT_HEALTHIER
