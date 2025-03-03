@@ -33,11 +33,11 @@ pub mod Core {
     };
     use perpetuals::core::errors::{
         CANT_DELEVERAGE_PENDING_ASSET, CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS,
-        DIFFERENT_QUOTE_ASSET_IDS, FEE_ASSET_AMOUNT_MISMATCH, INSUFFICIENT_FUNDS,
-        INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS,
-        INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT, SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED,
-        WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
+        DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_ACTUAL_BASE_SIGN,
+        INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
+        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
+        INVALID_ZERO_AMOUNT, SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -915,88 +915,56 @@ pub mod Core {
             self
                 ._create_position_diff_from_asset_amounts(
                     :position,
-                    base_id: order.base_asset_id,
-                    base_amount: actual_amount_base,
-                    quote_id: order.quote_asset_id,
-                    quote_amount: actual_amount_quote,
-                    fee_id: Option::Some(order.fee_asset_id),
-                    fee_amount: Option::Some(actual_fee),
+                    base: (order.base_asset_id, actual_amount_base.into()),
+                    quote: (order.quote_asset_id, actual_amount_quote.into()),
+                    fee: Option::Some((order.fee_asset_id, actual_fee)),
                 )
         }
 
         fn _create_position_diff_from_asset_amounts(
             ref self: ContractState,
             position: StoragePath<Position>,
-            base_id: AssetId,
-            base_amount: i64,
-            quote_id: AssetId,
-            quote_amount: i64,
-            fee_id: Option<AssetId>,
-            fee_amount: Option<u64>,
+            base: (AssetId, Balance),
+            quote: (AssetId, Balance),
+            fee: Option<(AssetId, u64)>,
         ) -> PositionDiff {
-            assert(fee_id.is_some() == fee_amount.is_some(), FEE_ASSET_AMOUNT_MISMATCH);
-            let is_fee_exist = fee_id.is_some();
+            let (base_id, mut base_amount) = base;
+            let (quote_id, mut quote_amount) = quote;
+            // We assume quote_id != base_id here.
+
+            let mut collaterals_diff = array![];
+            let mut synthetics_diff = array![];
 
             // fee asset.
-            let mut fee_diff: AssetDiff = Default::default();
-            let mut fee_asset_id: AssetId = Zero::zero();
-            if let (Option::Some(fee_amount), Option::Some(fee_id)) = (fee_amount, fee_id) {
-                fee_asset_id = fee_id;
-                fee_diff = self
-                    ._create_collateral_diff(
-                        :position, collateral_id: fee_asset_id, diff: -(fee_amount.into()),
-                    );
+            if let Option::Some((fee_id, fee_amount)) = fee {
+                if fee_id == quote_id {
+                    quote_amount -= fee_amount.into();
+                } else if fee_id == base_id {
+                    base_amount -= fee_amount.into();
+                } else {
+                    let fee_diff = self
+                        ._create_collateral_diff(
+                            :position, collateral_id: fee_id, diff: -(fee_amount).into(),
+                        );
+                    collaterals_diff.append(fee_diff);
+                }
             }
 
             // Quote asset.
-            let mut quote_diff: AssetDiff = Default::default();
-
-            if is_fee_exist && (quote_id == fee_asset_id) {
-                fee_diff.balance_after += quote_amount.into();
-                // risk factor after does not change for collateral (=0).
-            } else {
-                quote_diff = self
-                    ._create_collateral_diff(
-                        :position, collateral_id: quote_id, diff: quote_amount.into(),
-                    );
-            }
+            let quote_diff = self
+                ._create_collateral_diff(:position, collateral_id: quote_id, diff: quote_amount);
+            collaterals_diff.append(quote_diff);
 
             // Base asset.
-            let mut base_diff: AssetDiff = Default::default();
-            let is_base_collateral = self.assets.is_collateral(base_id);
-
-            if is_fee_exist && (base_id == fee_asset_id) {
-                fee_diff.balance_after += base_amount.into();
-                // risk factor after does not change for collateral (=0).
-            } else if is_base_collateral {
-                base_diff = self
-                    ._create_collateral_diff(
-                        :position, collateral_id: base_id, diff: base_amount.into(),
-                    );
+            if self.assets.is_collateral(base_id) {
+                let base_diff = self
+                    ._create_collateral_diff(:position, collateral_id: base_id, diff: base_amount);
+                collaterals_diff.append(base_diff);
             } else {
-                // Base and quote assets are different.
-                base_diff = self
-                    ._create_synthetic_diff(
-                        :position, synthetic_id: base_id, diff: base_amount.into(),
-                    );
+                let base_diff = self
+                    ._create_synthetic_diff(:position, synthetic_id: base_id, diff: base_amount);
+                synthetics_diff.append(base_diff);
             }
-
-            // Build position diff.
-            let mut collaterals_diff = array![];
-            let mut synthetics_diff = array![];
-            for asset_diff in array![fee_diff, quote_diff] {
-                if asset_diff.id == Default::default() {
-                    continue;
-                }
-                collaterals_diff.append(asset_diff);
-            };
-            if base_diff.id != Default::default() {
-                if is_base_collateral {
-                    collaterals_diff.append(base_diff);
-                } else {
-                    synthetics_diff.append(base_diff);
-                }
-            };
 
             PositionDiff {
                 collaterals: collaterals_diff.span(), synthetics: synthetics_diff.span(),
@@ -1315,12 +1283,9 @@ pub mod Core {
             let deleveraged_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: deleveraged_position,
-                    base_id: deleveraged_base_asset_id,
-                    base_amount: deleveraged_base_amount,
-                    quote_id: deleveraged_quote_asset_id,
-                    quote_amount: deleveraged_quote_amount,
-                    fee_id: Option::None,
-                    fee_amount: Option::None,
+                    base: (deleveraged_base_asset_id, deleveraged_base_amount.into()),
+                    quote: (deleveraged_quote_asset_id, deleveraged_quote_amount.into()),
+                    fee: Option::None,
                 );
             let deleveraged_position_unchanged_assets = self
                 .positions
@@ -1335,14 +1300,11 @@ pub mod Core {
             let deleverager_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: deleverager_position,
-                    base_id: deleveraged_base_asset_id,
                     // Passing the negative of actual amounts to deleverager as it is linked to
                     // deleveraged.
-                    base_amount: -deleveraged_base_amount,
-                    quote_id: deleveraged_quote_asset_id,
-                    quote_amount: -deleveraged_quote_amount,
-                    fee_id: Option::None,
-                    fee_amount: Option::None,
+                    base: (deleveraged_base_asset_id, -deleveraged_base_amount.into()),
+                    quote: (deleveraged_quote_asset_id, -deleveraged_quote_amount.into()),
+                    fee: Option::None,
                 );
             let deleverager_position_unchanged_assets = self
                 .positions
