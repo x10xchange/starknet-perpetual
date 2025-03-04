@@ -33,11 +33,11 @@ pub mod Core {
     };
     use perpetuals::core::errors::{
         CANT_DELEVERAGE_PENDING_ASSET, CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS,
-        DIFFERENT_QUOTE_ASSET_IDS, INSUFFICIENT_FUNDS, INVALID_ACTUAL_BASE_SIGN,
-        INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
-        INVALID_ZERO_AMOUNT, SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err,
+        DIFFERENT_QUOTE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
+        INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN,
+        INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN, INVALID_ZERO_AMOUNT,
+        SAME_BASE_QUOTE_ASSET_IDS, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        order_expired_err,
     };
 
     use perpetuals::core::events;
@@ -330,10 +330,6 @@ pub mod Core {
                 contract_address: collateral_config.token_address,
             };
             let withdraw_unquantized_amount = collateral_config.quantum * amount;
-            self
-                ._validate_sufficient_funds(
-                    :token_contract, :collateral_id, :withdraw_unquantized_amount,
-                );
             /// Execution - Withdraw:
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
@@ -1382,25 +1378,6 @@ pub mod Core {
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             // A user cannot transfer to itself.
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
-        }
-
-        fn _validate_sufficient_funds(
-            self: @ContractState,
-            token_contract: IERC20Dispatcher,
-            collateral_id: AssetId,
-            withdraw_unquantized_amount: u64,
-        ) {
-            let pending_quantized_amount = self
-                .deposits
-                .get_asset_aggregate_quantized_pending_deposits(asset_id: collateral_id.into());
-            let (_, quantum) = self.deposits.get_asset_info(asset_id: collateral_id.into());
-            let erc20_balance = token_contract.balance_of(get_contract_address());
-            let pending_unquantized_amount = pending_quantized_amount * quantum.into();
-            assert(
-                erc20_balance >= withdraw_unquantized_amount.into()
-                    + pending_unquantized_amount.into(),
-                INSUFFICIENT_FUNDS,
-            );
         }
 
         fn _validate_withdraw(
