@@ -29,7 +29,7 @@
         - [PublicKey](#publickey)
         - [HashType](#hashtype)
         - [AssetId](#assetid)
-        - [AssetEntry](#assetentry)
+        - [Asset](#asset)
         - [PositionData](#positiondata)
         - [UnchangedAssets](#unchangedassets)
         - [BalanceDiff](#balanceDiff)
@@ -451,24 +451,16 @@ pub struct PositionChangeResult {
 #### Description
 
 ```rust
-fn evaluate_position_change(
-    self: @ContractState, position: UnchangedAssets, position_diff: PositionDiff,
+pub fn evaluate_position_change(
+    unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionChangeResult
 ```
 
 #### Logic
-
-1. Initialize total\_value\_before \= 0
-2. Initialize total\_risk\_before \= 0
-3. Iterate over `position.asset_entries`:
-   1. total\_value\_before+= asset\_price\*asset\_balance
-   2. total\_risk\_before+= asset\_price\*asset\_balance\*asset\_risk\_factor
-4. Initialize total\_value\_after \= total\_value\_before
-5. Initialize total\_risk\_after \= total\_risk\_before
-6. Iterate over `position_diff`:
-   1. total\_value\_after \+= price\*balance\_after \- price\*balance\_before
-   2. total\_risk\_after \+= risk\_factor \* (price\*balance\_after \- price\*balance\_before)
-7. Return the [`PositionChangeResult`](#positionchangeresult) according to the Total Risk and Total Value.
+1. Calculates value and risk for unchanged assets
+2. Calculates value and risk changes for collateral assets
+3. Calculates value and risk changes for synthetic assets
+4. Combines all calculations into final before/after totals
 
 ## Structs
 
@@ -498,30 +490,27 @@ pub struct AssetId {
 }
 ```
 
-### AssetEntry
+### Asset
 
 ```rust
-pub struct AssetEntry {
+pub struct Asset {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
+    pub risk_factor: FixedTwoDecimal,
 }
 ```
 
 ### PositionData
 
 ```rust
-pub struct PositionData {
-    pub asset_entries: Span<AssetEntry>,
-}
+pub type PositionData = Span<Asset>;
 ```
 
 ### UnchangedAssets
 
 ```rust
-pub struct UnchangedAssets {
-    pub asset_entries: Span<AssetEntry>,
-}
+pub type UnchangedAssets = PositionData;
 ```
 
 ### BalanceDiff
@@ -661,10 +650,8 @@ struct Position {
     version: u8,
     owner_account: ContractAddress,
     owner_public_key: felt252,
-    collateral_assets_head: Option<AssetId>,
-    collateral_assets: Map<AssetId, CollateralAsset>,
-    synthetic_assets_head: Option<AssetId>,
-    synthetic_assets: Map<AssetId, SyntheticAsset>,
+    collateral_assets: IterableMap<AssetId, CollateralAsset>,
+    synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
 }
 ```
 
@@ -672,9 +659,8 @@ struct Position {
 
 ```rust
 struct CollateralAsset {
-    pub version: u8,
+    version: u8,
     pub balance: Balance,
-    pub next: Option<AssetId>,
 }
 ```
 
@@ -682,10 +668,9 @@ struct CollateralAsset {
 
 ```rust
 struct SyntheticAsset {
-    pub version: u8,
+    version: u8,
     pub balance: Balance,
     pub funding_index: FundingIndex,
-    pub next: Option<AssetId>,
 }
 ```
 
@@ -723,7 +708,7 @@ impl AssetStatusPacking of StorePacking<AssetStatus, u8> {
 
 ```rust
 struct CollateralConfig {
-    pub version: u8,
+    version: u8,
     // Collateral ERC20 contract address
     pub address: ContractAddress,
     // Configurable.
@@ -739,7 +724,7 @@ struct CollateralConfig {
 
 ```rust
 struct SyntheticConfig {
-    pub version: u8,
+    version: u8,
     // Configurable
     pub status: AssetStatus,
     // Resolution is the total number of the smallest part of a synthetic.
@@ -753,10 +738,9 @@ struct SyntheticConfig {
 
 ```rust
 struct CollateralTimelyData {
-    pub version: u8,
+    version: u8,
     pub price: Price,
     pub last_price_update: Timestamp,
-    pub next: Option<AssetId>,
 }
 ```
 
@@ -764,11 +748,10 @@ struct CollateralTimelyData {
 
 ```rust
 struct SyntheticTimelyData {
-    pub version: u8,
+    version: u8,
     pub price: Price,
     pub last_price_update: Timestamp,
     pub funding_index: FundingIndex,
-    pub next: Option<AssetId>,
 }
 ```
 
@@ -1199,8 +1182,6 @@ pub enum DepositStatus {
 #[storage]
 pub struct Storage {
     registered_deposits: Map<HashType, DepositStatus>,
-    // aggregate_pending_deposit is in unquantized amount
-    aggregate_quantized_pending_deposits: Map<felt252, u128>,
     asset_info: Map<felt252, (ContractAddress, u64)>,
     deposit_grace_period: TimeDelta,
 }
@@ -1487,10 +1468,8 @@ pub struct Position {
     pub version: u8,
     pub owner_account: ContractAddress,
     pub owner_public_key: PublicKey,
-    pub collateral_assets_head: Option<AssetId>,
-    pub collateral_assets: Map<AssetId, CollateralAsset>,
-    pub synthetic_assets_head: Option<AssetId>,
-    pub synthetic_assets: Map<AssetId, SyntheticAsset>,
+    pub collateral_assets: IterableMap<AssetId, CollateralAsset>,
+    pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
 }
 
 
@@ -1602,7 +1581,7 @@ is_valid_stark_signature(msg_hash, public_key, signature)
 Checking that the expiration timestamp of the transaction hasn’t expired:
 
 ```rust
-expiration < get_block_timestamp()
+expiration <= get_block_timestamp()
 ```
 
 ### Requests

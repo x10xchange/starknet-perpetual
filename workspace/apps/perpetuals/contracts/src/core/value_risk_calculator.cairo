@@ -231,6 +231,23 @@ pub fn calculate_position_tvtr(position_data: UnchangedAssets) -> PositionTVTR {
     calculate_position_tvtr_change(unchanged_assets: position_data, :position_diff_enriched).before
 }
 
+/// Calculates the total value and total risk change for a position, taking into account both
+/// unchanged assets and position changes (collateral and synthetic assets).
+///
+/// # Arguments
+///
+/// * `unchanged_assets` - Assets in the position that have not changed
+/// * `position_diff_enriched` - Changes in collateral and synthetic assets for the position
+///
+/// # Returns
+///
+/// * `PositionTVTRChange` - Contains the total value and total risk before and after the changes
+///
+/// # Logic Flow
+/// 1. Calculates value and risk for unchanged assets
+/// 2. Calculates value and risk changes for collateral assets
+/// 3. Calculates value and risk changes for synthetic assets
+/// 4. Combines all calculations into final before/after totals
 fn calculate_position_tvtr_change(
     unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionTVTRChange {
