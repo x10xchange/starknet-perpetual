@@ -859,15 +859,6 @@ pub mod Core {
                 collaterals: array![collateral_diff].span(), synthetics: array![].span(),
             }
         }
-        fn _create_synthetic_position_diff(
-            self: @ContractState,
-            position: StoragePath<Position>,
-            synthetic_id: AssetId,
-            diff: Balance,
-        ) -> PositionDiff {
-            let synthetic_diff = self._create_synthetic_diff(:position, :synthetic_id, :diff);
-            PositionDiff { collaterals: array![].span(), synthetics: array![synthetic_diff].span() }
-        }
 
         fn _create_collateral_diff(
             self: @ContractState,
@@ -901,10 +892,9 @@ pub mod Core {
             actual_amount_quote: i64,
             actual_fee: u64,
         ) -> PositionDiff {
-            let position = self.positions.get_position_snapshot(position_id: order.position_id);
             self
                 ._create_position_diff_from_asset_amounts(
-                    :position,
+                    position: self.positions.get_position_snapshot(position_id: order.position_id),
                     base: (order.base_asset_id, actual_amount_base.into()),
                     quote: (order.quote_asset_id, actual_amount_quote.into()),
                     fee: Option::Some((order.fee_asset_id, actual_fee)),

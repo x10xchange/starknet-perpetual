@@ -24,13 +24,13 @@ use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreSafeDispatcher;
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::collateral::{
     CollateralConfig, CollateralTimelyData, CollateralTrait,
 };
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::{Price, SignedPrice};
+use perpetuals::core::types::{PositionDiff, PositionId};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
@@ -350,8 +350,11 @@ pub fn add_synthetic_to_position(
     ref state: Core::ContractState, synthetic_id: AssetId, position_id: PositionId, balance: i64,
 ) {
     let position = state.positions.get_position_snapshot(:position_id);
-    let position_diff = state
-        ._create_synthetic_position_diff(:position, :synthetic_id, diff: balance.into());
+    let synthetic_diff = state
+        ._create_synthetic_diff(:position, :synthetic_id, diff: balance.into());
+    let position_diff = PositionDiff {
+        collaterals: array![].span(), synthetics: array![synthetic_diff].span(),
+    };
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
