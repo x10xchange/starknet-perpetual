@@ -40,10 +40,10 @@ pub mod AssetsComponent {
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::types::asset::collateral::{
-        CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+        CollateralConfig, CollateralTimelyData, CollateralTrait,
     };
     use perpetuals::core::types::asset::synthetic::{
-        SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
+        SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
@@ -244,42 +244,22 @@ pub mod AssetsComponent {
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             assert(resolution.is_non_zero(), INVALID_ZERO_RESOLUTION);
 
-            synthetic_entry
-                .write(
-                    Option::Some(
-                        SyntheticConfig {
-                            version: SYNTHETIC_VERSION,
-                            // It'll be active in the next price tick.
-                            status: AssetStatus::PENDING,
-                            // It validates the range of the risk factor.
-                            risk_factor_first_tier_boundary,
-                            risk_factor_tier_size,
-                            quorum,
-                            resolution,
-                        },
-                    ),
-                );
-
-            let synthetic_config = SyntheticConfig {
-                version: SYNTHETIC_VERSION,
+            let synthetic_config = SyntheticTrait::config(
                 // It'll be active in the next price tick.
                 status: AssetStatus::PENDING,
                 // It validates the range of the risk factor.
-                risk_factor_first_tier_boundary,
-                risk_factor_tier_size,
-                quorum,
-                resolution,
-            };
+                :risk_factor_first_tier_boundary,
+                :risk_factor_tier_size,
+                :quorum,
+                :resolution,
+            );
 
-            self.synthetic_config.write(asset_id, Option::Some(synthetic_config));
+            synthetic_entry.write(Option::Some(synthetic_config));
 
-            let synthetic_timely_data = SyntheticTimelyData {
-                version: SYNTHETIC_VERSION,
+            let synthetic_timely_data = SyntheticTrait::timely_data(
                 // These fields will be updated in the next price tick.
-                price: Zero::zero(),
-                last_price_update: Zero::zero(),
-                funding_index: Zero::zero(),
-            };
+                price: Zero::zero(), last_price_update: Zero::zero(), funding_index: Zero::zero(),
+            );
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
             let prev_risk_factor = 0_u8;
@@ -690,19 +670,18 @@ pub mod AssetsComponent {
             token_address: ContractAddress,
             quantum: u64,
         ) {
-            let collateral_config = CollateralConfig {
-                version: COLLATERAL_VERSION,
-                token_address,
+            let collateral_config = CollateralTrait::config(
+                :token_address,
                 status: AssetStatus::ACTIVE,
                 risk_factor: Zero::zero(),
-                quantum,
+                :quantum,
                 quorum: Zero::zero(),
-            };
+            );
             self.collateral_config.write(asset_id, Option::Some(collateral_config));
 
-            let collateral_timely_data = CollateralTimelyData {
-                version: COLLATERAL_VERSION, price: One::one(), last_price_update: Zero::zero(),
-            };
+            let collateral_timely_data = CollateralTrait::timely_data(
+                price: One::one(), last_price_update: Zero::zero(),
+            );
             self.collateral_timely_data.write(asset_id, collateral_timely_data);
             self.emit(events::CollateralRegistered { asset_id, token_address, quantum });
         }

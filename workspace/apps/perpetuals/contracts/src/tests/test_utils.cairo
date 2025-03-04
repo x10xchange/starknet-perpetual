@@ -26,7 +26,7 @@ use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreSafeDispatcher;
 use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::collateral::{
-    CollateralConfig, CollateralTimelyData, VERSION as COLLATERAL_VERSION,
+    CollateralConfig, CollateralTimelyData, CollateralTrait,
 };
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
@@ -205,7 +205,6 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     owner: COLLATERAL_OWNER(),
                 },
                 collateral_id: COLLATERAL_ASSET_ID(),
-                version: COLLATERAL_VERSION,
                 quantum: COLLATERAL_QUANTUM,
                 risk_factor: Zero::zero(),
                 quorum: COLLATERAL_QUORUM,
@@ -220,7 +219,6 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
 pub struct CollateralCfg {
     pub token_cfg: TokenConfig,
     pub collateral_id: AssetId,
-    pub version: u8,
     pub quantum: u64,
     pub risk_factor: FixedTwoDecimal,
     pub quorum: u8,
@@ -378,14 +376,13 @@ pub fn generate_collateral(
     collateral_cfg: @CollateralCfg, token_state: @TokenState,
 ) -> (CollateralConfig, CollateralTimelyData) {
     (
-        CollateralConfig {
-            version: *collateral_cfg.version,
+        CollateralTrait::config(
             token_address: *token_state.address,
-            quantum: *collateral_cfg.quantum,
             status: AssetStatus::ACTIVE,
             risk_factor: *collateral_cfg.risk_factor,
+            quantum: *collateral_cfg.quantum,
             quorum: *collateral_cfg.quorum,
-        },
+        ),
         COLLATERAL_TIMELY_DATA(),
     )
 }

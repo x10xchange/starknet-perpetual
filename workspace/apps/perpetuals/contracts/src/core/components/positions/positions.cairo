@@ -30,10 +30,8 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::{
-        CollateralAsset, VERSION as COLLATERAL_VERSION,
-    };
-    use perpetuals::core::types::asset::synthetic::{SyntheticAsset, VERSION as SYNTHETIC_VERSION};
+    use perpetuals::core::types::asset::collateral::{CollateralAsset, CollateralTrait};
+    use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticTrait};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
@@ -59,9 +57,7 @@ pub(crate) mod Positions {
         pub version: u8,
         pub owner_account: ContractAddress,
         pub owner_public_key: PublicKey,
-        pub collateral_assets_head: Option<AssetId>,
         pub collateral_assets: IterableMap<AssetId, CollateralAsset>,
-        pub synthetic_assets_head: Option<AssetId>,
         pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
     }
 
@@ -402,9 +398,7 @@ pub(crate) mod Positions {
             let position_mut = self._get_position_mut(:position_id);
             for diff in position_diff.collaterals {
                 let asset_id = *diff.id;
-                let collateral_asset = CollateralAsset {
-                    version: COLLATERAL_VERSION, balance: *diff.balance_after,
-                };
+                let collateral_asset = CollateralTrait::asset(balance: *diff.balance_after);
                 position_mut.collateral_assets.write(asset_id, collateral_asset);
             };
             for diff in position_diff.synthetics {
@@ -598,15 +592,11 @@ pub(crate) mod Positions {
             if let Option::Some(collateral) = position.collateral_assets.read(main_collateral_id) {
                 collateral_balance += collateral.balance
             };
-            let collateral_asset = CollateralAsset {
-                version: COLLATERAL_VERSION, balance: collateral_balance,
-            };
+            let collateral_asset = CollateralTrait::asset(balance: collateral_balance);
             position.collateral_assets.write(main_collateral_id, collateral_asset);
 
             // Updates the synthetic balance and funding index:
-            let synthetic_asset = SyntheticAsset {
-                version: SYNTHETIC_VERSION, balance, funding_index,
-            };
+            let synthetic_asset = SyntheticTrait::asset(balance, funding_index);
             position.synthetic_assets.write(synthetic_id, synthetic_asset);
         }
 

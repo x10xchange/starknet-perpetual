@@ -4,11 +4,9 @@ use contracts_commons::types::time::time::{Time, TimeDelta};
 use core::num::traits::{One, Zero};
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::types::PositionId;
-use perpetuals::core::types::asset::collateral::{
-    CollateralTimelyData, VERSION as COLLATERAL_VERSION,
-};
+use perpetuals::core::types::asset::collateral::{CollateralTimelyData, CollateralTrait};
 use perpetuals::core::types::asset::synthetic::{
-    SyntheticConfig, SyntheticTimelyData, VERSION as SYNTHETIC_VERSION,
+    SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
 };
 
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -55,41 +53,36 @@ pub fn OPERATOR() -> ContractAddress {
 }
 
 pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
-    CollateralTimelyData {
-        version: COLLATERAL_VERSION, price: One::one(), last_price_update: Time::now(),
-    }
+    CollateralTrait::timely_data(price: One::one(), last_price_update: Time::now())
 }
 
 pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
-    SyntheticConfig {
-        version: SYNTHETIC_VERSION,
-        resolution: SYNTHETIC_RESOLUTION,
+    SyntheticTrait::config(
         status: AssetStatus::ACTIVE,
         risk_factor_first_tier_boundary: MAX_U128,
         risk_factor_tier_size: Zero::zero(),
         quorum: SYNTHETIC_QUORUM,
-    }
+        resolution: SYNTHETIC_RESOLUTION,
+    )
 }
 
 pub fn SYNTHETIC_PENDING_CONFIG() -> SyntheticConfig {
-    SyntheticConfig {
-        version: SYNTHETIC_VERSION,
-        resolution: SYNTHETIC_RESOLUTION,
+    SyntheticTrait::config(
         status: AssetStatus::PENDING,
         risk_factor_first_tier_boundary: MAX_U128,
         risk_factor_tier_size: Zero::zero(),
         quorum: SYNTHETIC_QUORUM,
-    }
+        resolution: SYNTHETIC_RESOLUTION,
+    )
 }
 
 pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
-    SyntheticTimelyData {
-        version: SYNTHETIC_VERSION,
+    SyntheticTrait::timely_data(
         price: SYNTHETIC_PRICE(),
         // Pass non default timestamp.
         last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
         funding_index: Zero::zero(),
-    }
+    )
 }
 
 

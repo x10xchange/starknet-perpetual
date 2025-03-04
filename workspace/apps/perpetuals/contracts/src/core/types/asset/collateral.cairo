@@ -5,11 +5,11 @@ use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 
-pub const VERSION: u8 = 1;
+const VERSION: u8 = 1;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralConfig {
-    pub version: u8,
+    version: u8,
     // Collateral ERC20 contract address
     pub token_address: ContractAddress,
     // Configurable
@@ -23,7 +23,7 @@ pub struct CollateralConfig {
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralTimelyData {
-    pub version: u8,
+    version: u8,
     pub price: Price,
     pub last_price_update: Timestamp,
 }
@@ -33,6 +33,25 @@ pub struct CollateralTimelyData {
 /// - next: The next collateral asset id in the position.
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct CollateralAsset {
-    pub version: u8,
+    version: u8,
     pub balance: Balance,
+}
+
+#[generate_trait]
+pub impl CollateralImpl of CollateralTrait {
+    fn asset(balance: Balance) -> CollateralAsset {
+        CollateralAsset { version: VERSION, balance }
+    }
+    fn config(
+        token_address: ContractAddress,
+        status: AssetStatus,
+        risk_factor: FixedTwoDecimal,
+        quantum: u64,
+        quorum: u8,
+    ) -> CollateralConfig {
+        CollateralConfig { version: VERSION, token_address, status, risk_factor, quantum, quorum }
+    }
+    fn timely_data(price: Price, last_price_update: Timestamp) -> CollateralTimelyData {
+        CollateralTimelyData { version: VERSION, price, last_price_update }
+    }
 }
