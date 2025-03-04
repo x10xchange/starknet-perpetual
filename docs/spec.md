@@ -2720,15 +2720,16 @@ Only the Operator can execute.
 8. [public key signature](#public-key-signature) on `liquidator_order`
 9. `liquidated_position_id != liquidator_order.position_id`
 10. Positions are not `FEE_POSITION`.
-11. `liquidator_order.quote_type.asset_id` is registered and active collateral
-12. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
-13. `liquidated_position_id.is_liquidatable()==true`
-14. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
-15. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
-16. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
-17. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
-18. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
-19. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
+11. If `INSURANCE_FUND_POSITION` is liquidator or liquidated, the liquidated fee amount should be zero.
+12. `liquidator_order.quote_type.asset_id` is registered and active collateral
+13. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
+14. `liquidated_position_id.is_liquidatable()==true`
+15. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
+16. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
+17. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
+18. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
+19. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
+20. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
 
 #### Logic
 
