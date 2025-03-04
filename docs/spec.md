@@ -101,7 +101,7 @@
         - [SetPublicKeyRequest](#setpublickeyrequest)
         - [SetPublicKey](#setpublickey)
         - [FundingTick](#fundingtick-1)
-        - [PriceTick](#pricetick-1)
+        - [SignedPrice](#signedPrice)
         - [AssetActivated](#assetactivated)
         - [SyntheticAdded](#syntheticadded)
         - [SyntheticAssetDeactivated](#syntheticassetdeactivated)
@@ -632,14 +632,14 @@ pub struct FundingTick {
 }
 ```
 
-### PriceTick
+### SignedPrice
 
 ```rust
-pub struct PriceTick {
-    signature: Signature,
-    signer_public_key: felt252,
-    timestamp: u32,
-    price: u128,
+pub struct SignedPrice {
+    pub signature: Signature,
+    pub signer_public_key: PublicKey,
+    pub timestamp: u32,
+    pub oracle_price: u128,
 }
 ```
 
@@ -3118,7 +3118,7 @@ Funding is calculated on the go and applied during any flow that requires checki
 
 1. Update the collateral balance based on the funding amount:
 
-   change=global\_funding\_index-cached\_funding\_indexbalance232
+   $$change=global\\_funding\\_index-last\\_funding\\_index*balance $$
 
 Add `change` to the collateral balance (notice that `change` can be positive or negative)
 
@@ -3142,9 +3142,9 @@ Only the Operator can execute.
 3. Iterate over the funding ticks:
    1. Verify that the assets are sorted in ascending order \- no duplicates.
    2. **max\_funding\_rate validation**:
-      For **one** time unit, the following should be held: prev \- newprice%permitted
+      For **one** time unit, the following should be held: $\frac{prev - new}{price} \leq \\%permitted $
       In practice, we would check:
-      prev\_idx-new\_idxmax\_funding\_rateblock\_timestamp-prev\_funding\_timeasset\_price
+      $prev\\_idx-new\\_idx \leq max\\_funding\\_rate * (block\\_timestamp-prev\\_funding\\_time) * asset\\_price$
    3. Update asset funding index if asset is active else panic.
    4. prev\_asset\_id \= curr\_tick.asset\_id
 4. Update global last\_funding\_tick timestamp in storage
@@ -3311,8 +3311,8 @@ fn price_tick(
     ref self: ContractState,
     operator_nonce: u64,
     asset_id: AssetId,
-    price: u128
-    price_ticks: Span<PriceTick>
+    oracle_price: u128,
+    price_ticks: Span<SignedPrice>
 )
 ```
 
@@ -3338,7 +3338,8 @@ Only the Operator can execute.
 &nbsp;&nbsp;&nbsp;&nbsp;`oracles[price_ticks[i].signer_public_key],`
 &nbsp;&nbsp;&nbsp;&nbsp;`0...0(100 bits) || price_ticks[i].price(120 bits) || price_ticks[i].timestamp (32 bits)`
       `)`
-2. calculate median price using the formula: $median\_price= \frac{price*2^{28}}{asset\_id.resolution_factor*10^{12}}$
+2. calculate median price using the formula:
+$median\\_price = \frac{price*2^{28}}{asset\\_id.resolution\\_factor *10^{12} }$
 3. `self.synthetic_timely_data[asset_id].price = median_price`
 
    Explanation: Oracles sign prices in the same format as StarkEx \- they sign process of major unit with 18 decimals precision. So to ge the asset price of 1 Starknet unit of synthetic asset:

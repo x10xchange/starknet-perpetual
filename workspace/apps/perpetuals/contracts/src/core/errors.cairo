@@ -3,7 +3,7 @@ use perpetuals::core::types::asset::AssetId;
 
 pub const CANT_DELEVERAGE_PENDING_ASSET: felt252 = 'CANT_DELEVERAGE_PENDING_ASSET';
 pub const CANT_TRADE_WITH_FEE_POSITION: felt252 = 'CANT_TRADE_WITH_FEE_POSITION';
-pub const CANT_LIQUDATE_IF_POSITION: felt252 = 'CANT_LIQUDATE_IF_POSITION';
+pub const CANT_LIQUIDATE_IF_POSITION: felt252 = 'CANT_LIQUIDATE_IF_POSITION';
 pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
 pub const DIFFERENT_QUOTE_ASSET_IDS: felt252 = 'DIFFERENT_QUOTE_ASSET_IDS';
 pub const FEE_ASSET_AMOUNT_MISMATCH: felt252 = 'FEE_ASSET_AMOUNT_MISMATCH';
@@ -34,7 +34,7 @@ pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
 }
 
 pub fn illegal_zero_fee() -> ByteArray {
-    format!("NON_ZERO_FEE_IN_LIQUDATE_INSURANCE_FUND")
+    format!("NON_ZERO_FEE_IN_LIQUIDATE_INSURANCE_FUND")
 }
 
 pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {

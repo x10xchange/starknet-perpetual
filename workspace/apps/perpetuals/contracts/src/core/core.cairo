@@ -32,7 +32,7 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait, Position,
     };
     use perpetuals::core::errors::{
-        CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
+        CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
         DIFFERENT_BASE_ASSET_IDS, DIFFERENT_QUOTE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN,
         INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
         INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
@@ -701,7 +701,7 @@ pub mod Core {
                     actual_fee_b: actual_liquidator_fee,
                 );
 
-            assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUDATE_IF_POSITION);
+            assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
             // In case of liquidation of insurance fund, the liquidator fee should be zero.
             if liquidator_order.position_id == INSURANCE_FUND_POSITION {
                 assert_with_byte_array(fee_amount.is_zero(), illegal_zero_fee());
