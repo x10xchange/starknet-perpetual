@@ -41,10 +41,20 @@ pub type PositionData = Span<Asset>;
 pub type UnchangedAssets = PositionData;
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
+pub struct BalanceDiff {
+    pub before: Balance,
+    pub after: Balance,
+}
+
+#[derive(Copy, Debug, Default, Drop, Serde)]
 pub struct AssetDiff {
     pub id: AssetId,
-    pub balance_before: Balance,
-    pub balance_after: Balance,
+    pub balance: BalanceDiff,
+}
+
+#[derive(Copy, Debug, Default, Drop, Serde)]
+pub struct AssetDiffEnriched {
+    pub asset: AssetDiff,
     pub price: Price,
     pub risk_factor_before: FixedTwoDecimal,
     pub risk_factor_after: FixedTwoDecimal,
@@ -56,8 +66,20 @@ pub struct PositionDiff {
     pub synthetics: Span<AssetDiff>,
 }
 
+#[derive(Copy, Debug, Drop, Serde)]
+pub struct PositionDiffEnriched {
+    pub collaterals: Span<AssetDiffEnriched>,
+    pub synthetics: Span<AssetDiffEnriched>,
+}
+
 pub impl DefaultPositionDiffImpl of Default<PositionDiff> {
     fn default() -> PositionDiff {
         PositionDiff { collaterals: array![].span(), synthetics: array![].span() }
+    }
+}
+
+pub impl DefaultPositionDiffEnrichedImpl of Default<PositionDiffEnriched> {
+    fn default() -> PositionDiffEnriched {
+        PositionDiffEnriched { collaterals: array![].span(), synthetics: array![].span() }
     }
 }

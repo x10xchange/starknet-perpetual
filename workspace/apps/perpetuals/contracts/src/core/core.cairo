@@ -47,7 +47,7 @@ pub mod Core {
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::types::{AssetDiff, PositionDiff, PositionId};
+    use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff, PositionId};
     use perpetuals::core::value_risk_calculator::{
         deleveraged_position_validations, liquidated_position_validations,
         validate_position_is_healthy_or_healthier,
@@ -342,9 +342,10 @@ pub mod Core {
             let position_unchanged_assets = self
                 .positions
                 .get_position_unchanged_assets(:position, :position_diff);
+            let position_diff_enriched = self.assets.enrich_position_diff(:position_diff);
 
             validate_position_is_healthy_or_healthier(
-                :position_id, unchanged_assets: position_unchanged_assets, :position_diff,
+                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
             );
             self.positions.apply_diff(:position_id, :position_diff);
             let position = self.positions.get_position_snapshot(:position_id);
@@ -574,15 +575,22 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
+            let position_diff_a_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff_a);
+            let position_diff_b_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff_b);
+
             validate_position_is_healthy_or_healthier(
                 position_id: order_a.position_id,
                 unchanged_assets: position_unchanged_assets_a,
-                position_diff: position_diff_a,
+                position_diff_enriched: position_diff_a_enriched,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: order_b.position_id,
                 unchanged_assets: position_unchanged_assets_b,
-                position_diff: position_diff_b,
+                position_diff_enriched: position_diff_b_enriched,
             );
 
             self
@@ -729,15 +737,21 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
+            let liquidated_position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: liquidated_position_diff);
+            let liquidator_position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: liquidator_position_diff);
             liquidated_position_validations(
                 position_id: liquidated_position_id,
                 unchanged_assets: liquidated_position_unchanged_assets,
-                position_diff: liquidated_position_diff,
+                position_diff_enriched: liquidated_position_diff_enriched,
             );
             validate_position_is_healthy_or_healthier(
                 position_id: liquidator_position_id,
                 unchanged_assets: liquidator_position_unchanged_assets,
-                position_diff: liquidator_position_diff,
+                position_diff_enriched: liquidator_position_diff_enriched,
             );
 
             self
@@ -841,7 +855,6 @@ pub mod Core {
             diff: Balance,
         ) -> PositionDiff {
             let collateral_diff = self._create_collateral_diff(:position, :collateral_id, :diff);
-
             PositionDiff {
                 collaterals: array![collateral_diff].span(), synthetics: array![].span(),
             }
@@ -853,7 +866,6 @@ pub mod Core {
             diff: Balance,
         ) -> PositionDiff {
             let synthetic_diff = self._create_synthetic_diff(:position, :synthetic_id, :diff);
-
             PositionDiff { collaterals: array![].span(), synthetics: array![synthetic_diff].span() }
         }
 
@@ -863,19 +875,9 @@ pub mod Core {
             collateral_id: AssetId,
             diff: Balance,
         ) -> AssetDiff {
-            let balance_before = self.positions.get_provisional_balance(:position, :collateral_id);
-            let price = self.assets.get_collateral_price(:collateral_id);
-            let balance_after = balance_before + diff;
-            let risk_factor_before = self.assets.get_collateral_risk_factor(:collateral_id);
-            let risk_factor_after = self.assets.get_collateral_risk_factor(:collateral_id);
-            AssetDiff {
-                id: collateral_id,
-                balance_before,
-                balance_after,
-                price,
-                risk_factor_before,
-                risk_factor_after,
-            }
+            let before = self.positions.get_provisional_balance(:position, :collateral_id);
+            let after = before + diff;
+            AssetDiff { id: collateral_id, balance: BalanceDiff { before, after } }
         }
 
         fn _create_synthetic_diff(
@@ -884,23 +886,9 @@ pub mod Core {
             synthetic_id: AssetId,
             diff: Balance,
         ) -> AssetDiff {
-            let balance_before = self.positions.get_synthetic_balance(:position, :synthetic_id);
-            let balance_after = balance_before + diff;
-            let price = self.assets.get_synthetic_price(:synthetic_id);
-            let risk_factor_before = self
-                .assets
-                .get_synthetic_risk_factor(:synthetic_id, balance: balance_before, :price);
-            let risk_factor_after = self
-                .assets
-                .get_synthetic_risk_factor(:synthetic_id, balance: balance_after, :price);
-            AssetDiff {
-                id: synthetic_id,
-                balance_before,
-                balance_after,
-                price,
-                risk_factor_before,
-                risk_factor_after,
-            }
+            let before = self.positions.get_synthetic_balance(:position, :synthetic_id);
+            let after = before + diff;
+            AssetDiff { id: synthetic_id, balance: BalanceDiff { before, after } }
         }
 
         /// Builds assets diff from an order's fee, quote, and base assets, handling overlaps
@@ -1096,10 +1084,13 @@ pub mod Core {
                 .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
 
             /// Validations - Fundamentals:
+            let position_diff_sender_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff_sender);
             validate_position_is_healthy_or_healthier(
                 :position_id,
                 unchanged_assets: sender_position_unchanged_assets,
-                position_diff: position_diff_sender,
+                position_diff_enriched: position_diff_sender_enriched,
             );
         }
 
@@ -1338,26 +1329,38 @@ pub mod Core {
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
                 // If the synthetic asset is active, the position should be deleveragable
                 // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVE => deleveraged_position_validations(
-                    position_id: deleveraged_position_id,
-                    unchanged_assets: deleveraged_position_unchanged_assets,
-                    position_diff: deleveraged_position_diff,
-                ),
+                AssetStatus::ACTIVE => {
+                    let deleveraged_position_diff_enriched = self
+                        .assets
+                        .enrich_position_diff(position_diff: deleveraged_position_diff);
+                    deleveraged_position_validations(
+                        position_id: deleveraged_position_id,
+                        unchanged_assets: deleveraged_position_unchanged_assets,
+                        position_diff_enriched: deleveraged_position_diff_enriched,
+                    )
+                },
                 // In case of deactivated synthetic asset, the position should change to healthy or
                 // healthier.
-                AssetStatus::DEACTIVATED => validate_position_is_healthy_or_healthier(
-                    position_id: deleveraged_position_id,
-                    unchanged_assets: deleveraged_position_unchanged_assets,
-                    position_diff: deleveraged_position_diff,
-                ),
+                AssetStatus::DEACTIVATED => {
+                    let deleveraged_position_diff_enriched = self
+                        .assets
+                        .enrich_position_diff(position_diff: deleveraged_position_diff);
+                    validate_position_is_healthy_or_healthier(
+                        position_id: deleveraged_position_id,
+                        unchanged_assets: deleveraged_position_unchanged_assets,
+                        position_diff_enriched: deleveraged_position_diff_enriched,
+                    )
+                },
                 // In case of pending synthetic asset, error should be thrown.
                 AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
             };
-
+            let deleverager_position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: deleverager_position_diff);
             validate_position_is_healthy_or_healthier(
                 position_id: deleverager_position_id,
                 unchanged_assets: deleverager_position_unchanged_assets,
-                position_diff: deleverager_position_diff,
+                position_diff_enriched: deleverager_position_diff_enriched,
             );
         }
 

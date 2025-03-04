@@ -30,12 +30,13 @@ pub mod AssetsComponent {
         INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
         INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
         INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
-        INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
-        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
+        ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
+        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
+
 
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -49,6 +50,7 @@ pub mod AssetsComponent {
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
+    use perpetuals::core::types::{AssetDiffEnriched, PositionDiff, PositionDiffEnriched};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -517,11 +519,7 @@ pub mod AssetsComponent {
         fn get_collateral_price(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> Price {
-            if let Option::Some(data) = self.collateral_timely_data.read(collateral_id) {
-                data.price
-            } else {
-                panic_with_felt252(NOT_COLLATERAL)
-            }
+            One::one()
         }
 
         fn get_synthetic_price(
@@ -540,11 +538,7 @@ pub mod AssetsComponent {
         fn get_collateral_risk_factor(
             self: @ComponentState<TContractState>, collateral_id: AssetId,
         ) -> FixedTwoDecimal {
-            if let Option::Some(collateral_config) = self.collateral_config.read(collateral_id) {
-                collateral_config.risk_factor
-            } else {
-                panic_with_felt252(NOT_COLLATERAL)
-            }
+            Zero::zero()
         }
 
         /// Get the risk factor of a synthetic asset.
@@ -580,6 +574,40 @@ pub mod AssetsComponent {
             } else {
                 panic_with_felt252(NOT_SYNTHETIC)
             }
+        }
+
+        fn enrich_position_diff(
+            self: @ComponentState<TContractState>, position_diff: PositionDiff,
+        ) -> PositionDiffEnriched {
+            let mut collaterals: Array<AssetDiffEnriched> = array![];
+            let mut synthetics: Array<AssetDiffEnriched> = array![];
+
+            for collateral in position_diff.collaterals {
+                let price = self.get_collateral_price(*collateral.id);
+                let risk_factor_before = self.get_collateral_risk_factor(*collateral.id);
+                // Collateral risk factor does not change (=0).
+                let risk_factor_after = risk_factor_before;
+
+                let asset_diff_enriched = AssetDiffEnriched {
+                    asset: *collateral, price, risk_factor_before, risk_factor_after,
+                };
+                collaterals.append(asset_diff_enriched);
+            };
+
+            for synthetic in position_diff.synthetics {
+                let price = self.get_synthetic_price(*synthetic.id);
+                let risk_factor_before = self
+                    .get_synthetic_risk_factor(*synthetic.id, *synthetic.balance.before, price);
+                let risk_factor_after = self
+                    .get_synthetic_risk_factor(*synthetic.id, *synthetic.balance.after, price);
+
+                let asset_diff_enriched = AssetDiffEnriched {
+                    asset: *synthetic, price, risk_factor_before, risk_factor_after,
+                };
+                synthetics.append(asset_diff_enriched);
+            };
+
+            PositionDiffEnriched { collaterals: collaterals.span(), synthetics: synthetics.span() }
         }
 
         fn get_funding_index(

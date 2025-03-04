@@ -9,7 +9,9 @@ use perpetuals::core::errors::{
     position_not_liquidatable,
 };
 use perpetuals::core::types::price::PriceMulTrait;
-use perpetuals::core::types::{AssetDiff, PositionData, PositionDiff, PositionId, UnchangedAssets};
+use perpetuals::core::types::{
+    AssetDiffEnriched, BalanceDiff, PositionData, PositionDiffEnriched, PositionId, UnchangedAssets,
+};
 
 // This is the result of Price::One().mul(balance: 1)
 // which is actually 1e-6 USDC * 2^28 / 2^28 = 1
@@ -120,14 +122,14 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
 
 
 pub fn evaluate_position(position_data: PositionData) -> PositionChangeResult {
-    let position_diff = Default::default();
-    evaluate_position_change(unchanged_assets: position_data, :position_diff)
+    let position_diff_enriched = Default::default();
+    evaluate_position_change(unchanged_assets: position_data, :position_diff_enriched)
 }
 
 pub fn evaluate_position_change(
-    unchanged_assets: UnchangedAssets, position_diff: PositionDiff,
+    unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionChangeResult {
-    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff);
+    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
 
     // When the position has zero total risk (either before or after the change), metrics like
     // "healthier" or "fair deleverage" are not applicable. This happens when a position has no
@@ -152,9 +154,13 @@ pub fn evaluate_position_change(
 }
 
 pub fn validate_position_is_healthy_or_healthier(
-    position_id: PositionId, unchanged_assets: UnchangedAssets, position_diff: PositionDiff,
+    position_id: PositionId,
+    unchanged_assets: UnchangedAssets,
+    position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(:unchanged_assets, :position_diff);
+    let position_change_result = evaluate_position_change(
+        :unchanged_assets, :position_diff_enriched,
+    );
     assert_healthy_or_healthier(:position_id, :position_change_result);
 }
 
@@ -181,9 +187,13 @@ pub fn assert_healthy_or_healthier(
 }
 
 pub fn liquidated_position_validations(
-    position_id: PositionId, unchanged_assets: UnchangedAssets, position_diff: PositionDiff,
+    position_id: PositionId,
+    unchanged_assets: UnchangedAssets,
+    position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(:unchanged_assets, :position_diff);
+    let position_change_result = evaluate_position_change(
+        :unchanged_assets, :position_diff_enriched,
+    );
 
     assert_with_byte_array(
         position_change_result.position_state_before_change == PositionState::Liquidatable
@@ -195,9 +205,13 @@ pub fn liquidated_position_validations(
 }
 
 pub fn deleveraged_position_validations(
-    position_id: PositionId, unchanged_assets: UnchangedAssets, position_diff: PositionDiff,
+    position_id: PositionId,
+    unchanged_assets: UnchangedAssets,
+    position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(:unchanged_assets, :position_diff);
+    let position_change_result = evaluate_position_change(
+        :unchanged_assets, :position_diff_enriched,
+    );
 
     assert_with_byte_array(
         position_change_result.position_state_before_change == PositionState::Deleveragable,
@@ -213,12 +227,12 @@ pub fn deleveraged_position_validations(
 }
 
 pub fn calculate_position_tvtr(position_data: UnchangedAssets) -> PositionTVTR {
-    let position_diff = Default::default();
-    calculate_position_tvtr_change(unchanged_assets: position_data, :position_diff).before
+    let position_diff_enriched = Default::default();
+    calculate_position_tvtr_change(unchanged_assets: position_data, :position_diff_enriched).before
 }
 
 fn calculate_position_tvtr_change(
-    unchanged_assets: UnchangedAssets, position_diff: PositionDiff,
+    unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionTVTRChange {
     // Calculate the value and risk of the position data.
     let mut data_value = 0_i128;
@@ -232,14 +246,14 @@ fn calculate_position_tvtr_change(
         before: PositionTVTR { total_value: data_value, total_risk: data_risk },
         after: PositionTVTR { total_value: data_value, total_risk: data_risk },
     };
-    let collateral_value_risk = _calc_value_risk(span: position_diff.collaterals);
-    let synthetic_value_risk = _calc_value_risk(span: position_diff.synthetics);
+    let collateral_value_risk = _calc_value_risk(span: position_diff_enriched.collaterals);
+    let synthetic_value_risk = _calc_value_risk(span: position_diff_enriched.synthetics);
 
     data_value_risk + collateral_value_risk + synthetic_value_risk
 }
 
 
-fn _calc_value_risk(span: Span<AssetDiff>) -> PositionTVTRChange {
+fn _calc_value_risk(span: Span<AssetDiffEnriched>) -> PositionTVTRChange {
     let mut total_value_before = 0_i128;
     let mut total_risk_before = 0_u128;
 
@@ -247,8 +261,8 @@ fn _calc_value_risk(span: Span<AssetDiff>) -> PositionTVTRChange {
     let mut total_risk_after = 0_u128;
 
     for diff in span {
-        let asset_value_before = (*diff.price).mul(rhs: *diff.balance_before);
-        let asset_value_after = (*diff.price).mul(rhs: *diff.balance_after);
+        let asset_value_before = (*diff.price).mul(rhs: *diff.asset.balance.before);
+        let asset_value_after = (*diff.price).mul(rhs: *diff.asset.balance.after);
 
         total_value_before += asset_value_before;
         total_value_after += asset_value_after;
@@ -333,19 +347,22 @@ mod tests {
             risk_factor: RISK_FACTOR_1(),
         };
         let position_data = array![].span();
-        let asset_diff = AssetDiff {
-            id: asset.id,
-            balance_before: asset.balance,
-            balance_after: BalanceTrait::new(value: 80),
+        let asset_diff = AssetDiffEnriched {
+            asset: AssetDiff {
+                id: asset.id,
+                balance: BalanceDiff { before: asset.balance, after: BalanceTrait::new(value: 80) },
+            },
             price: asset.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let position_diff = PositionDiff {
+        let position_diff_enriched = PositionDiffEnriched {
             collaterals: array![].span(), synthetics: array![asset_diff].span(),
         };
 
-        let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
+        let position_tvtr_change = calculate_position_tvtr_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `total_value` before the change is `54,000`, calculated as `balance_before *
         /// price`
@@ -382,19 +399,22 @@ mod tests {
             risk_factor: RISK_FACTOR_1(),
         };
         let position_data = array![].span();
-        let asset_diff = AssetDiff {
-            id: asset.id,
-            balance_before: asset.balance,
-            balance_after: BalanceTrait::new(value: 20),
+        let asset_diff = AssetDiffEnriched {
+            asset: AssetDiff {
+                id: asset.id,
+                balance: BalanceDiff { before: asset.balance, after: BalanceTrait::new(value: 20) },
+            },
             price: asset.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let position_diff = PositionDiff {
+        let position_diff_enriched = PositionDiffEnriched {
             collaterals: array![].span(), synthetics: array![asset_diff].span(),
         };
 
-        let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
+        let position_tvtr_change = calculate_position_tvtr_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `total_value` before the change is `-54,000`, calculated as `balance_before *
         /// price`
@@ -456,27 +476,35 @@ mod tests {
         let position_data = array![asset_3, asset_4, asset_5].span();
 
         // Create a position diff with two assets diff.
-        let asset_diff_1 = AssetDiff {
-            id: asset_1.id,
-            balance_before: asset_1.balance,
-            balance_after: BalanceTrait::new(value: 80),
+        let asset_diff_1 = AssetDiffEnriched {
+            asset: AssetDiff {
+                id: asset_1.id,
+                balance: BalanceDiff {
+                    before: asset_1.balance, after: BalanceTrait::new(value: 80),
+                },
+            },
             price: asset_1.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let asset_diff_2 = AssetDiff {
-            id: asset_2.id,
-            balance_before: asset_2.balance,
-            balance_after: BalanceTrait::new(value: 60),
+        let asset_diff_2 = AssetDiffEnriched {
+            asset: AssetDiff {
+                id: asset_2.id,
+                balance: BalanceDiff {
+                    before: asset_2.balance, after: BalanceTrait::new(value: 60),
+                },
+            },
             price: asset_2.price,
             risk_factor_before: RISK_FACTOR_2(),
             risk_factor_after: RISK_FACTOR_2(),
         };
-        let position_diff = PositionDiff {
+        let position_diff_enriched = PositionDiffEnriched {
             collaterals: array![].span(), synthetics: array![asset_diff_1, asset_diff_2].span(),
         };
 
-        let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
+        let position_tvtr_change = calculate_position_tvtr_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `total_value` before the change is `121,500`, calculated as `balance_1_before *
         /// price + balance_2_before * price + balance_3_before * price + balance_4_before * price +
@@ -524,9 +552,11 @@ mod tests {
         let position_data = array![asset].span();
 
         // Create an empty position diff.
-        let position_diff = Default::default();
+        let position_diff_enriched = Default::default();
 
-        let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
+        let position_tvtr_change = calculate_position_tvtr_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `total_value` before the change is `54,000`, calculated as `balance_before *
         /// price`
@@ -556,9 +586,11 @@ mod tests {
         let position_data = array![].span();
 
         // Create an empty position diff.
-        let position_diff = Default::default();
+        let position_diff_enriched = Default::default();
 
-        let position_tvtr_change = calculate_position_tvtr_change(position_data, position_diff);
+        let position_tvtr_change = calculate_position_tvtr_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `total_value` before the change is `0`.
         assert_eq!(position_tvtr_change.before.total_value, 0);
@@ -582,9 +614,11 @@ mod tests {
         let position_data = array![].span();
 
         // Create an empty position diff.
-        let position_diff = Default::default();
+        let position_diff_enriched = Default::default();
 
-        let evaluated_position_change = evaluate_position_change(position_data, position_diff);
+        let evaluated_position_change = evaluate_position_change(
+            position_data, :position_diff_enriched,
+        );
 
         /// Ensures `position_state_before_change` is `Healthy`.
         assert!(

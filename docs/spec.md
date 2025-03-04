@@ -32,7 +32,11 @@
         - [AssetEntry](#assetentry)
         - [PositionData](#positiondata)
         - [UnchangedAssets](#unchangedassets)
-        - [AssetDiffEntry](#assetdiffentry)
+        - [BalanceDiff](#balanceDiff)
+        - [AssetDiff](#assetDiff)
+        - [AssetDiffEnriched](#AssetDiffEnriched)
+        - [PositionDiff](#PositionDiff)
+        - [PositionDiffEnriched](#PositionDiffEnriched)
         - [PositionId](#positionid)
         - [FundingIndex](#fundingindex)
         - [Balance](#balance)
@@ -520,14 +524,50 @@ pub struct UnchangedAssets {
 }
 ```
 
-### AssetDiffEntry
+### BalanceDiff
 
 ```rust
-pub struct AssetDiffEntry {
-    pub id: AssetId,
+pub struct BalanceDiff {
     pub before: Balance,
     pub after: Balance,
+}
+```
+
+### AssetDiff
+
+```rust
+pub struct AssetDiff {
+    pub id: AssetId,
+    pub balance: BalanceDiff,
+}
+```
+
+### AssetDiffEnriched
+
+```rust
+pub struct AssetDiffEnriched {
+    pub asset: AssetDiff,
     pub price: Price,
+    pub risk_factor_before: FixedTwoDecimal,
+    pub risk_factor_after: FixedTwoDecimal,
+}
+```
+
+### PositionDiff
+
+```rust
+pub struct PositionDiff {
+    pub collaterals: Span<AssetDiff>,
+    pub synthetics: Span<AssetDiff>,
+}
+```
+
+### PositionDiffEnriched
+
+```rust
+pub struct PositionDiffEnriched {
+    pub collaterals: Span<AssetDiffEnriched>,
+    pub synthetics: Span<AssetDiffEnriched>,
 }
 ```
 

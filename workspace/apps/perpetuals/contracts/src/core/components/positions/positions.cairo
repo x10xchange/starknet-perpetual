@@ -398,14 +398,14 @@ pub(crate) mod Positions {
             let position_mut = self._get_position_mut(:position_id);
             for diff in position_diff.collaterals {
                 let asset_id = *diff.id;
-                let collateral_asset = CollateralTrait::asset(balance: *diff.balance_after);
+                let collateral_asset = CollateralTrait::asset(balance: *diff.balance.after);
                 position_mut.collateral_assets.write(asset_id, collateral_asset);
             };
             for diff in position_diff.synthetics {
                 let synthetic_id = *diff.id;
                 self
                     ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, balance: *diff.balance_after,
+                        position: position_mut, :synthetic_id, balance: *diff.balance.after,
                     );
             };
         }
