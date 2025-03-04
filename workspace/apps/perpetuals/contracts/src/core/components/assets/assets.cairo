@@ -98,7 +98,7 @@ pub mod AssetsComponent {
         +HasComponent<TContractState>,
         +Drop<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl Pause: PausableComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Nonce: NonceComponent::HasComponent<TContractState>,
         impl Deposits: Deposit::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
@@ -163,8 +163,7 @@ pub mod AssetsComponent {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
-            let roles = get_dep_component!(@self, Roles);
-            roles.only_app_governor();
+            get_dep_component!(@self, Roles).only_app_governor();
 
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
             assert(asset_config.status != AssetStatus::DEACTIVATED, DEACTIVATED_ASSET);
@@ -303,8 +302,7 @@ pub mod AssetsComponent {
         /// stops receiving funding and price updates. Additionally, a deactivated asset cannot be
         /// reactivated.
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
-            let roles = get_dep_component!(@self, Roles);
-            roles.only_app_governor();
+            get_dep_component!(@self, Roles).only_app_governor();
             let mut config = self._get_synthetic_config(:synthetic_id);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
             config.status = AssetStatus::DEACTIVATED;
@@ -341,10 +339,7 @@ pub mod AssetsComponent {
             funding_ticks: Span<FundingTick>,
         ) {
             // Validations:
-            get_dep_component!(@self, Pause).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            self._validate_operator_flow(:operator_nonce);
 
             assert(
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
@@ -376,10 +371,7 @@ pub mod AssetsComponent {
             signed_prices: Span<SignedPrice>,
         ) {
             // Validations:
-            get_dep_component!(@self, Pause).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            self._validate_operator_flow(:operator_nonce);
 
             self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
 
@@ -449,8 +441,7 @@ pub mod AssetsComponent {
             asset_id: AssetId,
             oracle_public_key: PublicKey,
         ) {
-            let roles = get_dep_component!(@self, Roles);
-            roles.only_app_governor();
+            get_dep_component!(@self, Roles).only_app_governor();
 
             // Validate the oracle exists.
             let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
@@ -473,8 +464,7 @@ pub mod AssetsComponent {
         fn update_synthetic_quorum(
             ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
         ) {
-            let roles = get_dep_component!(@self, Roles);
-            roles.only_app_governor();
+            get_dep_component!(@self, Roles).only_app_governor();
             let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
             assert(synthetic_config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
@@ -493,7 +483,14 @@ pub mod AssetsComponent {
 
     #[generate_trait]
     pub impl InternalImpl<
-        TContractState, +HasComponent<TContractState>,
+        TContractState,
+        +HasComponent<TContractState>,
+        +Drop<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        +AccessControlComponent::HasComponent<TContractState>,
+        +SRC5Component::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
@@ -690,7 +687,14 @@ pub mod AssetsComponent {
 
     #[generate_trait]
     impl PrivateImpl<
-        TContractState, +HasComponent<TContractState>,
+        TContractState,
+        +HasComponent<TContractState>,
+        +Drop<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        +AccessControlComponent::HasComponent<TContractState>,
+        +SRC5Component::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
         fn _store_collateral(
             ref self: ComponentState<TContractState>,
@@ -857,6 +861,13 @@ pub mod AssetsComponent {
                 self.emit(events::AssetActivated { asset_id });
             }
             self.emit(events::PriceTick { asset_id, price });
+        }
+
+        fn _validate_operator_flow(ref self: ComponentState<TContractState>, operator_nonce: u64) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            get_dep_component!(@self, Roles).only_operator();
+            let mut nonce = get_dep_component_mut!(ref self, Nonce);
+            nonce.use_checked_nonce(nonce: operator_nonce);
         }
 
         fn _validate_oracle_signature(

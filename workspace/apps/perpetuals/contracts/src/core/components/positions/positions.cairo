@@ -156,10 +156,7 @@ pub(crate) mod Positions {
             owner_public_key: PublicKey,
             owner_account: ContractAddress,
         ) {
-            get_dep_component!(@self, Pausable).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            self._validate_operator_flow(:operator_nonce);
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
@@ -238,10 +235,7 @@ pub(crate) mod Positions {
             new_owner_account: ContractAddress,
             expiration: Timestamp,
         ) {
-            get_dep_component!(@self, Pausable).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self._get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
@@ -323,10 +317,7 @@ pub(crate) mod Positions {
             new_public_key: PublicKey,
             expiration: Timestamp,
         ) {
-            get_dep_component!(@self, Pausable).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self._get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
@@ -609,6 +600,13 @@ pub(crate) mod Positions {
 
             let position_change_result = evaluate_position(:position_data);
             position_change_result.position_state_after_change
+        }
+
+        fn _validate_operator_flow(ref self: ComponentState<TContractState>, operator_nonce: u64) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            get_dep_component!(@self, Roles).only_operator();
+            let mut nonce = get_dep_component_mut!(ref self, Nonce);
+            nonce.use_checked_nonce(nonce: operator_nonce);
         }
     }
 }
