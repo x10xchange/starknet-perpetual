@@ -550,19 +550,23 @@ pub mod Core {
 
             /// Execution:
             let position_diff_a = self
-                ._create_position_diff_from_order(
-                    order: order_a,
-                    actual_amount_base: actual_amount_base_a,
-                    actual_amount_quote: actual_amount_quote_a,
-                    actual_fee: actual_fee_a,
+                ._create_position_diff_from_asset_amounts(
+                    position: self
+                        .positions
+                        .get_position_snapshot(position_id: order_a.position_id),
+                    base: (order_a.base_asset_id, actual_amount_base_a.into()),
+                    quote: (order_a.quote_asset_id, actual_amount_quote_a.into()),
+                    fee: Option::Some((order_a.fee_asset_id, actual_fee_a)),
                 );
             let position_diff_b = self
-                ._create_position_diff_from_order(
-                    order: order_b,
+                ._create_position_diff_from_asset_amounts(
+                    position: self
+                        .positions
+                        .get_position_snapshot(position_id: order_b.position_id),
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    actual_amount_base: -actual_amount_base_a,
-                    actual_amount_quote: -actual_amount_quote_a,
-                    actual_fee: actual_fee_b,
+                    base: (order_b.base_asset_id, -actual_amount_base_a.into()),
+                    quote: (order_b.quote_asset_id, -actual_amount_quote_a.into()),
+                    fee: Option::Some((order_b.fee_asset_id, actual_fee_b)),
                 );
 
             let position_a = self.positions.get_position_snapshot(position_id_a);
@@ -730,19 +734,25 @@ pub mod Core {
 
             /// Execution:
             let liquidated_position_diff = self
-                ._create_position_diff_from_order(
-                    order: liquidated_order,
-                    actual_amount_base: actual_amount_base_liquidated,
-                    actual_amount_quote: actual_amount_quote_liquidated,
-                    actual_fee: fee_amount,
+                ._create_position_diff_from_asset_amounts(
+                    position: self
+                        .positions
+                        .get_position_snapshot(position_id: liquidated_order.position_id),
+                    base: (liquidated_order.base_asset_id, actual_amount_base_liquidated.into()),
+                    quote: (liquidated_order.quote_asset_id, actual_amount_quote_liquidated.into()),
+                    fee: Option::Some((liquidated_order.fee_asset_id, fee_amount)),
                 );
             let liquidator_position_diff = self
-                ._create_position_diff_from_order(
-                    order: liquidator_order,
+                ._create_position_diff_from_asset_amounts(
+                    position: self
+                        .positions
+                        .get_position_snapshot(position_id: liquidator_order.position_id),
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    actual_amount_base: -actual_amount_base_liquidated,
-                    actual_amount_quote: -actual_amount_quote_liquidated,
-                    actual_fee: actual_liquidator_fee,
+                    base: (liquidator_order.base_asset_id, -actual_amount_base_liquidated.into()),
+                    quote: (
+                        liquidator_order.quote_asset_id, -actual_amount_quote_liquidated.into(),
+                    ),
+                    fee: Option::Some((liquidator_order.fee_asset_id, actual_liquidator_fee)),
                 );
 
             let liquidated_position = self
@@ -919,36 +929,6 @@ pub mod Core {
             AssetDiff { id: collateral_id, balance: BalanceDiff { before, after } }
         }
 
-        fn _create_synthetic_diff(
-            self: @ContractState,
-            position: StoragePath<Position>,
-            synthetic_id: AssetId,
-            diff: Balance,
-        ) -> AssetDiff {
-            let before = self.positions.get_synthetic_balance(:position, :synthetic_id);
-            let after = before + diff;
-            AssetDiff { id: synthetic_id, balance: BalanceDiff { before, after } }
-        }
-
-        /// Builds assets diff from an order's fee, quote, and base assets, handling overlaps
-        /// by updating existing diffs. If an asset matches an existing entry, only `after
-        /// balance` is updated.
-        fn _create_position_diff_from_order(
-            ref self: ContractState,
-            order: Order,
-            actual_amount_base: i64,
-            actual_amount_quote: i64,
-            actual_fee: u64,
-        ) -> PositionDiff {
-            self
-                ._create_position_diff_from_asset_amounts(
-                    position: self.positions.get_position_snapshot(position_id: order.position_id),
-                    base: (order.base_asset_id, actual_amount_base.into()),
-                    quote: (order.quote_asset_id, actual_amount_quote.into()),
-                    fee: Option::Some((order.fee_asset_id, actual_fee)),
-                )
-        }
-
         fn _create_position_diff_from_asset_amounts(
             ref self: ContractState,
             position: StoragePath<Position>,
@@ -989,8 +969,9 @@ pub mod Core {
                     ._create_collateral_diff(:position, collateral_id: base_id, diff: base_amount);
                 collaterals_diff.append(base_diff);
             } else {
-                let base_diff = self
-                    ._create_synthetic_diff(:position, synthetic_id: base_id, diff: base_amount);
+                let before = self.positions.get_synthetic_balance(:position, synthetic_id: base_id);
+                let after = before + base_amount;
+                let base_diff = AssetDiff { id: base_id, balance: BalanceDiff { before, after } };
                 synthetics_diff.append(base_diff);
             }
 

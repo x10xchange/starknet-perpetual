@@ -31,14 +31,6 @@ pub struct PositionTVTR {
     pub total_risk: u128,
 }
 
-impl PositionTVTRAdd of Add<PositionTVTR> {
-    fn add(lhs: PositionTVTR, rhs: PositionTVTR) -> PositionTVTR {
-        let total_value = lhs.total_value + rhs.total_value;
-        let total_risk = lhs.total_risk + rhs.total_risk;
-        PositionTVTR { total_value, total_risk }
-    }
-}
-
 
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionTVTRChange {
@@ -46,13 +38,6 @@ pub struct PositionTVTRChange {
     pub after: PositionTVTR,
 }
 
-impl PositionTVTRChangeAdd of Add<PositionTVTRChange> {
-    fn add(lhs: PositionTVTRChange, rhs: PositionTVTRChange) -> PositionTVTRChange {
-        let before = lhs.before + rhs.before;
-        let after = lhs.after + rhs.after;
-        PositionTVTRChange { before, after }
-    }
-}
 
 #[generate_trait]
 pub impl PositionStateImpl of PositionStateTrait {
@@ -252,46 +237,45 @@ fn calculate_position_tvtr_change(
     unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionTVTRChange {
     // Calculate the value and risk of the position data.
-    let mut data_value = 0_i128;
-    let mut data_risk = 0_u128;
+    let mut unchanged_assets_value = 0_i128;
+    let mut unchanged_assets_risk = 0_u128;
     for asset in unchanged_assets {
         let asset_value: i128 = (*asset.price).mul(rhs: *asset.balance);
-        data_value += asset_value;
-        data_risk += (*asset.risk_factor).mul(asset_value.abs());
+        unchanged_assets_value += asset_value;
+        unchanged_assets_risk += (*asset.risk_factor).mul(asset_value.abs());
     };
-    let data_value_risk = PositionTVTRChange {
-        before: PositionTVTR { total_value: data_value, total_risk: data_risk },
-        after: PositionTVTR { total_value: data_value, total_risk: data_risk },
-    };
-    let collateral_value_risk = _calc_value_risk(span: position_diff_enriched.collaterals);
-    let synthetic_value_risk = _calc_value_risk(span: position_diff_enriched.synthetics);
 
-    data_value_risk + collateral_value_risk + synthetic_value_risk
-}
+    let mut total_value_before = unchanged_assets_value;
+    let mut total_risk_before = unchanged_assets_risk;
+    let mut total_value_after = unchanged_assets_value;
+    let mut total_risk_after = unchanged_assets_risk;
 
-
-fn _calc_value_risk(span: Span<AssetDiffEnriched>) -> PositionTVTRChange {
-    let mut total_value_before = 0_i128;
-    let mut total_risk_before = 0_u128;
-
-    let mut total_value_after = 0_i128;
-    let mut total_risk_after = 0_u128;
-
-    for diff in span {
-        let asset_value_before = (*diff.price).mul(rhs: *diff.asset.balance.before);
-        let asset_value_after = (*diff.price).mul(rhs: *diff.asset.balance.after);
+    for asset_diff in position_diff_enriched.synthetics {
+        let asset_value_before = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.before);
+        let asset_value_after = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.after);
 
         total_value_before += asset_value_before;
         total_value_after += asset_value_after;
 
-        total_risk_before += (*diff.risk_factor_before).mul(asset_value_before.abs());
-        total_risk_after += (*diff.risk_factor_after).mul(asset_value_after.abs());
+        total_risk_before += (*asset_diff.risk_factor_before).mul(asset_value_before.abs());
+        total_risk_after += (*asset_diff.risk_factor_after).mul(asset_value_after.abs());
     };
+
+    // TODO: Remove this for.
+    for asset_diff in position_diff_enriched.collaterals {
+        let asset_value_before = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.before);
+        let asset_value_after = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.after);
+
+        total_value_before += asset_value_before;
+        total_value_after += asset_value_after;
+    };
+
     PositionTVTRChange {
         before: PositionTVTR { total_value: total_value_before, total_risk: total_risk_before },
         after: PositionTVTR { total_value: total_value_after, total_risk: total_risk_after },
     }
 }
+
 
 #[cfg(test)]
 mod tests {
