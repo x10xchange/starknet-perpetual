@@ -549,16 +549,20 @@ pub mod Core {
                 );
 
             /// Execution:
-            let (position_diff_a, position_diff_b) = self
-                ._update_positions(
-                    :order_a,
-                    :order_b,
-                    :actual_amount_base_a,
-                    :actual_amount_quote_a,
-                    fee_a_position_id: FEE_POSITION,
-                    :actual_fee_a,
-                    fee_b_position_id: FEE_POSITION,
-                    :actual_fee_b,
+            let position_diff_a = self
+                ._create_position_diff_from_order(
+                    order: order_a,
+                    actual_amount_base: actual_amount_base_a,
+                    actual_amount_quote: actual_amount_quote_a,
+                    actual_fee: actual_fee_a,
+                );
+            let position_diff_b = self
+                ._create_position_diff_from_order(
+                    order: order_b,
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -actual_amount_base_a,
+                    actual_amount_quote: -actual_amount_quote_a,
+                    actual_fee: actual_fee_b,
                 );
 
             let position_a = self.positions.get_position_snapshot(position_id_a);
@@ -592,6 +596,23 @@ pub mod Core {
                 unchanged_assets: position_unchanged_assets_b,
                 position_diff_enriched: position_diff_b_enriched,
             );
+
+            // Apply Diffs.
+            self
+                .positions
+                .apply_diff(position_id: order_a.position_id, position_diff: position_diff_a);
+
+            self
+                .positions
+                .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
+
+            self
+                ._handle_fee_positions(
+                    fee_a_position_id: FEE_POSITION,
+                    fee_a: (order_a.fee_asset_id, actual_fee_a.into()),
+                    fee_b_position_id: FEE_POSITION,
+                    fee_b: (order_b.fee_asset_id, actual_fee_b.into()),
+                );
 
             self
                 .emit(
@@ -708,17 +729,22 @@ pub mod Core {
             }
 
             /// Execution:
-            let (liquidated_position_diff, liquidator_position_diff) = self
-                ._update_positions(
-                    order_a: liquidated_order,
-                    order_b: liquidator_order,
-                    actual_amount_base_a: actual_amount_base_liquidated,
-                    actual_amount_quote_a: actual_amount_quote_liquidated,
-                    fee_a_position_id: INSURANCE_FUND_POSITION,
-                    actual_fee_a: fee_amount,
-                    fee_b_position_id: FEE_POSITION,
-                    actual_fee_b: actual_liquidator_fee,
+            let liquidated_position_diff = self
+                ._create_position_diff_from_order(
+                    order: liquidated_order,
+                    actual_amount_base: actual_amount_base_liquidated,
+                    actual_amount_quote: actual_amount_quote_liquidated,
+                    actual_fee: fee_amount,
                 );
+            let liquidator_position_diff = self
+                ._create_position_diff_from_order(
+                    order: liquidator_order,
+                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
+                    actual_amount_base: -actual_amount_base_liquidated,
+                    actual_amount_quote: -actual_amount_quote_liquidated,
+                    actual_fee: actual_liquidator_fee,
+                );
+
             let liquidated_position = self
                 .positions
                 .get_position_snapshot(position_id: liquidated_position_id);
@@ -753,6 +779,28 @@ pub mod Core {
                 unchanged_assets: liquidator_position_unchanged_assets,
                 position_diff_enriched: liquidator_position_diff_enriched,
             );
+
+            // Apply Diffs.
+            self
+                .positions
+                .apply_diff(
+                    position_id: liquidated_position_id, position_diff: liquidated_position_diff,
+                );
+
+            self
+                .positions
+                .apply_diff(
+                    position_id: liquidator_order.position_id,
+                    position_diff: liquidator_position_diff,
+                );
+
+            self
+                ._handle_fee_positions(
+                    fee_a_position_id: INSURANCE_FUND_POSITION,
+                    fee_a: (liquidated_order.fee_asset_id, fee_amount.into()),
+                    fee_b_position_id: FEE_POSITION,
+                    fee_b: (liquidator_order.fee_asset_id, actual_liquidator_fee.into()),
+                );
 
             self
                 .emit(
@@ -951,54 +999,28 @@ pub mod Core {
             }
         }
 
-        fn _update_positions(
+        fn _handle_fee_positions(
             ref self: ContractState,
-            order_a: Order,
-            order_b: Order,
-            actual_amount_base_a: i64,
-            actual_amount_quote_a: i64,
             fee_a_position_id: PositionId,
-            actual_fee_a: u64,
+            fee_a: (AssetId, Balance),
             fee_b_position_id: PositionId,
-            actual_fee_b: u64,
-        ) -> (PositionDiff, PositionDiff) {
-            let position_diff_a = self
-                ._create_position_diff_from_order(
-                    order: order_a,
-                    actual_amount_base: actual_amount_base_a,
-                    actual_amount_quote: actual_amount_quote_a,
-                    actual_fee: actual_fee_a,
-                );
-            let position_diff_b = self
-                ._create_position_diff_from_order(
-                    order: order_b,
-                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    actual_amount_base: -actual_amount_base_a,
-                    actual_amount_quote: -actual_amount_quote_a,
-                    actual_fee: actual_fee_b,
-                );
-
-            // Apply the position diff.
-            self
-                .positions
-                .apply_diff(position_id: order_a.position_id, position_diff: position_diff_a);
-            self
-                .positions
-                .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
-
-            // Update fee positions.
+            fee_b: (AssetId, Balance),
+        ) {
+            let (fee_id_a, fee_amount_a) = fee_a;
+            let (fee_id_b, fee_amount_b) = fee_b;
             if fee_a_position_id == fee_b_position_id {
                 // Note: We assume that fee asset IDs are the same here. This should be updated when
                 // supporting multi-collateral.
-                let diff: Balance = (actual_fee_a + actual_fee_b).into();
+                let diff: Balance = fee_amount_a + fee_amount_b;
                 if diff.is_non_zero() {
                     let fee_position = self
                         .positions
                         .get_position_snapshot(position_id: fee_a_position_id);
                     let fee_position_diff = self
                         ._create_collateral_position_diff(
-                            position: fee_position, collateral_id: order_a.fee_asset_id, :diff,
+                            position: fee_position, collateral_id: fee_id_a, :diff,
                         );
+
                     self
                         .positions
                         .apply_diff(
@@ -1006,14 +1028,14 @@ pub mod Core {
                         );
                 }
             } else {
-                let diff: Balance = actual_fee_a.into();
+                let diff: Balance = fee_amount_a;
                 if diff.is_non_zero() {
                     let fee_position_a = self
                         .positions
                         .get_position_snapshot(position_id: fee_a_position_id);
                     let fee_position_diff_a = self
                         ._create_collateral_position_diff(
-                            position: fee_position_a, collateral_id: order_a.fee_asset_id, :diff,
+                            position: fee_position_a, collateral_id: fee_id_a, :diff,
                         );
                     self
                         .positions
@@ -1022,16 +1044,16 @@ pub mod Core {
                         );
                 }
 
-                if actual_fee_a.is_non_zero() {
+                let diff: Balance = fee_amount_b;
+                if diff.is_non_zero() {
                     let fee_position_b = self
                         .positions
                         .get_position_snapshot(position_id: fee_b_position_id);
                     let fee_position_diff_b = self
                         ._create_collateral_position_diff(
-                            position: fee_position_b,
-                            collateral_id: order_b.fee_asset_id,
-                            diff: actual_fee_b.into(),
+                            position: fee_position_b, collateral_id: fee_id_b, :diff,
                         );
+
                     self
                         .positions
                         .apply_diff(
@@ -1039,8 +1061,6 @@ pub mod Core {
                         );
                 }
             }
-
-            (position_diff_a, position_diff_b)
         }
 
         fn _execute_transfer(
