@@ -519,14 +519,18 @@ pub mod Core {
 
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
+
+            let position_a = self.positions.get_position_snapshot(position_id_a);
+            let position_b = self.positions.get_position_snapshot(position_id_b);
+
             // Signatures validation:
             let hash_a = self
                 ._validate_order_signature(
-                    position_id: position_id_a, order: order_a, signature: signature_a,
+                    position: position_a, order: order_a, signature: signature_a,
                 );
             let hash_b = self
                 ._validate_order_signature(
-                    position_id: position_id_b, order: order_b, signature: signature_b,
+                    position: position_b, order: order_b, signature: signature_b,
                 );
 
             // Validate and update fulfillments.
@@ -557,29 +561,32 @@ pub mod Core {
                     :actual_fee_b,
                 );
 
-            /// Execution:
+            /// Positions' Diffs:
             let position_diff_a = self
                 ._create_position_diff_from_asset_amounts(
-                    position: self
-                        .positions
-                        .get_position_snapshot(position_id: order_a.position_id),
+                    position: position_a,
                     base: (order_a.base_asset_id, actual_amount_base_a.into()),
                     quote: (order_a.quote_asset_id, actual_amount_quote_a.into()),
                     fee: Option::Some((order_a.fee_asset_id, actual_fee_a)),
                 );
             let position_diff_b = self
                 ._create_position_diff_from_asset_amounts(
-                    position: self
-                        .positions
-                        .get_position_snapshot(position_id: order_b.position_id),
+                    position: position_b,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
                     base: (order_b.base_asset_id, -actual_amount_base_a.into()),
                     quote: (order_b.quote_asset_id, -actual_amount_quote_a.into()),
                     fee: Option::Some((order_b.fee_asset_id, actual_fee_b)),
                 );
 
-            let position_a = self.positions.get_position_snapshot(position_id_a);
-            let position_b = self.positions.get_position_snapshot(position_id_a);
+            // Assuming fee_asset_id is the same for both orders.
+            let fee_position_diff = self
+                ._create_collateral_position_diff(
+                    position: self.positions.get_position_snapshot(FEE_POSITION),
+                    collateral_id: order_a.fee_asset_id,
+                    diff: (actual_fee_a + actual_fee_b).into(),
+                );
+
+            /// Unchanged assets:
             let position_unchanged_assets_a = self
                 .positions
                 .get_position_unchanged_assets(
@@ -619,13 +626,7 @@ pub mod Core {
                 .positions
                 .apply_diff(position_id: order_b.position_id, position_diff: position_diff_b);
 
-            self
-                ._handle_fee_positions(
-                    fee_a_position_id: FEE_POSITION,
-                    fee_a: (order_a.fee_asset_id, actual_fee_a.into()),
-                    fee_b_position_id: FEE_POSITION,
-                    fee_b: (order_b.fee_asset_id, actual_fee_b.into()),
-                );
+            self.positions.apply_diff(position_id: FEE_POSITION, position_diff: fee_position_diff);
 
             self
                 .emit(
@@ -693,10 +694,12 @@ pub mod Core {
             self._validate_operator_flow(:operator_nonce);
 
             let liquidator_position_id = liquidator_order.position_id;
+            let liquidator_position = self.positions.get_position_snapshot(liquidator_position_id);
+
             // Signatures validation:
             let liquidator_order_hash = self
                 ._validate_order_signature(
-                    position_id: liquidator_position_id,
+                    position: liquidator_position,
                     order: liquidator_order,
                     signature: liquidator_signature,
                 );
@@ -737,9 +740,10 @@ pub mod Core {
 
             assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
             // In case of liquidation of insurance fund, the liquidator fee should be zero.
-            if liquidator_order.position_id == INSURANCE_FUND_POSITION {
-                assert_with_byte_array(fee_amount.is_zero(), illegal_zero_fee());
-            }
+            assert_with_byte_array(
+                liquidator_order.position_id != INSURANCE_FUND_POSITION || fee_amount.is_zero(),
+                illegal_zero_fee(),
+            );
 
             /// Execution:
             let liquidated_position_diff = self
@@ -753,15 +757,25 @@ pub mod Core {
                 );
             let liquidator_position_diff = self
                 ._create_position_diff_from_asset_amounts(
-                    position: self
-                        .positions
-                        .get_position_snapshot(position_id: liquidator_order.position_id),
+                    position: liquidator_position,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
                     base: (liquidator_order.base_asset_id, -actual_amount_base_liquidated.into()),
                     quote: (
                         liquidator_order.quote_asset_id, -actual_amount_quote_liquidated.into(),
                     ),
                     fee: Option::Some((liquidator_order.fee_asset_id, actual_liquidator_fee)),
+                );
+            let insurance_position_diff = self
+                ._create_collateral_position_diff(
+                    position: self.positions.get_position_snapshot(INSURANCE_FUND_POSITION),
+                    collateral_id: liquidated_order.fee_asset_id,
+                    diff: fee_amount.into(),
+                );
+            let fee_position_diff = self
+                ._create_collateral_position_diff(
+                    position: self.positions.get_position_snapshot(FEE_POSITION),
+                    collateral_id: liquidator_order.fee_asset_id,
+                    diff: actual_liquidator_fee.into(),
                 );
 
             let liquidated_position = self
@@ -813,12 +827,12 @@ pub mod Core {
                     position_diff: liquidator_position_diff,
                 );
 
+            self.positions.apply_diff(position_id: FEE_POSITION, position_diff: fee_position_diff);
+
             self
-                ._handle_fee_positions(
-                    fee_a_position_id: INSURANCE_FUND_POSITION,
-                    fee_a: (liquidated_order.fee_asset_id, fee_amount.into()),
-                    fee_b_position_id: FEE_POSITION,
-                    fee_b: (liquidator_order.fee_asset_id, actual_liquidator_fee.into()),
+                .positions
+                .apply_diff(
+                    position_id: INSURANCE_FUND_POSITION, position_diff: insurance_position_diff,
                 );
 
             self
@@ -921,10 +935,13 @@ pub mod Core {
             collateral_id: AssetId,
             diff: Balance,
         ) -> PositionDiff {
-            let collateral_diff = self._create_collateral_diff(:position, :collateral_id, :diff);
-            PositionDiff {
-                collaterals: array![collateral_diff].span(), synthetics: array![].span(),
+            let mut collaterals = array![];
+            if diff.is_non_zero() {
+                let collateral_diff = self
+                    ._create_collateral_diff(:position, :collateral_id, :diff);
+                collaterals.append(collateral_diff);
             }
+            PositionDiff { collaterals: collaterals.span(), synthetics: array![].span() }
         }
 
         fn _create_collateral_diff(
@@ -986,70 +1003,6 @@ pub mod Core {
 
             PositionDiff {
                 collaterals: collaterals_diff.span(), synthetics: synthetics_diff.span(),
-            }
-        }
-
-        fn _handle_fee_positions(
-            ref self: ContractState,
-            fee_a_position_id: PositionId,
-            fee_a: (AssetId, Balance),
-            fee_b_position_id: PositionId,
-            fee_b: (AssetId, Balance),
-        ) {
-            let (fee_id_a, fee_amount_a) = fee_a;
-            let (fee_id_b, fee_amount_b) = fee_b;
-            if fee_a_position_id == fee_b_position_id {
-                // Note: We assume that fee asset IDs are the same here. This should be updated when
-                // supporting multi-collateral.
-                let diff: Balance = fee_amount_a + fee_amount_b;
-                if diff.is_non_zero() {
-                    let fee_position = self
-                        .positions
-                        .get_position_snapshot(position_id: fee_a_position_id);
-                    let fee_position_diff = self
-                        ._create_collateral_position_diff(
-                            position: fee_position, collateral_id: fee_id_a, :diff,
-                        );
-
-                    self
-                        .positions
-                        .apply_diff(
-                            position_id: fee_a_position_id, position_diff: fee_position_diff,
-                        );
-                }
-            } else {
-                let diff: Balance = fee_amount_a;
-                if diff.is_non_zero() {
-                    let fee_position_a = self
-                        .positions
-                        .get_position_snapshot(position_id: fee_a_position_id);
-                    let fee_position_diff_a = self
-                        ._create_collateral_position_diff(
-                            position: fee_position_a, collateral_id: fee_id_a, :diff,
-                        );
-                    self
-                        .positions
-                        .apply_diff(
-                            position_id: fee_a_position_id, position_diff: fee_position_diff_a,
-                        );
-                }
-
-                let diff: Balance = fee_amount_b;
-                if diff.is_non_zero() {
-                    let fee_position_b = self
-                        .positions
-                        .get_position_snapshot(position_id: fee_b_position_id);
-                    let fee_position_diff_b = self
-                        ._create_collateral_position_diff(
-                            position: fee_position_b, collateral_id: fee_id_b, :diff,
-                        );
-
-                    self
-                        .positions
-                        .apply_diff(
-                            position_id: fee_b_position_id, position_diff: fee_position_diff_b,
-                        );
-                }
             }
         }
 
@@ -1352,9 +1305,11 @@ pub mod Core {
         }
 
         fn _validate_order_signature(
-            self: @ContractState, position_id: PositionId, order: Order, signature: Signature,
+            self: @ContractState,
+            position: StoragePath<Position>,
+            order: Order,
+            signature: Signature,
         ) -> HashType {
-            let position = self.positions.get_position_snapshot(:position_id);
             let public_key = position.owner_public_key.read();
             let msg_hash = order.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);

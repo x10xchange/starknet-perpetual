@@ -386,6 +386,10 @@ pub(crate) mod Positions {
             position_id: PositionId,
             position_diff: PositionDiff,
         ) {
+            if position_diff.collaterals.len().is_zero()
+                && position_diff.synthetics.len().is_zero() {
+                return;
+            }
             let position_mut = self._get_position_mut(:position_id);
             for diff in position_diff.collaterals {
                 let asset_id = *diff.id;
