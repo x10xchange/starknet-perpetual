@@ -82,18 +82,18 @@ pub(crate) mod Positions {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Assets: AssetsComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
         fn get_position_assets(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
-            let position = self._get_position_snapshot(:position_id);
+            let position = self.get_position_snapshot(:position_id);
             self.get_position_unchanged_assets(:position, position_diff: Default::default())
         }
 
@@ -102,7 +102,7 @@ pub(crate) mod Positions {
         fn get_position_tv_tr(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionTVTR {
-            let position = self._get_position_snapshot(:position_id);
+            let position = self.get_position_snapshot(:position_id);
             let position_data = self
                 .get_position_unchanged_assets(:position, position_diff: Default::default());
             calculate_position_tvtr(:position_data)
@@ -112,7 +112,8 @@ pub(crate) mod Positions {
         /// `evaluate_position_change` function as it gives all the information needed at the same
         /// cost.
         fn is_healthy(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
-            let position_state = self._get_position_state(:position_id);
+            let position = self.get_position_snapshot(:position_id);
+            let position_state = self._get_position_state(:position);
             position_state == PositionState::Healthy
         }
 
@@ -120,7 +121,8 @@ pub(crate) mod Positions {
         /// `evaluate_position_change` function as it gives all the information needed at the same
         /// cost.
         fn is_liquidatable(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
-            let position_state = self._get_position_state(:position_id);
+            let position = self.get_position_snapshot(:position_id);
+            let position_state = self._get_position_state(:position);
             position_state == PositionState::Liquidatable
                 || position_state == PositionState::Deleveragable
         }
@@ -131,7 +133,8 @@ pub(crate) mod Positions {
         fn is_deleveragable(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> bool {
-            let position_state = self._get_position_state(:position_id);
+            let position = self.get_position_snapshot(:position_id);
+            let position_state = self._get_position_state(:position);
             position_state == PositionState::Deleveragable
         }
 
@@ -191,7 +194,7 @@ pub(crate) mod Positions {
             new_owner_account: ContractAddress,
             expiration: Timestamp,
         ) {
-            let position = self._get_position_snapshot(:position_id);
+            let position = self.get_position_snapshot(:position_id);
             let owner_account = position.owner_account.read();
             assert(owner_account.is_zero(), POSITION_HAS_OWNER_ACCOUNT);
             assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
@@ -237,7 +240,7 @@ pub(crate) mod Positions {
         ) {
             self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
-            let position = self._get_position_mut(:position_id);
+            let position = self.get_position_mut(:position_id);
             assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let public_key = position.owner_public_key.read();
@@ -275,7 +278,7 @@ pub(crate) mod Positions {
             new_public_key: PublicKey,
             expiration: Timestamp,
         ) {
-            let position = self._get_position_snapshot(:position_id);
+            let position = self.get_position_snapshot(:position_id);
             let owner_account = position.owner_account.read();
             let old_public_key = position.owner_public_key.read();
             assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
@@ -319,7 +322,7 @@ pub(crate) mod Positions {
         ) {
             self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
-            let position = self._get_position_mut(:position_id);
+            let position = self.get_position_mut(:position_id);
             let owner_account = position.owner_account.read();
             let old_public_key = position.owner_public_key.read();
             assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
@@ -349,13 +352,13 @@ pub(crate) mod Positions {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Assets: AssetsComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
@@ -390,7 +393,7 @@ pub(crate) mod Positions {
                 && position_diff.synthetics.len().is_zero() {
                 return;
             }
-            let position_mut = self._get_position_mut(:position_id);
+            let position_mut = self.get_position_mut(:position_id);
             for diff in position_diff.collaterals {
                 let asset_id = *diff.id;
                 let collateral_asset = CollateralTrait::asset(balance: *diff.balance.after);
@@ -408,15 +411,19 @@ pub(crate) mod Positions {
         fn get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
-            self._get_position_snapshot(:position_id)
+            let position = self.positions.entry(position_id);
+            assert(position.version.read().is_non_zero(), POSITION_DOESNT_EXIST);
+            position
         }
 
         /// Returns the position at the given `position_id`.
-        /// The function asserts that the position exists and has a non-zero owner public key.
+        /// The function asserts that the position exists and has a non-zero version.
         fn get_position_mut(
             ref self: ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Mutable<Position>> {
-            self._get_position_mut(:position_id)
+            let mut position = self.positions.entry(position_id);
+            assert(position.version.read().is_non_zero(), POSITION_DOESNT_EXIST);
+            position
         }
 
         fn get_synthetic_balance(
@@ -488,32 +495,14 @@ pub(crate) mod Positions {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Assets: AssetsComponent::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        /// Returns the position at the given `position_id`.
-        /// The function asserts that the position exists and has a non-zero owner public key.
-        fn _get_position_mut(
-            ref self: ComponentState<TContractState>, position_id: PositionId,
-        ) -> StoragePath<Mutable<Position>> {
-            let mut position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), POSITION_DOESNT_EXIST);
-            position
-        }
-
-        fn _get_position_snapshot(
-            self: @ComponentState<TContractState>, position_id: PositionId,
-        ) -> StoragePath<Position> {
-            let position = self.positions.entry(position_id);
-            assert(position.owner_public_key.read().is_non_zero(), POSITION_DOESNT_EXIST);
-            position
-        }
-
         /// Returns the main collateral balance of a position while taking into account the funding
         /// of all synthetic assets in the position.
         fn _get_provisional_main_collateral_balance(
@@ -539,7 +528,8 @@ pub(crate) mod Positions {
         fn _validate_position_exists(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) {
-            self._get_position_snapshot(:position_id);
+            // get_position_snapshot asserts that the position exists and has a non-zero version.
+            self.get_position_snapshot(:position_id);
         }
 
         /// Updates the synthetic balance and handles the funding mechanism.
@@ -596,9 +586,8 @@ pub(crate) mod Positions {
         }
 
         fn _get_position_state(
-            self: @ComponentState<TContractState>, position_id: PositionId,
+            self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> PositionState {
-            let position = self._get_position_snapshot(:position_id);
             let position_diff = Default::default();
             let position_data = self.get_position_unchanged_assets(:position, :position_diff);
 

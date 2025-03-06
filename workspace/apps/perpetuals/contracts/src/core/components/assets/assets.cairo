@@ -24,14 +24,14 @@ pub mod AssetsComponent {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_ALREADY_EXISTS, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE,
-        ASSET_NOT_EXISTS, COLLATERAL_NOT_ACTIVE, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET,
-        FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
-        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
-        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
-        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
-        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
-        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
-        ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        ASSET_NOT_EXISTS, COLLATERAL_NOT_EXISTS, DEACTIVATED_ASSET, FUNDING_EXPIRED,
+        FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP,
+        INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME,
+        INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM,
+        INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION, INVALID_ZERO_RF_FIRST_BOUNDRY,
+        INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS,
+        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
         SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
         UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
         ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
@@ -97,12 +97,12 @@ pub mod AssetsComponent {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
-        impl Deposits: Deposit::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Deposits: Deposit::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
         /// Add collateral asset is called by the operator to add a new collateral asset.
         /// We only have one collateral asset.
@@ -486,11 +486,11 @@ pub mod AssetsComponent {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
@@ -657,15 +657,6 @@ pub mod AssetsComponent {
             self._validate_prices(:now);
         }
 
-        fn validate_collateral_active(
-            self: @ComponentState<TContractState>, collateral_id: AssetId,
-        ) {
-            assert(
-                self._get_collateral_config(:collateral_id).status == AssetStatus::ACTIVE,
-                COLLATERAL_NOT_ACTIVE,
-            );
-        }
-
         fn validate_oracle_signature(
             self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
         ) {
@@ -690,11 +681,11 @@ pub mod AssetsComponent {
         TContractState,
         +HasComponent<TContractState>,
         +Drop<TContractState>,
-        impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl Pausable: PausableComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
+        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
         fn _store_collateral(
             ref self: ComponentState<TContractState>,

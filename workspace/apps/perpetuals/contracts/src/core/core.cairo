@@ -232,7 +232,6 @@ pub mod Core {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
             self._validate_position_exists(:position_id);
-            self.assets.validate_collateral_active(:collateral_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             /// Execution - Deposit:
@@ -331,7 +330,6 @@ pub mod Core {
             self._validate_position_exists(:position_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            self.assets.validate_collateral_active(:collateral_id);
 
             /// Not withdrawing from pending deposits:
             let collateral_config = self.assets.get_collateral_config(:collateral_id);
@@ -450,8 +448,6 @@ pub mod Core {
             /// Validations:
             self._validate_operator_flow(:operator_nonce);
 
-            // Validate collateral.
-            self.assets.validate_collateral_active(:collateral_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             // Validate expiration.
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
@@ -1086,9 +1082,6 @@ pub mod Core {
             let now = Time::now();
             assert_with_byte_array(now < order.expiration, order_expired_err(order.position_id));
 
-            // Assets check.
-            self.assets.validate_collateral_active(collateral_id: order.fee_asset_id);
-
             // Sign Validation for amounts.
             assert(
                 !have_same_sign(a: order.quote_amount, b: order.base_amount),
@@ -1146,7 +1139,6 @@ pub mod Core {
             assert(order_a.base_asset_id != order_a.quote_asset_id, SAME_BASE_QUOTE_ASSET_IDS);
 
             // Assets check.
-            self.assets.validate_collateral_active(collateral_id: order_a.quote_asset_id);
             self.assets.validate_asset_active(asset_id: order_a.base_asset_id);
         }
 
@@ -1184,7 +1176,6 @@ pub mod Core {
             assert(deleveraged_quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Assets check.
-            self.assets.validate_collateral_active(collateral_id: deleveraged_quote_asset_id);
             assert(
                 self.assets.is_synthetic(asset_id: deleveraged_base_asset_id),
                 INVALID_NON_SYNTHETIC_ASSET,
