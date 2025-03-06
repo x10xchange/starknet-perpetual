@@ -52,26 +52,11 @@ pub impl PositionStateImpl of PositionStateTrait {
     }
 }
 
-/// A struct representing the assessment of a position after a change.
-/// It contains answers to key questions about the position's state.
-///
-/// # Fields:
-/// - `is_healthier`:
-///     The position is healthier if the risk has decreased.
-/// - `is_fair_deleverage`:
-///     Indicates whether the deleveraging process is fair.
-#[derive(Copy, Debug, Drop, Serde)]
-pub struct ChangeEffects {
-    pub is_healthier: bool,
-    pub is_fair_deleverage: bool,
-}
-
 /// Representing the evaluation of position's state and the effects of a proposed change.
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionChangeResult {
     pub position_state_before_change: PositionState,
     pub position_state_after_change: PositionState,
-    pub change_effects: Option<ChangeEffects>,
 }
 
 
@@ -108,67 +93,40 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
 
 pub fn evaluate_position(position_data: PositionData) -> PositionChangeResult {
     let position_diff_enriched = Default::default();
-    evaluate_position_change(unchanged_assets: position_data, :position_diff_enriched)
-}
-
-pub fn evaluate_position_change(
-    unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
-) -> PositionChangeResult {
-    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
-
-    // When the position has zero total risk (either before or after the change), metrics like
-    // "healthier" or "fair deleverage" are not applicable. This happens when a position has no
-    // synthetic assets.
-    let change_effects = if tvtr.before.total_risk.is_non_zero()
-        && tvtr.after.total_risk.is_non_zero() {
-        Option::Some(
-            ChangeEffects {
-                is_healthier: is_healthier(before: tvtr.before, after: tvtr.after),
-                is_fair_deleverage: is_fair_deleverage(before: tvtr.before, after: tvtr.after),
-            },
-        )
-    } else {
-        Option::None
-    };
-
+    let tvtr = calculate_position_tvtr_change(
+        unchanged_assets: position_data, :position_diff_enriched,
+    );
     PositionChangeResult {
         position_state_before_change: PositionStateTrait::new(tvtr.before),
         position_state_after_change: PositionStateTrait::new(tvtr.after),
-        change_effects,
     }
 }
+
 
 pub fn validate_position_is_healthy_or_healthier(
     position_id: PositionId,
     unchanged_assets: UnchangedAssets,
     position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(
-        :unchanged_assets, :position_diff_enriched,
-    );
-    assert_healthy_or_healthier(:position_id, :position_change_result);
+    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
+    assert_healthy_or_healthier(:position_id, :tvtr);
 }
 
-pub fn assert_healthy_or_healthier(
-    position_id: PositionId, position_change_result: PositionChangeResult,
-) {
-    // If the position is healthy we can return.
-    if position_change_result.position_state_after_change == PositionState::Healthy {
+pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: PositionTVTRChange) {
+    let position_state_after_change = PositionStateTrait::new(tvtr.after);
+    if position_state_after_change == PositionState::Healthy {
+        // If the position is healthy we can return.
         return;
     }
 
-    match position_change_result.change_effects {
-        Option::Some(change_effects) => {
-            assert_with_byte_array(
-                change_effects.is_healthier, position_not_healthy_nor_healthier(:position_id),
-            );
-        },
-        Option::None => {
-            // None indicates that the position total risk before or after is 0 (no synthetic
-            // assets), thus we must be healthy.
-            panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id));
-        },
+    if tvtr.before.total_risk.is_zero() || tvtr.after.total_risk.is_zero() {
+        panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id));
     }
+
+    assert_with_byte_array(
+        is_healthier(before: tvtr.before, after: tvtr.after),
+        position_not_healthy_nor_healthier(:position_id),
+    );
 }
 
 pub fn liquidated_position_validations(
@@ -176,17 +134,16 @@ pub fn liquidated_position_validations(
     unchanged_assets: UnchangedAssets,
     position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(
-        :unchanged_assets, :position_diff_enriched,
-    );
+    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
+    let position_state_before_change = PositionStateTrait::new(tvtr.before);
 
     assert_with_byte_array(
-        position_change_result.position_state_before_change == PositionState::Liquidatable
-            || position_change_result.position_state_before_change == PositionState::Deleveragable,
+        position_state_before_change == PositionState::Liquidatable
+            || position_state_before_change == PositionState::Deleveragable,
         position_not_liquidatable(:position_id),
     );
 
-    assert_healthy_or_healthier(:position_id, :position_change_result);
+    assert_healthy_or_healthier(:position_id, :tvtr);
 }
 
 pub fn deleveraged_position_validations(
@@ -194,21 +151,19 @@ pub fn deleveraged_position_validations(
     unchanged_assets: UnchangedAssets,
     position_diff_enriched: PositionDiffEnriched,
 ) {
-    let position_change_result = evaluate_position_change(
-        :unchanged_assets, :position_diff_enriched,
-    );
+    let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
+    let position_state_before_change = PositionStateTrait::new(tvtr.before);
 
     assert_with_byte_array(
-        position_change_result.position_state_before_change == PositionState::Deleveragable,
+        position_state_before_change == PositionState::Deleveragable,
         position_not_deleveragable(:position_id),
     );
 
-    assert_healthy_or_healthier(:position_id, :position_change_result);
-    if let Option::Some(change_effects) = position_change_result.change_effects {
-        assert_with_byte_array(
-            change_effects.is_fair_deleverage, position_not_fair_deleverage(:position_id),
-        );
-    }
+    assert_healthy_or_healthier(:position_id, :tvtr);
+    assert_with_byte_array(
+        is_fair_deleverage(before: tvtr.before, after: tvtr.after),
+        position_not_fair_deleverage(:position_id),
+    );
 }
 
 pub fn calculate_position_tvtr(position_data: UnchangedAssets) -> PositionTVTR {
@@ -607,24 +562,15 @@ mod tests {
     }
 
 
-    /// Test the `evaluate_position_change` function for the case where the position is empty, and
+    /// Test the `evaluate_position` function for the case where the position is empty, and
     /// no diff is provided.
     #[test]
-    fn test_evaluate_position_change_empty_position_and_empty_diff() {
+    fn test_evaluate_position_empty_position_and_empty_diff() {
         // Create an empty position.
         let position_data = array![].span();
 
-        // Create an empty position diff.
-        let position_diff_enriched = Default::default();
-
-        let evaluated_position_change = evaluate_position_change(
-            position_data, :position_diff_enriched,
-        );
-
-        /// Ensures `position_state_before_change` is `Healthy`.
-        assert!(
-            evaluated_position_change.change_effects.is_none(),
-            "Expected position_state_before_change to be Healthy",
-        );
+        let evaluated_position = evaluate_position(position_data);
+        assert_eq!(evaluated_position.position_state_before_change, PositionState::Healthy);
+        assert_eq!(evaluated_position.position_state_after_change, PositionState::Healthy);
     }
 }
