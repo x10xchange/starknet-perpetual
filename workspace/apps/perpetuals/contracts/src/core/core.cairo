@@ -229,7 +229,13 @@ pub mod Core {
             amount: u64,
             salt: felt252,
         ) {
-            self._validate_deposit(:operator_nonce, :position_id, :collateral_id, :amount);
+            /// Validations:
+            self._validate_operator_flow(:operator_nonce);
+            self._validate_position_exists(:position_id);
+            self.assets.validate_collateral_active(:collateral_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+
+            /// Execution - Deposit:
             self
                 .deposits
                 .process_deposit(
@@ -320,11 +326,14 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self
-                ._validate_withdraw(
-                    :operator_nonce, :position_id, :collateral_id, :amount, :expiration,
-                );
-            /// Validation - Not withdrawing from pending deposits:
+            /// Validations:
+            self._validate_operator_flow(:operator_nonce);
+            self._validate_position_exists(:position_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
+            self.assets.validate_collateral_active(:collateral_id);
+
+            /// Not withdrawing from pending deposits:
             let collateral_config = self.assets.get_collateral_config(:collateral_id);
             let token_contract = IERC20Dispatcher {
                 contract_address: collateral_config.token_address,
@@ -440,16 +449,18 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self
-                ._validate_transfer(
-                    :operator_nonce,
-                    :recipient,
-                    :position_id,
-                    :collateral_id,
-                    :amount,
-                    :expiration,
-                    :salt,
-                );
+            /// Validations:
+            self._validate_operator_flow(:operator_nonce);
+
+            // Validate collateral.
+            self.assets.validate_collateral_active(:collateral_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            // Validate expiration.
+            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+            // A user cannot transfer to itself.
+            assert(recipient != position_id, INVALID_SAME_POSITIONS);
+
+            /// Executions:
             let position = self.positions.get_position_snapshot(:position_id);
             self._execute_transfer(:recipient, :position_id, :collateral_id, :amount);
             let hash = self
@@ -1100,19 +1111,6 @@ pub mod Core {
             fulfillment_entry.write(total_amount);
         }
 
-        fn _validate_deposit(
-            ref self: ContractState,
-            operator_nonce: u64,
-            position_id: PositionId,
-            collateral_id: AssetId,
-            amount: u64,
-        ) {
-            self._validate_operator_flow(:operator_nonce);
-            self._validate_position_exists(:position_id);
-            self.assets.validate_collateral_active(:collateral_id);
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-        }
-
         /// Validates operator flows prerequisites:
         /// - Contract is not paused.
         /// - Caller has operator role.
@@ -1367,42 +1365,6 @@ pub mod Core {
 
         fn _validate_position_exists(self: @ContractState, position_id: PositionId) {
             self.positions.get_position_snapshot(:position_id);
-        }
-
-        fn _validate_transfer(
-            ref self: ContractState,
-            operator_nonce: u64,
-            recipient: PositionId,
-            position_id: PositionId,
-            collateral_id: AssetId,
-            amount: u64,
-            expiration: Timestamp,
-            salt: felt252,
-        ) {
-            self._validate_operator_flow(:operator_nonce);
-
-            // Validate collateral.
-            self.assets.validate_collateral_active(:collateral_id);
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            // Validate expiration.
-            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
-            // A user cannot transfer to itself.
-            assert(recipient != position_id, INVALID_SAME_POSITIONS);
-        }
-
-        fn _validate_withdraw(
-            ref self: ContractState,
-            operator_nonce: u64,
-            position_id: PositionId,
-            collateral_id: AssetId,
-            amount: u64,
-            expiration: Timestamp,
-        ) {
-            self._validate_operator_flow(:operator_nonce);
-            self._validate_position_exists(:position_id);
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            self.assets.validate_collateral_active(:collateral_id);
         }
     }
 }
