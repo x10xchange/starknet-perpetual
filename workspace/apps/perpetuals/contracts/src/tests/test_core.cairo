@@ -340,7 +340,6 @@ fn test_successful_register_collateral() {
     assert_eq!(collateral_config.quorum, Zero::zero());
     assert_eq!(collateral_config.risk_factor, Zero::zero());
     assert_eq!(collateral_config.quantum, quantum);
-    assert_eq!(collateral_config.token_address, token_address);
     assert_eq!(state.deposits.get_asset_info(asset_id: asset_id.into()), (token_address, quantum));
 }
 

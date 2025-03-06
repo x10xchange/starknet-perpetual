@@ -23,7 +23,7 @@ pub mod Core {
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
@@ -335,9 +335,7 @@ pub mod Core {
 
             /// Not withdrawing from pending deposits:
             let collateral_config = self.assets.get_collateral_config(:collateral_id);
-            let token_contract = IERC20Dispatcher {
-                contract_address: collateral_config.token_address,
-            };
+            let token_contract = collateral_config.token_contract;
             let withdraw_unquantized_amount = collateral_config.quantum * amount;
             /// Execution - Withdraw:
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
