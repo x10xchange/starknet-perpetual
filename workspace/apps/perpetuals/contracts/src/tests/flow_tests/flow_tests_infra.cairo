@@ -619,6 +619,37 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 actual_fee_b: fee,
             );
     }
+
+    fn liquidate(
+        ref self: FlowTestState,
+        liquidator_user: User,
+        liquidated_user: User,
+        liquidator_order: Order,
+        liquidated_base: i64,
+        liquidated_quote: i64,
+        liquidated_fee: u64,
+        liquidator_fee: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        let liquidator_signature = liquidator_user
+            .account
+            .get_order_signature(
+                order: liquidator_order, public_key: liquidator_user.account.key_pair.public_key,
+            );
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .liquidate(
+                :operator_nonce,
+                :liquidator_signature,
+                liquidated_position_id: liquidated_user.position_id,
+                :liquidator_order,
+                actual_amount_base_liquidated: liquidated_base,
+                actual_amount_quote_liquidated: liquidated_quote,
+                actual_liquidator_fee: liquidator_fee,
+                fee_amount: liquidated_fee,
+            );
+    }
     /// TODO: add all the necessary functions to interact with the contract.
 }
 
