@@ -650,6 +650,29 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 fee_amount: liquidated_fee,
             );
     }
+
+    fn deleverage(
+        ref self: FlowTestState,
+        deleveraged_user: User,
+        deleverager_user: User,
+        deleveraged_base: i64,
+        base_asset_id: AssetId,
+        deleveraged_quote: i64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .deleverage(
+                :operator_nonce,
+                deleveraged_position_id: deleveraged_user.position_id,
+                deleverager_position_id: deleverager_user.position_id,
+                deleveraged_base_asset_id: base_asset_id,
+                deleveraged_base_amount: deleveraged_base,
+                deleveraged_quote_asset_id: constants::COLLATERAL_ASSET_ID(),
+                deleveraged_quote_amount: deleveraged_quote,
+            );
+    }
     /// TODO: add all the necessary functions to interact with the contract.
 }
 
