@@ -4,10 +4,11 @@ use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::errors::{illegal_base_to_quote_ratio_err, illegal_fee_to_quote_ratio_err};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
+use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
+use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
 use starkware_utils::types::HashType;
 use starkware_utils::types::time::time::Timestamp;
-use starkware_utils::utils::validate_ratio;
 
 pub const VERSION: u8 = 0;
 
@@ -68,25 +69,34 @@ impl StructHashImpl of StructHash<Order> {
 
 #[generate_trait]
 pub impl OrderImpl of OrderTrait {
+    /// Validates order variables against actual amounts:
+    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
+    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
     fn validate_against_actual_amounts(
         self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
     ) {
-        // Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
-        validate_ratio(
-            n1: actual_fee,
-            d1: actual_amount_quote.abs(),
-            n2: *self.fee_amount,
-            d2: (*self.quote_amount).abs(),
-            err: illegal_fee_to_quote_ratio_err(*self.position_id),
+        let order_base_to_quote_ratio = FractionTrait::new(
+            numerator: *self.base_amount, denominator: (*self.quote_amount).abs(),
+        );
+        let actual_base_to_quote_ratio = FractionTrait::new(
+            numerator: actual_amount_base, denominator: actual_amount_quote.abs(),
+        );
+        assert_with_byte_array(
+            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
+            illegal_base_to_quote_ratio_err(*self.position_id),
         );
 
-        // Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
-        validate_ratio(
-            n1: *self.base_amount,
-            d1: (*self.quote_amount).abs(),
-            n2: actual_amount_base,
-            d2: actual_amount_quote.abs(),
-            err: illegal_base_to_quote_ratio_err(*self.position_id),
+        // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
+        // operator's fee.
+        let actual_fee_to_quote_ratio = FractionTrait::new(
+            numerator: actual_fee, denominator: actual_amount_quote.abs(),
+        );
+        let order_fee_to_quote_ratio = FractionTrait::new(
+            numerator: *self.fee_amount, denominator: (*self.quote_amount).abs(),
+        );
+        assert_with_byte_array(
+            actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
+            illegal_fee_to_quote_ratio_err(*self.position_id),
         );
     }
 }

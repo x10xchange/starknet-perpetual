@@ -15,12 +15,12 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        BASE_ASSET_ID_NOT_SYNTHETIC, CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION,
-        CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN,
-        INVALID_ACTUAL_QUOTE_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_WRONG_AMOUNT_SIGN,
-        INVALID_ZERO_AMOUNT, QUOTE_ASSET_ID_NOT_COLLATERAL, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, illegal_zero_fee, order_expired_err,
+        CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
+        DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
+        INVALID_AMOUNT_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
+        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
+        QUOTE_ASSET_ID_NOT_COLLATERAL, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
+        illegal_zero_fee, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -518,32 +518,33 @@ pub mod Core {
                     position: position_b, order: order_b, signature: signature_b,
                 );
 
-            // Validate and update fulfillments.
             self
-                ._update_fulfillment(
-                    position_id: position_id_a,
-                    hash: hash_a,
-                    order_amount: order_a.base_amount,
-                    actual_amount: actual_amount_base_a,
-                );
-            self
-                ._update_fulfillment(
-                    position_id: position_id_b,
-                    hash: hash_b,
-                    order_amount: order_b.base_amount,
-                    // Passing the negative of actual amounts to `order_b` as it is linked to
-                    // `order_a`.
-                    actual_amount: -actual_amount_base_a,
-                );
-
-            self
-                ._validate_orders(
+                ._validate_trade(
                     :order_a,
                     :order_b,
                     :actual_amount_base_a,
                     :actual_amount_quote_a,
                     :actual_fee_a,
                     :actual_fee_b,
+                );
+
+            // Validate and update fulfillments.
+            self
+                ._update_fulfillment(
+                    position_id: position_id_a,
+                    hash: hash_a,
+                    order_base_amount: order_a.base_amount,
+                    actual_base_amount: actual_amount_base_a,
+                );
+
+            self
+                ._update_fulfillment(
+                    position_id: position_id_b,
+                    hash: hash_b,
+                    order_base_amount: order_b.base_amount,
+                    // Passing the negative of actual amounts to `order_b` as it is linked to
+                    // `order_a`.
+                    actual_base_amount: -actual_amount_base_a,
                 );
 
             /// Positions' Diffs:
@@ -673,19 +674,7 @@ pub mod Core {
                     signature: liquidator_signature,
                 );
 
-            // Validate and update fulfillment.
-            self
-                ._update_fulfillment(
-                    position_id: liquidator_position_id,
-                    hash: liquidator_order_hash,
-                    order_amount: liquidator_order.base_amount,
-                    // Passing the negative of actual amounts to `liquidator_order` as it is linked
-                    // to liquidated_order.
-                    actual_amount: -actual_amount_base_liquidated,
-                );
-
             let collateral_id = self.assets.get_collateral_id();
-
             let liquidated_order = Order {
                 position_id: liquidated_position_id,
                 base_asset_id: liquidator_order.base_asset_id,
@@ -701,7 +690,7 @@ pub mod Core {
 
             // Validations.
             self
-                ._validate_orders(
+                ._validate_trade(
                     order_a: liquidated_order,
                     order_b: liquidator_order,
                     actual_amount_base_a: actual_amount_base_liquidated,
@@ -716,6 +705,17 @@ pub mod Core {
                 liquidator_order.position_id != INSURANCE_FUND_POSITION || fee_amount.is_zero(),
                 illegal_zero_fee(),
             );
+
+            // Validate and update fulfillment.
+            self
+                ._update_fulfillment(
+                    position_id: liquidator_position_id,
+                    hash: liquidator_order_hash,
+                    order_base_amount: liquidator_order.base_amount,
+                    // Passing the negative of actual amounts to `liquidator_order` as it is linked
+                    // to liquidated_order.
+                    actual_base_amount: -actual_amount_base_liquidated,
+                );
 
             /// Execution:
             let liquidated_position_diff = self
@@ -1026,13 +1026,13 @@ pub mod Core {
             ref self: ContractState,
             position_id: PositionId,
             hash: HashType,
-            order_amount: i64,
-            actual_amount: i64,
+            order_base_amount: i64,
+            actual_base_amount: i64,
         ) {
             let fulfillment_entry = self.fulfillment.entry(hash);
-            let total_amount = fulfillment_entry.read() + actual_amount.abs();
+            let total_amount = fulfillment_entry.read() + actual_base_amount.abs();
             assert_with_byte_array(
-                total_amount <= order_amount.abs(), fulfillment_exceeded_err(:position_id),
+                total_amount <= order_base_amount.abs(), fulfillment_exceeded_err(:position_id),
             );
             fulfillment_entry.write(total_amount);
         }
@@ -1050,12 +1050,15 @@ pub mod Core {
             assert_with_byte_array(now <= order.expiration, order_expired_err(order.position_id));
 
             // Sign Validation for amounts.
-            assert(
-                !have_same_sign(order.quote_amount, order.base_amount), INVALID_WRONG_AMOUNT_SIGN,
-            );
+            assert(!have_same_sign(order.quote_amount, order.base_amount), INVALID_AMOUNT_SIGN);
+
+            // Validate asset ids.
+            let collateral_id = self.assets.get_collateral_id();
+            assert(order.quote_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
+            assert(order.fee_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
         }
 
-        fn _validate_orders(
+        fn _validate_trade(
             ref self: ContractState,
             order_a: Order,
             order_b: Order,
@@ -1064,7 +1067,12 @@ pub mod Core {
             actual_fee_a: u64,
             actual_fee_b: u64,
         ) {
+            // Base asset check.
+            assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
+            self.assets.validate_synthetic_active(synthetic_id: order_a.base_asset_id);
+
             assert(order_a.position_id != order_b.position_id, INVALID_SAME_POSITIONS);
+
             self._validate_order(order: order_a);
             self._validate_order(order: order_b);
 
@@ -1098,17 +1106,6 @@ pub mod Core {
                     actual_amount_quote: -actual_amount_quote_a,
                     actual_fee: actual_fee_b,
                 );
-            // Asset ids validations
-            let collateral_id = self.assets.get_collateral_id();
-            assert(order_a.quote_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
-            assert(order_a.fee_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
-            assert(order_b.quote_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
-            assert(order_b.fee_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
-            assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
-            assert(self.assets.is_synthetic(order_a.base_asset_id), BASE_ASSET_ID_NOT_SYNTHETIC);
-
-            // Assets check.
-            self.assets.validate_synthetic_active(synthetic_id: order_a.base_asset_id);
         }
 
         fn _validate_synthetic_shrinks(
@@ -1122,7 +1119,7 @@ pub mod Core {
                 .get_synthetic_balance(:position, synthetic_id: asset_id)
                 .into();
 
-            assert(!have_same_sign(amount, position_base_balance), INVALID_WRONG_AMOUNT_SIGN);
+            assert(!have_same_sign(amount, position_base_balance), INVALID_AMOUNT_SIGN);
             assert(amount.abs() <= position_base_balance.abs(), INVALID_DELEVERAGE_BASE_CHANGE);
         }
 
@@ -1153,7 +1150,7 @@ pub mod Core {
             // Sign Validation for amounts.
             assert(
                 !have_same_sign(deleveraged_base_amount, deleveraged_quote_amount),
-                INVALID_WRONG_AMOUNT_SIGN,
+                INVALID_AMOUNT_SIGN,
             );
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
