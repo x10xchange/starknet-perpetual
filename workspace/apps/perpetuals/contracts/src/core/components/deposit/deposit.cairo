@@ -176,7 +176,7 @@ pub(crate) mod Deposit {
         /// - The collateral asset exists in the system.
         /// - The collateral asset is active.
         /// - The funding validation interval has not passed since the last funding tick.
-        /// - [The prices of all assets in the system are valid](`_validate_prices`).
+        /// - The prices of all assets in the system are valid.
         /// - The deposit message has not been fulfilled.
         /// - A fact was registered for the deposit message.
         /// - If position exists, validate the owner_public_key and owner_account are the same.

@@ -631,14 +631,19 @@ pub mod AssetsComponent {
         /// - Funding interval validation.
         /// - Prices validation.
         fn validate_assets_integrity(ref self: ComponentState<TContractState>) {
-            let now = Time::now();
+            let current_time = Time::now();
             // Funding validation.
             assert(
-                now.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),
+                current_time.sub(self.last_funding_tick.read()) < self.max_funding_interval.read(),
                 FUNDING_EXPIRED,
             );
-            // Price validation.
-            self._validate_prices(:now);
+            /// If `max_price_interval` has passed since `last_price_validation`, validate
+            /// synthetic prices and update `last_price_validation` to current time.
+            let max_price_interval = self.max_price_interval.read();
+            if current_time.sub(self.last_price_validation.read()) >= max_price_interval {
+                self._validate_synthetic_prices(current_time, max_price_interval);
+                self.last_price_validation.write(current_time);
+            }
         }
 
         fn validate_oracle_signature(
@@ -816,24 +821,17 @@ pub mod AssetsComponent {
             );
         }
 
-        /// If `max_price_interval` has passed since `last_price_validation`, validate
-        /// synthetic prices and update `last_price_validation` to current time.
-        fn _validate_prices(ref self: ComponentState<TContractState>, now: Timestamp) {
-            let max_price_interval = self.max_price_interval.read();
-            if now.sub(self.last_price_validation.read()) >= max_price_interval {
-                self._validate_synthetic_prices(now, max_price_interval);
-                self.last_price_validation.write(now);
-            }
-        }
-
         fn _validate_synthetic_prices(
-            self: @ComponentState<TContractState>, now: Timestamp, max_price_interval: TimeDelta,
+            self: @ComponentState<TContractState>,
+            current_time: Timestamp,
+            max_price_interval: TimeDelta,
         ) {
             for (synthetic_id, synthetic_timely_data) in self.synthetic_timely_data {
                 // Validate only active asset
                 if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVE {
                     assert(
-                        now.sub(synthetic_timely_data.last_price_update) < max_price_interval,
+                        max_price_interval > current_time
+                            .sub(synthetic_timely_data.last_price_update),
                         SYNTHETIC_EXPIRED_PRICE,
                     );
                 }
