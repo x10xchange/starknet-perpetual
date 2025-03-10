@@ -14,7 +14,6 @@ use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreSafeDispatcher;
-use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTrait};
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::PositionId;
@@ -364,12 +363,6 @@ pub fn initialized_contract_state() -> Core::ContractState {
         insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
     );
     state
-}
-
-pub fn generate_collateral(
-    collateral_cfg: @CollateralCfg, token_state: @TokenState,
-) -> CollateralConfig {
-    CollateralTrait::config(token_address: *token_state.address, quantum: *collateral_cfg.quantum)
 }
 
 pub fn check_synthetic_config(

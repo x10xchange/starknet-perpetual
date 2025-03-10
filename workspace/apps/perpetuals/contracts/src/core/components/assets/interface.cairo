@@ -1,5 +1,5 @@
+use openzeppelin::token::erc20::interface::IERC20Dispatcher;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::collateral::CollateralConfig;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
@@ -41,7 +41,8 @@ pub trait IAssets<TContractState> {
         oracle_price: u128,
         signed_prices: Span<SignedPrice>,
     );
-    fn get_collateral_config(self: @TContractState) -> CollateralConfig;
+    fn get_collateral_token_contract(self: @TContractState) -> IERC20Dispatcher;
+    fn get_collateral_quantum(self: @TContractState) -> u64;
     fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
     fn get_last_price_validation(self: @TContractState) -> Timestamp;

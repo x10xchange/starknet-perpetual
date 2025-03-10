@@ -1,6 +1,5 @@
 use core::num::traits::zero::Zero;
 
-pub mod collateral;
 pub mod synthetic;
 
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]

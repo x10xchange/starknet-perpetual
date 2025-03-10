@@ -6,6 +6,7 @@ pub mod AssetsComponent {
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         ASSET_REGISTERED_AS_SYNTHETIC, COLLATERAL_ALREADY_REGISTERED, COLLATERAL_NOT_REGISTERED,
@@ -22,7 +23,6 @@ pub mod AssetsComponent {
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTrait};
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
@@ -63,7 +63,8 @@ pub mod AssetsComponent {
         pub last_price_validation: Timestamp,
         // Updates every funding tick.
         pub last_funding_tick: Timestamp,
-        collateral_config: CollateralConfig,
+        collateral_token_contract: IERC20Dispatcher,
+        collateral_quantum: u64,
         pub num_of_active_synthetic_assets: usize,
         pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
         pub synthetic_timely_data: IterableMap<AssetId, SyntheticTimelyData>,
@@ -126,8 +127,10 @@ pub mod AssetsComponent {
 
             // Execution:
             self.collateral_id.write(Option::Some(asset_id));
-            let collateral_config = CollateralTrait::config(:token_address, :quantum);
-            self.collateral_config.write(collateral_config);
+            self
+                .collateral_token_contract
+                .write(IERC20Dispatcher { contract_address: token_address });
+            self.collateral_quantum.write(quantum);
 
             let mut deposits = get_dep_component_mut!(ref self, Deposits);
             deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum);
@@ -393,8 +396,14 @@ pub mod AssetsComponent {
             self._set_price(:asset_id, :price);
         }
 
-        fn get_collateral_config(self: @ComponentState<TContractState>) -> CollateralConfig {
-            self.collateral_config.read()
+        fn get_collateral_token_contract(
+            self: @ComponentState<TContractState>,
+        ) -> IERC20Dispatcher {
+            self.collateral_token_contract.read()
+        }
+
+        fn get_collateral_quantum(self: @ComponentState<TContractState>) -> u64 {
+            self.collateral_quantum.read()
         }
 
         fn get_funding_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {

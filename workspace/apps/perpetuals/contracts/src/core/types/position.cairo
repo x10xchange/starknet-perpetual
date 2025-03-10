@@ -1,6 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::collateral::CollateralAsset;
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+use perpetuals::core::types::balance::Balance;
 use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
 use starkware_utils::iterable_map::{
@@ -33,7 +33,7 @@ pub struct Position {
     pub version: u8,
     pub owner_account: Option<ContractAddress>,
     pub owner_public_key: PublicKey,
-    pub collateral_asset: CollateralAsset,
+    pub collateral_balance: Balance,
     pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
 }
 

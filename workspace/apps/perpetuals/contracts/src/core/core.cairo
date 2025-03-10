@@ -349,9 +349,9 @@ pub mod Core {
             );
 
             self.positions.apply_diff(:position_id, :position_diff);
-            let collateral_config = self.assets.get_collateral_config();
-            let withdraw_unquantized_amount = collateral_config.quantum * amount;
-            let token_contract = collateral_config.token_contract;
+            let token_contract = self.assets.get_collateral_token_contract();
+            let quantum = self.assets.get_collateral_quantum();
+            let withdraw_unquantized_amount = quantum * amount;
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             self

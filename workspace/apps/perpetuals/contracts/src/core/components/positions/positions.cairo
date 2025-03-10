@@ -16,7 +16,6 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::CollateralTrait;
     use perpetuals::core::types::asset::synthetic::SyntheticTrait;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
@@ -395,8 +394,7 @@ pub(crate) mod Positions {
             }
             let position_mut = self.get_position_mut(:position_id);
             if let Option::Some(balance_diff) = position_diff.collateral {
-                let collateral_asset = CollateralTrait::asset(balance: balance_diff.after);
-                position_mut.collateral_asset.write(collateral_asset);
+                position_mut.collateral_balance.write(balance_diff.after);
             }
 
             for diff in position_diff.synthetics {
@@ -442,7 +440,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> Balance {
             let assets = get_dep_component!(self, Assets);
-            let mut collateral_provisional_balance = position.collateral_asset.balance.read();
+            let mut collateral_provisional_balance = position.collateral_balance.read();
             for (synthetic_id, synthetic) in position.synthetic_assets {
                 if synthetic.balance.is_zero() {
                     continue;
@@ -561,7 +559,7 @@ pub(crate) mod Positions {
                         balance: old_balance,
                     );
             }
-            position.collateral_asset.balance.add_and_write(collateral_balance);
+            position.collateral_balance.add_and_write(collateral_balance);
 
             // Updates the synthetic balance and funding index:
             let synthetic_asset = SyntheticTrait::asset(

@@ -326,9 +326,8 @@ fn test_successful_register_collateral() {
     );
 
     // Check.
-    let collateral_config = state.assets.get_collateral_config();
-    assert!(collateral_config.quantum == quantum);
-    assert!(collateral_config.token_contract.contract_address == token_address);
+    assert!(state.assets.get_collateral_token_contract().contract_address == token_address);
+    assert!(state.assets.get_collateral_quantum() == quantum);
     assert!(
         state
             .deposits
