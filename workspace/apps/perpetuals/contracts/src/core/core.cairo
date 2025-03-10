@@ -950,11 +950,9 @@ pub mod Core {
         fn _create_collateral_position_diff(
             self: @ContractState, position: StoragePath<Position>, diff: Balance,
         ) -> PositionDiff {
-            if diff.is_non_zero() {
-                let collateral = Option::Some(self._compute_collateral_diff(:position, :diff));
-                PositionDiff { collateral, synthetic: Option::None }
-            } else {
-                Default::default()
+            PositionDiff {
+                collateral: self._compute_collateral_diff(:position, :diff),
+                synthetic: Option::None,
             }
         }
 
@@ -974,11 +972,7 @@ pub mod Core {
             base_amount: Balance,
         ) -> PositionDiff {
             // Collateral asset.
-            let collateral = if effective_quote.is_non_zero() {
-                Option::Some(self._compute_collateral_diff(:position, diff: effective_quote))
-            } else {
-                Option::None
-            };
+            let collateral = self._compute_collateral_diff(:position, diff: effective_quote);
 
             // Synthetic asset.
             let before = self.positions.get_synthetic_balance(:position, synthetic_id: base_id);

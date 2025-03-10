@@ -46,12 +46,12 @@ pub struct AssetDiffEnriched {
 
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiff {
-    pub collateral: Option<BalanceDiff>,
+    pub collateral: BalanceDiff,
     pub synthetic: Option<AssetDiff>,
 }
 
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiffEnriched {
-    pub collateral: Option<BalanceDiff>,
+    pub collateral: BalanceDiff,
     pub synthetic: Option<AssetDiffEnriched>,
 }

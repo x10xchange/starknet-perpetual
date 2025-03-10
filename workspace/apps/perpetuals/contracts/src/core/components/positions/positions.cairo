@@ -392,9 +392,8 @@ pub(crate) mod Positions {
             position_diff: PositionDiff,
         ) {
             let position_mut = self.get_position_mut(:position_id);
-            if let Option::Some(balance_diff) = position_diff.collateral {
-                position_mut.collateral_balance.write(balance_diff.after);
-            }
+            let collateral_diff = position_diff.collateral.after - position_diff.collateral.before;
+            position_mut.collateral_balance.add_and_write(collateral_diff);
 
             if let Option::Some(diff) = position_diff.synthetic {
                 let synthetic_id = diff.id;
@@ -458,26 +457,18 @@ pub(crate) mod Positions {
             position: StoragePath<Position>,
             position_diff: PositionDiff,
         ) -> UnchangedAssets {
-            let mut position_data = array![];
             let assets = get_dep_component!(self, Assets);
-            let collateral_id = assets.get_collateral_id();
+            let mut position_data = array![];
 
-            let mut synthetics_diff = array![];
-
-            if position_diff.collateral.is_none() {
+            if position_diff.collateral.before == position_diff.collateral.after {
+                let collateral_id = assets.get_collateral_id();
                 let balance = self.get_collateral_provisional_balance(position);
-                if balance.is_non_zero() {
-                    position_data
-                        .append(
-                            Asset {
-                                id: collateral_id,
-                                balance,
-                                price: One::one(),
-                                risk_factor: Zero::zero(),
-                            },
-                        )
-                }
+                let asset = Asset {
+                    id: collateral_id, balance, price: One::one(), risk_factor: Zero::zero(),
+                };
+                position_data.append(asset);
             }
+            let mut synthetics_diff = array![];
             if let Option::Some(diff) = position_diff.synthetic {
                 synthetics_diff.append(diff.id);
             }

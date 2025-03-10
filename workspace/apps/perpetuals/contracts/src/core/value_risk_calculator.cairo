@@ -209,16 +209,14 @@ fn calculate_position_tvtr_change(
         total_risk_after += asset_diff.risk_factor_after.mul(asset_value_after.abs());
     }
 
-    if let Option::Some(diff) = position_diff_enriched.collateral {
-        // Collateral price is always 1. We use the Price impl of One to consider PRICE_SCALE in the
-        // mul operations.
-        let price: Price = One::one();
-        let asset_value_before = price.mul(rhs: diff.before);
-        let asset_value_after = price.mul(rhs: diff.after);
+    // Collateral price is always 1. We use the Price impl of One to consider PRICE_SCALE in the
+    // mul operations.
+    let price: Price = One::one();
+    let asset_value_before = price.mul(rhs: position_diff_enriched.collateral.before);
+    let asset_value_after = price.mul(rhs: position_diff_enriched.collateral.after);
 
-        total_value_before += asset_value_before;
-        total_value_after += asset_value_after;
-    }
+    total_value_before += asset_value_before;
+    total_value_after += asset_value_after;
 
     PositionTVTRChange {
         before: PositionTVTR { total_value: total_value_before, total_risk: total_risk_before },
@@ -308,7 +306,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetic: Option::Some(asset_diff),
+            collateral: Default::default(), synthetic: Option::Some(asset_diff),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -360,7 +358,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetic: Option::Some(asset_diff),
+            collateral: Default::default(), synthetic: Option::Some(asset_diff),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -440,7 +438,7 @@ mod tests {
         };
 
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetic: Option::Some(asset_diff_1),
+            collateral: Default::default(), synthetic: Option::Some(asset_diff_1),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
