@@ -438,13 +438,13 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn deposit_in_full(ref self: FlowTestState, user: User, reciever: User, amount: u128) {
+    fn deposit_and_process(ref self: FlowTestState, user: User, reciever: User, amount: u128) {
         let deposit_info = self.deposit(:user, :reciever, :amount);
         self.process_deposit(deposit_info);
     }
 
     fn self_deposit(ref self: FlowTestState, user: User, amount: u128) {
-        self.deposit_in_full(:user, reciever: user, :amount);
+        self.deposit_and_process(:user, reciever: user, :amount);
     }
 
     fn withdraw_request(
@@ -496,7 +496,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn withdraw_in_full(
+    fn request_and_withdraw(
         ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
     ) {
         let withdraw_info = self.withdraw_request(:user, :recipient, :amount, :expiration);
@@ -504,7 +504,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn self_withdraw(ref self: FlowTestState, user: User, amount: u128, expiration: Timestamp) {
-        self.withdraw_in_full(:user, recipient: user, :amount, :expiration);
+        self.request_and_withdraw(:user, recipient: user, :amount, :expiration);
     }
 
     fn transfer_request(
@@ -553,7 +553,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn transfer_in_full(
+    fn request_and_transfer(
         ref self: FlowTestState,
         user: User,
         recipient: PositionId,
