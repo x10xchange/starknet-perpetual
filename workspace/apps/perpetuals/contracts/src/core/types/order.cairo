@@ -1,26 +1,36 @@
-use contracts_commons::math::abs::Abs;
-use contracts_commons::types::HashType;
-use contracts_commons::types::time::time::Timestamp;
-use contracts_commons::utils::validate_ratio;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::errors::{illegal_base_to_quote_ratio_err, illegal_fee_to_quote_ratio_err};
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::position::PositionId;
+use starkware_utils::math::abs::Abs;
+use starkware_utils::types::HashType;
+use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::utils::validate_ratio;
 
 pub const VERSION: u8 = 0;
 
 #[derive(Copy, Drop, Hash, Serde)]
+// An order to buy or sell a synthetic asset for a collateral asset.
+// The base amount and quote amount have opposite signs.
 pub struct Order {
     pub position_id: PositionId,
+    // The synthetic asset to be bought or sold.
     pub base_asset_id: AssetId,
+    // The amount of the synthetic asset to be bought or sold.
     pub base_amount: i64,
+    // The collateral asset.
     pub quote_asset_id: AssetId,
+    // The amount of the collateral asset to be paid or received.
     pub quote_amount: i64,
+    // The collateral asset.
     pub fee_asset_id: AssetId,
+    // The amount of the collateral asset to be paid.
     pub fee_amount: u64,
+    // The expiration time of the order.
     pub expiration: Timestamp,
+    // A random value to make each order unique.
     pub salt: felt252,
 }
 
@@ -91,6 +101,6 @@ mod tests {
         let expected = selector!(
             "\"Order\"(\"position_id\":\"felt\",\"base_asset_id\":\"AssetId\",\"base_amount\":\"i64\",\"quote_asset_id\":\"AssetId\",\"quote_amount\":\"i64\",\"fee_asset_id\":\"AssetId\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(ORDER_TYPE_HASH.into_base_16_string(), expected.into_base_16_string());
+        assert!(ORDER_TYPE_HASH.into_base_16_string() == expected.into_base_16_string());
     }
 }

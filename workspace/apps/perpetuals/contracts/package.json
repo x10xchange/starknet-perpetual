@@ -1,6 +1,6 @@
 {
   "name": "@perpetuals/contracts",
-  "version": "0.0.2-dev.489",
+  "version": "0.0.2-dev.506",
   "private": true,
   "description": "perpetuals contracts",
   "scripts": {
@@ -10,8 +10,5 @@
     "postinstall": "node ../../../../scripts/install-scarb.js",
     "lint": "scarb fmt --check",
     "test": "scarb test"
-  },
-  "dependencies": {
-    "@contracts/commons": "workspace:*"
   }
 }

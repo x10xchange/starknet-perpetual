@@ -1,10 +1,10 @@
-use contracts_commons::types::time::time::Timestamp;
-use contracts_commons::types::{HashType, PublicKey};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::types::PositionId;
+use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
+use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::types::{HashType, PublicKey};
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct SetOwnerAccountArgs {
@@ -49,8 +49,8 @@ mod tests {
         let expected = selector!(
             "\"SetOwnerAccountArgs\"(\"position_id\":\"PositionId\",\"public_key\":\"felt\",\"new_owner_account\":\"ContractAddress\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(
-            SET_OWNER_ACCOUNT_ARGS_HASH.into_base_16_string(), expected.into_base_16_string(),
+        assert!(
+            SET_OWNER_ACCOUNT_ARGS_HASH.into_base_16_string() == expected.into_base_16_string(),
         );
     }
 }

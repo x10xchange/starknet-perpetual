@@ -1,14 +1,3 @@
-use contracts_commons::components::deposit::interface::{
-    IDepositDispatcher, IDepositDispatcherTrait,
-};
-use contracts_commons::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
-use contracts_commons::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use contracts_commons::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_32};
-use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::TokenTrait;
-use contracts_commons::test_utils::{Deployable, TokenConfig, TokenState, cheat_caller_address_once};
-use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-use contracts_commons::types::{PublicKey, Signature};
 use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
@@ -18,22 +7,30 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
-use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::price::{PRICE_SCALE, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
-use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
-use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
-use snforge_std::start_cheat_block_timestamp_global;
-use snforge_std::{ContractClassTrait, DeclareResultTrait};
+use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
+use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
+use starkware_utils::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
+use starkware_utils::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
+use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
+use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_40};
+use starkware_utils::message_hash::OffchainMessageHash;
+use starkware_utils::test_utils::{
+    Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
+};
+use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
+use starkware_utils::types::{PublicKey, Signature};
 
 const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 
-#[derive(Drop)]
+#[derive(Copy, Drop)]
 pub struct User {
     position_id: PositionId,
     account: Account,
@@ -78,9 +75,8 @@ impl OracleImpl of OracleTrait {
     fn sign_price(
         self: @Oracle, oracle_price: u128, timestamp: u32, asset_name: felt252,
     ) -> SignedPrice {
-        const TWO_POW_40: felt252 = 0x100_0000_0000;
-        let packed_timestamp_price = (timestamp.into() + oracle_price * TWO_POW_32.into()).into();
-        let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40;
+        let packed_timestamp_price = (timestamp.into() + oracle_price * PRICE_SCALE.into()).into();
+        let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40.into();
         let msg_hash = core::pedersen::pedersen(oracle_name_asset_name, packed_timestamp_price);
         SignedPrice {
             signature: self.account.sign_message(msg_hash),
@@ -349,7 +345,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.register_collateral();
         for synthetic_config in synthetics {
             self.add_synthetic(synthetic_config);
-        };
+        }
         advance_time(HOUR);
     }
 
@@ -429,7 +425,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 :operator_nonce,
                 depositor: deposit_info.user.account.address,
                 position_id: deposit_info.user.position_id,
-                collateral_id: constants::COLLATERAL_ASSET_ID(),
                 amount: deposit_info.amount.try_into().unwrap(),
                 salt: deposit_info.salt,
             );
@@ -438,6 +433,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn deposit_in_full(ref self: FlowTestState, user: User, reciever: User, amount: u128) {
         let deposit_info = self.deposit(:user, :reciever, :amount);
         self.process_deposit(deposit_info);
+    }
+
+    fn self_deposit(ref self: FlowTestState, user: User, amount: u128) {
+        self.deposit_in_full(:user, reciever: user, :amount);
     }
 
     fn withdraw_request(
@@ -462,7 +461,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 signature,
                 recipient: recipient_address,
                 position_id: user.position_id,
-                collateral_id: constants::COLLATERAL_ASSET_ID(),
                 amount: amount.try_into().unwrap(),
                 :expiration,
                 :salt,
@@ -484,17 +482,21 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 :operator_nonce,
                 recipient: withdraw_info.recipient,
                 position_id: withdraw_info.user.position_id,
-                collateral_id: constants::COLLATERAL_ASSET_ID(),
                 amount: withdraw_info.amount.try_into().unwrap(),
                 expiration: withdraw_info.expiration,
                 salt: withdraw_info.salt,
             );
     }
+
     fn withdraw_in_full(
         ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
     ) {
         let withdraw_info = self.withdraw_request(:user, :recipient, :amount, :expiration);
         self.withdraw(withdraw_info);
+    }
+
+    fn self_withdraw(ref self: FlowTestState, user: User, amount: u128, expiration: Timestamp) {
+        self.withdraw_in_full(:user, recipient: user, :amount, :expiration);
     }
 
     fn transfer_request(
@@ -522,7 +524,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 signature,
                 :recipient,
                 position_id: user.position_id,
-                collateral_id: constants::COLLATERAL_ASSET_ID(),
                 amount: amount.try_into().unwrap(),
                 :expiration,
                 :salt,
@@ -538,7 +539,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 :operator_nonce,
                 recipient: transfer_info.recipient,
                 position_id: transfer_info.user.position_id,
-                collateral_id: constants::COLLATERAL_ASSET_ID(),
                 amount: transfer_info.amount,
                 expiration: transfer_info.expiration,
                 salt: transfer_info.salt,

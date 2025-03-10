@@ -1,9 +1,9 @@
-use contracts_commons::types::time::time::Timestamp;
-use contracts_commons::types::{HashType, PublicKey};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::types::PositionId;
+use perpetuals::core::types::position::PositionId;
+use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::types::{HashType, PublicKey};
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct SetPublicKeyArgs {
@@ -48,6 +48,6 @@ mod tests {
         let expected = selector!(
             "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"old_public_key\":\"felt\",\"new_public_key\":\"felt\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(SET_PUBLIC_KEY_ARGS_HASH.into_base_16_string(), expected.into_base_16_string());
+        assert!(SET_PUBLIC_KEY_ARGS_HASH.into_base_16_string() == expected.into_base_16_string());
     }
 }

@@ -1,8 +1,9 @@
-use contracts_commons::types::time::time::Timestamp;
-use contracts_commons::types::{PublicKey, Signature};
-use perpetuals::core::types::{PositionData, PositionId};
+use perpetuals::core::types::PositionData;
+use perpetuals::core::types::position::PositionId;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
 use starknet::ContractAddress;
+use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::types::{PublicKey, Signature};
 
 #[starknet::interface]
 pub trait IPositions<TContractState> {

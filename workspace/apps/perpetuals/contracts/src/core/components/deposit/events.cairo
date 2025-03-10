@@ -1,14 +1,16 @@
+use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Deposit {
     #[key]
-    pub beneficiary: u32,
+    pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
 }
@@ -16,12 +18,12 @@ pub struct Deposit {
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct DepositProcessed {
     #[key]
-    pub beneficiary: u32,
+    pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
 }
@@ -29,12 +31,12 @@ pub struct DepositProcessed {
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct DepositCanceled {
     #[key]
-    pub beneficiary: u32,
+    pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
 }

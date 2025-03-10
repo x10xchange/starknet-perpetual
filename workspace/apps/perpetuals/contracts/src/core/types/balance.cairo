@@ -103,7 +103,7 @@ mod tests {
         let balance1 = Balance { value: 10 };
         let balance2 = Balance { value: 5 };
         let new_balance = balance1 + balance2;
-        assert_eq!(new_balance, BalanceTrait::new(value: 15));
+        assert!(new_balance == BalanceTrait::new(value: 15));
     }
 
     #[test]
@@ -111,7 +111,7 @@ mod tests {
         let balance1 = Balance { value: 10 };
         let balance2 = Balance { value: 5 };
         let new_balance = balance1 - balance2;
-        assert_eq!(new_balance, BalanceTrait::new(value: 5));
+        assert!(new_balance == BalanceTrait::new(value: 5));
     }
 
 
@@ -119,32 +119,32 @@ mod tests {
     fn test_add_assign() {
         let mut balance = Balance { value: 10 };
         balance += Balance { value: 5 };
-        assert_eq!(balance, BalanceTrait::new(value: 15));
+        assert!(balance == BalanceTrait::new(value: 15));
     }
 
     #[test]
     fn test_sub_assign() {
         let mut balance = Balance { value: 10 };
         balance -= Balance { value: 5 };
-        assert_eq!(balance, BalanceTrait::new(value: 5));
+        assert!(balance == BalanceTrait::new(value: 5));
     }
 
     #[test]
     fn test_i64_into_balance() {
         let balance: Balance = 10_i64.into();
-        assert_eq!(balance, BalanceTrait::new(value: 10));
+        assert!(balance == BalanceTrait::new(value: 10));
     }
 
     #[test]
     fn test_balance_into_i64() {
         let balance: Balance = Balance { value: 10 };
-        assert_eq!(balance.into(), 10_i64);
+        assert!(balance.into() == 10_i64);
     }
 
     #[test]
     fn test_zero() {
         let balance: Balance = Zero::zero();
-        assert_eq!(balance, BalanceTrait::new(value: 0));
+        assert!(balance == BalanceTrait::new(value: 0));
     }
 
     #[test]
@@ -163,6 +163,6 @@ mod tests {
     fn test_add_u64() {
         let balance = Balance { value: 10 };
         let new_balance = balance.add(5);
-        assert_eq!(new_balance, BalanceTrait::new(value: 15));
+        assert!(new_balance == BalanceTrait::new(value: 15));
     }
 }

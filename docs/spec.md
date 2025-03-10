@@ -226,13 +226,13 @@ classDiagram
         registered_deposits: Map< HashType, DepositStatus>
         aggregate_pending_deposit: Map< felt252, u128>
         asset_info: Map< felt252, [ContractAddress, u64]>
-        deposit_grace_period: TimeDelta
+        cancel_delay: TimeDelta
 
         deposit()
         cancel_deposit()
         get_deposit_status()
         get_asset_info()
-        get_deposit_grace_period()
+        get_cancel_delay()
     }
     class Requests{
         approved_requests: Map< HashType, RequestStatus>
@@ -1165,7 +1165,7 @@ pub trait IDeposit<TContractState> {
     );
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_asset_info(self: @TContractState, asset_id: felt252) -> (ContractAddress, u64);
-    fn get_deposit_grace_period(self: @TContractState) -> TimeDelta;
+    fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
 
 pub enum DepositStatus {
@@ -1183,7 +1183,7 @@ pub enum DepositStatus {
 pub struct Storage {
     registered_deposits: Map<HashType, DepositStatus>,
     asset_info: Map<felt252, (ContractAddress, u64)>,
-    deposit_grace_period: TimeDelta,
+    cancel_delay: TimeDelta,
 }
 ```
 #### Events
@@ -1206,7 +1206,7 @@ pub const DEPOSIT_ALREADY_PROCESSED: felt252 = 'DEPOSIT_ALREADY_PROCESSED';
 pub const DEPOSIT_ALREADY_REGISTERED: felt252 = 'DEPOSIT_ALREADY_REGISTERED';
 pub const DEPOSIT_NOT_CANCELABLE: felt252 = 'DEPOSIT_NOT_CANCELABLE';
 pub const DEPOSIT_NOT_REGISTERED: felt252 = 'DEPOSIT_NOT_REGISTERED';
-pub const INVALID_DEPOSIT_GRACE_PERIOD: felt252 = 'INVALID_DEPOSIT_GRACE_PERIOD';
+pub const INVALID_CANCEL_DELAY: felt252 = 'INVALID_CANCEL_DELAY';
 pub const ZERO_AMOUNT: felt252 = 'ZERO_AMOUNT';
 ```
 
@@ -2065,7 +2065,7 @@ fn constructor(
     max_funding_interval: TimeDelta,
     max_funding_rate: u32,
     max_oracle_price_validity: TimeDelta,
-    deposit_grace_period: TimeDelta,
+    cancel_delay: TimeDelta,
     fee_position_owner_account: ContractAddress,
     fee_position_owner_public_key: PublicKey,
     insurance_fund_position_owner_account: ContractAddress,
@@ -2185,7 +2185,6 @@ fn deposit_hash(
 
 #### Errors
 
-- ZERO\_AMOUNT
 - ASSET\_NOT\_REGISTERED
 - DEPOSIT\_ALREADY\_REGISTERED
 
@@ -2267,7 +2266,6 @@ We assume that the position is always healthier for deposit
 - SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
-- INVALID\_ZERO\_AMOUNT
 - COLLATERAL\_NOT\_ACTIVE
 - DEPOSIT\_NOT\_REGISTERED
 - DEPOSIT\_ALREADY\_PROCESSED
@@ -2388,7 +2386,6 @@ Anyone can execute.
 - REQUEST_ALREADY_REGISTERED
 - CALLER\_IS\_NOT\_OWNER\_ACCOUNT
 - INVALID\_STARK\_KEY\_SIGNATURE
-- INVALID\_ZERO\_AMOUNT
 
 #### Emits
 
@@ -2454,7 +2451,6 @@ This means that the withdraw is not taking money from the `pending_deposits`
 - SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
-- INVALID\_ZERO\_AMOUNT
 - WITHDRAW_EXPIRED
 - COLLATERAL_NOT_EXISTS
 - COLLATERAL\_NOT\_ACTIVE
@@ -2516,7 +2512,6 @@ Anyone can execute.
 - REQUEST_ALREADY_REGISTERED
 - CALLER\_IS\_NOT\_OWNER\_ACCOUNT
 - INVALID\_STARK\_KEY\_SIGNATURE
-- INVALID\_ZERO\_AMOUNT
 
 ###
 
@@ -2580,7 +2575,6 @@ Only the Operator can execute.
 - SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
 - COLLATERAL\_NOT\_ACTIVE
-- INVALID\_ZERO\_AMOUNT
 - TRANSFER_EXPIRED
 - COLLATERAL_NOT_EXISTS
 - COLLATERAL\_NOT\_ACTIVE

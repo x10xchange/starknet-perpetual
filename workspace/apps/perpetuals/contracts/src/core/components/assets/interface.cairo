@@ -1,12 +1,12 @@
-use contracts_commons::types::PublicKey;
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-use contracts_commons::types::time::time::{TimeDelta, Timestamp};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::collateral::CollateralConfig;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use starknet::ContractAddress;
+use starkware_utils::types::PublicKey;
+use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
+use starkware_utils::types::time::time::{TimeDelta, Timestamp};
 
 
 #[starknet::interface]
@@ -41,7 +41,7 @@ pub trait IAssets<TContractState> {
         oracle_price: u128,
         signed_prices: Span<SignedPrice>,
     );
-    fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;
+    fn get_collateral_config(self: @TContractState) -> CollateralConfig;
     fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
     fn get_last_price_validation(self: @TContractState) -> Timestamp;

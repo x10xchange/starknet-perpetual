@@ -13,7 +13,7 @@ pub enum AssetStatus {
     #[default]
     PENDING,
     ACTIVE,
-    DEACTIVATED,
+    INACTIVE,
 }
 
 #[generate_trait]

@@ -1,17 +1,18 @@
-use contracts_commons::errors::assert_with_byte_array;
-use contracts_commons::math::abs::Abs;
-use contracts_commons::math::fraction::FractionTraitI128U128 as FractionTrait;
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
-use core::num::traits::Zero;
+use core::num::traits::{One, Zero};
 use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
     position_not_deleveragable, position_not_fair_deleverage, position_not_healthy_nor_healthier,
     position_not_liquidatable,
 };
-use perpetuals::core::types::price::PriceMulTrait;
+use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::price::{Price, PriceMulTrait};
 use perpetuals::core::types::{
-    AssetDiffEnriched, BalanceDiff, PositionData, PositionDiffEnriched, PositionId, UnchangedAssets,
+    AssetDiffEnriched, BalanceDiff, PositionData, PositionDiffEnriched, UnchangedAssets,
 };
+use starkware_utils::errors::assert_with_byte_array;
+use starkware_utils::math::abs::Abs;
+use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
+use starkware_utils::types::fixed_two_decimal::FixedTwoDecimalTrait;
 
 // This is the result of Price::One().mul(balance: 1)
 // which is actually 1e-6 USDC * 2^28 / 2^28 = 1
@@ -198,7 +199,7 @@ fn calculate_position_tvtr_change(
         let asset_value: i128 = (*asset.price).mul(rhs: *asset.balance);
         unchanged_assets_value += asset_value;
         unchanged_assets_risk += (*asset.risk_factor).mul(asset_value.abs());
-    };
+    }
 
     let mut total_value_before = unchanged_assets_value;
     let mut total_risk_before = unchanged_assets_risk;
@@ -214,16 +215,18 @@ fn calculate_position_tvtr_change(
 
         total_risk_before += (*asset_diff.risk_factor_before).mul(asset_value_before.abs());
         total_risk_after += (*asset_diff.risk_factor_after).mul(asset_value_after.abs());
-    };
+    }
 
-    // TODO: Remove this for.
-    for asset_diff in position_diff_enriched.collaterals {
-        let asset_value_before = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.before);
-        let asset_value_after = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.after);
+    if let Option::Some(diff) = position_diff_enriched.collateral {
+        // Collateral price is always 1. We use the Price impl of One to consider PRICE_SCALE in the
+        // mul operations.
+        let price: Price = One::one();
+        let asset_value_before = price.mul(rhs: diff.before);
+        let asset_value_after = price.mul(rhs: diff.after);
 
         total_value_before += asset_value_before;
         total_value_after += asset_value_after;
-    };
+    }
 
     PositionTVTRChange {
         before: PositionTVTR { total_value: total_value_before, total_risk: total_risk_before },
@@ -234,29 +237,29 @@ fn calculate_position_tvtr_change(
 
 #[cfg(test)]
 mod tests {
-    use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
     use perpetuals::core::types::{Asset, AssetDiff};
+    use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
     use super::*;
 
 
     /// Prices
     fn PRICE_1() -> Price {
-        PriceTrait::new(900 * PRICE_SCALE)
+        PriceTrait::new(900_u64 * PRICE_SCALE.into())
     }
     fn PRICE_2() -> Price {
-        PriceTrait::new(900 * PRICE_SCALE)
+        PriceTrait::new(900_u64 * PRICE_SCALE.into())
     }
     fn PRICE_3() -> Price {
-        PriceTrait::new(900 * PRICE_SCALE)
+        PriceTrait::new(900_u64 * PRICE_SCALE.into())
     }
     fn PRICE_4() -> Price {
-        PriceTrait::new(900 * PRICE_SCALE)
+        PriceTrait::new(900_u64 * PRICE_SCALE.into())
     }
     fn PRICE_5() -> Price {
-        PriceTrait::new(900 * PRICE_SCALE)
+        PriceTrait::new(900_u64 * PRICE_SCALE.into())
     }
 
     /// Risk factors
@@ -313,7 +316,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collaterals: array![].span(), synthetics: array![asset_diff].span(),
+            collateral: Option::None, synthetics: array![asset_diff].span(),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -323,20 +326,20 @@ mod tests {
         /// Ensures `total_value` before the change is `54,000`, calculated as `balance_before *
         /// price`
         /// (`60 * 900`).
-        assert_eq!(position_tvtr_change.before.total_value, 54_000);
+        assert!(position_tvtr_change.before.total_value == 54_000);
 
         /// Ensures `total_risk` before the change is `27,000`, calculated as `abs(balance_before) *
         /// price * risk_factor` (`abs(60) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.before.total_risk, 27_000);
+        assert!(position_tvtr_change.before.total_risk == 27_000);
 
         /// Ensures `total_value` after the change is `72,000`, calculated as `balance_after *
         /// price`
         /// (`80 * 900`).
-        assert_eq!(position_tvtr_change.after.total_value, 72_000);
+        assert!(position_tvtr_change.after.total_value == 72_000);
 
         /// Ensures `total_risk` after the change is `36,000`, calculated as `abs(balance_after) *
         /// price * risk_factor` (`abs(80) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.after.total_risk, 36_000);
+        assert!(position_tvtr_change.after.total_risk == 36_000);
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where the balance is
@@ -365,7 +368,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collaterals: array![].span(), synthetics: array![asset_diff].span(),
+            collateral: Option::None, synthetics: array![asset_diff].span(),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -375,20 +378,20 @@ mod tests {
         /// Ensures `total_value` before the change is `-54,000`, calculated as `balance_before *
         /// price`
         /// (`-60 * 900`).
-        assert_eq!(position_tvtr_change.before.total_value, -54_000);
+        assert!(position_tvtr_change.before.total_value == -54_000);
 
         /// Ensures `total_risk` before the change is `27,000`, calculated as `abs(balance_before) *
         /// price * risk_factor` (`abs(-60) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.before.total_risk, 27_000);
+        assert!(position_tvtr_change.before.total_risk == 27_000);
 
         /// Ensures `total_value` after the change is `-18,000`, calculated as `balance_after *
         /// price`
         /// (`20 * 900`).
-        assert_eq!(position_tvtr_change.after.total_value, 18_000);
+        assert!(position_tvtr_change.after.total_value == 18_000);
 
         /// Ensures `total_risk` after the change is `9,000`, calculated as `abs(balance_after) *
         /// price * risk_factor` (`abs(20) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.after.total_risk, 9_000);
+        assert!(position_tvtr_change.after.total_risk == 9_000);
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where there are multiple
@@ -455,7 +458,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_2(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collaterals: array![].span(), synthetics: array![asset_diff_1, asset_diff_2].span(),
+            collateral: Option::None, synthetics: array![asset_diff_1, asset_diff_2].span(),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -465,7 +468,7 @@ mod tests {
         /// Ensures `total_value` before the change is `121,500`, calculated as `balance_1_before *
         /// price + balance_2_before * price + balance_3_before * price + balance_4_before * price +
         /// balance_5_before * price` (`60 * 900 + 40 * 900 + 20 * 900 + 10 * 900 + 5 * 900`).
-        assert_eq!(position_tvtr_change.before.total_value, 121_500);
+        assert!(position_tvtr_change.before.total_value == 121_500);
 
         /// Ensures `total_risk` before the change is `60,750`, calculated as `abs(balance_1_before)
         /// *
@@ -476,14 +479,14 @@ mod tests {
         /// price * risk_factor_5` (`abs(60) * 900 * 0.5 + abs(40) * 900 * 0.5 + abs(20) * 900 * 0.5
         /// +
         /// abs(10) * 900 * 0.5 + abs(5) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.before.total_risk, 60_750);
+        assert!(position_tvtr_change.before.total_risk == 60_750);
 
         /// Ensures `total_value` after the change is `157,500`, calculated as `balance_1_after *
         /// price + balance_2_after * price` + balance_3_after * price + balance_4_after * price +
         /// balance_5_after * price` (`80 * 900 + 60 * 900 + 20 * 900 + 10 * 900 + 5 * 900`).
         /// The balance of the other assets remains the same, so balance_3_after = 20,
         /// balance_4_after = 10, balance_5_after = 5.
-        assert_eq!(position_tvtr_change.after.total_value, 157_500);
+        assert!(position_tvtr_change.after.total_value == 157_500);
 
         /// Ensures `total_risk` after the change is `78,750`, calculated as `abs(balance_1_after) *
         /// price * risk_factor_1 + abs(balance_2_after) * price * risk_factor_2 +
@@ -492,7 +495,7 @@ mod tests {
         /// abs(60) * 900 * 0.5 + abs(20) * 900 * 0.5 + abs(10) * 900 * 0.5 + abs(5) * 900 * 0.5`).
         /// The balance of the other assets remains the same, so balance_3_after = 20,
         /// balance_4_after = 10, balance_5_after = 5.
-        assert_eq!(position_tvtr_change.after.total_risk, 78_750);
+        assert!(position_tvtr_change.after.total_risk == 78_750);
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where the diff is empty.
@@ -517,20 +520,20 @@ mod tests {
         /// Ensures `total_value` before the change is `54,000`, calculated as `balance_before *
         /// price`
         /// (`60 * 900`).
-        assert_eq!(position_tvtr_change.before.total_value, 54_000);
+        assert!(position_tvtr_change.before.total_value == 54_000);
 
         /// Ensures `total_risk` before the change is `27,000`, calculated as `abs(balance_before) *
         /// price * risk_factor` (`abs(60) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.before.total_risk, 27_000);
+        assert!(position_tvtr_change.before.total_risk == 27_000);
 
         /// Ensures `total_value` after the change is `54,000`, calculated as `balance_before *
         /// price`
         /// (`60 * 900`).
-        assert_eq!(position_tvtr_change.after.total_value, 54_000);
+        assert!(position_tvtr_change.after.total_value == 54_000);
 
         /// Ensures `total_risk` after the change is `27,000`, calculated as `abs(balance_before) *
         /// price * risk_factor` (`abs(60) * 900 * 0.5`).
-        assert_eq!(position_tvtr_change.after.total_risk, 27_000);
+        assert!(position_tvtr_change.after.total_risk == 27_000);
     }
 
 
@@ -549,16 +552,16 @@ mod tests {
         );
 
         /// Ensures `total_value` before the change is `0`.
-        assert_eq!(position_tvtr_change.before.total_value, 0);
+        assert!(position_tvtr_change.before.total_value == 0);
 
         /// Ensures `total_risk` before the change is `0`.
-        assert_eq!(position_tvtr_change.before.total_risk, 0);
+        assert!(position_tvtr_change.before.total_risk == 0);
 
         /// Ensures `total_value` after the change is `0`.
-        assert_eq!(position_tvtr_change.after.total_value, 0);
+        assert!(position_tvtr_change.after.total_value == 0);
 
         /// Ensures `total_risk` after the change is `0`.
-        assert_eq!(position_tvtr_change.after.total_risk, 0);
+        assert!(position_tvtr_change.after.total_risk == 0);
     }
 
 
@@ -570,7 +573,7 @@ mod tests {
         let position_data = array![].span();
 
         let evaluated_position = evaluate_position(position_data);
-        assert_eq!(evaluated_position.position_state_before_change, PositionState::Healthy);
-        assert_eq!(evaluated_position.position_state_after_change, PositionState::Healthy);
+        assert!(evaluated_position.position_state_before_change == PositionState::Healthy);
+        assert!(evaluated_position.position_state_after_change == PositionState::Healthy);
     }
 }

@@ -1,9 +1,9 @@
-use contracts_commons::types::Signature;
-use contracts_commons::types::time::time::Timestamp;
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::Order;
+use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
+use starkware_utils::types::Signature;
+use starkware_utils::types::time::time::Timestamp;
 
 
 #[starknet::interface]
@@ -13,7 +13,6 @@ pub trait ICore<TContractState> {
         operator_nonce: u64,
         depositor: ContractAddress,
         position_id: PositionId,
-        collateral_id: AssetId,
         amount: u64,
         salt: felt252,
     );
@@ -22,7 +21,6 @@ pub trait ICore<TContractState> {
         signature: Signature,
         recipient: ContractAddress,
         position_id: PositionId,
-        collateral_id: AssetId,
         amount: u64,
         expiration: Timestamp,
         salt: felt252,
@@ -32,7 +30,6 @@ pub trait ICore<TContractState> {
         operator_nonce: u64,
         recipient: ContractAddress,
         position_id: PositionId,
-        collateral_id: AssetId,
         amount: u64,
         expiration: Timestamp,
         salt: felt252,
@@ -42,7 +39,6 @@ pub trait ICore<TContractState> {
         signature: Signature,
         recipient: PositionId,
         position_id: PositionId,
-        collateral_id: AssetId,
         amount: u64,
         expiration: Timestamp,
         salt: felt252,
@@ -52,7 +48,6 @@ pub trait ICore<TContractState> {
         operator_nonce: u64,
         recipient: PositionId,
         position_id: PositionId,
-        collateral_id: AssetId,
         amount: u64,
         expiration: Timestamp,
         salt: felt252,
@@ -78,7 +73,6 @@ pub trait ICore<TContractState> {
         actual_amount_base_liquidated: i64,
         actual_amount_quote_liquidated: i64,
         actual_liquidator_fee: u64,
-        fee_asset_id: AssetId,
         fee_amount: u64,
     );
     fn deleverage(

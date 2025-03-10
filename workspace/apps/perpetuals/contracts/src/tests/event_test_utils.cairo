@@ -1,19 +1,19 @@
-use contracts_commons::components::deposit::events as deposit_events;
-use contracts_commons::test_utils::assert_expected_event_emitted;
-use contracts_commons::types::PublicKey;
-use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::components::assets::events as assets_events;
 use perpetuals::core::components::positions::events as positions_events;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::events;
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
+use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::Price;
 use perpetuals::tests::constants::*;
 use snforge_std::cheatcodes::events::Event;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use starknet::ContractAddress;
+use starkware_utils::components::deposit::events as deposit_events;
+use starkware_utils::test_utils::assert_expected_event_emitted;
+use starkware_utils::types::PublicKey;
+use starkware_utils::types::time::time::Timestamp;
 
 
 pub fn assert_new_position_event_with_expected(

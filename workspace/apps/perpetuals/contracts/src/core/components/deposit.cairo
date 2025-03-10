@@ -1,5 +1,5 @@
-pub(crate) mod deposit;
-pub(crate) mod errors;
+mod deposit;
+mod errors;
 pub mod events;
 pub mod interface;
 

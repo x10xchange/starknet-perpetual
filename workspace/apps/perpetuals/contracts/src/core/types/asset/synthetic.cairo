@@ -1,8 +1,8 @@
-use contracts_commons::types::time::time::Timestamp;
 use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
+use starkware_utils::types::time::time::Timestamp;
 
 const VERSION: u8 = 1;
 

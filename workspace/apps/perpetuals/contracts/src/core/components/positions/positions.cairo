@@ -1,21 +1,7 @@
 #[starknet::component]
 pub(crate) mod Positions {
-    use contracts_commons::components::nonce::NonceComponent;
-    use contracts_commons::components::nonce::NonceComponent::InternalTrait as NonceInternal;
-    use contracts_commons::components::pausable::PausableComponent;
-    use contracts_commons::components::pausable::PausableComponent::InternalTrait as PausableInternal;
-    use contracts_commons::components::request_approvals::RequestApprovalsComponent;
-    use contracts_commons::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
-    use contracts_commons::components::roles::RolesComponent;
-    use contracts_commons::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use contracts_commons::iterable_map::{
-        IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
-    };
-    use contracts_commons::span_utils::contains;
-    use contracts_commons::types::time::time::Timestamp;
-    use contracts_commons::types::{PublicKey, Signature};
-    use contracts_commons::utils::validate_expiration;
-    use core::num::traits::zero::Zero;
+    use core::num::traits::{One, Zero};
+    use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
@@ -30,36 +16,42 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::collateral::{CollateralAsset, CollateralTrait};
-    use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticTrait};
+    use perpetuals::core::types::asset::collateral::CollateralTrait;
+    use perpetuals::core::types::asset::synthetic::SyntheticTrait;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
+    use perpetuals::core::types::position::{
+        POSITION_VERSION, Position, PositionId, PositionMutableTrait, PositionTrait,
+    };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-    use perpetuals::core::types::{Asset, PositionData, PositionDiff, PositionId, UnchangedAssets};
-    use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use perpetuals::core::types::{Asset, PositionData, PositionDiff, UnchangedAssets};
     use perpetuals::core::value_risk_calculator::{
-        PositionState, calculate_position_tvtr, evaluate_position,
+        PositionState, PositionTVTR, calculate_position_tvtr, evaluate_position,
     };
     use starknet::storage::{
-        Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        Map, Mutable, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-
-    pub const POSITION_VERSION: u8 = 1;
+    use starkware_utils::components::nonce::NonceComponent;
+    use starkware_utils::components::nonce::NonceComponent::InternalTrait as NonceInternal;
+    use starkware_utils::components::pausable::PausableComponent;
+    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
+    use starkware_utils::components::request_approvals::RequestApprovalsComponent;
+    use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
+    use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
+    use starkware_utils::iterable_map::{
+        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+    };
+    use starkware_utils::span_utils::contains;
+    use starkware_utils::types::time::time::Timestamp;
+    use starkware_utils::types::{PublicKey, Signature};
+    use starkware_utils::utils::{AddToStorage, validate_expiration};
 
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
-
-    #[starknet::storage_node]
-    pub struct Position {
-        pub version: u8,
-        pub owner_account: ContractAddress,
-        pub owner_public_key: PublicKey,
-        pub collateral_assets: IterableMap<AssetId, CollateralAsset>,
-        pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
-    }
 
 
     #[storage]
@@ -159,13 +151,16 @@ pub(crate) mod Positions {
             owner_public_key: PublicKey,
             owner_account: ContractAddress,
         ) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
             self._validate_operator_flow(:operator_nonce);
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
-            position.owner_account.write(owner_account);
+            if owner_account.is_non_zero() {
+                position.owner_account.write(Option::Some(owner_account));
+            }
             self
                 .emit(
                     events::NewPosition {
@@ -195,14 +190,14 @@ pub(crate) mod Positions {
             expiration: Timestamp,
         ) {
             let position = self.get_position_snapshot(:position_id);
-            let owner_account = position.owner_account.read();
-            assert(owner_account.is_zero(), POSITION_HAS_OWNER_ACCOUNT);
+            let owner_account = position.get_owner_account();
+            assert(owner_account.is_none(), POSITION_HAS_OWNER_ACCOUNT);
             assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
-            let public_key = position.owner_public_key.read();
+            let public_key = position.get_owner_public_key();
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .register_approval(
-                    owner_account: new_owner_account,
+                    :owner_account,
                     :public_key,
                     :signature,
                     args: SetOwnerAccountArgs {
@@ -238,12 +233,13 @@ pub(crate) mod Positions {
             new_owner_account: ContractAddress,
             expiration: Timestamp,
         ) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
             self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self.get_position_mut(:position_id);
-            assert(position.owner_account.read().is_zero(), POSITION_HAS_OWNER_ACCOUNT);
+            let public_key = position.get_owner_public_key();
+            assert(position.get_owner_account().is_none(), POSITION_HAS_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
-            let public_key = position.owner_public_key.read();
             let hash = request_approvals
                 .consume_approved_request(
                     args: SetOwnerAccountArgs {
@@ -251,7 +247,7 @@ pub(crate) mod Positions {
                     },
                     :public_key,
                 );
-            position.owner_account.write(new_owner_account);
+            position.owner_account.write(Option::Some(new_owner_account));
             self
                 .emit(
                     events::SetOwnerAccount {
@@ -279,10 +275,14 @@ pub(crate) mod Positions {
             expiration: Timestamp,
         ) {
             let position = self.get_position_snapshot(:position_id);
-            let owner_account = position.owner_account.read();
-            let old_public_key = position.owner_public_key.read();
-            assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            let old_public_key = position.get_owner_public_key();
             assert(new_public_key != old_public_key, SAME_PUBLIC_KEY);
+            let owner_account = position.get_owner_account();
+            if let Option::Some(owner_account) = owner_account {
+                assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            } else {
+                panic_with_felt252(NO_OWNER_ACCOUNT);
+            }
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .register_approval(
@@ -320,12 +320,13 @@ pub(crate) mod Positions {
             new_public_key: PublicKey,
             expiration: Timestamp,
         ) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
             self._validate_operator_flow(:operator_nonce);
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self.get_position_mut(:position_id);
-            let owner_account = position.owner_account.read();
-            let old_public_key = position.owner_public_key.read();
-            assert(owner_account.is_non_zero(), NO_OWNER_ACCOUNT);
+            let owner_account = position.get_owner_account();
+            let old_public_key = position.get_owner_public_key();
+            assert(owner_account.is_some(), NO_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .consume_approved_request(
@@ -367,7 +368,7 @@ pub(crate) mod Positions {
         ) {
             // Checks that the component has not been initialized yet.
             let fee_position = self.positions.entry(FEE_POSITION);
-            assert(fee_position.owner_public_key.read().is_zero(), ALREADY_INITIALIZED);
+            assert(fee_position.get_owner_public_key().is_zero(), ALREADY_INITIALIZED);
 
             // Checks that the input public keys are non-zero.
             assert(fee_position_owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
@@ -389,21 +390,20 @@ pub(crate) mod Positions {
             position_id: PositionId,
             position_diff: PositionDiff,
         ) {
-            if position_diff.collaterals.len().is_zero()
-                && position_diff.synthetics.len().is_zero() {
+            if position_diff.collateral.is_none() && position_diff.synthetics.len().is_zero() {
                 return;
             }
             let position_mut = self.get_position_mut(:position_id);
-            for diff in position_diff.collaterals {
-                let asset_id = *diff.id;
-                let collateral_asset = CollateralTrait::asset(balance: *diff.balance.after);
-                position_mut.collateral_assets.write(asset_id, collateral_asset);
-            };
+            if let Option::Some(balance_diff) = position_diff.collateral {
+                let collateral_asset = CollateralTrait::asset(balance: balance_diff.after);
+                position_mut.collateral_asset.write(collateral_asset);
+            }
+
             for diff in position_diff.synthetics {
                 let synthetic_id = *diff.id;
                 self
                     ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, balance: *diff.balance.after,
+                        position: position_mut, :synthetic_id, new_balance: *diff.balance.after,
                     );
             };
         }
@@ -438,12 +438,20 @@ pub(crate) mod Positions {
             }
         }
 
-        fn get_provisional_balance(
-            self: @ComponentState<TContractState>,
-            position: StoragePath<Position>,
-            collateral_id: AssetId,
+        fn get_collateral_provisional_balance(
+            self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> Balance {
-            self._get_provisional_main_collateral_balance(:position)
+            let assets = get_dep_component!(self, Assets);
+            let mut collateral_provisional_balance = position.collateral_asset.balance.read();
+            for (synthetic_id, synthetic) in position.synthetic_assets {
+                if synthetic.balance.is_zero() {
+                    continue;
+                }
+                let funding_index = assets.get_funding_index(synthetic_id);
+                collateral_provisional_balance +=
+                    calculate_funding(synthetic.funding_index, funding_index, synthetic.balance);
+            }
+            collateral_provisional_balance
         }
 
         /// Returns all assets from the position, excluding assets with zero balance
@@ -455,25 +463,26 @@ pub(crate) mod Positions {
         ) -> UnchangedAssets {
             let mut position_data = array![];
             let assets = get_dep_component!(self, Assets);
+            let collateral_id = assets.get_collateral_id();
 
-            let mut collaterals_diff = array![];
             let mut synthetics_diff = array![];
 
-            for diff in position_diff.collaterals {
-                collaterals_diff.append(*(diff.id));
-            };
+            if position_diff.collateral.is_none() {
+                let balance = self.get_collateral_provisional_balance(position);
+                if balance.is_non_zero() {
+                    position_data
+                        .append(
+                            Asset {
+                                id: collateral_id,
+                                balance,
+                                price: One::one(),
+                                risk_factor: Zero::zero(),
+                            },
+                        )
+                }
+            }
             for diff in position_diff.synthetics {
                 synthetics_diff.append(*(diff.id));
-            };
-            let main_collateral_id = assets.get_main_collateral_asset_id();
-            if !contains(span: collaterals_diff.span(), element: main_collateral_id) {
-                let balance = self._get_provisional_main_collateral_balance(position);
-                if balance.is_non_zero() {
-                    let price = assets.get_collateral_price(main_collateral_id);
-                    let risk_factor = assets.get_collateral_risk_factor(main_collateral_id);
-                    position_data
-                        .append(Asset { id: main_collateral_id, balance, price, risk_factor })
-                }
             }
 
             for (synthetic_id, synthetic) in position.synthetic_assets {
@@ -485,7 +494,7 @@ pub(crate) mod Positions {
                 let price = assets.get_synthetic_price(synthetic_id);
                 let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
                 position_data.append(Asset { id: synthetic_id, balance, price, risk_factor });
-            };
+            }
             position_data.span()
         }
     }
@@ -503,28 +512,6 @@ pub(crate) mod Positions {
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        /// Returns the main collateral balance of a position while taking into account the funding
-        /// of all synthetic assets in the position.
-        fn _get_provisional_main_collateral_balance(
-            self: @ComponentState<TContractState>, position: StoragePath<Position>,
-        ) -> Balance {
-            let assets = get_dep_component!(self, Assets);
-            let mut provisional_main_collateral_balance = 0_i64.into();
-            let main_collateral_id = assets.get_main_collateral_asset_id();
-            if let Option::Some(collateral) = position.collateral_assets.read(main_collateral_id) {
-                provisional_main_collateral_balance += collateral.balance;
-            };
-            for (synthetic_id, synthetic) in position.synthetic_assets {
-                if synthetic.balance.is_zero() {
-                    continue;
-                }
-                let funding_index = assets.get_funding_index(synthetic_id);
-                provisional_main_collateral_balance +=
-                    calculate_funding(synthetic.funding_index, funding_index, synthetic.balance);
-            };
-            provisional_main_collateral_balance
-        }
-
         fn _validate_position_exists(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) {
@@ -558,30 +545,28 @@ pub(crate) mod Positions {
             ref self: ComponentState<TContractState>,
             position: StoragePath<Mutable<Position>>,
             synthetic_id: AssetId,
-            balance: Balance,
+            new_balance: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
-            let funding_index = assets.get_funding_index(:synthetic_id);
+            let global_funding_index = assets.get_funding_index(:synthetic_id);
 
             // Adjusts the main collateral balance accordingly:
             let mut collateral_balance = 0_i64.into();
             if let Option::Some(synthetic) = position.synthetic_assets.read(synthetic_id) {
-                if synthetic.balance.is_non_zero() {
-                    collateral_balance +=
-                        calculate_funding(
-                            synthetic.funding_index, funding_index, synthetic.balance,
-                        );
-                }
-            };
-            let main_collateral_id = assets.get_main_collateral_asset_id();
-            if let Option::Some(collateral) = position.collateral_assets.read(main_collateral_id) {
-                collateral_balance += collateral.balance
-            };
-            let collateral_asset = CollateralTrait::asset(balance: collateral_balance);
-            position.collateral_assets.write(main_collateral_id, collateral_asset);
+                let old_balance = synthetic.balance;
+                collateral_balance +=
+                    calculate_funding(
+                        old_funding_index: synthetic.funding_index,
+                        new_funding_index: global_funding_index,
+                        balance: old_balance,
+                    );
+            }
+            position.collateral_asset.balance.add_and_write(collateral_balance);
 
             // Updates the synthetic balance and funding index:
-            let synthetic_asset = SyntheticTrait::asset(balance, funding_index);
+            let synthetic_asset = SyntheticTrait::asset(
+                balance: new_balance, funding_index: global_funding_index,
+            );
             position.synthetic_assets.write(synthetic_id, synthetic_asset);
         }
 
@@ -596,7 +581,6 @@ pub(crate) mod Positions {
         }
 
         fn _validate_operator_flow(ref self: ComponentState<TContractState>, operator_nonce: u64) {
-            get_dep_component!(@self, Pausable).assert_not_paused();
             get_dep_component!(@self, Roles).only_operator();
             let mut nonce = get_dep_component_mut!(ref self, Nonce);
             nonce.use_checked_nonce(nonce: operator_nonce);

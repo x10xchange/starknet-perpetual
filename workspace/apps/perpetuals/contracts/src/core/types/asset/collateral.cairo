@@ -1,9 +1,5 @@
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-use contracts_commons::types::time::time::Timestamp;
 use openzeppelin::token::erc20::interface::IERC20Dispatcher;
-use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 
 const VERSION: u8 = 1;
@@ -14,19 +10,8 @@ pub struct CollateralConfig {
     // Collateral ERC20 contract
     pub token_contract: IERC20Dispatcher,
     // Configurable
-    pub status: AssetStatus,
-    pub risk_factor: FixedTwoDecimal,
     // Smallest unit of a token in the system.
     pub quantum: u64,
-    // Number of oracles that need to sign on the price to accept it.
-    pub quorum: u8,
-}
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct CollateralTimelyData {
-    version: u8,
-    pub price: Price,
-    pub last_price_update: Timestamp,
 }
 
 /// Collateral asset in a position.
@@ -43,17 +28,8 @@ pub impl CollateralImpl of CollateralTrait {
     fn asset(balance: Balance) -> CollateralAsset {
         CollateralAsset { version: VERSION, balance }
     }
-    fn config(
-        token_address: ContractAddress,
-        status: AssetStatus,
-        risk_factor: FixedTwoDecimal,
-        quantum: u64,
-        quorum: u8,
-    ) -> CollateralConfig {
+    fn config(token_address: ContractAddress, quantum: u64) -> CollateralConfig {
         let token_contract = IERC20Dispatcher { contract_address: token_address };
-        CollateralConfig { version: VERSION, token_contract, status, risk_factor, quantum, quorum }
-    }
-    fn timely_data(price: Price, last_price_update: Timestamp) -> CollateralTimelyData {
-        CollateralTimelyData { version: VERSION, price, last_price_update }
+        CollateralConfig { version: VERSION, token_contract, quantum }
     }
 }

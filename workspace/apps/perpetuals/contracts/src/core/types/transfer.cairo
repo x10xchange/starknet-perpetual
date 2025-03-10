@@ -1,10 +1,10 @@
-use contracts_commons::types::HashType;
-use contracts_commons::types::time::time::Timestamp;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
-use perpetuals::core::types::PositionId;
 use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::position::PositionId;
+use starkware_utils::types::HashType;
+use starkware_utils::types::time::time::Timestamp;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct TransferArgs {
@@ -56,7 +56,7 @@ mod tests {
         let expected = selector!(
             "\"TransferArgs\"(\"recipient\":\"PositionId\",\"position_id\":\"PositionId\",\"collateral_id\":\"AssetId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
-        assert_eq!(TRANSFER_ARGS_TYPE_HASH.into_base_16_string(), expected.into_base_16_string());
+        assert!(TRANSFER_ARGS_TYPE_HASH.into_base_16_string() == expected.into_base_16_string());
     }
 }
 

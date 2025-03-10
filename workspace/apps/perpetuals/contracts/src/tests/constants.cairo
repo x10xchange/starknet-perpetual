@@ -1,18 +1,16 @@
-use contracts_commons::constants::{DAY, MAX_U128, MINUTE, WEEK};
-use contracts_commons::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
-use contracts_commons::types::time::time::{Time, TimeDelta};
-use core::num::traits::{One, Zero};
+use core::num::traits::Zero;
 use openzeppelin_testing::signing::StarkKeyPair;
-use perpetuals::core::types::PositionId;
-use perpetuals::core::types::asset::collateral::{CollateralTimelyData, CollateralTrait};
 use perpetuals::core::types::asset::synthetic::{
     SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
 };
-
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
+use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
-use starknet::{ContractAddress, contract_address_const};
+use starknet::ContractAddress;
+use starkware_utils::constants::{DAY, MAX_U128, MINUTE, WEEK};
+use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
+use starkware_utils::types::time::time::{Time, TimeDelta};
 
 
 pub fn OPERATOR_PUBLIC_KEY() -> felt252 {
@@ -27,33 +25,29 @@ pub fn KEY_PAIR_2() -> StarkKeyPair {
 pub fn KEY_PAIR_3() -> StarkKeyPair {
     StarkCurveKeyPairImpl::from_secret_key('PRIVATE_KEY_3')
 }
-pub fn COLLATERAL_OWNER() -> ContractAddress nopanic {
-    contract_address_const::<'COLLATERAL_OWNER'>()
+pub fn COLLATERAL_OWNER() -> ContractAddress {
+    'COLLATERAL_OWNER'.try_into().unwrap()
 }
-pub fn POSITION_OWNER_1() -> ContractAddress nopanic {
-    contract_address_const::<'POSITION_OWNER_1'>()
+pub fn POSITION_OWNER_1() -> ContractAddress {
+    'POSITION_OWNER_1'.try_into().unwrap()
 }
-pub fn POSITION_OWNER_2() -> ContractAddress nopanic {
-    contract_address_const::<'POSITION_OWNER_2'>()
+pub fn POSITION_OWNER_2() -> ContractAddress {
+    'POSITION_OWNER_2'.try_into().unwrap()
 }
 pub fn TOKEN_ADDRESS() -> ContractAddress {
-    contract_address_const::<'TOKEN_ADDRESS'>()
+    'TOKEN_ADDRESS'.try_into().unwrap()
 }
 pub fn GOVERNANCE_ADMIN() -> ContractAddress {
-    contract_address_const::<'GOVERNANCE_ADMIN'>()
+    'GOVERNANCE_ADMIN'.try_into().unwrap()
 }
 pub fn APP_ROLE_ADMIN() -> ContractAddress {
-    contract_address_const::<'APP_ROLE_ADMIN'>()
+    'APP_ROLE_ADMIN'.try_into().unwrap()
 }
 pub fn APP_GOVERNOR() -> ContractAddress {
-    contract_address_const::<'APP_GOVERNOR'>()
+    'APP_GOVERNOR'.try_into().unwrap()
 }
 pub fn OPERATOR() -> ContractAddress {
-    contract_address_const::<'OPERATOR'>()
-}
-
-pub fn COLLATERAL_TIMELY_DATA() -> CollateralTimelyData {
-    CollateralTrait::timely_data(price: One::one(), last_price_update: Time::now())
+    'OPERATOR'.try_into().unwrap()
 }
 
 pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
@@ -93,7 +87,7 @@ pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 pub const MAX_FUNDING_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 /// 10 minutes in seconds.
 pub const MAX_ORACLE_PRICE_VALIDITY: TimeDelta = TimeDelta { seconds: 10 * MINUTE };
-pub const DEPOSIT_GRACE_PERIOD: TimeDelta = TimeDelta { seconds: WEEK };
+pub const CANCEL_DELAY: TimeDelta = TimeDelta { seconds: WEEK };
 pub const MAX_FUNDING_RATE: u32 = 35792; // Which is ~3% in an hour.
 pub const COLLATERAL_QUORUM: u8 = 0;
 pub const COLLATERAL_QUANTUM: u64 = 1_000;
@@ -135,7 +129,7 @@ pub fn RISK_FACTOR() -> FixedTwoDecimal {
 
 /// Prices
 pub fn SYNTHETIC_PRICE() -> Price {
-    PriceTrait::new(100 * PRICE_SCALE)
+    PriceTrait::new(100_u64 * PRICE_SCALE.into())
 }
 
 /// Assets' metadata

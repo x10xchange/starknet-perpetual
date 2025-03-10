@@ -1,17 +1,7 @@
 use Core::InternalCoreFunctionsTrait;
-use contracts_commons::components::nonce::interface::INonce;
-use contracts_commons::components::roles::interface::{
-    IRoles, IRolesDispatcher, IRolesDispatcherTrait,
-};
-use contracts_commons::constants::TWO_POW_32;
-use contracts_commons::iterable_map::*;
-use contracts_commons::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimal;
-use contracts_commons::types::fixed_two_decimal::FixedTwoDecimalTrait;
-use contracts_commons::types::time::time::{Time, TimeDelta, Timestamp};
-use contracts_commons::types::{HashType, Signature};
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
+use core::pedersen::PedersenTrait;
 use core::poseidon::PoseidonTrait;
 use openzeppelin::presets::interfaces::{
     AccountUpgradeableABIDispatcher, AccountUpgradeableABIDispatcherTrait,
@@ -24,13 +14,12 @@ use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICoreSafeDispatcher;
-use perpetuals::core::types::asset::collateral::{
-    CollateralConfig, CollateralTimelyData, CollateralTrait,
-};
+use perpetuals::core::types::asset::collateral::{CollateralConfig, CollateralTrait};
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
+use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::{Price, SignedPrice};
-use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff, PositionId};
+use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
@@ -38,6 +27,16 @@ use starknet::ContractAddress;
 use starknet::storage::{
     MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerWriteAccess,
 };
+use starkware_utils::components::nonce::interface::INonce;
+use starkware_utils::components::roles::interface::{
+    IRoles, IRolesDispatcher, IRolesDispatcherTrait,
+};
+use starkware_utils::constants::{TWO_POW_32, TWO_POW_40};
+use starkware_utils::iterable_map::*;
+use starkware_utils::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
+use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
+use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
+use starkware_utils::types::{HashType, Signature};
 
 
 // Structs
@@ -117,13 +116,12 @@ pub struct Oracle {
 #[generate_trait]
 pub impl OracleImpl of OracleTrait {
     fn get_oracle_name_asset_name_concat(self: @Oracle) -> felt252 {
-        const TWO_POW_40: felt252 = 0x100_0000_0000;
-        *self.asset_name * TWO_POW_40 + *self.oracle_name
+        *self.asset_name * TWO_POW_40.into() + *self.oracle_name
     }
     fn get_signed_price(self: Oracle, oracle_price: u128, timestamp: u32) -> SignedPrice {
         let message = core::pedersen::pedersen(
             self.get_oracle_name_asset_name_concat(),
-            (oracle_price * TWO_POW_32.into() + timestamp.into()).into(),
+            (oracle_price * TWO_POW_32.try_into().unwrap() + timestamp.into()).into(),
         );
         let (r, s) = self.key_pair.sign(message).unwrap();
         SignedPrice {
@@ -146,7 +144,7 @@ pub struct PerpetualsInitConfig {
     pub max_price_interval: TimeDelta,
     pub max_funding_rate: u32,
     pub max_oracle_price_validity: TimeDelta,
-    pub deposit_grace_period: TimeDelta,
+    pub cancel_delay: TimeDelta,
     pub fee_position_owner_account: ContractAddress,
     pub fee_position_owner_public_key: felt252,
     pub insurance_fund_position_owner_account: ContractAddress,
@@ -165,7 +163,7 @@ pub impl CoreImpl of CoreTrait {
         self.max_funding_interval.serialize(ref calldata);
         self.max_funding_rate.serialize(ref calldata);
         self.max_oracle_price_validity.serialize(ref calldata);
-        self.deposit_grace_period.serialize(ref calldata);
+        self.cancel_delay.serialize(ref calldata);
         self.fee_position_owner_public_key.serialize(ref calldata);
         self.insurance_fund_position_owner_public_key.serialize(ref calldata);
 
@@ -192,7 +190,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             max_price_interval: MAX_PRICE_INTERVAL,
             max_funding_rate: MAX_FUNDING_RATE,
             max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
-            deposit_grace_period: Time::weeks(1),
+            cancel_delay: Time::weeks(1),
             fee_position_owner_account: OPERATOR(),
             fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
             insurance_fund_position_owner_account: OPERATOR(),
@@ -269,12 +267,7 @@ pub fn setup_state_with_active_asset(
         .assets
         .synthetic_config
         .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
-    state
-        .assets
-        .risk_factor_tiers
-        .entry(*cfg.synthetic_cfg.synthetic_id)
-        .append()
-        .write(RISK_FACTOR());
+    state.assets.risk_factor_tiers.entry(*cfg.synthetic_cfg.synthetic_id).push(RISK_FACTOR());
     state
         .assets
         .synthetic_timely_data
@@ -306,7 +299,7 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
     state
         .assets
         .register_collateral(
-            asset_id: (*cfg.collateral_cfg.collateral_id).into(),
+            asset_id: *cfg.collateral_cfg.collateral_id,
             token_address: *token_state.address,
             quantum: *cfg.collateral_cfg.quantum,
         );
@@ -329,12 +322,9 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
         );
-    let asset_id = *cfg.collateral_cfg.collateral_id;
     let position = state.positions.get_position_snapshot(:position_id);
     let position_diff = state
-        ._create_collateral_position_diff(
-            :position, collateral_id: asset_id, diff: COLLATERAL_BALANCE_AMOUNT.into(),
-        );
+        ._create_collateral_position_diff(:position, diff: COLLATERAL_BALANCE_AMOUNT.into());
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
@@ -343,7 +333,7 @@ pub fn init_position_with_owner(
 ) {
     init_position(cfg, ref :state, :user);
     let position = state.positions.get_position_mut(position_id: user.position_id);
-    position.owner_account.write(user.address);
+    position.owner_account.write(Option::Some(user.address));
 }
 
 pub fn add_synthetic_to_position(
@@ -354,7 +344,7 @@ pub fn add_synthetic_to_position(
     let after = before + balance.into();
     let synthetic_diff = AssetDiff { id: synthetic_id, balance: BalanceDiff { before, after } };
     let position_diff = PositionDiff {
-        collaterals: array![].span(), synthetics: array![synthetic_diff].span(),
+        collateral: Option::None, synthetics: array![synthetic_diff].span(),
     };
     state.positions.apply_diff(:position_id, :position_diff);
 }
@@ -369,7 +359,7 @@ pub fn initialized_contract_state() -> Core::ContractState {
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
         max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
-        deposit_grace_period: DEPOSIT_GRACE_PERIOD,
+        cancel_delay: CANCEL_DELAY,
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
         insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
     );
@@ -378,17 +368,8 @@ pub fn initialized_contract_state() -> Core::ContractState {
 
 pub fn generate_collateral(
     collateral_cfg: @CollateralCfg, token_state: @TokenState,
-) -> (CollateralConfig, CollateralTimelyData) {
-    (
-        CollateralTrait::config(
-            token_address: *token_state.address,
-            status: AssetStatus::ACTIVE,
-            risk_factor: *collateral_cfg.risk_factor,
-            quantum: *collateral_cfg.quantum,
-            quorum: *collateral_cfg.quorum,
-        ),
-        COLLATERAL_TIMELY_DATA(),
-    )
+) -> CollateralConfig {
+    CollateralTrait::config(token_address: *token_state.address, quantum: *collateral_cfg.quantum)
 }
 
 pub fn check_synthetic_config(
@@ -402,15 +383,15 @@ pub fn check_synthetic_config(
     resolution: u64,
 ) {
     let synthetic_config = state.assets.get_synthetic_config(synthetic_id);
-    assert_eq!(synthetic_config.status, status);
+    assert!(synthetic_config.status == status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {
-        assert_eq!(*tiers[i], FixedTwoDecimalTrait::new(*risk_factor_tiers[i]));
-    };
-    assert_eq!(synthetic_config.risk_factor_first_tier_boundary, risk_factor_first_tier_boundary);
-    assert_eq!(synthetic_config.risk_factor_tier_size, risk_factor_tier_size);
-    assert_eq!(synthetic_config.quorum, quorum);
-    assert_eq!(synthetic_config.resolution, resolution);
+        assert!(*tiers[i] == FixedTwoDecimalTrait::new(*risk_factor_tiers[i]));
+    }
+    assert!(synthetic_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
+    assert!(synthetic_config.risk_factor_tier_size == risk_factor_tier_size);
+    assert!(synthetic_config.quorum == quorum);
+    assert!(synthetic_config.resolution == resolution);
 }
 
 pub fn check_synthetic_timely_data(
@@ -421,9 +402,9 @@ pub fn check_synthetic_timely_data(
     funding_index: FundingIndex,
 ) {
     let synthetic_timely_data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert_eq!(synthetic_timely_data.price, price);
-    assert_eq!(synthetic_timely_data.last_price_update, last_price_update);
-    assert_eq!(synthetic_timely_data.funding_index, funding_index);
+    assert!(synthetic_timely_data.price == price);
+    assert!(synthetic_timely_data.last_price_update == last_price_update);
+    assert!(synthetic_timely_data.funding_index == funding_index);
 }
 
 pub fn is_asset_in_synthetic_timely_data_list(
@@ -436,7 +417,7 @@ pub fn is_asset_in_synthetic_timely_data_list(
             flag = true;
             break;
         }
-    };
+    }
     flag
 }
 
@@ -476,7 +457,7 @@ pub fn check_synthetic_asset(
 
 pub fn validate_balance(token_state: TokenState, address: ContractAddress, expected_balance: u128) {
     let balance_to_check = token_state.balance_of(address);
-    assert_eq!(balance_to_check, expected_balance);
+    assert!(balance_to_check == expected_balance);
 }
 
 pub fn deposit_hash(
@@ -486,8 +467,7 @@ pub fn deposit_hash(
     quantized_amount: u128,
     salt: felt252,
 ) -> HashType {
-    PoseidonTrait::new()
-        .update_with(value: depositor)
+    PedersenTrait::new(base: depositor.into())
         .update_with(value: beneficiary)
         .update_with(value: asset_id)
         .update_with(value: quantized_amount)

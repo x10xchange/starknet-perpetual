@@ -1,35 +1,23 @@
-use contracts_commons::components::deposit::interface::{DepositStatus, IDeposit};
-use contracts_commons::components::nonce::interface::INonce;
-use contracts_commons::components::replaceability::interface::IReplaceable;
-use contracts_commons::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
-use contracts_commons::components::roles::interface::IRoles;
-use contracts_commons::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
-use contracts_commons::iterable_map::*;
-use contracts_commons::message_hash::OffchainMessageHash;
-use contracts_commons::test_utils::{
-    Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
-    cheat_caller_address_once,
-};
-use contracts_commons::types::time::time::{Time, Timestamp};
 use core::num::traits::Zero;
-use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-use perpetuals::core::components::assets::errors::ASSET_ALREADY_EXISTS;
+use perpetuals::core::components::assets::errors::{
+    ASSET_REGISTERED_AS_SYNTHETIC, COLLATERAL_ALREADY_REGISTERED,
+};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
 };
-use perpetuals::core::components::positions::Positions::POSITION_VERSION;
+use perpetuals::core::components::positions::Positions::{
+    FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
+};
 use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
 use perpetuals::core::components::positions::interface::{
     IPositions, IPositionsSafeDispatcher, IPositionsSafeDispatcherTrait,
 };
-use perpetuals::core::components::positions::{
-    Positions, Positions::InternalTrait as PositionsInternal,
-};
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
-use perpetuals::core::types::asset::{AssetIdTrait, AssetStatus};
-use perpetuals::core::types::funding::{FundingIndex, FundingTick};
+use perpetuals::core::types::asset::AssetStatus;
+use perpetuals::core::types::funding::{FundingIndexTrait, FundingTick};
 use perpetuals::core::types::order::Order;
+use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
 use perpetuals::core::types::price::{PriceTrait, SignedPrice};
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
@@ -59,39 +47,47 @@ use perpetuals::tests::test_utils::{
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
-    StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
-    StoragePointerWriteAccess,
+    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
 };
+use starkware_utils::components::deposit::interface::{DepositStatus, IDeposit};
+use starkware_utils::components::nonce::interface::INonce;
+use starkware_utils::components::replaceability::interface::IReplaceable;
+use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
+use starkware_utils::components::roles::interface::IRoles;
+use starkware_utils::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
+use starkware_utils::iterable_map::*;
+use starkware_utils::message_hash::OffchainMessageHash;
+use starkware_utils::test_utils::{
+    Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
+    cheat_caller_address_once,
+};
+use starkware_utils::types::time::time::{Time, Timestamp};
 
 
 #[test]
 fn test_constructor() {
     let mut state = initialized_contract_state();
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
-    assert_eq!(state.replaceability.get_upgrade_delay(), UPGRADE_DELAY);
-    assert_eq!(state.assets.get_price_validation_interval(), MAX_PRICE_INTERVAL);
-    assert_eq!(state.assets.get_funding_validation_interval(), MAX_FUNDING_INTERVAL);
-    assert_eq!(state.assets.get_max_funding_rate(), MAX_FUNDING_RATE);
-    assert_eq!(state.assets.get_max_oracle_price_validity(), MAX_ORACLE_PRICE_VALIDITY);
-    assert_eq!(state.deposits.get_deposit_grace_period(), DEPOSIT_GRACE_PERIOD);
-    assert_eq!(state.assets.last_funding_tick.read(), Time::now());
-    assert_eq!(state.assets.last_price_validation.read(), Time::now());
+    assert!(state.replaceability.get_upgrade_delay() == UPGRADE_DELAY);
+    assert!(state.assets.get_price_validation_interval() == MAX_PRICE_INTERVAL);
+    assert!(state.assets.get_funding_validation_interval() == MAX_FUNDING_INTERVAL);
+    assert!(state.assets.get_max_funding_rate() == MAX_FUNDING_RATE);
+    assert!(state.assets.get_max_oracle_price_validity() == MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.deposits.get_cancel_delay() == CANCEL_DELAY);
+    assert!(state.assets.last_funding_tick.read() == Time::now());
+    assert!(state.assets.last_price_validation.read() == Time::now());
 
-    assert_eq!(
+    assert!(
         state
             .positions
-            .get_position_snapshot(position_id: Positions::FEE_POSITION)
-            .owner_public_key
-            .read(),
-        OPERATOR_PUBLIC_KEY(),
+            .get_position_mut(position_id: FEE_POSITION)
+            .get_owner_public_key() == OPERATOR_PUBLIC_KEY(),
     );
-    assert_eq!(
+    assert!(
         state
             .positions
-            .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION)
-            .owner_public_key
-            .read(),
-        OPERATOR_PUBLIC_KEY(),
+            .get_position_mut(position_id: INSURANCE_FUND_POSITION)
+            .get_owner_public_key() == OPERATOR_PUBLIC_KEY(),
     );
 }
 
@@ -99,6 +95,7 @@ fn test_constructor() {
 // Invalid cases tests.
 
 #[test]
+#[feature("safe_dispatcher")]
 fn test_caller_failures() {
     // Setup:
     let (cfg, state, _) = init_by_dispatcher();
@@ -110,7 +107,6 @@ fn test_caller_failures() {
             operator_nonce: Zero::zero(),
             depositor: test_address(),
             position_id: POSITION_ID_1,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: DEPOSIT_AMOUNT,
             salt: 0,
         );
@@ -121,7 +117,6 @@ fn test_caller_failures() {
             signature: array![].span(),
             recipient: test_address(),
             position_id: POSITION_ID_1,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: WITHDRAW_AMOUNT.into(),
             expiration: Time::now(),
             salt: 0,
@@ -134,7 +129,6 @@ fn test_caller_failures() {
             operator_nonce: Zero::zero(),
             recipient: test_address(),
             position_id: POSITION_ID_1,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: WITHDRAW_AMOUNT.into(),
             expiration: Time::now(),
             salt: 0,
@@ -146,7 +140,6 @@ fn test_caller_failures() {
             signature: array![].span(),
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: TRANSFER_AMOUNT.into(),
             expiration: Time::now(),
             salt: 0,
@@ -159,7 +152,6 @@ fn test_caller_failures() {
             operator_nonce: Zero::zero(),
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: TRANSFER_AMOUNT.into(),
             expiration: Time::now(),
             salt: 0,
@@ -201,7 +193,6 @@ fn test_caller_failures() {
             actual_amount_base_liquidated: 0,
             actual_amount_quote_liquidated: 0,
             actual_liquidator_fee: 0,
-            fee_asset_id: cfg.collateral_cfg.collateral_id,
             fee_amount: 0,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
@@ -318,60 +309,48 @@ fn test_successful_register_collateral() {
     let mut spy = snforge_std::spy_events();
 
     // Parameters:
-    let asset_id = cfg.collateral_cfg.collateral_id;
     let quantum = COLLATERAL_QUANTUM;
     let token_address = cfg.collateral_cfg.token_cfg.owner;
 
     // Test.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state.register_collateral(:asset_id, :token_address, :quantum);
+    state.register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_register_collateral_event_with_expected(
-        spied_event: events[0], :asset_id, :token_address, :quantum,
+        spied_event: events[0],
+        asset_id: cfg.collateral_cfg.collateral_id,
+        :token_address,
+        :quantum,
     );
 
     // Check.
-    let collateral_config = state.assets.get_collateral_config(collateral_id: asset_id);
-    assert!(state.assets.collateral_timely_data.read(asset_id).is_some());
-    assert!(state.assets.get_main_collateral_asset_id() == asset_id);
-    assert_eq!(collateral_config.status, AssetStatus::ACTIVE);
-    assert_eq!(collateral_config.quorum, Zero::zero());
-    assert_eq!(collateral_config.risk_factor, Zero::zero());
-    assert_eq!(collateral_config.quantum, quantum);
-    assert_eq!(state.deposits.get_asset_info(asset_id: asset_id.into()), (token_address, quantum));
+    let collateral_config = state.assets.get_collateral_config();
+    assert!(collateral_config.quantum == quantum);
+    assert!(collateral_config.token_contract.contract_address == token_address);
+    assert!(
+        state
+            .deposits
+            .get_asset_info(
+                asset_id: cfg.collateral_cfg.collateral_id.into(),
+            ) == (token_address, quantum),
+    );
 }
 
 #[test]
+#[feature("safe_dispatcher")]
 fn test_register_collateral_failures() {
     // Setup:
     let (cfg, state, _) = init_by_dispatcher();
     let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
 
     // Parameters:
-    // `collateral_id` is already registered in the setup.
-    let asset_id = cfg.collateral_cfg.collateral_id;
-    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     let quantum = COLLATERAL_QUANTUM;
     let token_address = cfg.collateral_cfg.token_cfg.owner;
 
-    // Register collateral for the first time.
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
-    dispatcher.register_collateral(:asset_id, :token_address, :quantum).unwrap();
-
-    // Register the same collateral asset.
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
-    let result = dispatcher.register_collateral(:asset_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
-
-    // Register new collateral asset.
-    let new_asset_id = AssetIdTrait::new(value: selector!("NEW_COLLATERAL_ASSET_ID"));
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
-    let result = dispatcher.register_collateral(asset_id: new_asset_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
-
     // Collateral id already register as synthetic.
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
     dispatcher
         .add_synthetic_asset(
@@ -386,7 +365,25 @@ fn test_register_collateral_failures() {
 
     cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
     let result = dispatcher.register_collateral(asset_id: synthetic_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: ASSET_ALREADY_EXISTS);
+    assert_panic_with_felt_error(:result, expected_error: ASSET_REGISTERED_AS_SYNTHETIC);
+
+    // Register collateral for the first time.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    dispatcher
+        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum)
+        .unwrap();
+
+    // Register the same collateral asset.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher
+        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
+    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);
+
+    // Register new collateral asset.
+    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    let result = dispatcher
+        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
+    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);
 }
 
 // New position tests.
@@ -418,15 +415,16 @@ fn test_new_position() {
     );
 
     // Check.
-    assert_eq!(
-        state.positions.get_position_snapshot(:position_id).version.read(), POSITION_VERSION,
+    assert!(state.positions.get_position_mut(:position_id).get_version() == POSITION_VERSION);
+    assert!(
+        state.positions.get_position_mut(:position_id).get_owner_public_key() == owner_public_key,
     );
-    assert_eq!(
-        state.positions.get_position_snapshot(:position_id).owner_public_key.read(),
-        owner_public_key,
-    );
-    assert_eq!(
-        state.positions.get_position_snapshot(:position_id).owner_account.read(), owner_account,
+    assert!(
+        state
+            .positions
+            .get_position_mut(:position_id)
+            .get_owner_account()
+            .unwrap() == owner_account,
     );
 
     let position_tv_tr = state.positions.get_position_tv_tr(:position_id);
@@ -469,7 +467,7 @@ fn test_successful_set_owner_account_request_using_public_key() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 #[test]
@@ -551,11 +549,15 @@ fn test_successful_set_owner_account() {
     );
 
     // Check.
-    assert_eq!(
-        state.positions.get_position_snapshot(:position_id).owner_account.read(), new_owner_account,
+    assert!(
+        state
+            .positions
+            .get_position_mut(:position_id)
+            .get_owner_account()
+            .unwrap() == new_owner_account,
     );
     let status = state.request_approvals.get_request_status(request_hash: set_owner_account_hash);
-    assert_eq!(status, RequestStatus::PROCESSED);
+    assert!(status == RequestStatus::PROCESSED);
 }
 
 #[test]
@@ -731,7 +733,7 @@ fn test_successful_deactivate_synthetic_asset() {
             .entry(synthetic_id)
             .read()
             .unwrap()
-            .status == AssetStatus::DEACTIVATED,
+            .status == AssetStatus::INACTIVE,
     );
 }
 
@@ -779,7 +781,7 @@ fn test_successful_withdraw() {
     let operator_nonce = state.nonce();
 
     let contract_state_balance = token_state.balance_of(test_address());
-    assert_eq!(contract_state_balance, CONTRACT_INIT_BALANCE.into());
+    assert!(contract_state_balance == CONTRACT_INIT_BALANCE.into());
 
     let mut spy = snforge_std::spy_events();
     // Test:
@@ -788,7 +790,6 @@ fn test_successful_withdraw() {
             :signature,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
-            collateral_id: withdraw_args.collateral_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
@@ -799,7 +800,6 @@ fn test_successful_withdraw() {
             :operator_nonce,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
-            collateral_id: withdraw_args.collateral_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
@@ -828,17 +828,17 @@ fn test_successful_withdraw() {
     // Check:
     let user_balance = token_state.balance_of(user.address);
     let onchain_amount = (WITHDRAW_AMOUNT * COLLATERAL_QUANTUM);
-    assert_eq!(user_balance, onchain_amount.into());
+    assert!(user_balance == onchain_amount.into());
     let contract_state_balance = token_state.balance_of(test_address());
-    assert_eq!(contract_state_balance, (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
-    assert_eq!(
+    assert!(contract_state_balance == (CONTRACT_INIT_BALANCE - onchain_amount.into()).into());
+    assert!(
         state
             .positions
-            .get_provisional_balance(
+            .get_collateral_provisional_balance(
                 position: state.positions.get_position_snapshot(position_id: user.position_id),
-                collateral_id: cfg.collateral_cfg.collateral_id,
-            ),
-        COLLATERAL_BALANCE_AMOUNT.into() - WITHDRAW_AMOUNT.into(),
+            ) == COLLATERAL_BALANCE_AMOUNT
+            .into()
+            - WITHDRAW_AMOUNT.into(),
     );
 }
 
@@ -908,7 +908,7 @@ fn test_successful_deposit() {
     );
     let status = state.deposits.get_deposit_status(:deposit_hash);
     if let DepositStatus::PENDING(timestamp) = status {
-        assert_eq!(timestamp, expected_time);
+        assert!(timestamp == expected_time);
     } else {
         panic!("Deposit not found");
     }
@@ -995,7 +995,6 @@ fn test_successful_process_deposit() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: collateral_cfg_id.into(),
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -1013,7 +1012,7 @@ fn test_successful_process_deposit() {
     );
 
     let status = state.deposits.get_deposit_status(:deposit_hash);
-    assert_eq!(status, DepositStatus::DONE, "Deposit not processed");
+    assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
 }
 
 // Cancel deposit tests.
@@ -1188,7 +1187,6 @@ fn test_cancel_already_done_deposit() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: collateral_cfg_id.into(),
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -1398,30 +1396,30 @@ fn test_successful_trade() {
     let position_a = state.positions.get_position_snapshot(position_id: user_a.position_id);
     let user_a_collateral_balance = state
         .positions
-        .get_provisional_balance(position: position_a, :collateral_id);
+        .get_collateral_provisional_balance(position: position_a);
     let user_a_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: position_a, :synthetic_id);
-    assert_eq!(
-        user_a_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
+    assert!(
+        user_a_collateral_balance == (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() + QUOTE.into()),
     );
-    assert_eq!(user_a_synthetic_balance, (BASE).into());
+    assert!(user_a_synthetic_balance == (BASE).into());
 
     let position_b = state.positions.get_position_snapshot(position_id: user_b.position_id);
     let user_b_collateral_balance = state
         .positions
-        .get_provisional_balance(position: position_b, :collateral_id);
+        .get_collateral_provisional_balance(position: position_b);
     let user_b_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: position_b, :synthetic_id);
-    assert_eq!(
-        user_b_collateral_balance, (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
+    assert!(
+        user_b_collateral_balance == (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
     );
-    assert_eq!(user_b_synthetic_balance, (-BASE).into());
+    assert!(user_b_synthetic_balance == (-BASE).into());
 
-    let position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
-    let fee_position_balance = state.positions.get_provisional_balance(:position, :collateral_id);
-    assert_eq!(fee_position_balance, (FEE + FEE).into());
+    let position = state.positions.get_position_snapshot(position_id: FEE_POSITION);
+    let fee_position_balance = state.positions.get_collateral_provisional_balance(:position);
+    assert!(fee_position_balance == (FEE + FEE).into());
 }
 
 #[test]
@@ -1528,7 +1526,6 @@ fn test_successful_withdraw_request_with_public_key() {
             :signature,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
-            collateral_id: withdraw_args.collateral_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
@@ -1536,7 +1533,7 @@ fn test_successful_withdraw_request_with_public_key() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 #[test]
@@ -1573,7 +1570,6 @@ fn test_successful_withdraw_request_with_owner() {
             :signature,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
-            collateral_id: withdraw_args.collateral_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
@@ -1581,7 +1577,7 @@ fn test_successful_withdraw_request_with_owner() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 // Deleverage tests.
@@ -1668,21 +1664,21 @@ fn test_successful_deleverage() {
 
     let deleveraged_collateral_balance = state
         .positions
-        .get_provisional_balance(position: deleveraged_position, :collateral_id);
+        .get_collateral_provisional_balance(position: deleveraged_position);
     let deleveraged_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: deleveraged_position, :synthetic_id);
-    assert_eq!(deleveraged_collateral_balance, (COLLATERAL_BALANCE_AMOUNT + QUOTE).into());
-    assert_eq!(deleveraged_synthetic_balance, (-2 * SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+    assert!(deleveraged_collateral_balance == (COLLATERAL_BALANCE_AMOUNT + QUOTE).into());
+    assert!(deleveraged_synthetic_balance == (-2 * SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
     let deleverager_collateral_balance = state
         .positions
-        .get_provisional_balance(position: deleverager_position, :collateral_id);
+        .get_collateral_provisional_balance(position: deleverager_position);
     let deleverager_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: deleverager_position, :synthetic_id);
-    assert_eq!(deleverager_collateral_balance, (COLLATERAL_BALANCE_AMOUNT - QUOTE).into());
-    assert_eq!(deleverager_synthetic_balance, (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
+    assert!(deleverager_collateral_balance == (COLLATERAL_BALANCE_AMOUNT - QUOTE).into());
+    assert!(deleverager_synthetic_balance == (SYNTHETIC_BALANCE_AMOUNT - BASE).into());
 }
 
 #[test]
@@ -1802,7 +1798,6 @@ fn test_successful_liquidate() {
             actual_amount_base_liquidated: BASE,
             actual_amount_quote_liquidated: QUOTE,
             actual_liquidator_fee: FEE,
-            fee_asset_id: collateral_id,
             fee_amount: INSURANCE_FEE,
         );
     // Catch the event.
@@ -1835,41 +1830,43 @@ fn test_successful_liquidate() {
 
     let liquidated_collateral_balance = state
         .positions
-        .get_provisional_balance(position: liquidated_position, :collateral_id);
+        .get_collateral_provisional_balance(position: liquidated_position);
     let liquidated_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: liquidated_position, :synthetic_id);
-    assert_eq!(
-        liquidated_collateral_balance,
-        (COLLATERAL_BALANCE_AMOUNT.into() - INSURANCE_FEE.into() + QUOTE.into()),
+    assert!(
+        liquidated_collateral_balance == (COLLATERAL_BALANCE_AMOUNT.into()
+            - INSURANCE_FEE.into()
+            + QUOTE.into()),
     );
-    assert_eq!(liquidated_synthetic_balance, (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
+    assert!(liquidated_synthetic_balance == (-SYNTHETIC_BALANCE_AMOUNT + BASE).into());
 
     let liquidator_collateral_balance = state
         .positions
-        .get_provisional_balance(position: liquidator_position, :collateral_id);
+        .get_collateral_provisional_balance(position: liquidator_position);
     let liquidator_synthetic_balance = state
         .positions
         .get_synthetic_balance(position: liquidator_position, :synthetic_id);
-    assert_eq!(
-        liquidator_collateral_balance,
-        (COLLATERAL_BALANCE_AMOUNT.into() - FEE.into() - QUOTE.into()),
+    assert!(
+        liquidator_collateral_balance == (COLLATERAL_BALANCE_AMOUNT.into()
+            - FEE.into()
+            - QUOTE.into()),
     );
-    assert_eq!(liquidator_synthetic_balance, (-BASE).into());
+    assert!(liquidator_synthetic_balance == (-BASE).into());
 
-    let fee_position = state.positions.get_position_snapshot(position_id: Positions::FEE_POSITION);
+    let fee_position = state.positions.get_position_snapshot(position_id: FEE_POSITION);
     let fee_position_balance = state
         .positions
-        .get_provisional_balance(position: fee_position, :collateral_id);
-    assert_eq!(fee_position_balance, FEE.into());
+        .get_collateral_provisional_balance(position: fee_position);
+    assert!(fee_position_balance == FEE.into());
 
     let insurance_fund_position = state
         .positions
-        .get_position_snapshot(position_id: Positions::INSURANCE_FUND_POSITION);
+        .get_position_snapshot(position_id: INSURANCE_FUND_POSITION);
     let insurance_position_balance = state
         .positions
-        .get_provisional_balance(position: insurance_fund_position, :collateral_id);
-    assert_eq!(insurance_position_balance, INSURANCE_FEE.into());
+        .get_collateral_provisional_balance(position: insurance_fund_position);
+    assert!(insurance_position_balance == INSURANCE_FEE.into());
 }
 
 // Test set public key.
@@ -1889,7 +1886,7 @@ fn test_successful_set_public_key_request() {
     let old_public_key = user.get_public_key();
     let new_key_pair = KEY_PAIR_2();
     user.set_public_key(new_key_pair);
-    assert_eq!(user.get_public_key(), new_key_pair.public_key);
+    assert!(user.get_public_key() == new_key_pair.public_key);
 
     // Test change public key in perps:
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
@@ -1911,7 +1908,7 @@ fn test_successful_set_public_key_request() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 #[test]
@@ -1929,7 +1926,7 @@ fn test_successful_set_public_key() {
     let old_public_key = user.get_public_key();
     let new_key_pair = KEY_PAIR_2();
     user.set_public_key(new_key_pair);
-    assert_eq!(user.get_public_key(), new_key_pair.public_key);
+    assert!(user.get_public_key() == new_key_pair.public_key);
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     let set_public_key_args = SetPublicKeyArgs {
@@ -1977,9 +1974,9 @@ fn test_successful_set_public_key() {
     );
 
     // Check:
-    assert_eq!(
-        user.get_public_key(),
-        state
+    assert!(
+        user
+            .get_public_key() == state
             .positions
             .get_position_snapshot(position_id: user.position_id)
             .owner_public_key
@@ -2123,7 +2120,6 @@ fn test_successful_transfer_request_using_public_key() {
             :signature,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
             amount: transfer_args.amount,
             expiration: transfer_args.expiration,
             salt: transfer_args.salt,
@@ -2131,7 +2127,7 @@ fn test_successful_transfer_request_using_public_key() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 #[test]
@@ -2167,7 +2163,6 @@ fn test_successful_transfer_request_with_owner() {
             :signature,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
             amount: transfer_args.amount,
             expiration: transfer_args.expiration,
             salt: transfer_args.salt,
@@ -2175,7 +2170,7 @@ fn test_successful_transfer_request_with_owner() {
 
     // Check:
     let status = state.request_approvals.get_request_status(request_hash: msg_hash);
-    assert_eq!(status, RequestStatus::PENDING);
+    assert!(status == RequestStatus::PENDING);
 }
 
 #[test]
@@ -2215,7 +2210,6 @@ fn test_successful_transfer() {
             signature: sender_signature,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
             amount: transfer_args.amount,
             expiration: transfer_args.expiration,
             salt: transfer_args.salt,
@@ -2226,7 +2220,6 @@ fn test_successful_transfer() {
             :operator_nonce,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
             amount: transfer_args.amount,
             expiration: transfer_args.expiration,
             salt: transfer_args.salt,
@@ -2257,19 +2250,17 @@ fn test_successful_transfer() {
     let sender_position = state.positions.get_position_snapshot(position_id: sender.position_id);
     let sender_collateral_balance = state
         .positions
-        .get_provisional_balance(position: sender_position, :collateral_id);
-    assert_eq!(
-        sender_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into(),
-    );
+        .get_collateral_provisional_balance(position: sender_position);
+    assert!(sender_collateral_balance == COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into());
 
     let recipient_position = state
         .positions
         .get_position_snapshot(position_id: recipient.position_id);
     let recipient_collateral_balance = state
         .positions
-        .get_provisional_balance(position: recipient_position, :collateral_id);
-    assert_eq!(
-        recipient_collateral_balance, COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
+        .get_collateral_provisional_balance(position: recipient_position);
+    assert!(
+        recipient_collateral_balance == COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
     );
 }
 
@@ -2310,7 +2301,6 @@ fn test_invalid_transfer_request_amount_is_zero() {
             signature: sender_signature,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
-            collateral_id: transfer_args.collateral_id,
             amount: transfer_args.amount,
             expiration: transfer_args.expiration,
             salt: transfer_args.salt,
@@ -2355,7 +2345,6 @@ fn test_validate_synthetic_prices_expired() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -2399,7 +2388,6 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
@@ -2439,11 +2427,10 @@ fn test_validate_prices() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
-    assert_eq!(state.assets.last_price_validation.read(), new_time);
+    assert!(state.assets.last_price_validation.read() == new_time);
 }
 
 #[test]
@@ -2463,7 +2450,7 @@ fn test_validate_prices_no_update_needed() {
             amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     let old_time = Time::now();
-    assert_eq!(state.assets.last_price_validation.read(), old_time);
+    assert!(state.assets.last_price_validation.read() == old_time);
     let new_time = Time::now().add(delta: Time::seconds(count: 1000));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
@@ -2480,12 +2467,11 @@ fn test_validate_prices_no_update_needed() {
             operator_nonce: state.nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            collateral_id: cfg.collateral_cfg.collateral_id,
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
-    assert_eq!(state.assets.last_price_validation.read(), old_time);
+    assert!(state.assets.last_price_validation.read() == old_time);
 }
 
 // `funding_tick` tests.
@@ -2501,7 +2487,7 @@ fn test_funding_tick_basic() {
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 3.
-    let new_funding_index = FundingIndex { value: 3 * TWO_POW_32.try_into().unwrap() };
+    let new_funding_index = FundingIndexTrait::new(value: 3 * TWO_POW_32.try_into().unwrap());
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2524,8 +2510,8 @@ fn test_funding_tick_basic() {
     );
 
     // Check:
-    assert_eq!(
-        state.assets.get_synthetic_timely_data(synthetic_id).funding_index, new_funding_index,
+    assert!(
+        state.assets.get_synthetic_timely_data(synthetic_id).funding_index == new_funding_index,
     );
 }
 
@@ -2533,6 +2519,7 @@ fn test_funding_tick_basic() {
 #[should_panic(
     expected: "INVALID_FUNDING_RATE synthetic_id: AssetId { value: 720515315941943725751128480342703114962297896757142150278960020243082094068 }",
 )]
+#[feature("safe_dispatcher")]
 fn test_invalid_funding_rate() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -2543,7 +2530,7 @@ fn test_invalid_funding_rate() {
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 4.
-    let new_funding_index = FundingIndex { value: 4 * TWO_POW_32.try_into().unwrap() };
+    let new_funding_index = FundingIndexTrait::new(value: 4 * TWO_POW_32.try_into().unwrap());
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2569,8 +2556,8 @@ fn test_invalid_funding_len() {
     let new_time = Time::now().add(Time::seconds(10));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
 
-    let new_funding_index_1 = FundingIndex { value: 100 * TWO_POW_32.try_into().unwrap() };
-    let new_funding_index_2 = FundingIndex { value: 3 * TWO_POW_32.try_into().unwrap() };
+    let new_funding_index_1 = FundingIndexTrait::new(value: 100 * TWO_POW_32.try_into().unwrap());
+    let new_funding_index_2 = FundingIndexTrait::new(value: 3 * TWO_POW_32.try_into().unwrap());
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: SYNTHETIC_ASSET_ID_1(), funding_index: new_funding_index_1 },
         FundingTick { asset_id: SYNTHETIC_ASSET_ID_2(), funding_index: new_funding_index_2 },
@@ -2605,7 +2592,7 @@ fn test_price_tick_basic() {
     let old_time: u64 = Time::now().into();
     state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(Zero::zero());
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), Zero::zero());
+    assert!(state.assets.get_num_of_active_synthetic_assets() == Zero::zero());
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2637,11 +2624,11 @@ fn test_price_tick_basic() {
     );
 
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price.value(), 268);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == 268);
 }
 
 #[test]
@@ -2684,7 +2671,7 @@ fn test_price_tick_odd() {
     let old_time: u64 = Time::now().into();
     state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(0);
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2709,10 +2696,10 @@ fn test_price_tick_odd() {
                 .span(),
         );
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price.value(), 268);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == 268);
 }
 
 #[test]
@@ -2745,7 +2732,7 @@ fn test_price_tick_even() {
     let old_time: u64 = Time::now().into();
     state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     state.assets.num_of_active_synthetic_assets.write(0);
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 0);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2769,11 +2756,11 @@ fn test_price_tick_even() {
                 .span(),
         );
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
-    assert_eq!(state.assets.get_num_of_active_synthetic_assets(), 1);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert_eq!(data.last_price_update, new_time);
-    assert_eq!(data.price.value(), 268);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == 268);
 }
 
 #[test]
@@ -2796,6 +2783,7 @@ fn test_price_tick_no_quorum() {
 #[test]
 #[should_panic(expected: 'SIGNED_PRICES_UNSORTED')]
 fn test_price_tick_unsorted() {
+    start_cheat_block_timestamp_global(block_timestamp: Time::now().add(Time::weeks(1)).into());
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
@@ -2962,8 +2950,8 @@ fn test_price_tick_golden() {
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert_eq!(data.last_price_update, Time::now());
-    assert_eq!(data.price.value(), 6430);
+    assert!(data.last_price_update == Time::now());
+    assert!(data.price.value() == 6430);
 }
 
 // Add and remove oracle tests.
