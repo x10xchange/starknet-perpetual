@@ -343,7 +343,7 @@ pub fn add_synthetic_to_position(
     let after = before + balance.into();
     let synthetic_diff = AssetDiff { id: synthetic_id, balance: BalanceDiff { before, after } };
     let position_diff = PositionDiff {
-        collateral: Option::None, synthetics: array![synthetic_diff].span(),
+        collateral: Option::None, synthetic: Option::Some(synthetic_diff),
     };
     state.positions.apply_diff(:position_id, :position_diff);
 }

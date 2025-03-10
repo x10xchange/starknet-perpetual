@@ -44,26 +44,14 @@ pub struct AssetDiffEnriched {
     pub risk_factor_after: FixedTwoDecimal,
 }
 
-#[derive(Copy, Debug, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiff {
     pub collateral: Option<BalanceDiff>,
-    pub synthetics: Span<AssetDiff>,
+    pub synthetic: Option<AssetDiff>,
 }
 
-#[derive(Copy, Debug, Drop, Serde)]
+#[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiffEnriched {
     pub collateral: Option<BalanceDiff>,
-    pub synthetics: Span<AssetDiffEnriched>,
-}
-
-pub impl DefaultPositionDiffImpl of Default<PositionDiff> {
-    fn default() -> PositionDiff {
-        PositionDiff { collateral: Option::None, synthetics: array![].span() }
-    }
-}
-
-pub impl DefaultPositionDiffEnrichedImpl of Default<PositionDiffEnriched> {
-    fn default() -> PositionDiffEnriched {
-        PositionDiffEnriched { collateral: Option::None, synthetics: array![].span() }
-    }
+    pub synthetic: Option<AssetDiffEnriched>,
 }

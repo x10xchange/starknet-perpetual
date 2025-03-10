@@ -588,23 +588,21 @@ pub mod AssetsComponent {
         fn enrich_position_diff(
             self: @ComponentState<TContractState>, position_diff: PositionDiff,
         ) -> PositionDiffEnriched {
-            let mut synthetics: Array<AssetDiffEnriched> = array![];
-            for synthetic in position_diff.synthetics {
-                let price = self.get_synthetic_price(*synthetic.id);
+            let mut synthetic = Option::None;
+            if let Option::Some(asset) = position_diff.synthetic {
+                let price = self.get_synthetic_price(asset.id);
                 let risk_factor_before = self
-                    .get_synthetic_risk_factor(*synthetic.id, *synthetic.balance.before, price);
+                    .get_synthetic_risk_factor(asset.id, asset.balance.before, price);
                 let risk_factor_after = self
-                    .get_synthetic_risk_factor(*synthetic.id, *synthetic.balance.after, price);
+                    .get_synthetic_risk_factor(asset.id, asset.balance.after, price);
 
                 let asset_diff_enriched = AssetDiffEnriched {
-                    asset: *synthetic, price, risk_factor_before, risk_factor_after,
+                    asset, price, risk_factor_before, risk_factor_after,
                 };
-                synthetics.append(asset_diff_enriched);
+                synthetic = Option::Some(asset_diff_enriched);
             }
 
-            PositionDiffEnriched {
-                collateral: position_diff.collateral, synthetics: synthetics.span(),
-            }
+            PositionDiffEnriched { collateral: position_diff.collateral, synthetic }
         }
 
         fn get_funding_index(

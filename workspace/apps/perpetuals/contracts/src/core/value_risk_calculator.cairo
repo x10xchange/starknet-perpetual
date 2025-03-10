@@ -204,15 +204,15 @@ fn calculate_position_tvtr_change(
     let mut total_value_after = unchanged_assets_value;
     let mut total_risk_after = unchanged_assets_risk;
 
-    for asset_diff in position_diff_enriched.synthetics {
-        let asset_value_before = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.before);
-        let asset_value_after = (*asset_diff.price).mul(rhs: *asset_diff.asset.balance.after);
+    if let Option::Some(asset_diff) = position_diff_enriched.synthetic {
+        let asset_value_before = asset_diff.price.mul(rhs: asset_diff.asset.balance.before);
+        let asset_value_after = asset_diff.price.mul(rhs: asset_diff.asset.balance.after);
 
         total_value_before += asset_value_before;
         total_value_after += asset_value_after;
 
-        total_risk_before += (*asset_diff.risk_factor_before).mul(asset_value_before.abs());
-        total_risk_after += (*asset_diff.risk_factor_after).mul(asset_value_after.abs());
+        total_risk_before += asset_diff.risk_factor_before.mul(asset_value_before.abs());
+        total_risk_after += asset_diff.risk_factor_after.mul(asset_value_after.abs());
     }
 
     if let Option::Some(diff) = position_diff_enriched.collateral {
@@ -314,7 +314,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetics: array![asset_diff].span(),
+            collateral: Option::None, synthetic: Option::Some(asset_diff),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -366,7 +366,7 @@ mod tests {
             risk_factor_after: RISK_FACTOR_1(),
         };
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetics: array![asset_diff].span(),
+            collateral: Option::None, synthetic: Option::Some(asset_diff),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -393,10 +393,10 @@ mod tests {
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where there are multiple
-    /// asset
+    /// assets
     ///
     /// This test verifies the correctness of total value and total risk calculations before and
-    /// after a position change in a scenario with multiple assets and multiple assets diff.
+    /// after a position change in a scenario with multiple assets and a single asset diff.
     #[test]
     fn test_calculate_position_tvtr_change_multiple_assets() {
         // Create a position with multiple assets.
@@ -430,7 +430,7 @@ mod tests {
             price: PRICE_5(),
             risk_factor: RISK_FACTOR_5(),
         };
-        let position_data = array![asset_3, asset_4, asset_5].span();
+        let position_data = array![asset_2, asset_3, asset_4, asset_5].span();
 
         // Create a position diff with two assets diff.
         let asset_diff_1 = AssetDiffEnriched {
@@ -444,19 +444,9 @@ mod tests {
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
         };
-        let asset_diff_2 = AssetDiffEnriched {
-            asset: AssetDiff {
-                id: asset_2.id,
-                balance: BalanceDiff {
-                    before: asset_2.balance, after: BalanceTrait::new(value: 60),
-                },
-            },
-            price: asset_2.price,
-            risk_factor_before: RISK_FACTOR_2(),
-            risk_factor_after: RISK_FACTOR_2(),
-        };
+
         let position_diff_enriched = PositionDiffEnriched {
-            collateral: Option::None, synthetics: array![asset_diff_1, asset_diff_2].span(),
+            collateral: Option::None, synthetic: Option::Some(asset_diff_1),
         };
 
         let position_tvtr_change = calculate_position_tvtr_change(
@@ -479,21 +469,21 @@ mod tests {
         /// abs(10) * 900 * 0.5 + abs(5) * 900 * 0.5`).
         assert!(position_tvtr_change.before.total_risk == 60_750);
 
-        /// Ensures `total_value` after the change is `157,500`, calculated as `balance_1_after *
+        /// Ensures `total_value` after the change is `139,500`, calculated as `balance_1_after *
         /// price + balance_2_after * price` + balance_3_after * price + balance_4_after * price +
-        /// balance_5_after * price` (`80 * 900 + 60 * 900 + 20 * 900 + 10 * 900 + 5 * 900`).
-        /// The balance of the other assets remains the same, so balance_3_after = 20,
-        /// balance_4_after = 10, balance_5_after = 5.
-        assert!(position_tvtr_change.after.total_value == 157_500);
+        /// balance_5_after * price` (`80 * 900 + 40 * 900 + 20 * 900 + 10 * 900 + 5 * 900`).
+        /// The balance of the other assets remains the same, so balance_2_after = 40,
+        /// balance_3_after = 20, balance_4_after = 10, balance_5_after = 5.
+        assert!(position_tvtr_change.after.total_value == 139_500);
 
-        /// Ensures `total_risk` after the change is `78,750`, calculated as `abs(balance_1_after) *
+        /// Ensures `total_risk` after the change is `69,750`, calculated as `abs(balance_1_after) *
         /// price * risk_factor_1 + abs(balance_2_after) * price * risk_factor_2 +
         /// abs(balance_3_after) * price * risk_factor_3 + abs(balance_4_after) * price *
         /// risk_factor_4 + abs(balance_5_after) * price * risk_factor_5` (`abs(80) * 900 * 0.5 +
-        /// abs(60) * 900 * 0.5 + abs(20) * 900 * 0.5 + abs(10) * 900 * 0.5 + abs(5) * 900 * 0.5`).
-        /// The balance of the other assets remains the same, so balance_3_after = 20,
-        /// balance_4_after = 10, balance_5_after = 5.
-        assert!(position_tvtr_change.after.total_risk == 78_750);
+        /// abs(40) * 900 * 0.5 + abs(20) * 900 * 0.5 + abs(10) * 900 * 0.5 + abs(5) * 900 * 0.5`).
+        /// The balance of the other assets remains the same, so balance_2_after = 40,
+        /// balance_3_after = 20, balance_4_after = 10, balance_5_after = 5.
+        assert!(position_tvtr_change.after.total_risk == 69_750);
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where the diff is empty.

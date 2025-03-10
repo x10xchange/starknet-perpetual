@@ -391,19 +391,16 @@ pub(crate) mod Positions {
             position_id: PositionId,
             position_diff: PositionDiff,
         ) {
-            if position_diff.collateral.is_none() && position_diff.synthetics.len().is_zero() {
-                return;
-            }
             let position_mut = self.get_position_mut(:position_id);
             if let Option::Some(balance_diff) = position_diff.collateral {
                 position_mut.collateral_balance.write(balance_diff.after);
             }
 
-            for diff in position_diff.synthetics {
-                let synthetic_id = *diff.id;
+            if let Option::Some(diff) = position_diff.synthetic {
+                let synthetic_id = diff.id;
                 self
                     ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, new_balance: *diff.balance.after,
+                        position: position_mut, :synthetic_id, new_balance: diff.balance.after,
                     );
             };
         }
@@ -481,8 +478,8 @@ pub(crate) mod Positions {
                         )
                 }
             }
-            for diff in position_diff.synthetics {
-                synthetics_diff.append(*(diff.id));
+            if let Option::Some(diff) = position_diff.synthetic {
+                synthetics_diff.append(diff.id);
             }
 
             for (synthetic_id, synthetic) in position.synthetic_assets {

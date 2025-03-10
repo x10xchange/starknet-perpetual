@@ -555,17 +555,17 @@ pub mod Core {
             let position_diff_a = self
                 ._create_position_diff_from_asset_amounts(
                     position: position_a,
-                    base: (order_a.base_asset_id, actual_amount_base_a.into()),
-                    quote_amount: actual_amount_quote_a.into(),
-                    fee_amount: Option::Some(actual_fee_a),
+                    effective_quote: actual_amount_quote_a.into() - actual_fee_a.into(),
+                    base_id: order_a.base_asset_id,
+                    base_amount: actual_amount_base_a.into(),
                 );
             let position_diff_b = self
                 ._create_position_diff_from_asset_amounts(
                     position: position_b,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    base: (order_b.base_asset_id, -actual_amount_base_a.into()),
-                    quote_amount: -actual_amount_quote_a.into(),
-                    fee_amount: Option::Some(actual_fee_b),
+                    effective_quote: -actual_amount_quote_a.into() - actual_fee_b.into(),
+                    base_id: order_b.base_asset_id,
+                    base_amount: -actual_amount_base_a.into(),
                 );
 
             // Assuming fee_asset_id is the same for both orders.
@@ -745,17 +745,18 @@ pub mod Core {
                     position: self
                         .positions
                         .get_position_snapshot(position_id: liquidated_order.position_id),
-                    base: (liquidated_order.base_asset_id, actual_amount_base_liquidated.into()),
-                    quote_amount: actual_amount_quote_liquidated.into(),
-                    fee_amount: Option::Some(fee_amount),
+                    effective_quote: actual_amount_quote_liquidated.into() - fee_amount.into(),
+                    base_id: liquidated_order.base_asset_id,
+                    base_amount: actual_amount_base_liquidated.into(),
                 );
             let liquidator_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: liquidator_position,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    base: (liquidator_order.base_asset_id, -actual_amount_base_liquidated.into()),
-                    quote_amount: -actual_amount_quote_liquidated.into(),
-                    fee_amount: Option::Some(actual_liquidator_fee),
+                    effective_quote: -actual_amount_quote_liquidated.into()
+                        - actual_liquidator_fee.into(),
+                    base_id: liquidator_order.base_asset_id,
+                    base_amount: -actual_amount_base_liquidated.into(),
                 );
             let insurance_position_diff = self
                 ._create_collateral_position_diff(
@@ -926,14 +927,14 @@ pub mod Core {
             self: @ContractState, position: StoragePath<Position>, diff: Balance,
         ) -> PositionDiff {
             if diff.is_non_zero() {
-                let collateral = Option::Some(self._create_collateral_diff(:position, :diff));
-                PositionDiff { collateral, synthetics: array![].span() }
+                let collateral = Option::Some(self._compute_collateral_diff(:position, :diff));
+                PositionDiff { collateral, synthetic: Option::None }
             } else {
                 Default::default()
             }
         }
 
-        fn _create_collateral_diff(
+        fn _compute_collateral_diff(
             self: @ContractState, position: StoragePath<Position>, diff: Balance,
         ) -> BalanceDiff {
             let before = self.positions.get_collateral_provisional_balance(:position);
@@ -944,30 +945,25 @@ pub mod Core {
         fn _create_position_diff_from_asset_amounts(
             ref self: ContractState,
             position: StoragePath<Position>,
-            base: (AssetId, Balance),
-            mut quote_amount: Balance,
-            fee_amount: Option<u64>,
+            effective_quote: Balance,
+            base_id: AssetId,
+            base_amount: Balance,
         ) -> PositionDiff {
-            let (base_id, mut base_amount) = base;
-
-            // fee asset.
-            if let Option::Some(amount) = fee_amount {
-                quote_amount -= amount.into();
-            }
-
-            // Quote asset.
-            let quote_diff = if quote_amount.is_non_zero() {
-                Option::Some(self._create_collateral_diff(:position, diff: quote_amount))
+            // Collateral asset.
+            let collateral = if effective_quote.is_non_zero() {
+                Option::Some(self._compute_collateral_diff(:position, diff: effective_quote))
             } else {
                 Option::None
             };
 
-            // Base asset.
+            // Synthetic asset.
             let before = self.positions.get_synthetic_balance(:position, synthetic_id: base_id);
             let after = before + base_amount;
-            let base_diff = AssetDiff { id: base_id, balance: BalanceDiff { before, after } };
+            let synthetic = Option::Some(
+                AssetDiff { id: base_id, balance: BalanceDiff { before, after } },
+            );
 
-            PositionDiff { collateral: quote_diff, synthetics: array![base_diff].span() }
+            PositionDiff { collateral, synthetic }
         }
 
         fn _execute_transfer(
@@ -1173,9 +1169,9 @@ pub mod Core {
             let deleveraged_position_diff = self
                 ._create_position_diff_from_asset_amounts(
                     position: deleveraged_position,
-                    base: (deleveraged_base_asset_id, deleveraged_base_amount.into()),
-                    quote_amount: deleveraged_quote_amount.into(),
-                    fee_amount: Option::None,
+                    effective_quote: deleveraged_quote_amount.into(),
+                    base_id: deleveraged_base_asset_id,
+                    base_amount: deleveraged_base_amount.into(),
                 );
             let deleveraged_position_unchanged_assets = self
                 .positions
@@ -1192,9 +1188,9 @@ pub mod Core {
                     position: deleverager_position,
                     // Passing the negative of actual amounts to deleverager as it is linked to
                     // deleveraged.
-                    base: (deleveraged_base_asset_id, -deleveraged_base_amount.into()),
-                    quote_amount: -deleveraged_quote_amount.into(),
-                    fee_amount: Option::None,
+                    effective_quote: -deleveraged_quote_amount.into(),
+                    base_id: deleveraged_base_asset_id,
+                    base_amount: -deleveraged_base_amount.into(),
                 );
             let deleverager_position_unchanged_assets = self
                 .positions
