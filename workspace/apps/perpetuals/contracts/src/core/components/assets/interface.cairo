@@ -3,7 +3,6 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
-use starknet::ContractAddress;
 use starkware_utils::types::PublicKey;
 use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
 use starkware_utils::types::time::time::{TimeDelta, Timestamp};
@@ -11,9 +10,6 @@ use starkware_utils::types::time::time::{TimeDelta, Timestamp};
 
 #[starknet::interface]
 pub trait IAssets<TContractState> {
-    fn register_collateral(
-        ref self: TContractState, asset_id: AssetId, token_address: ContractAddress, quantum: u64,
-    );
     fn add_oracle_to_asset(
         ref self: TContractState,
         asset_id: AssetId,

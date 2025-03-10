@@ -1,7 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
-use starknet::ContractAddress;
 use starkware_utils::types::PublicKey;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -49,15 +48,6 @@ pub struct PriceTick {
     #[key]
     pub asset_id: AssetId,
     pub price: Price,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct CollateralRegistered {
-    #[key]
-    pub asset_id: AssetId,
-    #[key]
-    pub token_address: ContractAddress,
-    pub quantum: u64,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]

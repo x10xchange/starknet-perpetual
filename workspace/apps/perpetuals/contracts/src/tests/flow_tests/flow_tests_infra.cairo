@@ -2,6 +2,7 @@ use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
+use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
 };
@@ -20,7 +21,6 @@ use perpetuals::tests::constants;
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
-use starkware_utils::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
@@ -47,9 +47,9 @@ struct Oracle {
 
 #[derive(Drop)]
 pub struct DepositInfo {
-    // beneficiary can represent a different user than the depositor.
+    // position_id can represent a different user than the depositor.
     user: User,
-    beneficiary: u32,
+    position_id: PositionId,
     amount: u64,
     salt: felt252,
 }
@@ -260,18 +260,6 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         dispatcher.register_operator(account: *self.operator.address);
     }
 
-    fn register_collateral(self: @FlowTestState) {
-        let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
-
-        self.set_app_governor_as_caller();
-        dispatcher
-            .register_collateral(
-                constants::COLLATERAL_ASSET_ID(),
-                *self.token_state.address,
-                constants::COLLATERAL_QUANTUM,
-            );
-    }
-
     fn add_synthetic(self: @FlowTestState, synthetic_config: @SyntheticConfig) {
         let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
         self.set_app_governor_as_caller();
@@ -350,7 +338,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
     fn setup(ref self: FlowTestState, synthetics: Span<SyntheticConfig>) {
         self.set_roles();
-        self.register_collateral();
         for synthetic_config in synthetics {
             self.add_synthetic(synthetic_config);
         }
@@ -399,26 +386,20 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn deposit(ref self: FlowTestState, user: User, reciever: User, amount: u128) -> DepositInfo {
+    fn deposit(ref self: FlowTestState, user: User, reciever: User, amount: u64) -> DepositInfo {
         let salt = self.generate_salt();
-        let beneficiary = reciever.position_id.value;
+        let position_id = reciever.position_id;
         user.account.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(
-                :beneficiary,
-                asset_id: constants::COLLATERAL_ASSET_ID().value(),
-                quantized_amount: amount,
-                :salt,
-            );
-        DepositInfo { user, beneficiary, amount: amount.try_into().unwrap(), salt }
+            .deposit(:position_id, quantized_amount: amount, :salt);
+        DepositInfo { user, position_id, amount: amount.try_into().unwrap(), salt }
     }
 
     fn cancel_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
         deposit_info.user.account.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .cancel_deposit(
-                beneficiary: deposit_info.beneficiary,
-                asset_id: constants::COLLATERAL_ASSET_ID().value(),
+                position_id: deposit_info.position_id,
                 quantized_amount: deposit_info.amount.into(),
                 salt: deposit_info.salt,
             );
@@ -428,22 +409,22 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
 
-        ICoreDispatcher { contract_address: self.perpetuals_contract }
+        IDepositDispatcher { contract_address: self.perpetuals_contract }
             .process_deposit(
                 :operator_nonce,
                 depositor: deposit_info.user.account.address,
                 position_id: deposit_info.user.position_id,
-                amount: deposit_info.amount.try_into().unwrap(),
+                quantized_amount: deposit_info.amount.into(),
                 salt: deposit_info.salt,
             );
     }
 
-    fn deposit_and_process(ref self: FlowTestState, user: User, reciever: User, amount: u128) {
+    fn deposit_and_process(ref self: FlowTestState, user: User, reciever: User, amount: u64) {
         let deposit_info = self.deposit(:user, :reciever, :amount);
         self.process_deposit(deposit_info);
     }
 
-    fn self_deposit(ref self: FlowTestState, user: User, amount: u128) {
+    fn self_deposit(ref self: FlowTestState, user: User, amount: u64) {
         self.deposit_and_process(:user, reciever: user, :amount);
     }
 

@@ -1,9 +1,10 @@
 use core::num::traits::Zero;
-use perpetuals::core::components::assets::errors::{
-    ASSET_REGISTERED_AS_SYNTHETIC, COLLATERAL_ALREADY_REGISTERED,
-};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
+};
+use perpetuals::core::components::deposit::Deposit::deposit_hash;
+use perpetuals::core::components::deposit::interface::{
+    DepositStatus, IDeposit, IDepositSafeDispatcher, IDepositSafeDispatcherTrait,
 };
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::{
@@ -32,24 +33,21 @@ use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
     assert_deposit_processed_event_with_expected, assert_funding_tick_event_with_expected,
     assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
-    assert_price_tick_event_with_expected, assert_register_collateral_event_with_expected,
-    assert_remove_oracle_event_with_expected, assert_set_owner_account_event_with_expected,
-    assert_set_public_key_event_with_expected, assert_set_public_key_request_event_with_expected,
-    assert_trade_event_with_expected, assert_transfer_event_with_expected,
-    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_price_tick_event_with_expected, assert_remove_oracle_event_with_expected,
+    assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
+    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
+    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
-    initialized_contract_state, set_roles, setup_state_with_active_asset,
-    setup_state_with_pending_asset, validate_balance,
+    initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
+    validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
-use starkware_utils::components::deposit::Deposit::deposit_hash;
-use starkware_utils::components::deposit::interface::{DepositStatus, IDeposit};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use starkware_utils::components::roles::interface::IRoles;
@@ -65,7 +63,9 @@ use starkware_utils::types::time::time::{Time, Timestamp};
 
 #[test]
 fn test_constructor() {
-    let mut state = initialized_contract_state();
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = initialized_contract_state(cfg: @cfg, token_state: @token_state);
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert!(state.replaceability.get_upgrade_delay() == UPGRADE_DELAY);
     assert!(state.assets.get_price_validation_interval() == MAX_PRICE_INTERVAL);
@@ -100,14 +100,16 @@ fn test_caller_failures() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
-    let dispatcher = ICoreSafeDispatcher { contract_address };
 
-    let result = dispatcher
+    let dispatcher = ICoreSafeDispatcher { contract_address };
+    let deposit_dispatcher = IDepositSafeDispatcher { contract_address };
+
+    let result = deposit_dispatcher
         .process_deposit(
             operator_nonce: Zero::zero(),
             depositor: test_address(),
             position_id: POSITION_ID_1,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: 0,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
@@ -212,14 +214,6 @@ fn test_caller_failures() {
     let dispatcher = IAssetsSafeDispatcher { contract_address };
 
     let result = dispatcher
-        .register_collateral(
-            asset_id: cfg.collateral_cfg.collateral_id,
-            token_address: Zero::zero(),
-            quantum: Zero::zero(),
-        );
-    assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
-
-    let result = dispatcher
         .add_oracle_to_asset(
             asset_id: cfg.synthetic_cfg.synthetic_id,
             oracle_public_key: Zero::zero(),
@@ -295,97 +289,6 @@ fn test_caller_failures() {
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 }
 
-
-// Add collateral tests.
-
-#[test]
-fn test_successful_register_collateral() {
-    // Setup state, token:
-    let cfg: PerpetualsInitConfig = Default::default();
-    cfg.collateral_cfg.token_cfg.deploy();
-
-    let mut state = initialized_contract_state();
-    set_roles(ref :state, cfg: @cfg);
-    let mut spy = snforge_std::spy_events();
-
-    // Parameters:
-    let quantum = COLLATERAL_QUANTUM;
-    let token_address = cfg.collateral_cfg.token_cfg.owner;
-
-    // Test.
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state.register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
-
-    // Catch the event.
-    let events = spy.get_events().emitted_by(test_address()).events;
-    assert_register_collateral_event_with_expected(
-        spied_event: events[0],
-        asset_id: cfg.collateral_cfg.collateral_id,
-        :token_address,
-        :quantum,
-    );
-
-    // Check.
-    assert!(state.assets.get_collateral_token_contract().contract_address == token_address);
-    assert!(state.assets.get_collateral_quantum() == quantum);
-    assert!(
-        state
-            .deposits
-            .get_asset_info(
-                asset_id: cfg.collateral_cfg.collateral_id.into(),
-            ) == (token_address, quantum),
-    );
-}
-
-#[test]
-#[feature("safe_dispatcher")]
-fn test_register_collateral_failures() {
-    // Setup:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
-    let dispatcher = IAssetsSafeDispatcher { contract_address };
-
-    // Parameters:
-    let quantum = COLLATERAL_QUANTUM;
-    let token_address = cfg.collateral_cfg.token_cfg.owner;
-
-    // Collateral id already register as synthetic.
-    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
-    dispatcher
-        .add_synthetic_asset(
-            asset_id: synthetic_id,
-            risk_factor_tiers: array![50].span(),
-            risk_factor_first_tier_boundary: 1000,
-            risk_factor_tier_size: 1,
-            quorum: 1,
-            resolution: 1,
-        )
-        .unwrap();
-
-    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
-    let result = dispatcher.register_collateral(asset_id: synthetic_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: ASSET_REGISTERED_AS_SYNTHETIC);
-
-    // Register collateral for the first time.
-    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
-    dispatcher
-        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum)
-        .unwrap();
-
-    // Register the same collateral asset.
-    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
-    let result = dispatcher
-        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);
-
-    // Register new collateral asset.
-    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
-    let result = dispatcher
-        .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
-    assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);
-}
 
 // New position tests.
 
@@ -882,15 +785,13 @@ fn test_successful_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
-        beneficiary: user.position_id.value,
-        asset_id: collateral_cfg_id,
+        position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
@@ -899,9 +800,9 @@ fn test_successful_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_event_with_expected(
         spied_event: events[0],
-        beneficiary: user.position_id.value,
+        position_id: user.position_id,
         depositing_address: user.address,
-        asset_id: collateral_cfg_id,
+        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
@@ -931,7 +832,6 @@ fn test_deposit_already_registered() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user = Default::default();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
@@ -948,15 +848,13 @@ fn test_deposit_already_registered() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -985,15 +883,13 @@ fn test_successful_process_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
-        beneficiary: user.position_id.value,
-        asset_id: collateral_cfg_id,
+        position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
@@ -1005,7 +901,7 @@ fn test_successful_process_deposit() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -1013,9 +909,9 @@ fn test_successful_process_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_processed_event_with_expected(
         spied_event: events[0],
-        beneficiary: user.position_id.value,
+        position_id: user.position_id,
         depositing_address: user.address,
-        asset_id: collateral_cfg_id,
+        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
@@ -1049,15 +945,13 @@ fn test_successful_cancel_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
         depositor: user.address,
-        beneficiary: user.position_id.value,
-        asset_id: collateral_cfg_id,
+        position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         salt: user.salt_counter,
     );
@@ -1079,8 +973,7 @@ fn test_successful_cancel_deposit() {
     );
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1089,9 +982,9 @@ fn test_successful_cancel_deposit() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_deposit_canceled_event_with_expected(
         spied_event: events[0],
-        beneficiary: user.position_id.value,
+        position_id: user.position_id,
         depositing_address: user.address,
-        asset_id: collateral_cfg_id,
+        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT.into(),
         unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
@@ -1115,8 +1008,7 @@ fn test_cancel_non_registered_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1131,7 +1023,6 @@ fn test_cancel_deposit_different_hash() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -1145,16 +1036,14 @@ fn test_cancel_deposit_different_hash() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter + 1,
         );
@@ -1169,7 +1058,6 @@ fn test_cancel_already_done_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -1185,8 +1073,7 @@ fn test_cancel_already_done_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1197,7 +1084,7 @@ fn test_cancel_already_done_deposit() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
@@ -1207,8 +1094,7 @@ fn test_cancel_already_done_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1223,7 +1109,6 @@ fn test_double_cancel_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -1239,8 +1124,7 @@ fn test_double_cancel_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1250,15 +1134,13 @@ fn test_double_cancel_deposit() {
     );
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -1273,7 +1155,6 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -1289,16 +1170,14 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
 
     state
         .cancel_deposit(
-            beneficiary: user.position_id.value,
-            asset_id: collateral_cfg_id,
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -2354,8 +2233,7 @@ fn test_validate_synthetic_prices_expired() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.into(),
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -2366,7 +2244,7 @@ fn test_validate_synthetic_prices_expired() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -2397,8 +2275,7 @@ fn test_validate_synthetic_prices_pending_asset() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.into(),
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -2408,7 +2285,7 @@ fn test_validate_synthetic_prices_pending_asset() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     // If no assertion error is thrown, the test passes
@@ -2447,8 +2324,7 @@ fn test_validate_prices() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.into(),
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -2458,7 +2334,7 @@ fn test_validate_prices() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     assert!(state.assets.get_last_price_validation().into() == new_time);
@@ -2487,8 +2363,7 @@ fn test_validate_prices_no_update_needed() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
-            beneficiary: user.position_id.into(),
-            asset_id: cfg.collateral_cfg.collateral_id.into(),
+            position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT.into(),
             salt: user.salt_counter,
         );
@@ -2498,7 +2373,7 @@ fn test_validate_prices_no_update_needed() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            amount: DEPOSIT_AMOUNT,
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 

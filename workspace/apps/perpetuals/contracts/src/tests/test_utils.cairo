@@ -11,7 +11,7 @@ use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::core::Core::{InternalCoreFunctions, SNIP12MetadataImpl};
 use perpetuals::core::types::asset::{AssetDiff, AssetId, AssetStatus};
 use perpetuals::core::types::balance::BalanceDiff;
 use perpetuals::core::types::funding::FundingIndex;
@@ -137,14 +137,17 @@ pub struct PerpetualsInitConfig {
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: @PerpetualsInitConfig) -> ContractAddress {
+    fn deploy(self: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
+        self.collateral_cfg.collateral_id.serialize(ref calldata);
+        (*token_state).address.serialize(ref calldata);
+        self.collateral_cfg.quantum.serialize(ref calldata);
         self.max_price_interval.serialize(ref calldata);
+        self.max_oracle_price_validity.serialize(ref calldata);
         self.max_funding_interval.serialize(ref calldata);
         self.max_funding_rate.serialize(ref calldata);
-        self.max_oracle_price_validity.serialize(ref calldata);
         self.cancel_delay.serialize(ref calldata);
         self.fee_position_owner_public_key.serialize(ref calldata);
         self.insurance_fund_position_owner_public_key.serialize(ref calldata);
@@ -289,17 +292,9 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
     start_cheat_block_timestamp_global(
         block_timestamp: Time::now().add(delta: Time::weeks(count: 1)).into(),
     );
-    let mut state = initialized_contract_state();
+    let mut state = initialized_contract_state(:cfg, :token_state);
     set_roles(ref :state, :cfg);
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
-    state
-        .assets
-        .register_collateral(
-            asset_id: *cfg.collateral_cfg.collateral_id,
-            token_address: *token_state.address,
-            quantum: *cfg.collateral_cfg.quantum,
-        );
-
     // Fund the contract.
     (*token_state)
         .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
@@ -346,16 +341,21 @@ pub fn add_synthetic_to_position(
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
-pub fn initialized_contract_state() -> Core::ContractState {
+pub fn initialized_contract_state(
+    cfg: @PerpetualsInitConfig, token_state: @TokenState,
+) -> Core::ContractState {
     let mut state = CONTRACT_STATE();
     Core::constructor(
         ref state,
         governance_admin: GOVERNANCE_ADMIN(),
         upgrade_delay: UPGRADE_DELAY,
+        collateral_id: *cfg.collateral_cfg.collateral_id,
+        collateral_token_address: *token_state.address,
+        collateral_quantum: *cfg.collateral_cfg.quantum,
         max_price_interval: MAX_PRICE_INTERVAL,
+        max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
         max_funding_interval: MAX_FUNDING_INTERVAL,
         max_funding_rate: MAX_FUNDING_RATE,
-        max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
         cancel_delay: CANCEL_DELAY,
         fee_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
         insurance_fund_position_owner_public_key: OPERATOR_PUBLIC_KEY(),
@@ -464,7 +464,7 @@ pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @Perpetua
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
-    let contract_address = cfg.deploy();
+    let contract_address = cfg.deploy(:token_state);
     set_roles_by_dispatcher(:contract_address, :cfg);
     contract_address
 }

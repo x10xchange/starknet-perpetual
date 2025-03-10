@@ -9,11 +9,10 @@ pub mod AssetsComponent {
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
-        ASSET_REGISTERED_AS_SYNTHETIC, COLLATERAL_ALREADY_REGISTERED, COLLATERAL_NOT_REGISTERED,
-        DEACTIVATED_ASSET, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INVALID_FUNDING_TICK_LEN,
-        INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
-        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
-        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
+        COLLATERAL_NOT_REGISTERED, DEACTIVATED_ASSET, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
+        INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
+        INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
+        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
         INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
         INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
         ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
@@ -28,7 +27,7 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
-    use perpetuals::core::types::asset::{Asset, AssetDiffEnriched, AssetId, AssetStatus};
+    use perpetuals::core::types::asset::{AssetDiffEnriched, AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::position::{PositionDiff, PositionDiffEnriched};
@@ -38,8 +37,6 @@ pub mod AssetsComponent {
         Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess, Vec, VecTrait,
     };
-    use starkware_utils::components::deposit::Deposit;
-    use starkware_utils::components::deposit::Deposit::InternalTrait as DepositTrait;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
@@ -83,7 +80,6 @@ pub mod AssetsComponent {
         SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
-        CollateralRegistered: events::CollateralRegistered,
         OracleRemoved: events::OracleRemoved,
         AssetQuorumUpdated: events::AssetQuorumUpdated,
     }
@@ -95,49 +91,10 @@ pub mod AssetsComponent {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        impl Deposits: Deposit::HasComponent<TContractState>,
         impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
-        /// Add collateral asset is called by the operator to add a new collateral asset.
-        /// We only have one collateral asset.
-        ///
-        /// Validations:
-        /// - Only the operator can call this function.
-        /// - The asset is not registered yet.
-        ///
-        /// Execution:
-        /// - Adds a new collateral_config.
-        /// - Registers the token to deposits component.
-        fn register_collateral(
-            ref self: ComponentState<TContractState>,
-            asset_id: AssetId,
-            token_address: ContractAddress,
-            quantum: u64,
-        ) {
-            // Validations:
-            get_dep_component!(@self, Roles).only_app_governor();
-
-            assert(self.collateral_id.read().is_none(), COLLATERAL_ALREADY_REGISTERED);
-            assert(token_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
-            assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
-            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
-            assert(self.synthetic_config.read(asset_id).is_none(), ASSET_REGISTERED_AS_SYNTHETIC);
-
-            // Execution:
-            self.collateral_id.write(Option::Some(asset_id));
-            self
-                .collateral_token_contract
-                .write(IERC20Dispatcher { contract_address: token_address });
-            self.collateral_quantum.write(quantum);
-
-            let mut deposits = get_dep_component_mut!(ref self, Deposits);
-            deposits.register_token(asset_id: asset_id.into(), :token_address, :quantum);
-
-            self.emit(events::CollateralRegistered { asset_id, token_address, quantum });
-        }
-
         /// Add oracle to a synthetic asset.
         ///
         /// Validations:
@@ -521,17 +478,28 @@ pub mod AssetsComponent {
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
+            collateral_id: AssetId,
+            collateral_token_address: ContractAddress,
+            collateral_quantum: u64,
             max_price_interval: TimeDelta,
             max_funding_interval: TimeDelta,
             max_funding_rate: u32,
             max_oracle_price_validity: TimeDelta,
         ) {
             // Checks that the component has not been initialized yet.
-            assert(self.max_price_interval.read().is_zero(), ALREADY_INITIALIZED);
+            assert(self.collateral_id.read().is_none(), ALREADY_INITIALIZED);
+            assert(collateral_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(collateral_token_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
+            assert(collateral_quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
             assert(max_price_interval.is_non_zero(), ZERO_MAX_PRICE_INTERVAL);
             assert(max_funding_interval.is_non_zero(), ZERO_MAX_FUNDING_INTERVAL);
             assert(max_funding_rate.is_non_zero(), ZERO_MAX_FUNDING_RATE);
             assert(max_oracle_price_validity.is_non_zero(), ZERO_MAX_ORACLE_PRICE);
+            self.collateral_id.write(Option::Some(collateral_id));
+            self
+                .collateral_token_contract
+                .write(IERC20Dispatcher { contract_address: collateral_token_address });
+            self.collateral_quantum.write(collateral_quantum);
             self.max_price_interval.write(max_price_interval);
             self.max_funding_interval.write(max_funding_interval);
             self.max_funding_rate.write(max_funding_rate);

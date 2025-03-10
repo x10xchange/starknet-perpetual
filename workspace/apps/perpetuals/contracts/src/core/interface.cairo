@@ -8,14 +8,6 @@ use starkware_utils::types::time::time::Timestamp;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
-    fn process_deposit(
-        ref self: TContractState,
-        operator_nonce: u64,
-        depositor: ContractAddress,
-        position_id: PositionId,
-        amount: u64,
-        salt: felt252,
-    );
     fn withdraw_request(
         ref self: TContractState,
         signature: Signature,

@@ -1,4 +1,5 @@
 use perpetuals::core::components::assets::events as assets_events;
+use perpetuals::core::components::deposit::events as deposit_events;
 use perpetuals::core::components::positions::events as positions_events;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::events;
@@ -10,7 +11,6 @@ use perpetuals::tests::constants::*;
 use snforge_std::cheatcodes::events::Event;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use starknet::ContractAddress;
-use starkware_utils::components::deposit::events as deposit_events;
 use starkware_utils::test_utils::assert_expected_event_emitted;
 use starkware_utils::types::PublicKey;
 use starkware_utils::types::time::time::Timestamp;
@@ -35,17 +35,17 @@ pub fn assert_new_position_event_with_expected(
 
 pub fn assert_deposit_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    beneficiary: u32,
+    position_id: PositionId,
     depositing_address: ContractAddress,
-    asset_id: felt252,
-    quantized_amount: u128,
-    unquantized_amount: u128,
+    collateral_id: AssetId,
+    quantized_amount: u64,
+    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::Deposit {
-        beneficiary,
+        position_id,
         depositing_address,
-        asset_id,
+        collateral_id,
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
@@ -61,17 +61,17 @@ pub fn assert_deposit_event_with_expected(
 
 pub fn assert_deposit_canceled_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    beneficiary: u32,
+    position_id: PositionId,
     depositing_address: ContractAddress,
-    asset_id: felt252,
-    quantized_amount: u128,
-    unquantized_amount: u128,
+    collateral_id: AssetId,
+    quantized_amount: u64,
+    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositCanceled {
-        beneficiary,
+        position_id,
         depositing_address,
-        asset_id,
+        collateral_id,
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
@@ -86,17 +86,17 @@ pub fn assert_deposit_canceled_event_with_expected(
 
 pub fn assert_deposit_processed_event_with_expected(
     spied_event: @(ContractAddress, Event),
-    beneficiary: u32,
+    position_id: PositionId,
     depositing_address: ContractAddress,
-    asset_id: felt252,
-    quantized_amount: u128,
-    unquantized_amount: u128,
+    collateral_id: AssetId,
+    quantized_amount: u64,
+    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositProcessed {
-        beneficiary,
+        position_id,
         depositing_address,
-        asset_id,
+        collateral_id,
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
@@ -465,20 +465,5 @@ pub fn assert_add_oracle_event_with_expected(
         :expected_event,
         expected_event_selector: @selector!("OracleAdded"),
         expected_event_name: "OracleAdded",
-    );
-}
-
-pub fn assert_register_collateral_event_with_expected(
-    spied_event: @(ContractAddress, Event),
-    asset_id: AssetId,
-    token_address: ContractAddress,
-    quantum: u64,
-) {
-    let expected_event = assets_events::CollateralRegistered { asset_id, token_address, quantum };
-    assert_expected_event_emitted(
-        :spied_event,
-        :expected_event,
-        expected_event_selector: @selector!("CollateralRegistered"),
-        expected_event_name: "CollateralRegistered",
     );
 }

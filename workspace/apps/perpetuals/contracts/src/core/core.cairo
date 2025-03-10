@@ -8,6 +8,8 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
+    use perpetuals::core::components::deposit::Deposit;
+    use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -38,8 +40,6 @@ pub mod Core {
     use starknet::storage::{
         Map, StoragePath, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starkware_utils::components::deposit::Deposit;
-    use starkware_utils::components::deposit::Deposit::InternalTrait as DepositInternal;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -173,10 +173,13 @@ pub mod Core {
         ref self: ContractState,
         governance_admin: ContractAddress,
         upgrade_delay: u64,
+        collateral_id: AssetId,
+        collateral_token_address: ContractAddress,
+        collateral_quantum: u64,
         max_price_interval: TimeDelta,
+        max_oracle_price_validity: TimeDelta,
         max_funding_interval: TimeDelta,
         max_funding_rate: u32,
-        max_oracle_price_validity: TimeDelta,
         cancel_delay: TimeDelta,
         fee_position_owner_public_key: PublicKey,
         insurance_fund_position_owner_public_key: PublicKey,
@@ -186,6 +189,9 @@ pub mod Core {
         self
             .assets
             .initialize(
+                :collateral_id,
+                :collateral_token_address,
+                :collateral_quantum,
                 :max_price_interval,
                 :max_funding_interval,
                 :max_funding_rate,
@@ -199,56 +205,6 @@ pub mod Core {
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
-        /// Process deposit a collateral amount from the 'depositing_address' to a given position.
-        ///
-        /// Validations:
-        /// - Only the operator can call this function.
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The `expiration` time has not passed.
-        /// - The collateral asset exists in the system.
-        /// - The collateral asset is active.
-        /// - The funding validation interval has not passed since the last funding tick.
-        /// - The prices of all assets in the system are valid.
-        /// - The deposit message has not been fulfilled.
-        /// - A fact was registered for the deposit message.
-        /// - If position exists, validate the owner_public_key and owner_account are the same.
-        ///
-        /// Execution:
-        /// - Transfer the collateral `amount` to the position from the pending deposits.
-        /// - Update the position's collateral balance.
-        /// - Mark the deposit message as fulfilled.
-        fn process_deposit(
-            ref self: ContractState,
-            operator_nonce: u64,
-            depositor: ContractAddress,
-            position_id: PositionId,
-            amount: u64,
-            salt: felt252,
-        ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
-            /// Execution - Deposit:
-            let collateral_id = self.assets.get_collateral_id();
-            self
-                .deposits
-                .process_deposit(
-                    :depositor,
-                    beneficiary: position_id.into(),
-                    asset_id: collateral_id.into(),
-                    quantized_amount: amount.into(),
-                    :salt,
-                );
-            let position = self.positions.get_position_snapshot(:position_id);
-            let position_diff = self
-                .positions
-                .create_collateral_position_diff(:position, diff: amount.into());
-            self.positions.apply_diff(:position_id, :position_diff);
-        }
-
         /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
         ///
         /// Validations:
@@ -346,9 +302,9 @@ pub mod Core {
             self._validate_healthy_or_healthier_position(:position_id, :position, :position_diff);
 
             self.positions.apply_diff(:position_id, :position_diff);
-            let token_contract = self.assets.get_collateral_token_contract();
             let quantum = self.assets.get_collateral_quantum();
             let withdraw_unquantized_amount = quantum * amount;
+            let token_contract = self.assets.get_collateral_token_contract();
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             self

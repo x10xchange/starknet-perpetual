@@ -26,7 +26,6 @@ pub(crate) mod Deposit {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::types::HashType;
     use starkware_utils::types::time::time::{Time, TimeDelta};
 
@@ -90,9 +89,9 @@ pub(crate) mod Deposit {
                 .registered_deposits
                 .write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));
             let assets = get_dep_component!(@self, Assets);
-            let quantum = assets.get_quantum();
+            let quantum = assets.get_collateral_quantum();
             let unquantized_amount = quantized_amount * quantum.into();
-            let token_contract = assets.get_token_contract();
+            let token_contract = assets.get_collateral_token_contract();
             token_contract
                 .transfer_from(
                     sender: caller_address,
@@ -149,9 +148,9 @@ pub(crate) mod Deposit {
             self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED);
 
             let assets = get_dep_component!(@self, Assets);
-            let quantum = assets.get_quantum();
+            let quantum = assets.get_collateral_quantum();
             let unquantized_amount = quantized_amount * quantum.into();
-            let token_contract = assets.get_token_contract();
+            let token_contract = assets.get_collateral_token_contract();
             token_contract.transfer(recipient: caller_address, amount: unquantized_amount.into());
             self
                 .emit(
@@ -195,9 +194,8 @@ pub(crate) mod Deposit {
         ) {
             /// Validations:
             get_dep_component!(@self, Pausable).assert_not_paused();
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
+            let mut nonce = get_dep_component_mut!(ref self, OperatortNonce);
+            nonce.use_checked_nonce(:operator_nonce);
             let mut assets = get_dep_component_mut!(ref self, Assets);
             assets.validate_assets_integrity();
 
@@ -215,13 +213,13 @@ pub(crate) mod Deposit {
                 DepositStatus::CANCELED => { panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED) },
                 DepositStatus::PENDING(_) => {},
             }
-            let quantum = get_dep_component!(@self, Assets).get_quantum();
+            let quantum = get_dep_component!(@self, Assets).get_collateral_quantum();
             let unquantized_amount = quantized_amount * quantum.into();
             self.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
-            let positions = get_dep_component_mut!(ref self, Positions);
-            let position = (@positions).get_position_snapshot(:position_id);
+            let mut positions = get_dep_component_mut!(ref self, Positions);
+            let mut position = (@positions).get_position_snapshot(:position_id);
             let position_diff = (@positions)
-                ._create_collateral_position_diff(:position, diff: quantized_amount.into());
+                .create_collateral_position_diff(:position, diff: quantized_amount.into());
             positions.apply_diff(:position_id, :position_diff);
             self
                 .emit(
