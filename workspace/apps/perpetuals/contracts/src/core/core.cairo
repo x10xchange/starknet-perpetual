@@ -339,16 +339,11 @@ pub mod Core {
                     public_key: position.get_owner_public_key(),
                 );
 
+            /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
                 ._create_collateral_position_diff(:position, diff: -(amount.into()));
-            let position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(:position, :position_diff);
-            let position_diff_enriched = self.assets.enrich_position_diff(:position_diff);
-            validate_position_is_healthy_or_healthier(
-                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
-            );
+            self._validate_healthy_or_healthier_position(:position_id, :position, :position_diff);
 
             self.positions.apply_diff(:position_id, :position_diff);
             let token_contract = self.assets.get_collateral_token_contract();
@@ -575,36 +570,19 @@ pub mod Core {
                     diff: (actual_fee_a + actual_fee_b).into(),
                 );
 
-            /// Unchanged assets:
-            let position_unchanged_assets_a = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: position_a, position_diff: position_diff_a,
-                );
-            let position_unchanged_assets_b = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: position_b, position_diff: position_diff_b,
-                );
-
             /// Validations - Fundamentals:
-            let position_diff_a_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff_a);
-            let position_diff_b_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff_b);
-
-            validate_position_is_healthy_or_healthier(
-                position_id: order_a.position_id,
-                unchanged_assets: position_unchanged_assets_a,
-                position_diff_enriched: position_diff_a_enriched,
-            );
-            validate_position_is_healthy_or_healthier(
-                position_id: order_b.position_id,
-                unchanged_assets: position_unchanged_assets_b,
-                position_diff_enriched: position_diff_b_enriched,
-            );
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: order_a.position_id,
+                    position: position_a,
+                    position_diff: position_diff_a,
+                );
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: order_b.position_id,
+                    position: position_b,
+                    position_diff: position_diff_b,
+                );
 
             // Apply Diffs.
             self
@@ -775,34 +753,20 @@ pub mod Core {
             let liquidator_position = self
                 .positions
                 .get_position_snapshot(position_id: liquidator_position_id);
-            let liquidated_position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: liquidated_position, position_diff: liquidated_position_diff,
-                );
-            let liquidator_position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: liquidator_position, position_diff: liquidator_position_diff,
-                );
 
             /// Validations - Fundamentals:
-            let liquidated_position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: liquidated_position_diff);
-            let liquidator_position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: liquidator_position_diff);
-            liquidated_position_validations(
-                position_id: liquidated_position_id,
-                unchanged_assets: liquidated_position_unchanged_assets,
-                position_diff_enriched: liquidated_position_diff_enriched,
-            );
-            validate_position_is_healthy_or_healthier(
-                position_id: liquidator_position_id,
-                unchanged_assets: liquidator_position_unchanged_assets,
-                position_diff_enriched: liquidator_position_diff_enriched,
-            );
+            self
+                ._validate_liquidated_position(
+                    position_id: liquidated_position_id,
+                    position: liquidated_position,
+                    position_diff: liquidated_position_diff,
+                );
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: liquidator_position_id,
+                    position: liquidator_position,
+                    position_diff: liquidator_position_diff,
+                );
 
             // Apply Diffs.
             self
@@ -977,9 +941,6 @@ pub mod Core {
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff_sender = self
                 ._create_collateral_position_diff(:position, diff: -(amount.into()));
-            let sender_position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(:position, position_diff: position_diff_sender);
 
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let position_diff_recipient = self
@@ -995,14 +956,10 @@ pub mod Core {
                 .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
 
             /// Validations - Fundamentals:
-            let position_diff_sender_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff_sender);
-            validate_position_is_healthy_or_healthier(
-                :position_id,
-                unchanged_assets: sender_position_unchanged_assets,
-                position_diff_enriched: position_diff_sender_enriched,
-            );
+            self
+                ._validate_healthy_or_healthier_position(
+                    :position_id, :position, position_diff: position_diff_sender,
+                );
         }
 
         fn _update_fulfillment(
@@ -1173,12 +1130,6 @@ pub mod Core {
                     base_id: deleveraged_base_asset_id,
                     base_amount: deleveraged_base_amount.into(),
                 );
-            let deleveraged_position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: deleveraged_position, position_diff: deleveraged_position_diff,
-                );
-
             let deleverager_position = self
                 .positions
                 .get_position_snapshot(position_id: deleverager_position_id);
@@ -1192,10 +1143,36 @@ pub mod Core {
                     base_id: deleveraged_base_asset_id,
                     base_amount: -deleveraged_base_amount.into(),
                 );
-            let deleverager_position_unchanged_assets = self
-                .positions
-                .get_position_unchanged_assets(
-                    position: deleverager_position, position_diff: deleverager_position_diff,
+
+            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
+                // If the synthetic asset is active, the position should be deleveragable
+                // and changed to fair deleverage and healthier.
+                AssetStatus::ACTIVE => {
+                    self
+                        ._validate_deleveraged_position(
+                            position_id: deleveraged_position_id,
+                            position: deleveraged_position,
+                            position_diff: deleveraged_position_diff,
+                        )
+                },
+                // In case of inactive synthetic asset, the position should change to healthy or
+                // healthier.
+                AssetStatus::INACTIVE => {
+                    self
+                        ._validate_healthy_or_healthier_position(
+                            position_id: deleveraged_position_id,
+                            position: deleveraged_position,
+                            position_diff: deleveraged_position_diff,
+                        )
+                },
+                // In case of pending synthetic asset, error should be thrown.
+                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
+            }
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: deleverager_position_id,
+                    position: deleverager_position,
+                    position_diff: deleverager_position_diff,
                 );
 
             self
@@ -1208,43 +1185,6 @@ pub mod Core {
                 .apply_diff(
                     position_id: deleverager_position_id, position_diff: deleverager_position_diff,
                 );
-
-            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
-                // If the synthetic asset is active, the position should be deleveragable
-                // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVE => {
-                    let deleveraged_position_diff_enriched = self
-                        .assets
-                        .enrich_position_diff(position_diff: deleveraged_position_diff);
-                    deleveraged_position_validations(
-                        position_id: deleveraged_position_id,
-                        unchanged_assets: deleveraged_position_unchanged_assets,
-                        position_diff_enriched: deleveraged_position_diff_enriched,
-                    )
-                },
-                // In case of deactivated synthetic asset, the position should change to healthy or
-                // healthier.
-                AssetStatus::INACTIVE => {
-                    let deleveraged_position_diff_enriched = self
-                        .assets
-                        .enrich_position_diff(position_diff: deleveraged_position_diff);
-                    validate_position_is_healthy_or_healthier(
-                        position_id: deleveraged_position_id,
-                        unchanged_assets: deleveraged_position_unchanged_assets,
-                        position_diff_enriched: deleveraged_position_diff_enriched,
-                    )
-                },
-                // In case of pending synthetic asset, error should be thrown.
-                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
-            }
-            let deleverager_position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: deleverager_position_diff);
-            validate_position_is_healthy_or_healthier(
-                position_id: deleverager_position_id,
-                unchanged_assets: deleverager_position_unchanged_assets,
-                position_diff_enriched: deleverager_position_diff_enriched,
-            );
         }
 
         fn _validate_order_signature(
@@ -1257,6 +1197,63 @@ pub mod Core {
             let msg_hash = order.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);
             msg_hash
+        }
+
+        fn _validate_healthy_or_healthier_position(
+            self: @ContractState,
+            position_id: PositionId,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+        ) {
+            let position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+
+            let position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff);
+
+            validate_position_is_healthy_or_healthier(
+                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
+            );
+        }
+
+        fn _validate_liquidated_position(
+            self: @ContractState,
+            position_id: PositionId,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+        ) {
+            let position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+
+            let position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff);
+
+            liquidated_position_validations(
+                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
+            );
+        }
+
+        fn _validate_deleveraged_position(
+            self: @ContractState,
+            position_id: PositionId,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+        ) {
+            let position_unchanged_assets = self
+                .positions
+                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+
+            let position_diff_enriched = self
+                .assets
+                .enrich_position_diff(position_diff: position_diff);
+
+            deleveraged_position_validations(
+                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
+            );
         }
     }
 }

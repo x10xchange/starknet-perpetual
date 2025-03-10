@@ -509,13 +509,6 @@ pub(crate) mod Positions {
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        fn _validate_position_exists(
-            self: @ComponentState<TContractState>, position_id: PositionId,
-        ) {
-            // get_position_snapshot asserts that the position exists and has a non-zero version.
-            self.get_position_snapshot(:position_id);
-        }
-
         /// Updates the synthetic balance and handles the funding mechanism.
         /// This function adjusts the main collateral balance of a position by applying funding
         /// costs or earnings based on the difference between the global funding index and the
