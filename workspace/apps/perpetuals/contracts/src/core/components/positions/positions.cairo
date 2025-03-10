@@ -17,16 +17,16 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
-    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::SyntheticTrait;
-    use perpetuals::core::types::balance::Balance;
+    use perpetuals::core::types::asset::{Asset, AssetDiff, AssetId};
+    use perpetuals::core::types::balance::{Balance, BalanceDiff};
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
-        POSITION_VERSION, Position, PositionId, PositionMutableTrait, PositionTrait,
+        POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
+        PositionTrait, UnchangedAssets,
     };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-    use perpetuals::core::types::{Asset, PositionData, PositionDiff, UnchangedAssets};
     use perpetuals::core::value_risk_calculator::{
         PositionState, PositionTVTR, calculate_position_tvtr, evaluate_position,
     };
@@ -404,6 +404,36 @@ pub(crate) mod Positions {
             };
         }
 
+        fn create_collateral_position_diff(
+            self: @ComponentState<TContractState>, position: StoragePath<Position>, diff: Balance,
+        ) -> PositionDiff {
+            PositionDiff {
+                collateral: self._compute_collateral_diff(:position, :diff),
+                synthetic: Option::None,
+            }
+        }
+
+        fn create_position_diff_from_asset_amounts(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            effective_quote: Balance,
+            base_id: AssetId,
+            base_amount: Balance,
+        ) -> PositionDiff {
+            // Collateral asset.
+            let collateral = self._compute_collateral_diff(:position, diff: effective_quote);
+
+            // Synthetic asset.
+            let before = self.get_synthetic_balance(:position, synthetic_id: base_id);
+            let after = before + base_amount;
+            let synthetic = Option::Some(
+                AssetDiff { id: base_id, balance: BalanceDiff { before, after } },
+            );
+
+            PositionDiff { collateral, synthetic }
+        }
+
+
         fn get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
@@ -500,6 +530,14 @@ pub(crate) mod Positions {
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
+        fn _compute_collateral_diff(
+            self: @ComponentState<TContractState>, position: StoragePath<Position>, diff: Balance,
+        ) -> BalanceDiff {
+            let before = self.get_collateral_provisional_balance(:position);
+            let after = before + diff;
+            BalanceDiff { before, after }
+        }
+
         /// Updates the synthetic balance and handles the funding mechanism.
         /// This function adjusts the main collateral balance of a position by applying funding
         /// costs or earnings based on the difference between the global funding index and the

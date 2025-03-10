@@ -1,5 +1,4 @@
-use perpetuals::core::types::PositionData;
-use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::core::value_risk_calculator::PositionTVTR;
 use starknet::ContractAddress;
 use starkware_utils::types::time::time::Timestamp;

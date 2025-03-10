@@ -1,6 +1,6 @@
-use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::asset::{Asset, AssetDiff, AssetDiffEnriched, AssetId};
+use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
 use starkware_utils::iterable_map::{
@@ -10,11 +10,36 @@ use starkware_utils::types::PublicKey;
 
 pub const POSITION_VERSION: u8 = 1;
 
+#[starknet::storage_node]
+pub struct Position {
+    pub version: u8,
+    pub owner_account: Option<ContractAddress>,
+    pub owner_public_key: PublicKey,
+    pub collateral_balance: Balance,
+    pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
+}
+
 
 #[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct PositionId {
     pub value: u32,
 }
+
+#[derive(Copy, Debug, Drop, Serde, Default)]
+pub struct PositionDiff {
+    pub collateral: BalanceDiff,
+    pub synthetic: Option<AssetDiff>,
+}
+
+#[derive(Copy, Debug, Drop, Serde, Default)]
+pub struct PositionDiffEnriched {
+    pub collateral: BalanceDiff,
+    pub synthetic: Option<AssetDiffEnriched>,
+}
+
+pub type PositionData = Span<Asset>;
+pub type UnchangedAssets = PositionData;
+
 
 pub impl U32IntoPositionId of Into<u32, PositionId> {
     fn into(self: u32) -> PositionId {
@@ -26,15 +51,6 @@ pub impl PositionIdIntoU32 of Into<PositionId, u32> {
     fn into(self: PositionId) -> u32 {
         self.value
     }
-}
-
-#[starknet::storage_node]
-pub struct Position {
-    pub version: u8,
-    pub owner_account: Option<ContractAddress>,
-    pub owner_public_key: PublicKey,
-    pub collateral_balance: Balance,
-    pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
 }
 
 #[generate_trait]
@@ -64,4 +80,3 @@ pub impl PositionMutableImpl of PositionMutableTrait {
         self.version.read()
     }
 }
-

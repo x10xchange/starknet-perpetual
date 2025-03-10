@@ -6,6 +6,12 @@ pub struct Balance {
     value: i64,
 }
 
+#[derive(Copy, Debug, Default, Drop, Serde)]
+pub struct BalanceDiff {
+    pub before: Balance,
+    pub after: Balance,
+}
+
 impl BalancePartialOrd of PartialOrd<Balance> {
     fn lt(lhs: Balance, rhs: Balance) -> bool {
         lhs.value < rhs.value

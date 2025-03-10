@@ -25,12 +25,10 @@ pub mod Core {
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::order::{Order, OrderTrait};
-    use perpetuals::core::types::position::{Position, PositionId, PositionTrait};
+    use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff};
     use perpetuals::core::value_risk_calculator::{
         deleveraged_position_validations, liquidated_position_validations,
         validate_position_is_healthy_or_healthier,
@@ -246,7 +244,8 @@ pub mod Core {
                 );
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_collateral_position_diff(:position, diff: amount.into());
+                .positions
+                .create_collateral_position_diff(:position, diff: amount.into());
             self.positions.apply_diff(:position_id, :position_diff);
         }
 
@@ -342,7 +341,8 @@ pub mod Core {
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff = self
-                ._create_collateral_position_diff(:position, diff: -(amount.into()));
+                .positions
+                .create_collateral_position_diff(:position, diff: -(amount.into()));
             self._validate_healthy_or_healthier_position(:position_id, :position, :position_diff);
 
             self.positions.apply_diff(:position_id, :position_diff);
@@ -549,14 +549,16 @@ pub mod Core {
 
             /// Positions' Diffs:
             let position_diff_a = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: position_a,
                     effective_quote: actual_amount_quote_a.into() - actual_fee_a.into(),
                     base_id: order_a.base_asset_id,
                     base_amount: actual_amount_base_a.into(),
                 );
             let position_diff_b = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: position_b,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
                     effective_quote: -actual_amount_quote_a.into() - actual_fee_b.into(),
@@ -566,7 +568,8 @@ pub mod Core {
 
             // Assuming fee_asset_id is the same for both orders.
             let fee_position_diff = self
-                ._create_collateral_position_diff(
+                .positions
+                .create_collateral_position_diff(
                     position: self.positions.get_position_snapshot(FEE_POSITION),
                     diff: (actual_fee_a + actual_fee_b).into(),
                 );
@@ -719,7 +722,8 @@ pub mod Core {
 
             /// Execution:
             let liquidated_position_diff = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: self
                         .positions
                         .get_position_snapshot(position_id: liquidated_order.position_id),
@@ -728,7 +732,8 @@ pub mod Core {
                     base_amount: actual_amount_base_liquidated.into(),
                 );
             let liquidator_position_diff = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: liquidator_position,
                     // Passing the negative of actual amounts to order_b as it is linked to order_a.
                     effective_quote: -actual_amount_quote_liquidated.into()
@@ -737,12 +742,14 @@ pub mod Core {
                     base_amount: -actual_amount_base_liquidated.into(),
                 );
             let insurance_position_diff = self
-                ._create_collateral_position_diff(
+                .positions
+                .create_collateral_position_diff(
                     position: self.positions.get_position_snapshot(INSURANCE_FUND_POSITION),
                     diff: fee_amount.into(),
                 );
             let fee_position_diff = self
-                ._create_collateral_position_diff(
+                .positions
+                .create_collateral_position_diff(
                     position: self.positions.get_position_snapshot(FEE_POSITION),
                     diff: actual_liquidator_fee.into(),
                 );
@@ -865,7 +872,8 @@ pub mod Core {
                 .positions
                 .get_position_snapshot(position_id: deleveraged_position_id);
             let deleveraged_position_diff = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: deleveraged_position,
                     effective_quote: deleveraged_quote_amount.into(),
                     base_id: deleveraged_base_asset_id,
@@ -876,7 +884,8 @@ pub mod Core {
                 .get_position_snapshot(position_id: deleverager_position_id);
 
             let deleverager_position_diff = self
-                ._create_position_diff_from_asset_amounts(
+                .positions
+                .create_position_diff_from_asset_amounts(
                     position: deleverager_position,
                     // Passing the negative of actual amounts to deleverager as it is linked to
                     // deleveraged.
@@ -947,43 +956,6 @@ pub mod Core {
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _create_collateral_position_diff(
-            self: @ContractState, position: StoragePath<Position>, diff: Balance,
-        ) -> PositionDiff {
-            PositionDiff {
-                collateral: self._compute_collateral_diff(:position, :diff),
-                synthetic: Option::None,
-            }
-        }
-
-        fn _compute_collateral_diff(
-            self: @ContractState, position: StoragePath<Position>, diff: Balance,
-        ) -> BalanceDiff {
-            let before = self.positions.get_collateral_provisional_balance(:position);
-            let after = before + diff;
-            BalanceDiff { before, after }
-        }
-
-        fn _create_position_diff_from_asset_amounts(
-            ref self: ContractState,
-            position: StoragePath<Position>,
-            effective_quote: Balance,
-            base_id: AssetId,
-            base_amount: Balance,
-        ) -> PositionDiff {
-            // Collateral asset.
-            let collateral = self._compute_collateral_diff(:position, diff: effective_quote);
-
-            // Synthetic asset.
-            let before = self.positions.get_synthetic_balance(:position, synthetic_id: base_id);
-            let after = before + base_amount;
-            let synthetic = Option::Some(
-                AssetDiff { id: base_id, balance: BalanceDiff { before, after } },
-            );
-
-            PositionDiff { collateral, synthetic }
-        }
-
         fn _execute_transfer(
             ref self: ContractState,
             recipient: PositionId,
@@ -994,13 +966,13 @@ pub mod Core {
             // Parameters
             let position = self.positions.get_position_snapshot(:position_id);
             let position_diff_sender = self
-                ._create_collateral_position_diff(:position, diff: -(amount.into()));
+                .positions
+                .create_collateral_position_diff(:position, diff: -(amount.into()));
 
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let position_diff_recipient = self
-                ._create_collateral_position_diff(
-                    position: recipient_position, diff: amount.into(),
-                );
+                .positions
+                .create_collateral_position_diff(position: recipient_position, diff: amount.into());
 
             // Execute transfer
             self.positions.apply_diff(:position_id, position_diff: position_diff_sender);

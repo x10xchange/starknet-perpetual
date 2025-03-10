@@ -28,11 +28,11 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
-    use perpetuals::core::types::asset::{AssetId, AssetStatus};
+    use perpetuals::core::types::asset::{Asset, AssetDiffEnriched, AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
+    use perpetuals::core::types::position::{PositionDiff, PositionDiffEnriched};
     use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
-    use perpetuals::core::types::{AssetDiffEnriched, PositionDiff, PositionDiffEnriched};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,

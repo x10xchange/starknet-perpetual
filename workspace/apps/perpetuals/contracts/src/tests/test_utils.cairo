@@ -1,4 +1,3 @@
-use Core::InternalCoreFunctionsTrait;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
 use core::poseidon::PoseidonTrait;
@@ -13,11 +12,11 @@ use perpetuals::core::components::positions::Positions::InternalTrait as Positio
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::types::asset::{AssetId, AssetStatus};
+use perpetuals::core::types::asset::{AssetDiff, AssetId, AssetStatus};
+use perpetuals::core::types::balance::BalanceDiff;
 use perpetuals::core::types::funding::FundingIndex;
-use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::position::{PositionDiff, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
-use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
@@ -321,7 +320,8 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
         );
     let position = state.positions.get_position_snapshot(:position_id);
     let position_diff = state
-        ._create_collateral_position_diff(:position, diff: COLLATERAL_BALANCE_AMOUNT.into());
+        .positions
+        .create_collateral_position_diff(:position, diff: COLLATERAL_BALANCE_AMOUNT.into());
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
