@@ -615,7 +615,7 @@ pub mod Core {
             actual_amount_base_liquidated: i64,
             actual_amount_quote_liquidated: i64,
             actual_liquidator_fee: u64,
-            fee_amount: u64,
+            liquidated_fee_amount: u64,
         ) {
             /// Validations:
             self.pausable.assert_not_paused();
@@ -641,7 +641,7 @@ pub mod Core {
                 quote_asset_id: liquidator_order.quote_asset_id,
                 quote_amount: actual_amount_quote_liquidated,
                 fee_asset_id: liquidator_order.fee_asset_id,
-                fee_amount,
+                fee_amount: liquidated_fee_amount,
                 // Dummy values needed to initialize the struct and pass validation.
                 salt: Zero::zero(),
                 expiration: Time::now(),
@@ -654,16 +654,15 @@ pub mod Core {
                     order_b: liquidator_order,
                     actual_amount_base_a: actual_amount_base_liquidated,
                     actual_amount_quote_a: actual_amount_quote_liquidated,
-                    actual_fee_a: fee_amount,
+                    actual_fee_a: liquidated_fee_amount,
                     actual_fee_b: actual_liquidator_fee,
                 );
 
             assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
             // In case of liquidation of insurance fund, the liquidator fee should be zero.
-            assert_with_byte_array(
-                liquidator_order.position_id != INSURANCE_FUND_POSITION || fee_amount.is_zero(),
-                illegal_zero_fee(),
-            );
+            if liquidator_order.position_id == INSURANCE_FUND_POSITION {
+                assert_with_byte_array(liquidated_fee_amount.is_zero(), illegal_zero_fee());
+            }
 
             // Validate and update fulfillment.
             self
@@ -683,7 +682,8 @@ pub mod Core {
                     position: self
                         .positions
                         .get_position_snapshot(position_id: liquidated_order.position_id),
-                    effective_quote: actual_amount_quote_liquidated.into() - fee_amount.into(),
+                    effective_quote: actual_amount_quote_liquidated.into()
+                        - liquidated_fee_amount.into(),
                     base_id: liquidated_order.base_asset_id,
                     base_amount: actual_amount_base_liquidated.into(),
                 );
@@ -701,7 +701,7 @@ pub mod Core {
                 .positions
                 .create_collateral_position_diff(
                     position: self.positions.get_position_snapshot(INSURANCE_FUND_POSITION),
-                    diff: fee_amount.into(),
+                    diff: liquidated_fee_amount.into(),
                 );
             let fee_position_diff = self
                 .positions
@@ -768,7 +768,7 @@ pub mod Core {
                         actual_amount_quote_liquidated,
                         actual_liquidator_fee,
                         insurance_fund_fee_asset_id: collateral_id,
-                        insurance_fund_fee_amount: fee_amount,
+                        insurance_fund_fee_amount: liquidated_fee_amount,
                         liquidator_order_hash: liquidator_order_hash,
                     },
                 );

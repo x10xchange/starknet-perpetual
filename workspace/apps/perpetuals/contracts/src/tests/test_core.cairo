@@ -195,7 +195,7 @@ fn test_caller_failures() {
             actual_amount_base_liquidated: 0,
             actual_amount_quote_liquidated: 0,
             actual_liquidator_fee: 0,
-            fee_amount: 0,
+            liquidated_fee_amount: 0,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
@@ -1687,7 +1687,7 @@ fn test_successful_liquidate() {
             actual_amount_base_liquidated: BASE,
             actual_amount_quote_liquidated: QUOTE,
             actual_liquidator_fee: FEE,
-            fee_amount: INSURANCE_FEE,
+            liquidated_fee_amount: INSURANCE_FEE,
         );
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;

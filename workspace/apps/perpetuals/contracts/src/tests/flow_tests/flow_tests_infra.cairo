@@ -628,7 +628,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 actual_amount_base_liquidated: liquidated_base,
                 actual_amount_quote_liquidated: liquidated_quote,
                 actual_liquidator_fee: liquidator_fee,
-                fee_amount: liquidated_fee,
+                liquidated_fee_amount: liquidated_fee,
             );
     }
 

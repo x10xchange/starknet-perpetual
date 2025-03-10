@@ -65,7 +65,7 @@ pub trait ICore<TContractState> {
         actual_amount_base_liquidated: i64,
         actual_amount_quote_liquidated: i64,
         actual_liquidator_fee: u64,
-        fee_amount: u64,
+        liquidated_fee_amount: u64,
     );
     fn deleverage(
         ref self: TContractState,
