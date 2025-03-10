@@ -348,10 +348,7 @@ pub mod AssetsComponent {
             operator_nonce_component.use_checked_nonce(:operator_nonce);
 
             self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
-
-            let synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
-            let price = oracle_price.convert(resolution: synthetic_config.resolution);
-            self._set_price(:asset_id, :price);
+            self._set_price(:asset_id, :oracle_price);
         }
 
         fn get_collateral_token_contract(
@@ -748,14 +745,18 @@ pub mod AssetsComponent {
             assert(2 * (higher_amount + equal_amount) >= signed_prices_len, INVALID_MEDIAN);
         }
 
-        fn _set_price(ref self: ComponentState<TContractState>, asset_id: AssetId, price: Price) {
+        fn _set_price(
+            ref self: ComponentState<TContractState>, asset_id: AssetId, oracle_price: u128,
+        ) {
+            let mut synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
+            let price = oracle_price.convert(resolution: synthetic_config.resolution);
+
             let mut synthetic_timely_data = self._get_synthetic_timely_data(synthetic_id: asset_id);
             synthetic_timely_data.price = price;
             synthetic_timely_data.last_price_update = Time::now();
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
-            let mut synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
-            // If the asset is not active, it'll be activated.
+            // If the asset is pending, it'll be activated.
             if synthetic_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
                 synthetic_config.status = AssetStatus::ACTIVE;
