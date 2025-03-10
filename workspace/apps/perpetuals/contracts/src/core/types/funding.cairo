@@ -92,8 +92,16 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
     }
 }
 
-/// Validates the funding rate using the following formula:
-/// `max_funding_rate * time_diff * synthetic_price / 2^32`.
+/// Validates the funding rate by ensuring that the index difference is bounded by the max funding
+/// rate.
+///
+/// The max funding rate represents the rate of change **per second**, so it is multiplied by
+/// `time_diff.
+/// Additionally, since the index includes the synthetic price,
+/// the formula also multiplies by `synthetic_price`.
+///
+/// Formula:
+/// `index_diff <= max_funding_rate * time_diff * synthetic_price`
 pub fn validate_funding_rate(
     synthetic_id: AssetId,
     index_diff: u64,
