@@ -17,6 +17,10 @@ use starkware_utils::types::fixed_two_decimal::FixedTwoDecimalTrait;
 const EPSILON: i128 = 1_i128;
 
 
+/// Represents the state of a position based on its total value and total risk.
+/// - A position is **Deleveragable** (and also **Liquidatable**) if its total value is negative.
+/// - A position is **Liquidatable** if its total value is less than its total risk.
+/// - Otherwise, the position is considered **Healthy**.
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub enum PositionState {
     Healthy,
@@ -24,13 +28,14 @@ pub enum PositionState {
     Deleveragable,
 }
 
+/// The total value and total risk of a position.
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionTVTR {
     pub total_value: i128,
     pub total_risk: u128,
 }
 
-
+/// The change in terms of total value and total risk of a position.
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct PositionTVTRChange {
     pub before: PositionTVTR,
@@ -38,26 +43,16 @@ pub struct PositionTVTRChange {
 }
 
 
-#[generate_trait]
-pub impl PositionStateImpl of PositionStateTrait {
-    fn new(position_tvtr: PositionTVTR) -> PositionState {
-        if position_tvtr.total_value < 0 {
-            PositionState::Deleveragable
-        } else if position_tvtr.total_value.abs() < position_tvtr.total_risk {
-            PositionState::Liquidatable
-        } else {
-            PositionState::Healthy
-        }
+/// Returns the state of a position based on its total value and total risk.
+fn get_position_state(position_tvtr: PositionTVTR) -> PositionState {
+    if position_tvtr.total_value < 0 {
+        PositionState::Deleveragable
+    } else if position_tvtr.total_value.abs() < position_tvtr.total_risk {
+        PositionState::Liquidatable
+    } else {
+        PositionState::Healthy
     }
 }
-
-/// Representing the evaluation of position's state and the effects of a proposed change.
-#[derive(Copy, Debug, Drop, Serde)]
-pub struct PositionChangeResult {
-    pub position_state_before_change: PositionState,
-    pub position_state_after_change: PositionState,
-}
-
 
 /// The position is fair if the total_value divided by the total_risk is the almost before and after
 /// the change - the before_ratio needs to be between after_ratio-epsilon and after ratio.
@@ -89,16 +84,12 @@ fn is_healthier(before: PositionTVTR, after: PositionTVTR) -> bool {
     after_ratio >= before_ratio
 }
 
-
-pub fn evaluate_position(position_data: PositionData) -> PositionChangeResult {
-    let position_diff_enriched = Default::default();
+/// Returns the state of a position.
+pub fn evaluate_position(position_data: PositionData) -> PositionState {
     let tvtr = calculate_position_tvtr_change(
-        unchanged_assets: position_data, :position_diff_enriched,
+        unchanged_assets: position_data, position_diff_enriched: Default::default(),
     );
-    PositionChangeResult {
-        position_state_before_change: PositionStateTrait::new(tvtr.before),
-        position_state_after_change: PositionStateTrait::new(tvtr.after),
-    }
+    get_position_state(position_tvtr: tvtr.before)
 }
 
 
@@ -112,7 +103,7 @@ pub fn validate_position_is_healthy_or_healthier(
 }
 
 pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: PositionTVTRChange) {
-    let position_state_after_change = PositionStateTrait::new(tvtr.after);
+    let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
         // If the position is healthy we can return.
         return;
@@ -134,14 +125,14 @@ pub fn liquidated_position_validations(
     position_diff_enriched: PositionDiffEnriched,
 ) {
     let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
-    let position_state_before_change = PositionStateTrait::new(tvtr.before);
+    let position_state_before_change = get_position_state(position_tvtr: tvtr.before);
 
+    // Validate that the position isn't healthy before the change.
     assert_with_byte_array(
         position_state_before_change == PositionState::Liquidatable
             || position_state_before_change == PositionState::Deleveragable,
         position_not_liquidatable(:position_id),
     );
-
     assert_healthy_or_healthier(:position_id, :tvtr);
 }
 
@@ -152,7 +143,7 @@ pub fn deleveraged_position_validations(
     is_active_asset: bool,
 ) {
     let tvtr = calculate_position_tvtr_change(:unchanged_assets, :position_diff_enriched);
-    let position_state_before_change = PositionStateTrait::new(tvtr.before);
+    let position_state_before_change = get_position_state(position_tvtr: tvtr.before);
 
     if is_active_asset {
         assert_with_byte_array(
@@ -556,15 +547,13 @@ mod tests {
     }
 
 
-    /// Test the `evaluate_position` function for the case where the position is empty, and
-    /// no diff is provided.
+    /// Test the `evaluate_position` function for the case where the position is empty.
     #[test]
     fn test_evaluate_position_empty_position_and_empty_diff() {
         // Create an empty position.
         let position_data = array![].span();
 
         let evaluated_position = evaluate_position(position_data);
-        assert!(evaluated_position.position_state_before_change == PositionState::Healthy);
-        assert!(evaluated_position.position_state_after_change == PositionState::Healthy);
+        assert!(evaluated_position == PositionState::Healthy);
     }
 }

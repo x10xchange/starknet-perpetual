@@ -565,9 +565,7 @@ pub(crate) mod Positions {
         ) -> PositionState {
             let position_diff = Default::default();
             let position_data = self.get_position_unchanged_assets(:position, :position_diff);
-
-            let position_change_result = evaluate_position(:position_data);
-            position_change_result.position_state_after_change
+            evaluate_position(:position_data)
         }
     }
 }
