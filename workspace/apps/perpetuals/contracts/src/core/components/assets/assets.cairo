@@ -60,12 +60,12 @@ pub mod AssetsComponent {
         max_price_interval: TimeDelta,
         max_funding_interval: TimeDelta,
         // Updates each price validation.
-        pub last_price_validation: Timestamp,
+        last_price_validation: Timestamp,
         // Updates every funding tick.
-        pub last_funding_tick: Timestamp,
+        last_funding_tick: Timestamp,
         collateral_token_contract: IERC20Dispatcher,
         collateral_quantum: u64,
-        pub num_of_active_synthetic_assets: usize,
+        num_of_active_synthetic_assets: usize,
         pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
         pub synthetic_timely_data: IterableMap<AssetId, SyntheticTimelyData>,
         pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
@@ -408,7 +408,11 @@ pub mod AssetsComponent {
             self.collateral_quantum.read()
         }
 
-        fn get_funding_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
+        fn get_max_price_interval(self: @ComponentState<TContractState>) -> TimeDelta {
+            self.max_price_interval.read()
+        }
+
+        fn get_max_funding_interval(self: @ComponentState<TContractState>) -> TimeDelta {
             self.max_funding_interval.read()
         }
         fn get_last_funding_tick(self: @ComponentState<TContractState>) -> Timestamp {
@@ -824,7 +828,7 @@ pub mod AssetsComponent {
                 // Validate only active asset
                 if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVE {
                     assert(
-                        max_price_interval > current_time
+                        max_price_interval >= current_time
                             .sub(synthetic_timely_data.last_price_update),
                         SYNTHETIC_EXPIRED_PRICE,
                     );

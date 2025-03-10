@@ -47,9 +47,7 @@ use perpetuals::tests::test_utils::{
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
-use starknet::storage::{
-    StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
-};
+use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::deposit::Deposit::deposit_hash;
 use starkware_utils::components::deposit::interface::{DepositStatus, IDeposit};
 use starkware_utils::components::replaceability::interface::IReplaceable;
@@ -71,12 +69,12 @@ fn test_constructor() {
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert!(state.replaceability.get_upgrade_delay() == UPGRADE_DELAY);
     assert!(state.assets.get_price_validation_interval() == MAX_PRICE_INTERVAL);
-    assert!(state.assets.get_funding_validation_interval() == MAX_FUNDING_INTERVAL);
+    assert!(state.assets.get_max_funding_interval() == MAX_FUNDING_INTERVAL);
     assert!(state.assets.get_max_funding_rate() == MAX_FUNDING_RATE);
     assert!(state.assets.get_max_oracle_price_validity() == MAX_ORACLE_PRICE_VALIDITY);
     assert!(state.deposits.get_cancel_delay() == CANCEL_DELAY);
-    assert!(state.assets.last_funding_tick.read() == Time::now());
-    assert!(state.assets.last_price_validation.read() == Time::now());
+    assert!(state.assets.get_last_funding_tick() == Time::now());
+    assert!(state.assets.get_last_price_validation() == Time::now());
 
     assert!(
         state
@@ -2341,7 +2339,18 @@ fn test_validate_synthetic_prices_expired() {
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
     start_cheat_block_timestamp_global(block_timestamp: now.into());
-    state.assets.last_funding_tick.write(now);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .assets
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(),
+            funding_ticks: array![
+                FundingTick {
+                    asset_id: cfg.synthetic_cfg.synthetic_id, funding_index: Zero::zero(),
+                },
+            ]
+                .span(),
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
@@ -2363,7 +2372,7 @@ fn test_validate_synthetic_prices_expired() {
 }
 
 #[test]
-fn test_validate_synthetic_prices_uninitialized_asset() {
+fn test_validate_synthetic_prices_pending_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -2378,13 +2387,13 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
             spender: test_address(),
             amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
-    let mut synthetic_timely_data = SYNTHETIC_TIMELY_DATA();
-    synthetic_timely_data.last_price_update = Time::now();
-    state.assets.synthetic_timely_data.write(cfg.synthetic_cfg.synthetic_id, synthetic_timely_data);
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
     start_cheat_block_timestamp_global(block_timestamp: now.into());
-    state.assets.last_funding_tick.write(Time::now());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .assets
+        .funding_tick(operator_nonce: state.get_operator_nonce(), funding_ticks: array![].span());
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
@@ -2394,7 +2403,6 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    // Call the function, should panic with EXPIRED_PRICE error
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
@@ -2422,9 +2430,20 @@ fn test_validate_prices() {
             spender: test_address(),
             amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
-    let new_time = Time::now().add(delta: Time::days(count: 1));
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
-    state.assets.last_funding_tick.write(Time::now());
+    let new_time: u64 = Time::now().add(delta: state.get_max_price_interval()).into();
+    start_cheat_block_timestamp_global(block_timestamp: new_time);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .assets
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(),
+            funding_ticks: array![
+                FundingTick {
+                    asset_id: cfg.synthetic_cfg.synthetic_id, funding_index: Zero::zero(),
+                },
+            ]
+                .span(),
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
@@ -2442,7 +2461,7 @@ fn test_validate_prices() {
             amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
-    assert!(state.assets.last_price_validation.read() == new_time);
+    assert!(state.assets.get_last_price_validation().into() == new_time);
 }
 
 #[test]
@@ -2462,7 +2481,7 @@ fn test_validate_prices_no_update_needed() {
             amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
         );
     let old_time = Time::now();
-    assert!(state.assets.last_price_validation.read() == old_time);
+    assert!(state.assets.get_last_price_validation() == old_time);
     let new_time = Time::now().add(delta: Time::seconds(count: 1000));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
@@ -2483,7 +2502,7 @@ fn test_validate_prices_no_update_needed() {
             salt: user.salt_counter,
         );
 
-    assert!(state.assets.last_price_validation.read() == old_time);
+    assert!(state.assets.get_last_price_validation() == old_time);
 }
 
 // `funding_tick` tests.
@@ -2587,7 +2606,7 @@ fn test_invalid_funding_len() {
 fn test_price_tick_basic() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let mut spy = snforge_std::spy_events();
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
@@ -2602,10 +2621,8 @@ fn test_price_tick_basic() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
-    state.assets.num_of_active_synthetic_assets.write(Zero::zero());
-    assert!(state.assets.get_num_of_active_synthetic_assets() == Zero::zero());
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
@@ -2647,7 +2664,7 @@ fn test_price_tick_basic() {
 fn test_price_tick_odd() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle2_name = 'ORCL2';
@@ -2681,8 +2698,6 @@ fn test_price_tick_odd() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
-    state.assets.num_of_active_synthetic_assets.write(0);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
@@ -2718,7 +2733,7 @@ fn test_price_tick_odd() {
 fn test_price_tick_even() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle3_name = 'ORCL3';
@@ -2742,8 +2757,6 @@ fn test_price_tick_even() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
-    state.assets.num_of_active_synthetic_assets.write(0);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
@@ -2798,7 +2811,7 @@ fn test_price_tick_unsorted() {
     start_cheat_block_timestamp_global(block_timestamp: Time::now().add(Time::weeks(1)).into());
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle2_name = 'ORCL2';
@@ -2822,7 +2835,6 @@ fn test_price_tick_unsorted() {
             :asset_name,
         );
     let old_time: u64 = Time::now().into();
-    state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
     let operator_nonce = state.get_operator_nonce();
@@ -2850,7 +2862,7 @@ fn test_price_tick_unsorted() {
 fn test_price_tick_old_oracle() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'ASSET_NAME';
     let oracle1_name = 'ORCL1';
     let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
@@ -2972,7 +2984,7 @@ fn test_price_tick_golden() {
 fn test_successful_add_and_remove_oracle() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
 
     let asset_name = 'ASSET_NAME';
     let oracle_name = 'ORCL';
@@ -3024,7 +3036,7 @@ fn test_successful_add_and_remove_oracle() {
 fn test_add_oracle_name_too_long() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
 
     let asset_name = 'ASSET_NAME';
     let oracle_name = 'LONG_ORACLE_NAME';
@@ -3047,7 +3059,7 @@ fn test_add_oracle_name_too_long() {
 fn test_add_oracle_asset_name_too_long() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
 
     let asset_name = 'TOO_LONG_ASSET_NAME';
     let oracle_name = 'ORCL';
@@ -3106,7 +3118,7 @@ fn test_add_existed_oracle() {
 fn test_successful_remove_nonexistent_oracle() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
 
     // Parameters:
     let key_pair = KEY_PAIR_1();

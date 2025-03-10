@@ -1,16 +1,11 @@
-use core::num::traits::Zero;
+use core::num::traits::Pow;
 use openzeppelin_testing::signing::StarkKeyPair;
-use perpetuals::core::types::asset::synthetic::{
-    SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
-};
-use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
+use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::ContractAddress;
-use starkware_utils::constants::{DAY, MAX_U128, MINUTE, WEEK};
-use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
-use starkware_utils::types::time::time::{Time, TimeDelta};
+use starkware_utils::constants::{DAY, MINUTE, WEEK};
+use starkware_utils::types::time::time::TimeDelta;
 
 
 pub fn OPERATOR_PUBLIC_KEY() -> felt252 {
@@ -50,36 +45,6 @@ pub fn OPERATOR() -> ContractAddress {
     'OPERATOR'.try_into().unwrap()
 }
 
-pub fn SYNTHETIC_CONFIG() -> SyntheticConfig {
-    SyntheticTrait::config(
-        status: AssetStatus::ACTIVE,
-        risk_factor_first_tier_boundary: MAX_U128,
-        risk_factor_tier_size: Zero::zero(),
-        quorum: SYNTHETIC_QUORUM,
-        resolution: SYNTHETIC_RESOLUTION,
-    )
-}
-
-pub fn SYNTHETIC_PENDING_CONFIG() -> SyntheticConfig {
-    SyntheticTrait::config(
-        status: AssetStatus::PENDING,
-        risk_factor_first_tier_boundary: MAX_U128,
-        risk_factor_tier_size: Zero::zero(),
-        quorum: SYNTHETIC_QUORUM,
-        resolution: SYNTHETIC_RESOLUTION,
-    )
-}
-
-pub fn SYNTHETIC_TIMELY_DATA() -> SyntheticTimelyData {
-    SyntheticTrait::timely_data(
-        price: SYNTHETIC_PRICE(),
-        // Pass non default timestamp.
-        last_price_update: Time::now().add(delta: Time::seconds(count: 1)),
-        funding_index: Zero::zero(),
-    )
-}
-
-
 pub const UPGRADE_DELAY: u64 = 5_u64;
 /// 1 day in seconds.
 pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
@@ -108,6 +73,12 @@ pub const POSITION_ID_2: PositionId = PositionId { value: 3 };
 pub const ORACLE_A_NAME: felt252 = 'ORCLA';
 pub const ORACLE_B_NAME: felt252 = 'ORCLB';
 
+/// Risk factors
+pub const RISK_FACTOR: u8 = 50;
+
+/// Prices
+pub const ORACLE_PRICE: u128 = 10_u128.pow(23);
+
 /// Assets IDs
 pub fn COLLATERAL_ASSET_ID() -> AssetId {
     AssetIdTrait::new(value: selector!("COLLATERAL_ASSET_ID"))
@@ -122,15 +93,6 @@ pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
     AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
 }
 
-/// Risk factors
-pub fn RISK_FACTOR() -> FixedTwoDecimal {
-    FixedTwoDecimalTrait::new(50)
-}
-
-/// Prices
-pub fn SYNTHETIC_PRICE() -> Price {
-    PriceTrait::new(100_u64 * PRICE_SCALE.into())
-}
 
 /// Assets' metadata
 pub fn COLLATERAL_NAME() -> ByteArray {

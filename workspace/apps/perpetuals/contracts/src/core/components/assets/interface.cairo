@@ -43,10 +43,11 @@ pub trait IAssets<TContractState> {
     );
     fn get_collateral_token_contract(self: @TContractState) -> IERC20Dispatcher;
     fn get_collateral_quantum(self: @TContractState) -> u64;
-    fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
     fn get_last_price_validation(self: @TContractState) -> Timestamp;
+    fn get_max_funding_interval(self: @TContractState) -> TimeDelta;
     fn get_max_funding_rate(self: @TContractState) -> u32;
+    fn get_max_price_interval(self: @TContractState) -> TimeDelta;
     fn get_max_oracle_price_validity(self: @TContractState) -> TimeDelta;
     fn get_num_of_active_synthetic_assets(self: @TContractState) -> usize;
     fn get_price_validation_interval(self: @TContractState) -> TimeDelta;

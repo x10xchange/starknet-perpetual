@@ -20,15 +20,15 @@ use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::core::types::{AssetDiff, BalanceDiff, PositionDiff};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
-use snforge_std::{ContractClassTrait, DeclareResultTrait, test_address};
-use starknet::ContractAddress;
-use starknet::storage::{
-    MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerWriteAccess,
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global, test_address,
 };
+use starknet::ContractAddress;
+use starknet::storage::StoragePointerWriteAccess;
 use starkware_utils::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
-use starkware_utils::constants::{TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{MAX_U128, TWO_POW_32, TWO_POW_40};
 use starkware_utils::iterable_map::*;
 use starkware_utils::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::Signature;
@@ -239,18 +239,32 @@ pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
 pub fn setup_state_with_active_asset(
     cfg: @PerpetualsInitConfig, token_state: @TokenState,
 ) -> Core::ContractState {
-    let mut state = init_state(:cfg, :token_state);
-    // Synthetic asset configs.
+    let mut state = setup_state_with_pending_asset(:cfg, :token_state);
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     state
-        .assets
-        .synthetic_config
-        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_CONFIG()));
-    state.assets.risk_factor_tiers.entry(*cfg.synthetic_cfg.synthetic_id).push(RISK_FACTOR());
+        .add_oracle_to_asset(
+            asset_id: *cfg.synthetic_cfg.synthetic_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
+    let oracle_price = ORACLE_PRICE;
+    let operator_nonce = state.get_operator_nonce();
+    let timestamp: u64 = Time::now().into();
     state
-        .assets
-        .synthetic_timely_data
-        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
-    state.assets.num_of_active_synthetic_assets.write(1);
+        .price_tick(
+            :operator_nonce,
+            asset_id: *cfg.synthetic_cfg.synthetic_id,
+            :oracle_price,
+            signed_prices: [
+                oracle1.get_signed_price(:oracle_price, timestamp: timestamp.try_into().unwrap())
+            ]
+                .span(),
+        );
     state
 }
 
@@ -261,16 +275,21 @@ pub fn setup_state_with_pending_asset(
     // Synthetic asset configs.
     state
         .assets
-        .synthetic_config
-        .write(*cfg.synthetic_cfg.synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
-    state
-        .assets
-        .synthetic_timely_data
-        .write(*cfg.synthetic_cfg.synthetic_id, SYNTHETIC_TIMELY_DATA());
+        .add_synthetic_asset(
+            asset_id: *cfg.synthetic_cfg.synthetic_id,
+            risk_factor_tiers: array![RISK_FACTOR].span(),
+            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_tier_size: MAX_U128,
+            quorum: SYNTHETIC_QUORUM,
+            resolution: SYNTHETIC_RESOLUTION,
+        );
     state
 }
 
 pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(count: 1)).into(),
+    );
     let mut state = initialized_contract_state();
     set_roles(ref :state, :cfg);
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
