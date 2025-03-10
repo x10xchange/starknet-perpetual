@@ -5,6 +5,7 @@ use perpetuals::core::components::assets::errors::{
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsSafeDispatcher, IAssetsSafeDispatcherTrait,
 };
+use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::{
     FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
 };
@@ -50,7 +51,6 @@ use starknet::storage::{
     StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
 };
 use starkware_utils::components::deposit::interface::{DepositStatus, IDeposit};
-use starkware_utils::components::nonce::interface::INonce;
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use starkware_utils::components::roles::interface::IRoles;
@@ -404,7 +404,10 @@ fn test_new_position() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .new_position(
-            operator_nonce: state.nonce(), :position_id, :owner_public_key, :owner_account,
+            operator_nonce: state.get_operator_nonce(),
+            :position_id,
+            :owner_public_key,
+            :owner_account,
         );
 
     // Catch the event.
@@ -534,7 +537,10 @@ fn test_successful_set_owner_account() {
     state
         .positions
         .set_owner_account(
-            operator_nonce: state.nonce(), :position_id, :new_owner_account, :expiration,
+            operator_nonce: state.get_operator_nonce(),
+            :position_id,
+            :new_owner_account,
+            :expiration,
         );
 
     // Catch the event.
@@ -580,7 +586,10 @@ fn test_set_existed_owner_account() {
     state
         .positions
         .set_owner_account(
-            operator_nonce: state.nonce(), :position_id, :new_owner_account, :expiration,
+            operator_nonce: state.get_operator_nonce(),
+            :position_id,
+            :new_owner_account,
+            :expiration,
         );
 }
 
@@ -777,7 +786,7 @@ fn test_successful_withdraw() {
     };
     let hash = withdraw_args.get_message_hash(user.get_public_key());
     let signature = user.sign_message(hash);
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
 
     let contract_state_balance = token_state.balance_of(test_address());
     assert!(contract_state_balance == CONTRACT_INIT_BALANCE.into());
@@ -991,7 +1000,7 @@ fn test_successful_process_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -1183,7 +1192,7 @@ fn test_cancel_already_done_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -1347,7 +1356,7 @@ fn test_successful_trade() {
     let hash_b = order_b.get_message_hash(user_b.get_public_key());
     let signature_a = user_a.sign_message(hash_a);
     let signature_b = user_b.sign_message(hash_b);
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
 
     let mut spy = snforge_std::spy_events();
     // Test:
@@ -1473,7 +1482,7 @@ fn test_invalid_trade_same_base_signs() {
 
     let signature_a = user_a.sign_message(order_a.get_message_hash(user_a.get_public_key()));
     let signature_b = user_b.sign_message(order_b.get_message_hash(user_b.get_public_key()));
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -1609,7 +1618,7 @@ fn test_successful_deleverage() {
     );
 
     // Test params:
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     // For a fair deleverage, the TV/TR ratio of the deleveraged position should remain the same
     // before and after the deleverage. This is the reasoning behind the choice
     // of QUOTE and BASE.
@@ -1709,7 +1718,7 @@ fn test_unfair_deleverage() {
     );
 
     // Test params:
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     // The following value causes an unfair deleverage, as it breaks the TV/TR ratio.
     let BASE = 10;
     let QUOTE = -10;
@@ -1765,7 +1774,7 @@ fn test_successful_liquidate() {
 
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
 
     let collateral_id = cfg.collateral_cfg.collateral_id;
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
@@ -1948,7 +1957,7 @@ fn test_successful_set_public_key() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .set_public_key(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
             expiration: set_public_key_args.expiration,
@@ -2009,7 +2018,7 @@ fn test_set_public_key_no_request() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .set_public_key(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
             expiration: set_public_key_args.expiration,
@@ -2188,7 +2197,7 @@ fn test_successful_transfer() {
     // Setup parameters:
     let expiration = Time::now().add(delta: Time::days(1));
     let collateral_id = cfg.collateral_cfg.collateral_id;
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
 
     let transfer_args = TransferArgs {
         position_id: sender.position_id,
@@ -2341,7 +2350,7 @@ fn test_validate_synthetic_prices_expired() {
     // Call the function, should panic with EXPIRED_PRICE error
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -2384,7 +2393,7 @@ fn test_validate_synthetic_prices_uninitialized_asset() {
     // Call the function, should panic with EXPIRED_PRICE error
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -2423,7 +2432,7 @@ fn test_validate_prices() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -2463,7 +2472,7 @@ fn test_validate_prices_no_update_needed() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .process_deposit(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
             amount: DEPOSIT_AMOUNT,
@@ -2500,7 +2509,7 @@ fn test_funding_tick_basic() {
     // 3 <= 3.
     let mut spy = snforge_std::spy_events();
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
@@ -2542,7 +2551,7 @@ fn test_invalid_funding_rate() {
     // synthetic_price * max_funding_rate * time_diff = 100 * 3% per hour * 1 hour = 3.
     // 3 > 4.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
 }
 
 #[test]
@@ -2565,7 +2574,7 @@ fn test_invalid_funding_len() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
 }
 
 // `price_tick` tests.
@@ -2596,7 +2605,7 @@ fn test_price_tick_basic() {
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2675,7 +2684,7 @@ fn test_price_tick_odd() {
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2736,7 +2745,7 @@ fn test_price_tick_even() {
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2769,7 +2778,7 @@ fn test_price_tick_no_quorum() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2812,7 +2821,7 @@ fn test_price_tick_unsorted() {
     state.assets.synthetic_config.write(synthetic_id, Option::Some(SYNTHETIC_PENDING_CONFIG()));
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price: u128 = TEN_POW_15.into();
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2855,7 +2864,7 @@ fn test_price_tick_old_oracle() {
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     let oracle_price = 1000;
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,
@@ -2940,7 +2949,7 @@ fn test_price_tick_golden() {
         block_timestamp: Timestamp { seconds: timestamp.into() + 1 }.into(),
     );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let operator_nonce = state.nonce();
+    let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
             :operator_nonce,

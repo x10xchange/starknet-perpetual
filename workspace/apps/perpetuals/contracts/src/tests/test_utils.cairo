@@ -9,6 +9,7 @@ use openzeppelin::presets::interfaces::{
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::IAssets;
+use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
@@ -26,7 +27,6 @@ use starknet::ContractAddress;
 use starknet::storage::{
     MutableVecTrait, StorageMapWriteAccess, StoragePathEntry, StoragePointerWriteAccess,
 };
-use starkware_utils::components::nonce::interface::INonce;
 use starkware_utils::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
@@ -316,7 +316,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
     let position_id = user.position_id;
     state
         .new_position(
-            operator_nonce: state.nonce(),
+            operator_nonce: state.get_operator_nonce(),
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),

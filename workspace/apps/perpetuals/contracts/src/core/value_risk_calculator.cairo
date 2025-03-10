@@ -6,9 +6,7 @@ use perpetuals::core::errors::{
 };
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::{Price, PriceMulTrait};
-use perpetuals::core::types::{
-    AssetDiffEnriched, BalanceDiff, PositionData, PositionDiffEnriched, UnchangedAssets,
-};
+use perpetuals::core::types::{PositionData, PositionDiffEnriched, UnchangedAssets};
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
@@ -240,7 +238,7 @@ mod tests {
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
-    use perpetuals::core::types::{Asset, AssetDiff};
+    use perpetuals::core::types::{Asset, AssetDiff, AssetDiffEnriched, BalanceDiff};
     use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
     use super::*;
 

@@ -8,6 +8,8 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
@@ -40,8 +42,6 @@ pub mod Core {
     };
     use starkware_utils::components::deposit::Deposit;
     use starkware_utils::components::deposit::Deposit::InternalTrait as DepositInternal;
-    use starkware_utils::components::nonce::NonceComponent;
-    use starkware_utils::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -59,7 +59,7 @@ pub mod Core {
     use starkware_utils::utils::{validate_expiration, validate_stark_signature};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
-    component!(path: NonceComponent, storage: nonce, event: NonceEvent);
+    component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
@@ -72,8 +72,8 @@ pub mod Core {
     component!(path: Positions, storage: positions, event: PositionsEvent);
 
     #[abi(embed_v0)]
-    impl NonceImpl = NonceComponent::NonceImpl<ContractState>;
-    impl NonceComponentInternalImpl = NonceComponent::InternalImpl<ContractState>;
+    impl OperatorNonceImpl =
+        OperatorNonceComponent::OperatorNonceImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl DepositImpl = Deposit::DepositImpl<ContractState>;
@@ -119,7 +119,7 @@ pub mod Core {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
-        nonce: NonceComponent::Storage,
+        operator_nonce: OperatorNonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
@@ -144,7 +144,7 @@ pub mod Core {
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
-        NonceEvent: NonceComponent::Event,
+        OperatorNonceEvent: OperatorNonceComponent::Event,
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
@@ -230,7 +230,8 @@ pub mod Core {
         ) {
             /// Validations:
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
 
             /// Execution - Deposit:
             let collateral_id = self.assets.get_collateral_id();
@@ -324,7 +325,8 @@ pub mod Core {
             salt: felt252,
         ) {
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
             let collateral_id = self.assets.get_collateral_id();
             let position = self.positions.get_position_snapshot(:position_id);
@@ -437,7 +439,8 @@ pub mod Core {
             salt: felt252,
         ) {
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
             let position = self.positions.get_position_snapshot(:position_id);
@@ -501,7 +504,8 @@ pub mod Core {
             actual_fee_b: u64,
         ) {
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
 
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
@@ -677,7 +681,8 @@ pub mod Core {
         ) {
             /// Validations:
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
 
             let liquidator_position_id = liquidator_order.position_id;
             let liquidator_position = self.positions.get_position_snapshot(liquidator_position_id);
@@ -868,7 +873,8 @@ pub mod Core {
         ) {
             /// Validations:
             self.pausable.assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
 
             let deleveraged_position = self
                 .positions
@@ -1016,16 +1022,6 @@ pub mod Core {
                 total_amount <= order_amount.abs(), fulfillment_exceeded_err(:position_id),
             );
             fulfillment_entry.write(total_amount);
-        }
-
-        /// Validates operator flows prerequisites:
-        /// - Caller has operator role.
-        /// - Operator nonce is valid.
-        /// - Assets integrity [_validate_assets_integrity].
-        fn _validate_operator_flow(ref self: ContractState, operator_nonce: u64) {
-            self.roles.only_operator();
-            self.nonce.use_checked_nonce(nonce: operator_nonce);
-            self.assets.validate_assets_integrity();
         }
 
         fn _validate_order(ref self: ContractState, order: Order) {

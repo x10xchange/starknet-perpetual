@@ -12,6 +12,8 @@ pub(crate) mod Deposit {
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::interface::{DepositStatus, IDeposit};
     use perpetuals::core::components::deposit::{errors, events};
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternalTrait;
     use perpetuals::core::types::position::PositionId;
@@ -20,8 +22,6 @@ pub(crate) mod Deposit {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
-    use starkware_utils::components::nonce::NonceComponent;
-    use starkware_utils::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -53,7 +53,7 @@ pub(crate) mod Deposit {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatortNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Positions: PositionsComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,

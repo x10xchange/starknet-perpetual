@@ -2,6 +2,9 @@ use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
+use perpetuals::core::components::operator_nonce::interface::{
+    IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
+};
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
@@ -17,7 +20,6 @@ use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSigne
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
 use starkware_utils::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
-use starkware_utils::components::nonce::interface::{INonceDispatcher, INonceDispatcherTrait};
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
@@ -218,9 +220,9 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         self.position_id_gen
     }
     fn get_nonce(self: @FlowTestState) -> u64 {
-        let dispatcher = INonceDispatcher { contract_address: *self.perpetuals_contract };
+        let dispatcher = IOperatorNonceDispatcher { contract_address: *self.perpetuals_contract };
         self.operator.set_as_caller(*self.perpetuals_contract);
-        dispatcher.nonce()
+        dispatcher.get_operator_nonce()
     }
 
     fn set_app_governor_as_caller(self: @FlowTestState) {

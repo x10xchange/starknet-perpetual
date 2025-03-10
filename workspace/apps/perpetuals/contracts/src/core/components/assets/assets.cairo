@@ -23,6 +23,8 @@ pub mod AssetsComponent {
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
@@ -38,8 +40,6 @@ pub mod AssetsComponent {
     };
     use starkware_utils::components::deposit::Deposit;
     use starkware_utils::components::deposit::Deposit::InternalTrait as DepositTrait;
-    use starkware_utils::components::nonce::NonceComponent;
-    use starkware_utils::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
@@ -96,7 +96,7 @@ pub mod AssetsComponent {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Deposits: Deposit::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of IAssets<ComponentState<TContractState>> {
@@ -334,7 +334,8 @@ pub mod AssetsComponent {
             funding_ticks: Span<FundingTick>,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
 
             assert(
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
@@ -387,7 +388,8 @@ pub mod AssetsComponent {
             signed_prices: Span<SignedPrice>,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
 
             self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
 
@@ -509,7 +511,7 @@ pub mod AssetsComponent {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatortNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
@@ -672,7 +674,7 @@ pub mod AssetsComponent {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatortNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
@@ -795,12 +797,6 @@ pub mod AssetsComponent {
                 self.emit(events::AssetActivated { asset_id });
             }
             self.emit(events::PriceTick { asset_id, price });
-        }
-
-        fn _validate_operator_flow(ref self: ComponentState<TContractState>, operator_nonce: u64) {
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
         }
 
         fn _validate_oracle_signature(

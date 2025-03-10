@@ -6,6 +6,8 @@ pub(crate) mod Positions {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT,
         INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
@@ -33,14 +35,11 @@ pub(crate) mod Positions {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use starkware_utils::components::nonce::NonceComponent;
-    use starkware_utils::components::nonce::NonceComponent::InternalTrait as NonceInternal;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
@@ -76,7 +75,7 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
@@ -151,7 +150,8 @@ pub(crate) mod Positions {
             owner_account: ContractAddress,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
@@ -233,7 +233,8 @@ pub(crate) mod Positions {
             expiration: Timestamp,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self.get_position_mut(:position_id);
             let public_key = position.get_owner_public_key();
@@ -320,7 +321,8 @@ pub(crate) mod Positions {
             expiration: Timestamp,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
-            self._validate_operator_flow(:operator_nonce);
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self.get_position_mut(:position_id);
             let owner_account = position.get_owner_account();
@@ -355,7 +357,7 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
@@ -505,7 +507,7 @@ pub(crate) mod Positions {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Assets: AssetsComponent::HasComponent<TContractState>,
-        impl Nonce: NonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
@@ -576,12 +578,6 @@ pub(crate) mod Positions {
 
             let position_change_result = evaluate_position(:position_data);
             position_change_result.position_state_after_change
-        }
-
-        fn _validate_operator_flow(ref self: ComponentState<TContractState>, operator_nonce: u64) {
-            get_dep_component!(@self, Roles).only_operator();
-            let mut nonce = get_dep_component_mut!(ref self, Nonce);
-            nonce.use_checked_nonce(nonce: operator_nonce);
         }
     }
 }
