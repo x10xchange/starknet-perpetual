@@ -299,9 +299,9 @@ pub mod AssetsComponent {
                 INVALID_FUNDING_TICK_LEN,
             );
 
-            let now = Time::now();
-            let mut prev_synthetic_id: AssetId = Zero::zero();
             let last_funding_tick = self.last_funding_tick.read();
+            let time_diff: u64 = (Time::now().sub(other: last_funding_tick)).into();
+            let mut prev_synthetic_id: AssetId = Zero::zero();
             let max_funding_rate = self.max_funding_rate.read();
             for funding_tick in funding_ticks {
                 let synthetic_id = *funding_tick.asset_id;
@@ -312,15 +312,14 @@ pub mod AssetsComponent {
                 );
                 self
                     ._process_funding_tick(
-                        :now,
-                        :last_funding_tick,
+                        :time_diff,
                         :max_funding_rate,
                         new_funding_index: *funding_tick.funding_index,
                         :synthetic_id,
                     );
                 prev_synthetic_id = synthetic_id;
             }
-            self.last_funding_tick.write(now);
+            self.last_funding_tick.write(Time::now());
         }
 
         /// Price tick for an asset to update the price of the asset.
@@ -662,8 +661,7 @@ pub mod AssetsComponent {
 
         fn _process_funding_tick(
             ref self: ComponentState<TContractState>,
-            now: Timestamp,
-            last_funding_tick: Timestamp,
+            time_diff: u64,
             max_funding_rate: u32,
             new_funding_index: FundingIndex,
             synthetic_id: AssetId,
@@ -671,7 +669,6 @@ pub mod AssetsComponent {
             let mut synthetic_timely_data = self._get_synthetic_timely_data(:synthetic_id);
             let last_funding_index = synthetic_timely_data.funding_index;
             let index_diff: i64 = (new_funding_index - last_funding_index).into();
-            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
             validate_funding_rate(
                 :synthetic_id,
                 index_diff: index_diff.abs(),
