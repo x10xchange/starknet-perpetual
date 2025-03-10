@@ -861,14 +861,74 @@ pub mod Core {
                 );
 
             /// Execution:
+            let deleveraged_position = self
+                .positions
+                .get_position_snapshot(position_id: deleveraged_position_id);
+            let deleveraged_position_diff = self
+                ._create_position_diff_from_asset_amounts(
+                    position: deleveraged_position,
+                    effective_quote: deleveraged_quote_amount.into(),
+                    base_id: deleveraged_base_asset_id,
+                    base_amount: deleveraged_base_amount.into(),
+                );
+            let deleverager_position = self
+                .positions
+                .get_position_snapshot(position_id: deleverager_position_id);
+
+            let deleverager_position_diff = self
+                ._create_position_diff_from_asset_amounts(
+                    position: deleverager_position,
+                    // Passing the negative of actual amounts to deleverager as it is linked to
+                    // deleveraged.
+                    effective_quote: -deleveraged_quote_amount.into(),
+                    base_id: deleveraged_base_asset_id,
+                    base_amount: -deleveraged_base_amount.into(),
+                );
+
+            /// Validations - Fundamentals:
+            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
+                // If the synthetic asset is active, the position should be deleveragable
+                // and changed to fair deleverage and healthier.
+                AssetStatus::ACTIVE => {
+                    self
+                        ._validate_deleveraged_position(
+                            position_id: deleveraged_position_id,
+                            position: deleveraged_position,
+                            position_diff: deleveraged_position_diff,
+                            is_active_asset: true,
+                        )
+                },
+                // In case of inactive synthetic asset, the position should changed to fair
+                // deleverage and healthy or healthier.
+                AssetStatus::INACTIVE => {
+                    self
+                        ._validate_deleveraged_position(
+                            position_id: deleveraged_position_id,
+                            position: deleveraged_position,
+                            position_diff: deleveraged_position_diff,
+                            is_active_asset: false,
+                        )
+                },
+                // In case of pending synthetic asset, error should be thrown.
+                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
+            }
             self
-                ._execute_deleverage(
-                    :deleveraged_position_id,
-                    :deleverager_position_id,
-                    :deleveraged_base_asset_id,
-                    :deleveraged_base_amount,
-                    :deleveraged_quote_asset_id,
-                    :deleveraged_quote_amount,
+                ._validate_healthy_or_healthier_position(
+                    position_id: deleverager_position_id,
+                    position: deleverager_position,
+                    position_diff: deleverager_position_diff,
+                );
+
+            // Apply diffs
+            self
+                .positions
+                .apply_diff(
+                    position_id: deleveraged_position_id, position_diff: deleveraged_position_diff,
+                );
+            self
+                .positions
+                .apply_diff(
+                    position_id: deleverager_position_id, position_diff: deleverager_position_diff,
                 );
 
             self
@@ -1111,82 +1171,6 @@ pub mod Core {
                 );
         }
 
-        fn _execute_deleverage(
-            ref self: ContractState,
-            deleveraged_position_id: PositionId,
-            deleverager_position_id: PositionId,
-            deleveraged_base_asset_id: AssetId,
-            deleveraged_base_amount: i64,
-            deleveraged_quote_asset_id: AssetId,
-            deleveraged_quote_amount: i64,
-        ) {
-            let deleveraged_position = self
-                .positions
-                .get_position_snapshot(position_id: deleveraged_position_id);
-            let deleveraged_position_diff = self
-                ._create_position_diff_from_asset_amounts(
-                    position: deleveraged_position,
-                    effective_quote: deleveraged_quote_amount.into(),
-                    base_id: deleveraged_base_asset_id,
-                    base_amount: deleveraged_base_amount.into(),
-                );
-            let deleverager_position = self
-                .positions
-                .get_position_snapshot(position_id: deleverager_position_id);
-
-            let deleverager_position_diff = self
-                ._create_position_diff_from_asset_amounts(
-                    position: deleverager_position,
-                    // Passing the negative of actual amounts to deleverager as it is linked to
-                    // deleveraged.
-                    effective_quote: -deleveraged_quote_amount.into(),
-                    base_id: deleveraged_base_asset_id,
-                    base_amount: -deleveraged_base_amount.into(),
-                );
-
-            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
-                // If the synthetic asset is active, the position should be deleveragable
-                // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVE => {
-                    self
-                        ._validate_deleveraged_position(
-                            position_id: deleveraged_position_id,
-                            position: deleveraged_position,
-                            position_diff: deleveraged_position_diff,
-                        )
-                },
-                // In case of inactive synthetic asset, the position should change to healthy or
-                // healthier.
-                AssetStatus::INACTIVE => {
-                    self
-                        ._validate_healthy_or_healthier_position(
-                            position_id: deleveraged_position_id,
-                            position: deleveraged_position,
-                            position_diff: deleveraged_position_diff,
-                        )
-                },
-                // In case of pending synthetic asset, error should be thrown.
-                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
-            }
-            self
-                ._validate_healthy_or_healthier_position(
-                    position_id: deleverager_position_id,
-                    position: deleverager_position,
-                    position_diff: deleverager_position_diff,
-                );
-
-            self
-                .positions
-                .apply_diff(
-                    position_id: deleveraged_position_id, position_diff: deleveraged_position_diff,
-                );
-            self
-                .positions
-                .apply_diff(
-                    position_id: deleverager_position_id, position_diff: deleverager_position_diff,
-                );
-        }
-
         fn _validate_order_signature(
             self: @ContractState,
             position: StoragePath<Position>,
@@ -1242,6 +1226,7 @@ pub mod Core {
             position_id: PositionId,
             position: StoragePath<Position>,
             position_diff: PositionDiff,
+            is_active_asset: bool,
         ) {
             let position_unchanged_assets = self
                 .positions
@@ -1252,7 +1237,10 @@ pub mod Core {
                 .enrich_position_diff(position_diff: position_diff);
 
             deleveraged_position_validations(
-                :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
+                :position_id,
+                unchanged_assets: position_unchanged_assets,
+                :position_diff_enriched,
+                :is_active_asset,
             );
         }
     }
