@@ -41,8 +41,8 @@ use perpetuals::tests::event_test_utils::{
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
-    check_synthetic_asset, deposit_hash, init_by_dispatcher, init_position,
-    init_position_with_owner, initialized_contract_state, set_roles, setup_state_with_active_asset,
+    check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
+    initialized_contract_state, set_roles, setup_state_with_active_asset,
     setup_state_with_pending_asset, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
@@ -50,6 +50,7 @@ use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
     StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
 };
+use starkware_utils::components::deposit::Deposit::deposit_hash;
 use starkware_utils::components::deposit::interface::{DepositStatus, IDeposit};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
@@ -98,9 +99,10 @@ fn test_constructor() {
 #[feature("safe_dispatcher")]
 fn test_caller_failures() {
     // Setup:
-    let (cfg, state, _) = init_by_dispatcher();
-
-    let dispatcher = ICoreSafeDispatcher { contract_address: state.address };
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
+    let dispatcher = ICoreSafeDispatcher { contract_address };
 
     let result = dispatcher
         .process_deposit(
@@ -209,7 +211,7 @@ fn test_caller_failures() {
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
-    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
+    let dispatcher = IAssetsSafeDispatcher { contract_address };
 
     let result = dispatcher
         .register_collateral(
@@ -255,7 +257,7 @@ fn test_caller_failures() {
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
-    let dispatcher = IPositionsSafeDispatcher { contract_address: state.address };
+    let dispatcher = IPositionsSafeDispatcher { contract_address };
 
     let result = dispatcher
         .new_position(
@@ -341,8 +343,10 @@ fn test_successful_register_collateral() {
 #[feature("safe_dispatcher")]
 fn test_register_collateral_failures() {
     // Setup:
-    let (cfg, state, _) = init_by_dispatcher();
-    let dispatcher = IAssetsSafeDispatcher { contract_address: state.address };
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
+    let dispatcher = IAssetsSafeDispatcher { contract_address };
 
     // Parameters:
     let quantum = COLLATERAL_QUANTUM;
@@ -350,7 +354,7 @@ fn test_register_collateral_failures() {
 
     // Collateral id already register as synthetic.
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher
         .add_synthetic_asset(
             asset_id: synthetic_id,
@@ -362,24 +366,24 @@ fn test_register_collateral_failures() {
         )
         .unwrap();
 
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     let result = dispatcher.register_collateral(asset_id: synthetic_id, :token_address, :quantum);
     assert_panic_with_felt_error(:result, expected_error: ASSET_REGISTERED_AS_SYNTHETIC);
 
     // Register collateral for the first time.
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher
         .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum)
         .unwrap();
 
     // Register the same collateral asset.
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     let result = dispatcher
         .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
     assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);
 
     // Register new collateral asset.
-    cheat_caller_address_once(contract_address: state.address, caller_address: cfg.app_governor);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     let result = dispatcher
         .register_collateral(asset_id: cfg.collateral_cfg.collateral_id, :token_address, :quantum);
     assert_panic_with_felt_error(:result, expected_error: COLLATERAL_ALREADY_REGISTERED);

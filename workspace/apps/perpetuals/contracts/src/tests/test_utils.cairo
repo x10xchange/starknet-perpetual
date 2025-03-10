@@ -1,7 +1,6 @@
 use Core::InternalCoreFunctionsTrait;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::Zero;
-use core::pedersen::PedersenTrait;
 use core::poseidon::PoseidonTrait;
 use openzeppelin::presets::interfaces::{
     AccountUpgradeableABIDispatcher, AccountUpgradeableABIDispatcherTrait,
@@ -14,7 +13,6 @@ use perpetuals::core::components::positions::Positions::InternalTrait as Positio
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
-use perpetuals::core::interface::ICoreSafeDispatcher;
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::PositionId;
@@ -33,23 +31,9 @@ use starkware_utils::components::roles::interface::{
 use starkware_utils::constants::{TWO_POW_32, TWO_POW_40};
 use starkware_utils::iterable_map::*;
 use starkware_utils::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
+use starkware_utils::types::Signature;
 use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
-use starkware_utils::types::{HashType, Signature};
-
-
-// Structs
-
-#[derive(Drop, Copy)]
-pub struct CoreConfig {}
-
-
-/// The `PerpetualsInitState` struct represents the state of the Core contract.
-/// It includes the contract address
-#[derive(Drop, Copy)]
-pub struct PerpetualsInitState {
-    pub address: ContractAddress,
-}
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.
@@ -154,7 +138,7 @@ pub struct PerpetualsInitConfig {
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: @PerpetualsInitConfig) -> PerpetualsInitState {
+    fn deploy(self: @PerpetualsInitConfig) -> ContractAddress {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -168,12 +152,7 @@ pub impl CoreImpl of CoreTrait {
 
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
-        let core = PerpetualsInitState { address: core_contract_address };
-        core
-    }
-
-    fn safe_dispatcher(self: PerpetualsInitState) -> ICoreSafeDispatcher {
-        ICoreSafeDispatcher { contract_address: self.address }
+        core_contract_address
     }
 }
 
@@ -453,47 +432,20 @@ pub fn validate_balance(token_state: TokenState, address: ContractAddress, expec
     assert!(balance_to_check == expected_balance);
 }
 
-pub fn deposit_hash(
-    depositor: ContractAddress,
-    beneficiary: u32,
-    asset_id: felt252,
-    quantized_amount: u128,
-    salt: felt252,
-) -> HashType {
-    PedersenTrait::new(base: depositor.into())
-        .update_with(value: beneficiary)
-        .update_with(value: asset_id)
-        .update_with(value: quantized_amount)
-        .update_with(value: salt)
-        .finalize()
-}
-
-
 // Utils for dispatcher usage.
 
-pub fn set_roles_by_dispatcher(state: @PerpetualsInitState, cfg: @PerpetualsInitConfig) {
-    let contract_address = *state.address;
+pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @PerpetualsInitConfig) {
     let dispatcher = IRolesDispatcher { contract_address };
-
-    cheat_caller_address_once(
-        contract_address: contract_address, caller_address: *cfg.governance_admin,
-    );
+    cheat_caller_address_once(:contract_address, caller_address: *cfg.governance_admin);
     dispatcher.register_app_role_admin(account: *cfg.app_role_admin);
-    cheat_caller_address_once(
-        contract_address: contract_address, caller_address: *cfg.app_role_admin,
-    );
+    cheat_caller_address_once(:contract_address, caller_address: *cfg.app_role_admin);
     dispatcher.register_app_governor(account: *cfg.app_governor);
-    cheat_caller_address_once(
-        contract_address: contract_address, caller_address: *cfg.app_role_admin,
-    );
+    cheat_caller_address_once(:contract_address, caller_address: *cfg.app_role_admin);
     dispatcher.register_operator(account: *cfg.operator);
 }
 
-pub fn init_by_dispatcher() -> (PerpetualsInitConfig, PerpetualsInitState, ICoreSafeDispatcher) {
-    let cfg: PerpetualsInitConfig = Default::default();
-    let state = CoreTrait::deploy(@cfg);
-    let dispatcher = state.safe_dispatcher();
-    set_roles_by_dispatcher(state: @state, cfg: @cfg);
-
-    (cfg, state, dispatcher)
+pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
+    let contract_address = cfg.deploy();
+    set_roles_by_dispatcher(:contract_address, :cfg);
+    contract_address
 }
