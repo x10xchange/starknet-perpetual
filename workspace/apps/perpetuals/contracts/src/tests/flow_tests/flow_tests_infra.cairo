@@ -11,6 +11,7 @@ use perpetuals::core::components::positions::interface::{
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
+use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::{PRICE_SCALE, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
@@ -171,6 +172,11 @@ impl AccountImpl of AccountTrait {
     fn sign_message(self: @Account, message: felt252) -> Signature {
         let (r, s) = (*self).key_pair.sign(message).unwrap();
         array![r, s].span()
+    }
+
+    fn get_order_signature(self: @Account, order: Order, public_key: felt252) -> Signature {
+        let hash = order.get_message_hash(public_key);
+        self.sign_message(hash)
     }
 }
 
@@ -556,6 +562,62 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     ) {
         let transfer_info = self.transfer_request(:user, :recipient, :amount, :expiration);
         self.transfer(transfer_info);
+    }
+
+    fn create_order(
+        ref self: FlowTestState,
+        user: User,
+        base_amount: i64,
+        base_asset_id: AssetId,
+        quote_amount: i64,
+        fee_amount: u64,
+        expiration: Timestamp,
+    ) -> Order {
+        let salt = self.generate_salt();
+        Order {
+            position_id: user.position_id,
+            base_asset_id,
+            base_amount,
+            quote_asset_id: constants::COLLATERAL_ASSET_ID(),
+            quote_amount,
+            fee_asset_id: constants::COLLATERAL_ASSET_ID(),
+            fee_amount,
+            expiration,
+            salt,
+        }
+    }
+
+    fn trade(
+        ref self: FlowTestState,
+        user_a: User,
+        user_b: User,
+        order_a: Order,
+        order_b: Order,
+        base: i64,
+        quote: i64,
+        fee: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        let signature_a = user_a
+            .account
+            .get_order_signature(order: order_a, public_key: user_a.account.key_pair.public_key);
+        let signature_b = user_b
+            .account
+            .get_order_signature(order: order_b, public_key: user_b.account.key_pair.public_key);
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .trade(
+                :operator_nonce,
+                :signature_a,
+                :signature_b,
+                :order_a,
+                :order_b,
+                actual_amount_base_a: base,
+                actual_amount_quote_a: quote,
+                actual_fee_a: fee,
+                actual_fee_b: fee,
+            );
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
