@@ -200,8 +200,8 @@ fn calculate_position_tvtr_change(
     let mut total_risk_after = unchanged_assets_risk;
 
     if let Option::Some(asset_diff) = position_diff_enriched.synthetic {
-        let asset_value_before = asset_diff.price.mul(rhs: asset_diff.asset.balance.before);
-        let asset_value_after = asset_diff.price.mul(rhs: asset_diff.asset.balance.after);
+        let asset_value_before = asset_diff.price.mul(rhs: asset_diff.balance_before);
+        let asset_value_after = asset_diff.price.mul(rhs: asset_diff.balance_after);
 
         total_value_before += asset_value_before;
         total_value_after += asset_value_after;
@@ -228,10 +228,8 @@ fn calculate_position_tvtr_change(
 
 #[cfg(test)]
 mod tests {
-    use perpetuals::core::types::asset::{
-        Asset, AssetDiff, AssetDiffEnriched, AssetId, AssetIdTrait,
-    };
-    use perpetuals::core::types::balance::{BalanceDiff, BalanceTrait};
+    use perpetuals::core::types::asset::{Asset, AssetDiffEnriched, AssetId, AssetIdTrait};
+    use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
     use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
     use super::*;
@@ -299,10 +297,9 @@ mod tests {
         };
         let position_data = array![].span();
         let asset_diff = AssetDiffEnriched {
-            asset: AssetDiff {
-                id: asset.id,
-                balance: BalanceDiff { before: asset.balance, after: BalanceTrait::new(value: 80) },
-            },
+            asset_id: asset.id,
+            balance_before: asset.balance,
+            balance_after: BalanceTrait::new(value: 80),
             price: asset.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
@@ -351,10 +348,9 @@ mod tests {
         };
         let position_data = array![].span();
         let asset_diff = AssetDiffEnriched {
-            asset: AssetDiff {
-                id: asset.id,
-                balance: BalanceDiff { before: asset.balance, after: BalanceTrait::new(value: 20) },
-            },
+            asset_id: asset.id,
+            balance_before: asset.balance,
+            balance_after: BalanceTrait::new(value: 20),
             price: asset.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),
@@ -428,12 +424,9 @@ mod tests {
 
         // Create a position diff with two assets diff.
         let asset_diff_1 = AssetDiffEnriched {
-            asset: AssetDiff {
-                id: asset_1.id,
-                balance: BalanceDiff {
-                    before: asset_1.balance, after: BalanceTrait::new(value: 80),
-                },
-            },
+            asset_id: asset_1.id,
+            balance_before: asset_1.balance,
+            balance_after: BalanceTrait::new(value: 80),
             price: asset_1.price,
             risk_factor_before: RISK_FACTOR_1(),
             risk_factor_after: RISK_FACTOR_1(),

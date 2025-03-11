@@ -1,5 +1,5 @@
 use core::num::traits::zero::Zero;
-use perpetuals::core::types::balance::{Balance, BalanceDiff};
+use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::price::Price;
 use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
 
@@ -27,14 +27,10 @@ pub struct Asset {
 }
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
-pub struct AssetDiff {
-    pub id: AssetId,
-    pub balance: BalanceDiff,
-}
-
-#[derive(Copy, Debug, Default, Drop, Serde)]
 pub struct AssetDiffEnriched {
-    pub asset: AssetDiff,
+    pub asset_id: AssetId,
+    pub balance_before: Balance,
+    pub balance_after: Balance,
     pub price: Price,
     pub risk_factor_before: FixedTwoDecimal,
     pub risk_factor_after: FixedTwoDecimal,

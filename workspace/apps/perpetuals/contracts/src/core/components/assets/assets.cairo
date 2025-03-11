@@ -27,10 +27,9 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
-    use perpetuals::core::types::asset::{AssetDiffEnriched, AssetId, AssetStatus};
+    use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::position::{PositionDiff, PositionDiffEnriched};
     use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
     use starknet::ContractAddress;
     use starknet::storage::{
@@ -551,26 +550,6 @@ pub mod AssetsComponent {
             } else {
                 panic_with_felt252(NOT_SYNTHETIC)
             }
-        }
-
-        fn enrich_position_diff(
-            self: @ComponentState<TContractState>, position_diff: PositionDiff,
-        ) -> PositionDiffEnriched {
-            let mut synthetic = Option::None;
-            if let Option::Some(asset) = position_diff.synthetic {
-                let price = self.get_synthetic_price(asset.id);
-                let risk_factor_before = self
-                    .get_synthetic_risk_factor(asset.id, asset.balance.before, price);
-                let risk_factor_after = self
-                    .get_synthetic_risk_factor(asset.id, asset.balance.after, price);
-
-                let asset_diff_enriched = AssetDiffEnriched {
-                    asset, price, risk_factor_before, risk_factor_after,
-                };
-                synthetic = Option::Some(asset_diff_enriched);
-            }
-
-            PositionDiffEnriched { collateral: position_diff.collateral, synthetic }
         }
 
         fn get_funding_index(

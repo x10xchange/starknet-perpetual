@@ -26,9 +26,13 @@ pub mod Core {
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
-    use perpetuals::core::types::asset::{AssetId, AssetStatus};
+    use perpetuals::core::types::asset::{AssetDiffEnriched, AssetId, AssetStatus};
+    use perpetuals::core::types::balance::BalanceDiff;
     use perpetuals::core::types::order::{Order, OrderTrait};
-    use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
+    use perpetuals::core::types::position::{
+        Position, PositionDiff, PositionDiffEnriched, PositionId, PositionTrait,
+        create_collateral_position_diff, create_position_diff,
+    };
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::value_risk_calculator::{
@@ -295,10 +299,7 @@ pub mod Core {
                 );
 
             /// Validations - Fundamentals:
-            let position = self.positions.get_position_snapshot(:position_id);
-            let position_diff = self
-                .positions
-                .create_collateral_position_diff(:position, diff: -(amount.into()));
+            let position_diff = create_collateral_position_diff(collateral_diff: -amount.into());
             self._validate_healthy_or_healthier_position(:position_id, :position, :position_diff);
 
             self.positions.apply_diff(:position_id, :position_diff);
@@ -504,31 +505,23 @@ pub mod Core {
                 );
 
             /// Positions' Diffs:
-            let position_diff_a = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: position_a,
-                    effective_quote: actual_amount_quote_a.into() - actual_fee_a.into(),
-                    base_id: order_a.base_asset_id,
-                    base_amount: actual_amount_base_a.into(),
-                );
-            let position_diff_b = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: position_b,
-                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    effective_quote: -actual_amount_quote_a.into() - actual_fee_b.into(),
-                    base_id: order_b.base_asset_id,
-                    base_amount: -actual_amount_base_a.into(),
-                );
+            let position_diff_a = create_position_diff(
+                collateral_diff: actual_amount_quote_a.into() - actual_fee_a.into(),
+                synthetic_id: order_a.base_asset_id,
+                synthetic_diff: actual_amount_base_a.into(),
+            );
+
+            // Passing the negative of actual amounts to order_b as it is linked to order_a.
+            let position_diff_b = create_position_diff(
+                collateral_diff: -actual_amount_quote_a.into() - actual_fee_b.into(),
+                synthetic_id: order_b.base_asset_id,
+                synthetic_diff: -actual_amount_base_a.into(),
+            );
 
             // Assuming fee_asset_id is the same for both orders.
-            let fee_position_diff = self
-                .positions
-                .create_collateral_position_diff(
-                    position: self.positions.get_position_snapshot(FEE_POSITION),
-                    diff: (actual_fee_a + actual_fee_b).into(),
-                );
+            let fee_position_diff = create_collateral_position_diff(
+                collateral_diff: (actual_fee_a + actual_fee_b).into(),
+            );
 
             /// Validations - Fundamentals:
             self
@@ -676,39 +669,25 @@ pub mod Core {
                 );
 
             /// Execution:
-            let liquidated_position_diff = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: self
-                        .positions
-                        .get_position_snapshot(position_id: liquidated_order.position_id),
-                    effective_quote: actual_amount_quote_liquidated.into()
-                        - liquidated_fee_amount.into(),
-                    base_id: liquidated_order.base_asset_id,
-                    base_amount: actual_amount_base_liquidated.into(),
-                );
-            let liquidator_position_diff = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: liquidator_position,
-                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    effective_quote: -actual_amount_quote_liquidated.into()
-                        - actual_liquidator_fee.into(),
-                    base_id: liquidator_order.base_asset_id,
-                    base_amount: -actual_amount_base_liquidated.into(),
-                );
-            let insurance_position_diff = self
-                .positions
-                .create_collateral_position_diff(
-                    position: self.positions.get_position_snapshot(INSURANCE_FUND_POSITION),
-                    diff: liquidated_fee_amount.into(),
-                );
-            let fee_position_diff = self
-                .positions
-                .create_collateral_position_diff(
-                    position: self.positions.get_position_snapshot(FEE_POSITION),
-                    diff: actual_liquidator_fee.into(),
-                );
+            let liquidated_position_diff = create_position_diff(
+                collateral_diff: actual_amount_quote_liquidated.into()
+                    - liquidated_fee_amount.into(),
+                synthetic_id: liquidator_order.base_asset_id,
+                synthetic_diff: actual_amount_base_liquidated.into(),
+            );
+            // Passing the negative of actual amounts to order_b as it is linked to order_a.
+            let liquidator_position_diff = create_position_diff(
+                collateral_diff: -actual_amount_quote_liquidated.into()
+                    - actual_liquidator_fee.into(),
+                synthetic_id: liquidator_order.base_asset_id,
+                synthetic_diff: -actual_amount_base_liquidated.into(),
+            );
+            let insurance_position_diff = create_collateral_position_diff(
+                collateral_diff: liquidated_fee_amount.into(),
+            );
+            let fee_position_diff = create_collateral_position_diff(
+                collateral_diff: actual_liquidator_fee.into(),
+            );
 
             let liquidated_position = self
                 .positions
@@ -824,31 +803,18 @@ pub mod Core {
                 );
 
             /// Execution:
-            let deleveraged_position = self
-                .positions
-                .get_position_snapshot(position_id: deleveraged_position_id);
-            let deleveraged_position_diff = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: deleveraged_position,
-                    effective_quote: deleveraged_quote_amount.into(),
-                    base_id: deleveraged_base_asset_id,
-                    base_amount: deleveraged_base_amount.into(),
-                );
-            let deleverager_position = self
-                .positions
-                .get_position_snapshot(position_id: deleverager_position_id);
-
-            let deleverager_position_diff = self
-                .positions
-                .create_position_diff_from_asset_amounts(
-                    position: deleverager_position,
-                    // Passing the negative of actual amounts to deleverager as it is linked to
-                    // deleveraged.
-                    effective_quote: -deleveraged_quote_amount.into(),
-                    base_id: deleveraged_base_asset_id,
-                    base_amount: -deleveraged_base_amount.into(),
-                );
+            let deleveraged_position_diff = create_position_diff(
+                collateral_diff: deleveraged_quote_amount.into(),
+                synthetic_id: deleveraged_base_asset_id,
+                synthetic_diff: deleveraged_base_amount.into(),
+            );
+            // Passing the negative of actual amounts to deleverager as it is linked to
+            // deleveraged.
+            let deleverager_position_diff = create_position_diff(
+                collateral_diff: -deleveraged_quote_amount.into(),
+                synthetic_id: deleveraged_base_asset_id,
+                synthetic_diff: -deleveraged_base_amount.into(),
+            );
 
             /// Validations - Fundamentals:
             match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
@@ -920,15 +886,13 @@ pub mod Core {
             amount: u64,
         ) {
             // Parameters
-            let position = self.positions.get_position_snapshot(:position_id);
-            let position_diff_sender = self
-                .positions
-                .create_collateral_position_diff(:position, diff: -(amount.into()));
+            let position_diff_sender = create_collateral_position_diff(
+                collateral_diff: -amount.into(),
+            );
 
-            let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
-            let position_diff_recipient = self
-                .positions
-                .create_collateral_position_diff(position: recipient_position, diff: amount.into());
+            let position_diff_recipient = create_collateral_position_diff(
+                collateral_diff: amount.into(),
+            );
 
             // Execute transfer
             self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
@@ -938,6 +902,7 @@ pub mod Core {
                 .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
 
             /// Validations - Fundamentals:
+            let position = self.positions.get_position_snapshot(:position_id);
             self
                 ._validate_healthy_or_healthier_position(
                     :position_id, :position, position_diff: position_diff_sender,
@@ -1110,11 +1075,9 @@ pub mod Core {
         ) {
             let position_unchanged_assets = self
                 .positions
-                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+                .get_position_unchanged_assets(:position, :position_diff);
 
-            let position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff);
+            let position_diff_enriched = self.enrich_position_diff(:position, :position_diff);
 
             validate_position_is_healthy_or_healthier(
                 :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
@@ -1129,11 +1092,9 @@ pub mod Core {
         ) {
             let position_unchanged_assets = self
                 .positions
-                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+                .get_position_unchanged_assets(:position, :position_diff);
 
-            let position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff);
+            let position_diff_enriched = self.enrich_position_diff(:position, :position_diff);
 
             liquidated_position_validations(
                 :position_id, unchanged_assets: position_unchanged_assets, :position_diff_enriched,
@@ -1149,11 +1110,9 @@ pub mod Core {
         ) {
             let position_unchanged_assets = self
                 .positions
-                .get_position_unchanged_assets(position: position, position_diff: position_diff);
+                .get_position_unchanged_assets(:position, position_diff: position_diff);
 
-            let position_diff_enriched = self
-                .assets
-                .enrich_position_diff(position_diff: position_diff);
+            let position_diff_enriched = self.enrich_position_diff(:position, :position_diff);
 
             deleveraged_position_validations(
                 :position_id,
@@ -1161,6 +1120,39 @@ pub mod Core {
                 :position_diff_enriched,
                 :is_active_asset,
             );
+        }
+
+        fn enrich_position_diff(
+            self: @ContractState, position: StoragePath<Position>, position_diff: PositionDiff,
+        ) -> PositionDiffEnriched {
+            let mut synthetic = Option::None;
+            if let Option::Some((synthetic_id, diff)) = position_diff.synthetic {
+                let balance_before = self.positions.get_synthetic_balance(:position, :synthetic_id);
+                let balance_after = balance_before + diff;
+                let price = self.assets.get_synthetic_price(synthetic_id);
+                let risk_factor_before = self
+                    .assets
+                    .get_synthetic_risk_factor(synthetic_id, balance_before, price);
+                let risk_factor_after = self
+                    .assets
+                    .get_synthetic_risk_factor(synthetic_id, balance_after, price);
+
+                let asset_diff_enriched = AssetDiffEnriched {
+                    asset_id: synthetic_id,
+                    balance_before,
+                    balance_after,
+                    price,
+                    risk_factor_before,
+                    risk_factor_after,
+                };
+                synthetic = Option::Some(asset_diff_enriched);
+            }
+
+            let before = self.positions.get_collateral_provisional_balance(:position);
+            let after = before + position_diff.collateral;
+            let collateral = BalanceDiff { before: before, after };
+
+            PositionDiffEnriched { collateral, synthetic }
         }
     }
 }

@@ -1,5 +1,5 @@
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-use perpetuals::core::types::asset::{Asset, AssetDiff, AssetDiffEnriched, AssetId};
+use perpetuals::core::types::asset::{Asset, AssetDiffEnriched, AssetId};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
@@ -27,8 +27,19 @@ pub struct PositionId {
 
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiff {
-    pub collateral: BalanceDiff,
-    pub synthetic: Option<AssetDiff>,
+    pub collateral: Balance,
+    pub synthetic: Option<(AssetId, Balance)>,
+}
+
+pub fn create_position_diff(
+    collateral_diff: Balance, synthetic_id: AssetId, synthetic_diff: Balance,
+) -> PositionDiff {
+    PositionDiff {
+        collateral: collateral_diff, synthetic: Option::Some((synthetic_id, synthetic_diff)),
+    }
+}
+pub fn create_collateral_position_diff(collateral_diff: Balance) -> PositionDiff {
+    PositionDiff { collateral: collateral_diff, synthetic: Option::None }
 }
 
 #[derive(Copy, Debug, Drop, Serde, Default)]

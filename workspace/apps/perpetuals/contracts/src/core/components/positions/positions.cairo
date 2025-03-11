@@ -18,8 +18,8 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::synthetic::SyntheticTrait;
-    use perpetuals::core::types::asset::{Asset, AssetDiff, AssetId};
-    use perpetuals::core::types::balance::{Balance, BalanceDiff};
+    use perpetuals::core::types::asset::{Asset, AssetId};
+    use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
         POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
@@ -43,7 +43,6 @@ pub(crate) mod Positions {
     use starkware_utils::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::span_utils::contains;
     use starkware_utils::types::time::time::Timestamp;
     use starkware_utils::types::{PublicKey, Signature};
     use starkware_utils::utils::{AddToStorage, validate_expiration};
@@ -392,47 +391,15 @@ pub(crate) mod Positions {
             position_diff: PositionDiff,
         ) {
             let position_mut = self.get_position_mut(:position_id);
-            let collateral_diff = position_diff.collateral.after - position_diff.collateral.before;
-            position_mut.collateral_balance.add_and_write(collateral_diff);
+            position_mut.collateral_balance.add_and_write(position_diff.collateral);
 
-            if let Option::Some(diff) = position_diff.synthetic {
-                let synthetic_id = diff.id;
+            if let Option::Some((synthetic_id, synthetic_diff)) = position_diff.synthetic {
                 self
                     ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, new_balance: diff.balance.after,
+                        position: position_mut, :synthetic_id, :synthetic_diff,
                     );
             };
         }
-
-        fn create_collateral_position_diff(
-            self: @ComponentState<TContractState>, position: StoragePath<Position>, diff: Balance,
-        ) -> PositionDiff {
-            PositionDiff {
-                collateral: self._compute_collateral_diff(:position, :diff),
-                synthetic: Option::None,
-            }
-        }
-
-        fn create_position_diff_from_asset_amounts(
-            self: @ComponentState<TContractState>,
-            position: StoragePath<Position>,
-            effective_quote: Balance,
-            base_id: AssetId,
-            base_amount: Balance,
-        ) -> PositionDiff {
-            // Collateral asset.
-            let collateral = self._compute_collateral_diff(:position, diff: effective_quote);
-
-            // Synthetic asset.
-            let before = self.get_synthetic_balance(:position, synthetic_id: base_id);
-            let after = before + base_amount;
-            let synthetic = Option::Some(
-                AssetDiff { id: base_id, balance: BalanceDiff { before, after } },
-            );
-
-            PositionDiff { collateral, synthetic }
-        }
-
 
         fn get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
@@ -490,7 +457,7 @@ pub(crate) mod Positions {
             let assets = get_dep_component!(self, Assets);
             let mut position_data = array![];
 
-            if position_diff.collateral.before == position_diff.collateral.after {
+            if position_diff.collateral.is_zero() {
                 let collateral_id = assets.get_collateral_id();
                 let balance = self.get_collateral_provisional_balance(position);
                 let asset = Asset {
@@ -498,15 +465,14 @@ pub(crate) mod Positions {
                 };
                 position_data.append(asset);
             }
-            let mut synthetics_diff = array![];
-            if let Option::Some(diff) = position_diff.synthetic {
-                synthetics_diff.append(diff.id);
+            let mut synthetic_diff_id = Default::default();
+            if let Option::Some((id, _)) = position_diff.synthetic {
+                synthetic_diff_id = id;
             }
 
             for (synthetic_id, synthetic) in position.synthetic_assets {
                 let balance = synthetic.balance;
-                if balance.is_zero()
-                    || contains(span: synthetics_diff.span(), element: synthetic_id) {
+                if balance.is_zero() || synthetic_diff_id == synthetic_id {
                     continue;
                 }
                 let price = assets.get_synthetic_price(synthetic_id);
@@ -530,14 +496,6 @@ pub(crate) mod Positions {
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        fn _compute_collateral_diff(
-            self: @ComponentState<TContractState>, position: StoragePath<Position>, diff: Balance,
-        ) -> BalanceDiff {
-            let before = self.get_collateral_provisional_balance(:position);
-            let after = before + diff;
-            BalanceDiff { before, after }
-        }
-
         /// Updates the synthetic balance and handles the funding mechanism.
         /// This function adjusts the main collateral balance of a position by applying funding
         /// costs or earnings based on the difference between the global funding index and the
@@ -564,15 +522,16 @@ pub(crate) mod Positions {
             ref self: ComponentState<TContractState>,
             position: StoragePath<Mutable<Position>>,
             synthetic_id: AssetId,
-            new_balance: Balance,
+            synthetic_diff: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
             let global_funding_index = assets.get_funding_index(:synthetic_id);
 
             // Adjusts the main collateral balance accordingly:
             let mut collateral_balance = 0_i64.into();
+            let mut old_balance = 0_i64.into();
             if let Option::Some(synthetic) = position.synthetic_assets.read(synthetic_id) {
-                let old_balance = synthetic.balance;
+                old_balance = synthetic.balance;
                 collateral_balance +=
                     calculate_funding(
                         old_funding_index: synthetic.funding_index,
@@ -584,7 +543,7 @@ pub(crate) mod Positions {
 
             // Updates the synthetic balance and funding index:
             let synthetic_asset = SyntheticTrait::asset(
-                balance: new_balance, funding_index: global_funding_index,
+                balance: old_balance + synthetic_diff, funding_index: global_funding_index,
             );
             position.synthetic_assets.write(synthetic_id, synthetic_asset);
         }

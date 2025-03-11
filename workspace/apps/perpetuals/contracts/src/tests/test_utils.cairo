@@ -12,10 +12,9 @@ use perpetuals::core::components::positions::Positions::InternalTrait as Positio
 use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::{InternalCoreFunctions, SNIP12MetadataImpl};
-use perpetuals::core::types::asset::{AssetDiff, AssetId, AssetStatus};
-use perpetuals::core::types::balance::BalanceDiff;
+use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
-use perpetuals::core::types::position::{PositionDiff, PositionId};
+use perpetuals::core::types::position::{PositionDiff, PositionId, create_collateral_position_diff};
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
@@ -313,10 +312,9 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
         );
-    let position = state.positions.get_position_snapshot(:position_id);
-    let position_diff = state
-        .positions
-        .create_collateral_position_diff(:position, diff: COLLATERAL_BALANCE_AMOUNT.into());
+    let position_diff = create_collateral_position_diff(
+        collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(),
+    );
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
@@ -331,12 +329,8 @@ pub fn init_position_with_owner(
 pub fn add_synthetic_to_position(
     ref state: Core::ContractState, synthetic_id: AssetId, position_id: PositionId, balance: i64,
 ) {
-    let position = state.positions.get_position_snapshot(:position_id);
-    let before = state.positions.get_synthetic_balance(:position, :synthetic_id);
-    let after = before + balance.into();
-    let synthetic_diff = AssetDiff { id: synthetic_id, balance: BalanceDiff { before, after } };
     let position_diff = PositionDiff {
-        collateral: Default::default(), synthetic: Option::Some(synthetic_diff),
+        collateral: Default::default(), synthetic: Option::Some((synthetic_id, balance.into())),
     };
     state.positions.apply_diff(:position_id, :position_diff);
 }
