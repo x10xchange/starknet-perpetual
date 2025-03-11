@@ -31,17 +31,6 @@ fn test_nonce_getter() {
 }
 
 #[test]
-fn test_use_nonce() {
-    let mut state = CONTRACT_STATE();
-
-    cheat_caller_address_once(contract_address: test_address(), caller_address: OPERATOR);
-    let nonce = state.nonce.use_next_nonce();
-    assert!(nonce.is_zero());
-    let nonce = state.get_operator_nonce();
-    assert_eq!(nonce, 1, "use_next_nonce should increment the nonce by 1");
-}
-
-#[test]
 fn test_use_checked_nonce() {
     let mut state = CONTRACT_STATE();
     cheat_caller_address_once(contract_address: test_address(), caller_address: OPERATOR);

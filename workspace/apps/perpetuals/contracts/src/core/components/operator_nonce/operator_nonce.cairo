@@ -42,18 +42,11 @@ pub mod OperatorNonceComponent {
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         /// Consumes a nonce, returns the current value, and increments nonce.
-        fn use_next_nonce(ref self: ComponentState<TContractState>) -> u64 {
-            get_dep_component!(@self, Roles).only_operator();
-            let nonce = self.nonce.read();
-            self.nonce.write(nonce + 1);
-            nonce
-        }
-
-        /// Consumes a nonce, returns the current value, and increments nonce.
         /// Panics if the nonce is not the expected value.
         fn use_checked_nonce(ref self: ComponentState<TContractState>, operator_nonce: u64) -> u64 {
             get_dep_component!(@self, Roles).only_operator();
-            let current = self.use_next_nonce();
+            let current = self.nonce.read();
+            self.nonce.write(current + 1);
             assert!(
                 operator_nonce == current,
                 "INVALID_NONCE: current!=received {}!={}",
