@@ -786,13 +786,14 @@ fn test_successful_deposit() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
+        token_address: token_state.address,
         depositor: user.address,
         position_id: user.position_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
         salt: user.salt_counter,
     );
 
@@ -803,8 +804,8 @@ fn test_successful_deposit() {
         position_id: user.position_id,
         depositing_address: user.address,
         collateral_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
-        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
@@ -849,13 +850,13 @@ fn test_deposit_already_registered() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -884,13 +885,14 @@ fn test_successful_process_deposit() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
+        token_address: token_state.address,
         depositor: user.address,
         position_id: user.position_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
         salt: user.salt_counter,
     );
     let mut spy = snforge_std::spy_events();
@@ -901,7 +903,7 @@ fn test_successful_process_deposit() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
@@ -912,8 +914,8 @@ fn test_successful_process_deposit() {
         position_id: user.position_id,
         depositing_address: user.address,
         collateral_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
-        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
@@ -946,13 +948,14 @@ fn test_successful_cancel_deposit() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
+        token_address: token_state.address,
         depositor: user.address,
         position_id: user.position_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
         salt: user.salt_counter,
     );
     let mut spy = snforge_std::spy_events();
@@ -974,7 +977,7 @@ fn test_successful_cancel_deposit() {
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
@@ -985,8 +988,8 @@ fn test_successful_cancel_deposit() {
         position_id: user.position_id,
         depositing_address: user.address,
         collateral_id: collateral_cfg_id,
-        quantized_amount: DEPOSIT_AMOUNT.into(),
-        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
@@ -1009,7 +1012,7 @@ fn test_cancel_non_registered_deposit() {
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -1037,14 +1040,14 @@ fn test_cancel_deposit_different_hash() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter + 1,
         );
 }
@@ -1074,7 +1077,7 @@ fn test_cancel_already_done_deposit() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
@@ -1084,7 +1087,7 @@ fn test_cancel_already_done_deposit() {
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
@@ -1095,7 +1098,7 @@ fn test_cancel_already_done_deposit() {
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -1125,7 +1128,7 @@ fn test_double_cancel_deposit() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
@@ -1135,13 +1138,13 @@ fn test_double_cancel_deposit() {
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -1171,14 +1174,14 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 
     state
         .cancel_deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
 }
@@ -2207,14 +2210,6 @@ fn test_validate_synthetic_prices_expired() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    // Fund user.
-    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
-    token_state
-        .approve(
-            owner: user.address,
-            spender: test_address(),
-            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
-        );
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
     start_cheat_block_timestamp_global(block_timestamp: now.into());
@@ -2230,22 +2225,39 @@ fn test_validate_synthetic_prices_expired() {
             ]
                 .span(),
         );
+    // Setup parameters:
+    let expiration = Time::now().add(Time::days(1));
+
+    let withdraw_args = WithdrawArgs {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: WITHDRAW_AMOUNT,
+        recipient: user.address,
+    };
+    let hash = withdraw_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(hash);
+
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
-        .deposit(
-            position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
-            salt: user.salt_counter,
+        .withdraw_request(
+            :signature,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    // Call the function, should panic with EXPIRED_PRICE error
     state
-        .process_deposit(
+        .withdraw(
             operator_nonce: state.get_operator_nonce(),
-            depositor: user.address,
-            position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT,
-            salt: user.salt_counter,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
 }
 
@@ -2276,7 +2288,7 @@ fn test_validate_synthetic_prices_pending_asset() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2299,14 +2311,6 @@ fn test_validate_prices() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    // Fund user.
-    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
-    token_state
-        .approve(
-            owner: user.address,
-            spender: test_address(),
-            amount: DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into(),
-        );
     let new_time: u64 = Time::now().add(delta: state.get_max_price_interval()).into();
     start_cheat_block_timestamp_global(block_timestamp: new_time);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -2321,21 +2325,40 @@ fn test_validate_prices() {
             ]
                 .span(),
         );
+
+    // Setup parameters:
+    let expiration = Time::now().add(Time::days(1));
+
+    let withdraw_args = WithdrawArgs {
+        position_id: user.position_id,
+        salt: user.salt_counter,
+        expiration,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount: WITHDRAW_AMOUNT,
+        recipient: user.address,
+    };
+    let hash = withdraw_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(hash);
+
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
-        .deposit(
-            position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
-            salt: user.salt_counter,
+        .withdraw_request(
+            :signature,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
-        .process_deposit(
+        .withdraw(
             operator_nonce: state.get_operator_nonce(),
-            depositor: user.address,
-            position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT,
-            salt: user.salt_counter,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
         );
     assert!(state.assets.get_last_price_validation().into() == new_time);
 }
@@ -2364,7 +2387,7 @@ fn test_validate_prices_no_update_needed() {
     state
         .deposit(
             position_id: user.position_id,
-            quantized_amount: DEPOSIT_AMOUNT.into(),
+            quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);

@@ -468,7 +468,7 @@ pub mod AssetsComponent {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        impl OperatortNonce: OperatorNonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
@@ -621,7 +621,7 @@ pub mod AssetsComponent {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        impl OperatortNonce: OperatorNonceComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {

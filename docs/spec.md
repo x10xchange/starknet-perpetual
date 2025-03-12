@@ -2153,19 +2153,17 @@ Anyone can execute.
 #### Hash
 
 ```rust
-fn deposit_hash(
-    ref self: ComponentState<TContractState>,
-    signer: ContractAddress,
-    asset_id: felt252,
-    quantized_amount: u128,
-    beneficiary: u32,
+pub fn deposit_hash(
+    token_address: ContractAddress,
+    depositor: ContractAddress,
+    position_id: PositionId,
+    quantized_amount: u64,
     salt: felt252,
-) -> felt252 {
-    PoseidonTrait::new()
-        .update_with(value: get_caller_address())
-        .update_with(value: asset_id)
+) -> HashType {
+    PedersenTrait::new(base: token_address.into())
+        .update_with(value: depositor)
+        .update_with(value: position_id)
         .update_with(value: quantized_amount)
-        .update_with(value: beneficiary)
         .update_with(value: salt)
         .finalize()
 }
@@ -2217,23 +2215,20 @@ Only the Operator can execute.
 #### Hash
 
 ```rust
-fn deposit_hash(
-        ref self: ComponentState<TContractState>,
-        signer: ContractAddress,
-        asset_id: felt252,
-        quantized_amount: i64,
-        beneficiary: u32,
-        salt: felt252,
-) -> felt252 {
-        PoseidonTrait::new()
+pub fn deposit_hash(
+    token_address: ContractAddress,
+    depositor: ContractAddress,
+    position_id: PositionId,
+    quantized_amount: u64,
+    salt: felt252,
+) -> HashType {
+    PedersenTrait::new(base: token_address.into())
         .update_with(value: depositor)
-        .update_with(value: asset_id)
+        .update_with(value: position_id)
         .update_with(value: quantized_amount)
-        .update_with(value: beneficiary)
         .update_with(value: salt)
         .finalize()
 }
-
 ```
 
 #### Validations
@@ -2300,23 +2295,20 @@ Anyone can execute.
 #### Hash
 
 ```rust
-fn deposit_hash(
-    ref self: ComponentState<TContractState>,
-    signer: ContractAddress,
-    beneficiary: u32,
-    asset_id: felt252,
-    quantized_amount: u128,
+pub fn deposit_hash(
+    token_address: ContractAddress,
+    depositor: ContractAddress,
+    position_id: PositionId,
+    quantized_amount: u64,
     salt: felt252,
-) -> felt252 {
-    PoseidonTrait::new()
-        .update_with(value: get_caller_address())
-        .update_with(value: beneficiary)
-        .update_with(value: asset_id)
+) -> HashType {
+    PedersenTrait::new(base: token_address.into())
+        .update_with(value: depositor)
+        .update_with(value: position_id)
         .update_with(value: quantized_amount)
         .update_with(value: salt)
         .finalize()
 }
-
 ```
 
 #### Validations
