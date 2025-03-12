@@ -10,6 +10,7 @@ use starkware_utils::types::time::time::{TimeDelta, Timestamp};
 
 #[starknet::interface]
 pub trait IAssets<TContractState> {
+    // Write functions.
     fn add_oracle_to_asset(
         ref self: TContractState,
         asset_id: AssetId,
@@ -37,6 +38,12 @@ pub trait IAssets<TContractState> {
         oracle_price: u128,
         signed_prices: Span<SignedPrice>,
     );
+    fn remove_oracle_from_asset(
+        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
+    );
+    fn update_synthetic_quorum(ref self: TContractState, synthetic_id: AssetId, quorum: u8);
+
+    // View functions.
     fn get_collateral_token_contract(self: @TContractState) -> IERC20Dispatcher;
     fn get_collateral_quantum(self: @TContractState) -> u64;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
@@ -52,8 +59,4 @@ pub trait IAssets<TContractState> {
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
-    fn remove_oracle_from_asset(
-        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
-    );
-    fn update_synthetic_quorum(ref self: TContractState, synthetic_id: AssetId, quorum: u8);
 }

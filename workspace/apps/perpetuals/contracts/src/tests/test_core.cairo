@@ -17,7 +17,7 @@ use perpetuals::core::components::positions::interface::{
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::AssetStatus;
-use perpetuals::core::types::funding::{FundingIndexTrait, FundingTick};
+use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
 use perpetuals::core::types::price::{PRICE_SCALE, PriceTrait, SignedPrice};
@@ -51,7 +51,7 @@ use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use starkware_utils::components::roles::interface::IRoles;
-use starkware_utils::constants::{HOUR, MAX_U128, TWO_POW_32};
+use starkware_utils::constants::{HOUR, MAX_U128};
 use starkware_utils::iterable_map::*;
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::test_utils::{
@@ -2416,7 +2416,7 @@ fn test_funding_tick_basic() {
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 3.
-    let new_funding_index = FundingIndexTrait::new(value: 3 * TWO_POW_32.try_into().unwrap());
+    let new_funding_index = FundingIndex { value: 3 * FUNDING_SCALE };
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2459,7 +2459,7 @@ fn test_invalid_funding_rate() {
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 4.
-    let new_funding_index = FundingIndexTrait::new(value: 4 * TWO_POW_32.try_into().unwrap());
+    let new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: synthetic_id, funding_index: new_funding_index },
     ]
@@ -2485,8 +2485,8 @@ fn test_invalid_funding_len() {
     let new_time = Time::now().add(Time::seconds(10));
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
 
-    let new_funding_index_1 = FundingIndexTrait::new(value: 100 * TWO_POW_32.try_into().unwrap());
-    let new_funding_index_2 = FundingIndexTrait::new(value: 3 * TWO_POW_32.try_into().unwrap());
+    let new_funding_index_1 = FundingIndex { value: 100 * FUNDING_SCALE };
+    let new_funding_index_2 = FundingIndex { value: 3 * FUNDING_SCALE };
     let funding_ticks: Span<FundingTick> = array![
         FundingTick { asset_id: SYNTHETIC_ASSET_ID_1(), funding_index: new_funding_index_1 },
         FundingTick { asset_id: SYNTHETIC_ASSET_ID_2(), funding_index: new_funding_index_2 },

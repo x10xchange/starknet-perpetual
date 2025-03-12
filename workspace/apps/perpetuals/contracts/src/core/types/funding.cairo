@@ -1,19 +1,28 @@
-use core::num::traits::zero::Zero;
+use core::num::traits::{Pow, Zero};
 use perpetuals::core::errors::invalid_funding_rate_err;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::price::{Price, PriceMulTrait};
-use starkware_utils::constants::TWO_POW_32;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::utils::mul_wide_and_div;
 
-const FUNDING_SCALE: i64 = TWO_POW_32.try_into().unwrap();
+pub const FUNDING_SCALE: i64 = 2_i64.pow(32);
+
+const MAX_FUNDING_ERROR: felt252 = 'Value must be < 2^64';
+const MIN_FUNDING_ERROR: felt252 = 'Value must be > -2^64';
+
 #[derive(Copy, Debug, Drop, PartialEq, starknet::Store, Serde)]
+/// `FundingIndex` represents a global funding rate tracker for each synthetic asset in the system.
+/// It's used to calculate funding payments between long and short position holders.
+/// To optimize performance, positions are only updated with the latest funding index when their
+/// owners execute transactions. The system then calculates the accumulated funding payment since
+/// the last interaction and adjusts the position's collateral balance accordingly.
+/// After each update, the current funding index is cached for each synthetic asset in the position.
 pub struct FundingIndex {
     /// Signed 64-bit fixed-point number:
     /// 1 sign bit, 31-bits integer part, 32-bits fractional part.
     /// Represents values as: actual_value = stored_value / 2**32.
-    value: i64,
+    pub value: i64,
 }
 
 pub trait FundingIndexMulTrait {
@@ -57,17 +66,6 @@ pub struct FundingTick {
     pub funding_index: FundingIndex,
 }
 
-#[generate_trait]
-pub impl FundingIndexImpl of FundingIndexTrait {
-    fn new(value: i64) -> FundingIndex {
-        FundingIndex { value }
-    }
-
-    fn value(self: @FundingIndex) -> i64 {
-        *self.value
-    }
-}
-
 pub impl FundingIndexZero of Zero<FundingIndex> {
     fn zero() -> FundingIndex {
         FundingIndex { value: 0 }
@@ -96,7 +94,7 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
 /// rate.
 ///
 /// The max funding rate represents the rate of change **per second**, so it is multiplied by
-/// `time_diff.
+/// `time_diff`.
 /// Additionally, since the index includes the synthetic price,
 /// the formula also multiplies by `synthetic_price`.
 ///
@@ -104,7 +102,9 @@ impl FundingIndexIntoImpl of Into<FundingIndex, i64> {
 /// `index_diff <= max_funding_rate * time_diff * synthetic_price`
 pub fn validate_funding_rate(
     synthetic_id: AssetId,
+    // index_diff scale is the same as the `FUNDING_SCALE` (2^32).
     index_diff: u64,
+    // max_funding_rate scale is the same as the `FUNDING_SCALE` (2^32).
     max_funding_rate: u32,
     time_diff: u64,
     synthetic_price: Price,
