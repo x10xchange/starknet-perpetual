@@ -406,7 +406,7 @@ pub fn assert_add_synthetic_event_with_expected(
     risk_factor_tiers: Span<u8>,
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
-    resolution: u64,
+    resolution_factor: u64,
     quorum: u8,
 ) {
     let expected_event = assets_events::SyntheticAdded {
@@ -414,7 +414,7 @@ pub fn assert_add_synthetic_event_with_expected(
         risk_factor_tiers,
         risk_factor_first_tier_boundary,
         risk_factor_tier_size,
-        resolution,
+        resolution_factor,
         quorum,
     };
     assert_expected_event_emitted(

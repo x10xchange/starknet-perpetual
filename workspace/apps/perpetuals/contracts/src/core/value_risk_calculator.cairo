@@ -226,26 +226,26 @@ mod tests {
     use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticDiffEnriched};
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
-    use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
+    use perpetuals::core::types::price::{Price, PriceTrait};
     use perpetuals::core::types::risk_factor::RiskFactor;
     use super::*;
 
 
     /// Prices
     fn PRICE_1() -> Price {
-        PriceTrait::new(900_u64 * PRICE_SCALE.into())
+        PriceTrait::new(value: 900_u64)
     }
     fn PRICE_2() -> Price {
-        PriceTrait::new(900_u64 * PRICE_SCALE.into())
+        PriceTrait::new(value: 900_u64)
     }
     fn PRICE_3() -> Price {
-        PriceTrait::new(900_u64 * PRICE_SCALE.into())
+        PriceTrait::new(value: 900_u64)
     }
     fn PRICE_4() -> Price {
-        PriceTrait::new(900_u64 * PRICE_SCALE.into())
+        PriceTrait::new(value: 900_u64)
     }
     fn PRICE_5() -> Price {
-        PriceTrait::new(900_u64 * PRICE_SCALE.into())
+        PriceTrait::new(value: 900_u64)
     }
 
     /// Risk factors

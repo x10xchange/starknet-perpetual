@@ -1,20 +1,30 @@
-use core::num::traits::{One, WideMul, Zero};
+use core::num::traits::{One, Pow, Zero};
 use perpetuals::core::types::balance::Balance;
 use starkware_utils::math::utils::mul_wide_and_div;
 use starkware_utils::types::{PublicKey, Signature};
 
 // 2^28
-pub const PRICE_SCALE: u32 = 0x10000000;
+pub const PRICE_SCALE: u64 = 2_u64.pow(28);
+
 // 2^56
-const MAX_PRICE: u64 = 0x100000000000000;
+const MAX_PRICE: u64 = 2_u64.pow(56);
+
 // Oracle always sign the price with 18 decimal places.
-const ORACLE_SCALE: u256 = 1_000_000_000_000_000_000;
+const ORACLE_SCALE: u128 = 10_u128.pow(18);
+
 // StarkNet Perps scale is with 6 decimal places.
-const SN_PERPS_SCALE: u256 = 1_000_000;
+// The value here is 10^6 and it must corresepond to the quantum of the collateral so the minimal
+// collateral unit is 10^-6 USD.
+const SN_PERPS_SCALE: u128 = 10_u128.pow(6);
+
+// The ratio between the StarkNet Perps scale and the Oracle scale.
+const SN_PERPS_ORACLE_SCALE_RATIO: u128 = 10_u128.pow(12);
 
 const MAX_PRICE_ERROR: felt252 = 'Value must be < 2^56';
 
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
+/// Price is the price of a synthetic asset in the Perps system.
+/// The price is the price of the minimal unit of the asset in 10^-6 USD.
 pub struct Price {
     // Unsigned 28-bit fixed point decimal precision.
     // 28-bit for the integer part and 28-bit for the fractional part.
@@ -47,7 +57,7 @@ pub trait PriceMulTrait<T> {
 impl PriceMulU32 of PriceMulTrait<u32> {
     type Target = u128;
     fn mul(self: @Price, rhs: u32) -> Self::Target {
-        mul_wide_and_div(*self.value, rhs.into(), PRICE_SCALE.into())
+        mul_wide_and_div(*self.value, rhs.into(), PRICE_SCALE.try_into().unwrap())
             .expect('Price mul overflow')
             .into()
     }
@@ -57,72 +67,37 @@ impl PriceMulBalance of PriceMulTrait<Balance> {
     type Target = i128;
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
         let value: i64 = (*self.value).try_into().unwrap();
-        mul_wide_and_div(value, rhs.into(), PRICE_SCALE.into()).expect('Price mul overflow').into()
+        mul_wide_and_div(value, rhs.into(), PRICE_SCALE.try_into().unwrap())
+            .expect('Price mul overflow')
+            .into()
     }
 }
 
 #[generate_trait]
 pub impl PriceImpl of PriceTrait {
     fn new(value: u64) -> Price {
+        let value = value * PRICE_SCALE;
         assert(value < MAX_PRICE, MAX_PRICE_ERROR);
-        Price { value: value }
-    }
-
-    fn build(integer_part: u32, fractional_part: u32) -> Price {
-        assert(fractional_part.into() < PRICE_SCALE, 'Value must be < 2^28');
-        Self::new(integer_part.into() * PRICE_SCALE.into() + fractional_part.into())
+        Price { value }
     }
 
     fn value(self: @Price) -> u64 {
         *self.value
     }
-
-    fn convert(self: u128, resolution: u64) -> Price {
-        let mut converted_price = self.wide_mul(PRICE_SCALE.into());
-        converted_price *= SN_PERPS_SCALE;
-        converted_price /= resolution.into();
-        converted_price /= ORACLE_SCALE;
-        converted_price.into()
-    }
 }
 
-
-impl U256IntoPrice of Into<u256, Price> {
-    fn into(self: u256) -> Price {
-        let value = self.try_into().expect(MAX_PRICE_ERROR);
-        assert(value < MAX_PRICE, MAX_PRICE_ERROR);
-        Price { value }
-    }
-}
-
-impl PriceAdd of Add<Price> {
-    fn add(lhs: Price, rhs: Price) -> Price {
-        PriceTrait::new(value: lhs.value + rhs.value)
-    }
-}
-impl PriceSub of Sub<Price> {
-    fn sub(lhs: Price, rhs: Price) -> Price {
-        PriceTrait::new(value: lhs.value - rhs.value)
-    }
-}
-
-pub impl PriceAddAssign of core::ops::AddAssign<Price, Price> {
-    fn add_assign(ref self: Price, rhs: Price) {
-        let value = self.value + rhs.value;
-        assert(value < MAX_PRICE, MAX_PRICE_ERROR);
-        self.value = value;
-    }
-}
-
-pub impl PriceSubAssign of core::ops::SubAssign<Price, Price> {
-    fn sub_assign(ref self: Price, rhs: Price) {
-        self.value -= rhs.value;
-    }
+pub fn convert_oracle_to_perps_price(oracle_price: u128, resolution_factor: u64) -> Price {
+    let mut converted_price = oracle_price * PRICE_SCALE.into();
+    converted_price /= resolution_factor.into();
+    converted_price /= SN_PERPS_ORACLE_SCALE_RATIO;
+    let value = converted_price.try_into().expect(MAX_PRICE_ERROR);
+    assert(value < MAX_PRICE, MAX_PRICE_ERROR);
+    Price { value }
 }
 
 pub impl PriceZeroImpl of Zero<Price> {
     fn zero() -> Price {
-        Price { value: 0 }
+        PriceTrait::new(value: 0)
     }
 
     fn is_zero(self: @Price) -> bool {
@@ -136,11 +111,11 @@ pub impl PriceZeroImpl of Zero<Price> {
 
 pub impl PriceOneImpl of One<Price> {
     fn one() -> Price {
-        Price { value: PRICE_SCALE.into() }
+        PriceTrait::new(value: 1)
     }
 
     fn is_one(self: @Price) -> bool {
-        *self.value == PRICE_SCALE.into()
+        *self.value == PRICE_SCALE
     }
 
     fn is_non_one(self: @Price) -> bool {
@@ -157,73 +132,29 @@ mod tests {
 
     #[test]
     fn test_new_price() {
-        let price = PriceTrait::new(100 * PRICE_SCALE.into());
-        assert!(price.value == 100 * PRICE_SCALE.into());
+        let price = PriceTrait::new(100);
+        assert!(price.value == 100 * PRICE_SCALE);
     }
 
     #[test]
     #[should_panic(expected: 'Value must be < 2^56')]
     fn test_new_price_over_limit() {
-        let _price = PriceTrait::new(MAX_PRICE.into());
-    }
-
-    #[test]
-    fn test_build_price() {
-        let price = PriceTrait::build(100, 100);
-        assert!(price.value == 100 * PRICE_SCALE.into() + 100);
-    }
-
-    #[test]
-    #[should_panic(expected: 'Value must be < 2^28')]
-    fn test_build_price_over_limit() {
-        let _price = PriceTrait::build(100, PRICE_SCALE.into());
+        let _price = PriceTrait::new(PRICE_SCALE);
     }
 
     #[test]
     fn test_price_mul_u32() {
-        let price = PriceTrait::new(100 * PRICE_SCALE.into());
+        let price = PriceTrait::new(value: 100);
         let result = price.mul(2_u32);
         assert!(result == 200_u128);
     }
 
     #[test]
     fn test_price_mul_balance() {
-        let price = PriceTrait::new(100 * PRICE_SCALE.into());
+        let price = PriceTrait::new(value: 100);
         let balance = BalanceTrait::new(value: 2);
         let result = price.mul(balance);
         assert!(result == 200);
-    }
-
-    #[test]
-    fn test_price_add() {
-        let price1 = PriceTrait::new(100_u64 * PRICE_SCALE.into());
-        let price2 = PriceTrait::new(200_u64 * PRICE_SCALE.into());
-        let result = price1 + price2;
-        assert!(result == PriceTrait::new(300_u64 * PRICE_SCALE.into()));
-    }
-
-    #[test]
-    fn test_price_sub() {
-        let price1 = PriceTrait::new(200_u64 * PRICE_SCALE.into());
-        let price2 = PriceTrait::new(100_u64 * PRICE_SCALE.into());
-        let result = price1 - price2;
-        assert!(result == PriceTrait::new(100_u64 * PRICE_SCALE.into()));
-    }
-
-    #[test]
-    fn test_price_add_assign() {
-        let mut price1 = PriceTrait::new(100_u64 * PRICE_SCALE.into());
-        let price2 = PriceTrait::new(200_u64 * PRICE_SCALE.into());
-        price1 += price2;
-        assert!(price1 == PriceTrait::new(300_u64 * PRICE_SCALE.into()));
-    }
-
-    #[test]
-    fn test_price_sub_assign() {
-        let mut price1 = PriceTrait::new(200_u64 * PRICE_SCALE.into());
-        let price2 = PriceTrait::new(100_u64 * PRICE_SCALE.into());
-        price1 -= price2;
-        assert!(price1 == PriceTrait::new(100_u64 * PRICE_SCALE.into()));
     }
 
     #[test]
@@ -240,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_price_is_non_zero() {
-        let price = PriceTrait::new(100 * PRICE_SCALE.into());
+        let price = PriceTrait::new(value: 100);
         assert!(price.is_non_zero());
     }
 }

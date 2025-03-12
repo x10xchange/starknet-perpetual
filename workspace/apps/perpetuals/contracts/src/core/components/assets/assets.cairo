@@ -12,13 +12,13 @@ pub mod AssetsComponent {
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
         INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
         INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
-        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
-        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
-        ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
+        INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
+        INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
+        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
+        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -30,7 +30,9 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
+    use perpetuals::core::types::price::{
+        Price, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
+    };
     use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use starknet::ContractAddress;
     use starknet::storage::{
@@ -177,7 +179,7 @@ pub mod AssetsComponent {
             risk_factor_first_tier_boundary: u128,
             risk_factor_tier_size: u128,
             quorum: u8,
-            resolution: u64,
+            resolution_factor: u64,
         ) {
             /// Validations:
             get_dep_component!(@self, Roles).only_app_governor();
@@ -193,7 +195,7 @@ pub mod AssetsComponent {
             assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
             assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
-            assert(resolution.is_non_zero(), INVALID_ZERO_RESOLUTION);
+            assert(resolution_factor.is_non_zero(), INVALID_ZERO_RESOLUTION_FACTOR);
 
             let synthetic_config = SyntheticTrait::config(
                 // It'll be active in the next price tick.
@@ -202,7 +204,7 @@ pub mod AssetsComponent {
                 :risk_factor_first_tier_boundary,
                 :risk_factor_tier_size,
                 :quorum,
-                :resolution,
+                :resolution_factor,
             );
 
             synthetic_entry.write(Option::Some(synthetic_config));
@@ -228,7 +230,7 @@ pub mod AssetsComponent {
                         risk_factor_tiers,
                         risk_factor_first_tier_boundary,
                         risk_factor_tier_size,
-                        resolution,
+                        resolution_factor,
                         quorum,
                     },
                 );
@@ -728,7 +730,9 @@ pub mod AssetsComponent {
             ref self: ComponentState<TContractState>, asset_id: AssetId, oracle_price: u128,
         ) {
             let mut synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
-            let price = oracle_price.convert(resolution: synthetic_config.resolution);
+            let price = convert_oracle_to_perps_price(
+                :oracle_price, resolution_factor: synthetic_config.resolution_factor,
+            );
 
             let mut synthetic_timely_data = self._get_synthetic_timely_data(synthetic_id: asset_id);
             synthetic_timely_data.price = price;

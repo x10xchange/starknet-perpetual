@@ -17,7 +17,7 @@ pub struct SyntheticConfig {
     pub risk_factor_tier_size: u128,
     pub quorum: u8,
     // Smallest unit of a synthetic asset in the system.
-    pub resolution: u64,
+    pub resolution_factor: u64,
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
@@ -53,7 +53,7 @@ pub impl SyntheticImpl of SyntheticTrait {
         risk_factor_first_tier_boundary: u128,
         risk_factor_tier_size: u128,
         quorum: u8,
-        resolution: u64,
+        resolution_factor: u64,
     ) -> SyntheticConfig {
         SyntheticConfig {
             version: VERSION,
@@ -61,7 +61,7 @@ pub impl SyntheticImpl of SyntheticTrait {
             risk_factor_first_tier_boundary,
             risk_factor_tier_size,
             quorum,
-            resolution,
+            resolution_factor,
         }
     }
     fn timely_data(

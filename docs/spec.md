@@ -316,7 +316,7 @@ classDiagram
         risk_factor_first_tier_boundary: u128
         risk_factor_tier_size: u128
         quorum: u8
-        resolution: u64
+        resolution_factor: u64
     }
     class CollateralTimelyData{
         version: u8
@@ -728,7 +728,7 @@ struct SyntheticConfig {
     // Configurable
     pub status: AssetStatus,
     // Resolution is the total number of the smallest part of a synthetic.
-    pub resolution: u64,
+    pub resolution_factor: u64,
     // Number of oracles that need to sign on the price to accept it.
     pub quorum: u8,
 }
@@ -1047,7 +1047,7 @@ pub trait IAssets<TContractState> {
         risk_factor_first_tier_boundary: u128,
         risk_factor_tier_size: u128,
         quorum: u8,
-        resolution: u64,
+        resolution_factor: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(
@@ -1984,7 +1984,7 @@ pub struct SyntheticAdded {
     pub risk_factor_tiers: Span<u8>,
     pub risk_factor_first_tier_boundary: u128,
     pub risk_factor_tier_size: u128,
-    pub resolution: u64,
+    pub resolution_factor: u64,
     pub quorum: u8,
 }
 ```
@@ -3423,7 +3423,7 @@ fn add_synthetic_asset(
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
     quorum: u8,
-    resolution: u64,
+    resolution_factor: u64,
 )
 ```
 

@@ -20,7 +20,7 @@ pub struct SyntheticAdded {
     pub risk_factor_tiers: Span<u8>,
     pub risk_factor_first_tier_boundary: u128,
     pub risk_factor_tier_size: u128,
-    pub resolution: u64,
+    pub resolution_factor: u64,
     pub quorum: u8,
 }
 

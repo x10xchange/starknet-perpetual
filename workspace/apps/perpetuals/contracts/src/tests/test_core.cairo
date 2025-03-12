@@ -20,7 +20,7 @@ use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::funding::{FundingIndexTrait, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
-use perpetuals::core::types::price::{PriceTrait, SignedPrice};
+use perpetuals::core::types::price::{PRICE_SCALE, PriceTrait, SignedPrice};
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
@@ -51,7 +51,7 @@ use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use starkware_utils::components::roles::interface::IRoles;
-use starkware_utils::constants::{HOUR, MAX_U128, TEN_POW_15, TWO_POW_32};
+use starkware_utils::constants::{HOUR, MAX_U128, TWO_POW_32};
 use starkware_utils::iterable_map::*;
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::test_utils::{
@@ -229,7 +229,7 @@ fn test_caller_failures() {
             risk_factor_first_tier_boundary: Zero::zero(),
             risk_factor_tier_size: Zero::zero(),
             quorum: 0,
-            resolution: 0,
+            resolution_factor: 0,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
 
@@ -529,7 +529,7 @@ fn test_successful_add_synthetic_asset() {
             :risk_factor_first_tier_boundary,
             :risk_factor_tier_size,
             quorum: quorum_1,
-            resolution: resolution_1,
+            resolution_factor: resolution_1,
         );
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
@@ -540,7 +540,7 @@ fn test_successful_add_synthetic_asset() {
             :risk_factor_first_tier_boundary,
             :risk_factor_tier_size,
             quorum: quorum_2,
-            resolution: resolution_2,
+            resolution_factor: resolution_2,
         );
 
     // Catch the event.
@@ -551,7 +551,7 @@ fn test_successful_add_synthetic_asset() {
         risk_factor_tiers: risk_factor_1,
         :risk_factor_first_tier_boundary,
         :risk_factor_tier_size,
-        resolution: resolution_1,
+        resolution_factor: resolution_1,
         quorum: quorum_1,
     );
 
@@ -564,7 +564,7 @@ fn test_successful_add_synthetic_asset() {
         :risk_factor_first_tier_boundary,
         :risk_factor_tier_size,
         quorum: quorum_1,
-        resolution: resolution_1,
+        resolution_factor: resolution_1,
         price: Zero::zero(),
         last_price_update: Zero::zero(),
         funding_index: Zero::zero(),
@@ -577,7 +577,7 @@ fn test_successful_add_synthetic_asset() {
         :risk_factor_first_tier_boundary,
         :risk_factor_tier_size,
         quorum: quorum_2,
-        resolution: resolution_2,
+        resolution_factor: resolution_2,
         price: Zero::zero(),
         last_price_update: Zero::zero(),
         funding_index: Zero::zero(),
@@ -602,7 +602,7 @@ fn test_add_synthetic_asset_existed_asset() {
             risk_factor_first_tier_boundary: MAX_U128,
             risk_factor_tier_size: 1,
             quorum: 13,
-            resolution: 10000000,
+            resolution_factor: 10000000,
         );
 }
 
@@ -2500,7 +2500,7 @@ fn test_price_tick_basic() {
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let oracle_price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
@@ -2524,7 +2524,7 @@ fn test_price_tick_basic() {
     );
     assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: synthetic_id);
     assert_price_tick_event_with_expected(
-        spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(268),
+        spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(value: 100),
     );
 
     assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
@@ -2532,7 +2532,7 @@ fn test_price_tick_basic() {
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
-    assert!(data.price.value() == 268);
+    assert!(data.price.value() == 100 * PRICE_SCALE);
 }
 
 #[test]
@@ -2577,7 +2577,7 @@ fn test_price_tick_odd() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let oracle_price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
@@ -2601,7 +2601,7 @@ fn test_price_tick_odd() {
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
-    assert!(data.price.value() == 268);
+    assert!(data.price.value() == 100 * PRICE_SCALE);
 }
 
 #[test]
@@ -2636,7 +2636,7 @@ fn test_price_tick_even() {
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let oracle_price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
@@ -2660,7 +2660,7 @@ fn test_price_tick_even() {
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
-    assert!(data.price.value() == 268);
+    assert!(data.price.value() == 100 * PRICE_SCALE);
 }
 
 #[test]
@@ -2711,7 +2711,7 @@ fn test_price_tick_unsorted() {
         );
     let old_time: u64 = Time::now().into();
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    let oracle_price: u128 = TEN_POW_15.into();
+    let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
@@ -2773,7 +2773,7 @@ fn test_price_tick_old_oracle() {
 fn test_price_tick_golden() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut state = setup_state_with_pending_asset(cfg: @cfg, token_state: @token_state);
     let asset_name = 'PENGUUSDMARK\x00\x00\x00\x00';
     let oracle0_name = 'Stkai';
     let oracle1_name = 'Stork';

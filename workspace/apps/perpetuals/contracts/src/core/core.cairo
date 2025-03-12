@@ -179,6 +179,8 @@ pub mod Core {
         upgrade_delay: u64,
         collateral_id: AssetId,
         collateral_token_address: ContractAddress,
+        // Collateral quantum must make the minimal collateral unit == 10^-6 USD. For more details
+        // see `SN_PERPS_SCALE` in the `price.cairo` file.
         collateral_quantum: u64,
         max_price_interval: TimeDelta,
         max_oracle_price_validity: TimeDelta,

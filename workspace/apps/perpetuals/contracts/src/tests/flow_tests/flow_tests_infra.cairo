@@ -199,7 +199,7 @@ pub struct SyntheticConfig {
     pub risk_factor_first_tier_boundary: u128,
     pub risk_factor_tier_size: u128,
     pub quorum: u8,
-    pub resolution: u64,
+    pub resolution_factor: u64,
 }
 
 pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
@@ -210,7 +210,7 @@ pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
         risk_factor_first_tier_boundary: MAX_U128,
         risk_factor_tier_size: Zero::zero(),
         quorum: constants::SYNTHETIC_QUORUM,
-        resolution: constants::SYNTHETIC_RESOLUTION,
+        resolution_factor: constants::SYNTHETIC_RESOLUTION_FACTOR,
     }
 }
 
@@ -281,7 +281,7 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
                 risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
                 risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
                 quorum: *synthetic_config.quorum,
-                resolution: *synthetic_config.resolution,
+                resolution_factor: *synthetic_config.resolution_factor,
             );
 
         self.set_app_governor_as_caller();

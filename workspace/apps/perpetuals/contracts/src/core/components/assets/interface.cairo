@@ -24,7 +24,7 @@ pub trait IAssets<TContractState> {
         risk_factor_first_tier_boundary: u128,
         risk_factor_tier_size: u128,
         quorum: u8,
-        resolution: u64,
+        resolution_factor: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(

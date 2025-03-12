@@ -282,7 +282,7 @@ pub fn setup_state_with_pending_asset(
             risk_factor_first_tier_boundary: MAX_U128,
             risk_factor_tier_size: MAX_U128,
             quorum: SYNTHETIC_QUORUM,
-            resolution: SYNTHETIC_RESOLUTION,
+            resolution_factor: SYNTHETIC_RESOLUTION_FACTOR,
         );
     state
 }
@@ -367,7 +367,7 @@ pub fn check_synthetic_config(
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
     quorum: u8,
-    resolution: u64,
+    resolution_factor: u64,
 ) {
     let synthetic_config = state.assets.get_synthetic_config(synthetic_id);
     assert!(synthetic_config.status == status);
@@ -378,7 +378,7 @@ pub fn check_synthetic_config(
     assert!(synthetic_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
     assert!(synthetic_config.risk_factor_tier_size == risk_factor_tier_size);
     assert!(synthetic_config.quorum == quorum);
-    assert!(synthetic_config.resolution == resolution);
+    assert!(synthetic_config.resolution_factor == resolution_factor);
 }
 
 pub fn check_synthetic_timely_data(
@@ -416,7 +416,7 @@ pub fn check_synthetic_asset(
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
     quorum: u8,
-    resolution: u64,
+    resolution_factor: u64,
     price: Price,
     last_price_update: Timestamp,
     funding_index: FundingIndex,
@@ -429,7 +429,7 @@ pub fn check_synthetic_asset(
         :risk_factor_first_tier_boundary,
         :risk_factor_tier_size,
         :quorum,
-        :resolution,
+        :resolution_factor,
     );
     check_synthetic_timely_data(
         :state,
