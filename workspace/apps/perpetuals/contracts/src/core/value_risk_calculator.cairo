@@ -38,7 +38,7 @@ pub struct PositionTVTR {
 
 /// The change in terms of total value and total risk of a position.
 #[derive(Copy, Debug, Drop, Serde)]
-pub struct PositionTVTRChange {
+pub struct TVTRChange {
     pub before: PositionTVTR,
     pub after: PositionTVTR,
 }
@@ -67,7 +67,7 @@ fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
     let after_minus_epsilon_ratio = FractionTrait::new(
         numerator: after.total_value - EPSILON, denominator: after.total_risk,
     );
-    after_minus_epsilon_ratio < before_ratio && before_ratio <= after_ratio
+    after_minus_epsilon_ratio <= before_ratio && before_ratio <= after_ratio
 }
 
 /// This is checked only when the before is not healthy:
@@ -103,7 +103,7 @@ pub fn validate_position_is_healthy_or_healthier(
     assert_healthy_or_healthier(:position_id, :tvtr);
 }
 
-pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: PositionTVTRChange) {
+pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
         // If the position is healthy we can return.
@@ -175,7 +175,7 @@ pub fn calculate_position_tvtr(position_data: UnchangedAssets) -> PositionTVTR {
 ///
 /// # Returns
 ///
-/// * `PositionTVTRChange` - Contains the total value and total risk before and after the changes
+/// * `TVTRChange` - Contains the total value and total risk before and after the changes
 ///
 /// # Logic Flow
 /// 1. Calculates value and risk for unchanged assets
@@ -184,11 +184,12 @@ pub fn calculate_position_tvtr(position_data: UnchangedAssets) -> PositionTVTR {
 /// 4. Combines all calculations into final before/after totals
 fn calculate_position_tvtr_change(
     unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
-) -> PositionTVTRChange {
+) -> TVTRChange {
     // Calculate the value and risk of the position data.
     let mut unchanged_assets_value = 0_i128;
     let mut unchanged_assets_risk = 0_u128;
     for asset in unchanged_assets {
+        // asset_value is in units of 10^-6 USD.
         let asset_value: i128 = (*asset.price).mul(rhs: *asset.balance);
         unchanged_assets_value += asset_value;
         unchanged_assets_risk += (*asset.risk_factor).mul(asset_value.abs());
@@ -200,6 +201,7 @@ fn calculate_position_tvtr_change(
     let mut total_risk_after = unchanged_assets_risk;
 
     if let Option::Some(asset_diff) = position_diff_enriched.synthetic {
+        // asset_value is in units of 10^-6 USD.
         let asset_value_before = asset_diff.price.mul(rhs: asset_diff.balance_before);
         let asset_value_after = asset_diff.price.mul(rhs: asset_diff.balance_after);
 
@@ -210,16 +212,17 @@ fn calculate_position_tvtr_change(
         total_risk_after += asset_diff.risk_factor_after.mul(asset_value_after.abs());
     }
 
-    // Collateral price is always 1. We use the Price impl of One to consider PRICE_SCALE in the
-    // mul operations.
+    // Collateral price is always "One" in Perps - "One" is 10^-6 USD which means 2^28 same as the
+    // PRICE_SCALE.
     let price: Price = One::one();
+    // asset_value is in units of 10^-6 USD.
     let asset_value_before = price.mul(rhs: position_diff_enriched.collateral.before);
     let asset_value_after = price.mul(rhs: position_diff_enriched.collateral.after);
 
     total_value_before += asset_value_before;
     total_value_after += asset_value_after;
 
-    PositionTVTRChange {
+    TVTRChange {
         before: PositionTVTR { total_value: total_value_before, total_risk: total_risk_before },
         after: PositionTVTR { total_value: total_value_after, total_risk: total_risk_after },
     }

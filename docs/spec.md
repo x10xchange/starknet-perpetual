@@ -11,7 +11,7 @@
         - [Total Value (TV) and Total Risk (TR)](#total-value-\(tv\)-and-total-risk-\(tr\))
         - [Structs](#structs)
             - [PositionTVTR](#positiontvtr)
-            - [PositionTVTRChange](#positiontvtrchange)
+            - [TVTRChange](#TVTRChange)
             - [PositionState](#positionstate)
             - [Deleveragable](#deleveragable)
             - [Liquidatable](#liquidatable)
@@ -376,10 +376,10 @@ pub struct PositionTVTR {
 
 ```
 
-### PositionTVTRChange
+### TVTRChange
 
 ```rust
-pub struct PositionTVTRChange {
+pub struct TVTRChange {
     pub before: PositionTVTR,
     pub after: PositionTVTR,
 }
