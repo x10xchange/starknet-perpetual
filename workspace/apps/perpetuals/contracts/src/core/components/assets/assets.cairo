@@ -31,6 +31,7 @@ pub mod AssetsComponent {
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::{Price, PriceMulTrait, PriceTrait, SignedPrice};
+    use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -45,7 +46,6 @@ pub mod AssetsComponent {
     };
     use starkware_utils::math::abs::Abs;
     use starkware_utils::types::PublicKey;
-    use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
     use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
     use starkware_utils::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
 
@@ -64,7 +64,7 @@ pub mod AssetsComponent {
         num_of_active_synthetic_assets: usize,
         pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
         pub synthetic_timely_data: IterableMap<AssetId, SyntheticTimelyData>,
-        pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
+        pub risk_factor_tiers: Map<AssetId, Vec<RiskFactor>>,
         asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
         collateral_id: Option<AssetId>,
@@ -218,9 +218,8 @@ pub mod AssetsComponent {
                 assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
                 self
                     .risk_factor_tiers
-                    .entry(asset_id)
-                    // New function checks that `risk_factor` is lower than 100.
-                    .push(FixedTwoDecimalTrait::new(*risk_factor));
+                    .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
+                    .push(RiskFactorTrait::new(*risk_factor));
             }
             self
                 .emit(
@@ -398,7 +397,7 @@ pub mod AssetsComponent {
 
         fn get_risk_factor_tiers(
             self: @ComponentState<TContractState>, asset_id: AssetId,
-        ) -> Span<FixedTwoDecimal> {
+        ) -> Span<RiskFactor> {
             let mut tiers = array![];
             let risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
             for i in 0..risk_factor_tiers.len() {
@@ -530,7 +529,7 @@ pub mod AssetsComponent {
             synthetic_id: AssetId,
             balance: Balance,
             price: Price,
-        ) -> FixedTwoDecimal {
+        ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let synthetic_value: u128 = price.mul(rhs: balance).abs();
                 let mut index = if synthetic_value <= synthetic_config

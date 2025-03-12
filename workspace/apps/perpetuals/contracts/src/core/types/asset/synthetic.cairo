@@ -2,8 +2,9 @@ use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
-use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
+use perpetuals::core::types::risk_factor::RiskFactor;
 use starkware_utils::types::time::time::Timestamp;
+
 
 const VERSION: u8 = 1;
 
@@ -32,7 +33,7 @@ pub struct SyntheticAsset {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor: RiskFactor,
 }
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
@@ -41,8 +42,8 @@ pub struct SyntheticDiffEnriched {
     pub balance_before: Balance,
     pub balance_after: Balance,
     pub price: Price,
-    pub risk_factor_before: FixedTwoDecimal,
-    pub risk_factor_after: FixedTwoDecimal,
+    pub risk_factor_before: RiskFactor,
+    pub risk_factor_after: RiskFactor,
 }
 
 #[generate_trait]

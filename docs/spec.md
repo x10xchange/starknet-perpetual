@@ -45,7 +45,7 @@
         - [TimeDelta](#timedelta)
         - [FundingTick](#fundingtick)
         - [PriceTick](#pricetick)
-        - [FixedTwoDecimal](#fixedtwodecimal)
+        - [RiskFactor](#riskfactor)
         - [Position](#position)
         - [CollateralAsset](#collateralasset)
         - [SyntheticAsset](#syntheticasset)
@@ -198,7 +198,7 @@ classDiagram
         num_of_active_synthetic_assets: usize
         synthetic_timely_data_head: Option[AssetId]
         synthetic_timely_data: Map< AssetId, SyntheticTimelyData>
-        risk_factor_tiers: Map< AssetId, Vec[FixedTwoDecimal]>
+        risk_factor_tiers: Map< AssetId, Vec[RiskFactor]>
         asset_oracle: Map< AssetId, Map[PublicKey, felt252]>
         max_oracle_price_validity: TimeDelta
 
@@ -306,7 +306,7 @@ classDiagram
         version: u8
         token_address: ContractAddress
         status: AssetStatus
-        risk_factor: FixedTwoDecimal
+        risk_factor: RiskFactor
         quantum: u64
         quorum: u8
     }
@@ -497,7 +497,7 @@ pub struct Asset {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor: RiskFactor,
 }
 ```
 
@@ -537,8 +537,8 @@ pub struct AssetDiff {
 pub struct AssetDiffEnriched {
     pub asset: AssetDiff,
     pub price: Price,
-    pub risk_factor_before: FixedTwoDecimal,
-    pub risk_factor_after: FixedTwoDecimal,
+    pub risk_factor_before: RiskFactor,
+    pub risk_factor_after: RiskFactor,
 }
 ```
 
@@ -632,12 +632,12 @@ pub struct SignedPrice {
 }
 ```
 
-### FixedTwoDecimal
+### RiskFactor
 
 ```rust
 // Fixed-point decimal with 2 decimal places.
 // Example: 0.75 is represented as 75.
-pub struct FixedTwoDecimal {
+pub struct RiskFactor {
     pub value: u8 // Stores number * 100
 }
 ```
@@ -714,7 +714,7 @@ struct CollateralConfig {
     // Configurable.
     pub status: AssetStatus,
     pub quantum: u64,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor: RiskFactor,
     // Number of oracles that need to sign on the price to accept it.
     pub quorum: u8,
 }
@@ -1065,7 +1065,7 @@ pub trait IAssets<TContractState> {
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
-    fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<FixedTwoDecimal>;
+    fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
     fn remove_oracle_from_asset(
         ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
     );
@@ -1092,7 +1092,7 @@ Struct Storage {
     pub num_of_active_synthetic_assets: usize,
     pub synthetic_timely_data_head: Option<AssetId>,
     pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-    pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
+    pub risk_factor_tiers: Map<AssetId, Vec<RiskFactor>>,
     asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
     max_oracle_price_validity: TimeDelta,
 }

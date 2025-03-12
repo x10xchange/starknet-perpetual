@@ -16,6 +16,7 @@ use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::{PositionDiff, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
+use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
 use perpetuals::tests::constants::*;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
@@ -30,7 +31,6 @@ use starkware_utils::constants::{MAX_U128, TWO_POW_32, TWO_POW_40};
 use starkware_utils::iterable_map::*;
 use starkware_utils::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::Signature;
-use starkware_utils::types::fixed_two_decimal::{FixedTwoDecimal, FixedTwoDecimalTrait};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
@@ -197,7 +197,7 @@ pub struct CollateralCfg {
     pub token_cfg: TokenConfig,
     pub collateral_id: AssetId,
     pub quantum: u64,
-    pub risk_factor: FixedTwoDecimal,
+    pub risk_factor: RiskFactor,
     pub quorum: u8,
 }
 
@@ -373,7 +373,7 @@ pub fn check_synthetic_config(
     assert!(synthetic_config.status == status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {
-        assert!(*tiers[i] == FixedTwoDecimalTrait::new(*risk_factor_tiers[i]));
+        assert!(*tiers[i] == RiskFactorTrait::new(*risk_factor_tiers[i]));
     }
     assert!(synthetic_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
     assert!(synthetic_config.risk_factor_tier_size == risk_factor_tier_size);

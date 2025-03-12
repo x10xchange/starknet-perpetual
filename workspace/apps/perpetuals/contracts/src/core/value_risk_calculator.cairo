@@ -8,10 +8,10 @@ use perpetuals::core::types::asset::synthetic::SyntheticAsset;
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::position::{PositionDiffEnriched, PositionId};
 use perpetuals::core::types::price::{Price, PriceMulTrait};
+use perpetuals::core::types::risk_factor::RiskFactorTrait;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
-use starkware_utils::types::fixed_two_decimal::FixedTwoDecimalTrait;
 
 // This is the result of Price::One().mul(balance: 1)
 // which is actually 1e-6 USDC * 2^28 / 2^28 = 1
@@ -227,7 +227,7 @@ mod tests {
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::price::{PRICE_SCALE, Price, PriceTrait};
-    use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
+    use perpetuals::core::types::risk_factor::RiskFactor;
     use super::*;
 
 
@@ -249,20 +249,20 @@ mod tests {
     }
 
     /// Risk factors
-    fn RISK_FACTOR_1() -> FixedTwoDecimal {
-        FixedTwoDecimalTrait::new(50)
+    fn RISK_FACTOR_1() -> RiskFactor {
+        RiskFactorTrait::new(50)
     }
-    fn RISK_FACTOR_2() -> FixedTwoDecimal {
-        FixedTwoDecimalTrait::new(50)
+    fn RISK_FACTOR_2() -> RiskFactor {
+        RiskFactorTrait::new(50)
     }
-    fn RISK_FACTOR_3() -> FixedTwoDecimal {
-        FixedTwoDecimalTrait::new(50)
+    fn RISK_FACTOR_3() -> RiskFactor {
+        RiskFactorTrait::new(50)
     }
-    fn RISK_FACTOR_4() -> FixedTwoDecimal {
-        FixedTwoDecimalTrait::new(50)
+    fn RISK_FACTOR_4() -> RiskFactor {
+        RiskFactorTrait::new(50)
     }
-    fn RISK_FACTOR_5() -> FixedTwoDecimal {
-        FixedTwoDecimalTrait::new(50)
+    fn RISK_FACTOR_5() -> RiskFactor {
+        RiskFactorTrait::new(50)
     }
 
     /// Assets IDs

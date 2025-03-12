@@ -3,8 +3,8 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::risk_factor::RiskFactor;
 use starkware_utils::types::PublicKey;
-use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
 use starkware_utils::types::time::time::{TimeDelta, Timestamp};
 
 
@@ -51,7 +51,7 @@ pub trait IAssets<TContractState> {
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
-    fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<FixedTwoDecimal>;
+    fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
     fn remove_oracle_from_asset(
         ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
     );
