@@ -9,7 +9,7 @@ pub mod AssetsComponent {
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
-        COLLATERAL_NOT_REGISTERED, DEACTIVATED_ASSET, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED,
+        COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
         INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
         INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
         INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION,
@@ -114,7 +114,7 @@ pub mod AssetsComponent {
             get_dep_component!(@self, Roles).only_app_governor();
 
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
-            assert(asset_config.status != AssetStatus::INACTIVE, DEACTIVATED_ASSET);
+            assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
 
             // Validate the oracle does not exist.
             let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
@@ -246,8 +246,8 @@ pub mod AssetsComponent {
         /// - remove asset from `synthetic_timely_data` map
         /// - Decrement the number of active synthetic assets.
         ///
-        /// When a synthetic asset is deactivated, it can no longer be traded or liquidated. It also
-        /// stops receiving funding and price updates. Additionally, a deactivated asset cannot be
+        /// When a synthetic asset is inactive, it can no longer be traded or liquidated. It also
+        /// stops receiving funding and price updates. Additionally, a inactive asset cannot be
         /// reactivated.
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
             get_dep_component!(@self, Roles).only_app_governor();
@@ -444,7 +444,7 @@ pub mod AssetsComponent {
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
             let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
-            assert(synthetic_config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
+            assert(synthetic_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             let old_quorum = synthetic_config.quorum;
             assert(old_quorum != quorum, INVALID_SAME_QUORUM);
@@ -677,13 +677,13 @@ pub mod AssetsComponent {
             signed_prices: Span<SignedPrice>,
         ) {
             let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
-            assert(asset_config.status != AssetStatus::INACTIVE, DEACTIVATED_ASSET);
-            assert(asset_config.quorum.into() <= signed_prices.len(), QUORUM_NOT_REACHED);
+            assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
+            let signed_prices_len = signed_prices.len();
+            assert(signed_prices_len >= asset_config.quorum.into(), QUORUM_NOT_REACHED);
 
             let mut lower_amount: usize = 0;
             let mut higher_amount: usize = 0;
             let mut equal_amount: usize = 0;
-            let signed_prices_len = signed_prices.len();
 
             let mut previous_public_key_opt: Option<PublicKey> = Option::None;
 

@@ -1623,7 +1623,7 @@ Checking that the asset exists in the system and is not delisted.
 
 - Withdraw, Deposit asset\_ids must be collaterals
 - Trade, Liquidate \- quote, fee asset\_ids must be collaterals
-- Deleverage \- quote is active collateral. base must be synthetic, it can be deactivated.
+- Deleverage \- quote is active collateral. base must be synthetic, it can be inactive.
 
 ### Fulfillment
 
