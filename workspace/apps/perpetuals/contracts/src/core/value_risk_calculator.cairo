@@ -82,16 +82,6 @@ pub fn evaluate_position(
     get_position_state(position_tvtr: tvtr)
 }
 
-
-pub fn validate_position_is_healthy_or_healthier(
-    position_id: PositionId,
-    unchanged_synthetics: Span<SyntheticAsset>,
-    position_diff_enriched: PositionDiffEnriched,
-) {
-    let tvtr = calculate_position_tvtr_change(:unchanged_synthetics, :position_diff_enriched);
-    assert_healthy_or_healthier(:position_id, :tvtr);
-}
-
 pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
@@ -187,7 +177,7 @@ pub fn calculate_position_tvtr(
 /// 2. Calculates value and risk changes for collateral assets
 /// 3. Calculates value and risk changes for synthetic assets
 /// 4. Combines all calculations into final before/after totals
-fn calculate_position_tvtr_change(
+pub fn calculate_position_tvtr_change(
     unchanged_synthetics: Span<SyntheticAsset>, position_diff_enriched: PositionDiffEnriched,
 ) -> TVTRChange {
     // Calculate the value and risk of the position data.

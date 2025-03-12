@@ -444,13 +444,16 @@ pub(crate) mod Positions {
                 if synthetic.balance.is_zero() {
                     continue;
                 }
-                let funding_index = assets.get_funding_index(synthetic_id);
+                let global_funding_index = assets.get_funding_index(synthetic_id);
                 collateral_provisional_balance +=
-                    calculate_funding(synthetic.funding_index, funding_index, synthetic.balance);
+                    calculate_funding(
+                        old_funding_index: synthetic.funding_index,
+                        new_funding_index: global_funding_index,
+                        balance: synthetic.balance,
+                    );
             }
             collateral_provisional_balance
         }
-
         /// Returns all assets from the position, excluding assets with zero balance
         /// and those included in `position_diff`.
         fn get_position_unchanged_synthetics(
