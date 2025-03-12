@@ -14,6 +14,7 @@ pub const INVALID_DELEVERAGE_BASE_CHANGE: felt252 = 'INVALID_DELEVERAGE_BASE_CHA
 pub const INVALID_NON_SYNTHETIC_ASSET: felt252 = 'INVALID_NON_SYNTHETIC_ASSET';
 pub const INVALID_OWNER_SIGNATURE: felt252 = 'INVALID_ACCOUNT_OWNER_SIGNATURE';
 pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_QUOTE_AMOUNT_SIGN';
+pub const INVALID_QUOTE_FEE_AMOUNT: felt252 = 'INVALID_QUOTE_FEE_AMOUNT';
 pub const INVALID_SAME_POSITIONS: felt252 = 'INVALID_SAME_POSITIONS';
 pub const INVALID_ZERO_AMOUNT: felt252 = 'INVALID_ZERO_AMOUNT';
 pub const POSITION_UNHEALTHY: felt252 = 'POSITION_UNHEALTHY';
@@ -31,10 +32,6 @@ pub fn illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
 
 pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
     format!("ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
-}
-
-pub fn illegal_zero_fee() -> ByteArray {
-    format!("NON_ZERO_FEE_IN_LIQUIDATE_INSURANCE_FUND")
 }
 
 pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {

@@ -20,9 +20,9 @@ pub mod Core {
         CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
         DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
         INVALID_AMOUNT_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_QUOTE_AMOUNT_SIGN, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
-        QUOTE_ASSET_ID_NOT_COLLATERAL, TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err,
-        illegal_zero_fee, order_expired_err,
+        INVALID_QUOTE_AMOUNT_SIGN, INVALID_QUOTE_FEE_AMOUNT, INVALID_SAME_POSITIONS,
+        INVALID_ZERO_AMOUNT, QUOTE_ASSET_ID_NOT_COLLATERAL, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
@@ -464,22 +464,6 @@ pub mod Core {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
 
-            let position_id_a = order_a.position_id;
-            let position_id_b = order_b.position_id;
-
-            let position_a = self.positions.get_position_snapshot(position_id_a);
-            let position_b = self.positions.get_position_snapshot(position_id_b);
-
-            // Signatures validation:
-            let hash_a = self
-                ._validate_order_signature(
-                    position: position_a, order: order_a, signature: signature_a,
-                );
-            let hash_b = self
-                ._validate_order_signature(
-                    position: position_b, order: order_b, signature: signature_b,
-                );
-
             self
                 ._validate_trade(
                     :order_a,
@@ -488,6 +472,25 @@ pub mod Core {
                     :actual_amount_quote_a,
                     :actual_fee_a,
                     :actual_fee_b,
+                );
+
+            let position_id_a = order_a.position_id;
+            let position_id_b = order_b.position_id;
+
+            let position_a = self.positions.get_position_snapshot(position_id_a);
+            let position_b = self.positions.get_position_snapshot(position_id_b);
+            // Signatures validation:
+            let hash_a = self
+                ._validate_order_signature(
+                    public_key: position_a.get_owner_public_key(),
+                    order: order_a,
+                    signature: signature_a,
+                );
+            let hash_b = self
+                ._validate_order_signature(
+                    public_key: position_b.get_owner_public_key(),
+                    order: order_b,
+                    signature: signature_b,
                 );
 
             // Validate and update fulfillments.
@@ -611,6 +614,8 @@ pub mod Core {
             actual_amount_base_liquidated: i64,
             actual_amount_quote_liquidated: i64,
             actual_liquidator_fee: u64,
+            /// The `liquidated_fee_amount` is paid by the liquidated position to the
+            /// insurance fund position.
             liquidated_fee_amount: u64,
         ) {
             /// Validations:
@@ -618,16 +623,10 @@ pub mod Core {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
 
-            let liquidator_position_id = liquidator_order.position_id;
-            let liquidator_position = self.positions.get_position_snapshot(liquidator_position_id);
+            assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
 
-            // Signatures validation:
-            let liquidator_order_hash = self
-                ._validate_order_signature(
-                    position: liquidator_position,
-                    order: liquidator_order,
-                    signature: liquidator_signature,
-                );
+            let liquidator_position_id = liquidator_order.position_id;
+            assert(liquidator_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
 
             let collateral_id = self.assets.get_collateral_id();
             let liquidated_order = Order {
@@ -654,11 +653,18 @@ pub mod Core {
                     actual_fee_b: actual_liquidator_fee,
                 );
 
-            assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
-            // In case of liquidation of insurance fund, the liquidator fee should be zero.
-            if liquidator_order.position_id == INSURANCE_FUND_POSITION {
-                assert_with_byte_array(liquidated_fee_amount.is_zero(), illegal_zero_fee());
-            }
+            let liquidator_position = self.positions.get_position_snapshot(liquidator_position_id);
+            let liquidated_position = self
+                .positions
+                .get_position_snapshot(position_id: liquidated_position_id);
+
+            // Signatures validation:
+            let liquidator_order_hash = self
+                ._validate_order_signature(
+                    public_key: liquidator_position.get_owner_public_key(),
+                    order: liquidator_order,
+                    signature: liquidator_signature,
+                );
 
             // Validate and update fulfillment.
             self
@@ -693,13 +699,6 @@ pub mod Core {
             let fee_position_diff = PositionDiff {
                 collateral_diff: actual_liquidator_fee.into(), synthetic_diff: Option::None,
             };
-
-            let liquidated_position = self
-                .positions
-                .get_position_snapshot(position_id: liquidated_position_id);
-            let liquidator_position = self
-                .positions
-                .get_position_snapshot(position_id: liquidator_position_id);
 
             /// Validations - Fundamentals:
             self
@@ -934,7 +933,8 @@ pub mod Core {
         fn _validate_order(ref self: ContractState, order: Order) {
             // Verify that position is not fee position.
             assert(order.position_id != FEE_POSITION, CANT_TRADE_WITH_FEE_POSITION);
-
+            // This is to make sure that the fee is relative to the quote amount.
+            assert(order.quote_amount.abs() > order.fee_amount, INVALID_QUOTE_FEE_AMOUNT);
             // Non-zero amount check.
             assert(order.base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             assert(order.quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
@@ -971,8 +971,8 @@ pub mod Core {
             self._validate_order(order: order_b);
 
             // Non-zero actual amount check.
-            assert(actual_amount_base_a != 0, INVALID_ZERO_AMOUNT);
-            assert(actual_amount_quote_a != 0, INVALID_ZERO_AMOUNT);
+            assert(actual_amount_base_a.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(actual_amount_quote_a.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Sign Validation for amounts.
             assert(
@@ -1063,12 +1063,8 @@ pub mod Core {
         }
 
         fn _validate_order_signature(
-            self: @ContractState,
-            position: StoragePath<Position>,
-            order: Order,
-            signature: Signature,
+            self: @ContractState, public_key: PublicKey, order: Order, signature: Signature,
         ) -> HashType {
-            let public_key = position.get_owner_public_key();
             let msg_hash = order.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);
             msg_hash
