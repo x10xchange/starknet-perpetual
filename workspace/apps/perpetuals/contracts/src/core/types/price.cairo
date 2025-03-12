@@ -18,7 +18,7 @@ const ORACLE_SCALE: u128 = 10_u128.pow(18);
 const SN_PERPS_SCALE: u128 = 10_u128.pow(6);
 
 // The ratio between the StarkNet Perps scale and the Oracle scale.
-const SN_PERPS_ORACLE_SCALE_RATIO: u128 = 10_u128.pow(12);
+const ORACLE_SCALE_SN_PERPS_RATIO: u128 = ORACLE_SCALE / SN_PERPS_SCALE;
 
 const MAX_PRICE_ERROR: felt252 = 'Value must be < 2^56';
 
@@ -89,7 +89,7 @@ pub impl PriceImpl of PriceTrait {
 pub fn convert_oracle_to_perps_price(oracle_price: u128, resolution_factor: u64) -> Price {
     let mut converted_price = oracle_price * PRICE_SCALE.into();
     converted_price /= resolution_factor.into();
-    converted_price /= SN_PERPS_ORACLE_SCALE_RATIO;
+    converted_price /= ORACLE_SCALE_SN_PERPS_RATIO;
     let value = converted_price.try_into().expect(MAX_PRICE_ERROR);
     assert(value < MAX_PRICE, MAX_PRICE_ERROR);
     Price { value }
