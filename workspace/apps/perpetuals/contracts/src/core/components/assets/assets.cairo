@@ -531,18 +531,19 @@ pub mod AssetsComponent {
             price: Price,
         ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
+                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
                 let synthetic_value: u128 = price.mul(rhs: balance).abs();
-                let mut index = if synthetic_value <= synthetic_config
-                    .risk_factor_first_tier_boundary {
+                let index = if synthetic_value <= synthetic_config.risk_factor_first_tier_boundary {
                     0_u128
                 } else {
                     let tier_size = synthetic_config.risk_factor_tier_size;
                     let first_tier_offset = synthetic_value
                         - synthetic_config.risk_factor_first_tier_boundary;
-                    1_u128 + (first_tier_offset / tier_size)
+                    min(
+                        1_u128 + (first_tier_offset / tier_size),
+                        asset_risk_factor_tiers.len().into() - 1,
+                    )
                 };
-                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
-                index = min(index, asset_risk_factor_tiers.len().into() - 1);
                 asset_risk_factor_tiers
                     .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
                     .read()

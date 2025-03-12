@@ -529,23 +529,28 @@ pub(crate) mod Positions {
             let global_funding_index = assets.get_funding_index(:synthetic_id);
 
             // Adjusts the main collateral balance accordingly:
-            let mut collateral_balance = 0_i64.into();
-            let mut old_balance = 0_i64.into();
-            if let Option::Some(synthetic) = position.synthetic_balance.read(synthetic_id) {
-                old_balance = synthetic.balance;
-                collateral_balance +=
+            let (collateral_funding, current_synthetic_balance) = if let Option::Some(synthetic) =
+                position
+                .synthetic_balance
+                .read(synthetic_id) {
+                let current_synthetic_balance = synthetic.balance;
+                (
                     calculate_funding(
                         old_funding_index: synthetic.funding_index,
                         new_funding_index: global_funding_index,
-                        balance: old_balance,
-                    );
-            }
-            position.collateral_balance.add_and_write(collateral_balance);
+                        balance: current_synthetic_balance,
+                    ),
+                    current_synthetic_balance,
+                )
+            } else {
+                (0_i64.into(), 0_i64.into())
+            };
+            position.collateral_balance.add_and_write(collateral_funding);
 
             // Updates the synthetic balance and funding index:
             let synthetic_asset = SyntheticBalance {
                 version: POSITION_VERSION,
-                balance: old_balance + synthetic_diff,
+                balance: current_synthetic_balance + synthetic_diff,
                 funding_index: global_funding_index,
             };
             position.synthetic_balance.write(synthetic_id, synthetic_asset);
