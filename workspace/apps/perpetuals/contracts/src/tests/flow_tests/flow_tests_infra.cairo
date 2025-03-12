@@ -387,6 +387,14 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn deposit(ref self: FlowTestState, user: User, reciever: User, amount: u64) -> DepositInfo {
+        self.token_state.fund(recipient: user.account.address, amount: amount.into());
+        self
+            .token_state
+            .approve(
+                owner: user.account.address,
+                spender: self.perpetuals_contract,
+                amount: amount.into(),
+            );
         let salt = self.generate_salt();
         let position_id = reciever.position_id;
         user.account.set_as_caller(self.perpetuals_contract);
