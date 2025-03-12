@@ -68,7 +68,7 @@ fn test_constructor() {
     let mut state = initialized_contract_state(cfg: @cfg, token_state: @token_state);
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert!(state.replaceability.get_upgrade_delay() == UPGRADE_DELAY);
-    assert!(state.assets.get_price_validation_interval() == MAX_PRICE_INTERVAL);
+    assert!(state.assets.get_max_price_interval() == MAX_PRICE_INTERVAL);
     assert!(state.assets.get_max_funding_interval() == MAX_FUNDING_INTERVAL);
     assert!(state.assets.get_max_funding_rate() == MAX_FUNDING_RATE);
     assert!(state.assets.get_max_oracle_price_validity() == MAX_ORACLE_PRICE_VALIDITY);
@@ -378,6 +378,39 @@ fn test_successful_set_owner_account_request_using_public_key() {
 }
 
 #[test]
+#[should_panic(expected: 'CALLER_IS_NOT_OWNER_ACCOUNT')]
+fn test_set_owner_account_request_invalid_caller() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+    let expiration = expected_time.add(delta: Time::days(1));
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        public_key: user.get_public_key(),
+        new_owner_account: user.address,
+        position_id: user.position_id,
+        expiration,
+    };
+    let msg_hash = set_owner_account_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(msg_hash);
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_owner_account_request(
+            :signature, position_id: user.position_id, new_owner_account: user.address, :expiration,
+        );
+}
+
+#[test]
 #[should_panic(expected: 'POSITION_HAS_OWNER_ACCOUNT')]
 fn test_set_owner_account_request_position_has_owner() {
     // Setup state, token and user:
@@ -487,15 +520,19 @@ fn test_set_existed_owner_account() {
     let expiration = Time::now().add(Time::days(1));
 
     // Test.
+
+    let set_owner_account_args = SetOwnerAccountArgs {
+        public_key: user.get_public_key(),
+        new_owner_account: user.address,
+        position_id: user.position_id,
+        expiration,
+    };
+    let msg_hash = set_owner_account_args.get_message_hash(public_key: user.get_public_key());
+    let signature = user.sign_message(msg_hash);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .positions
-        .set_owner_account(
-            operator_nonce: state.get_operator_nonce(),
-            :position_id,
-            :new_owner_account,
-            :expiration,
-        );
+        .set_owner_account_request(:signature, :position_id, :new_owner_account, :expiration);
 }
 
 // Add synthetic asset tests.

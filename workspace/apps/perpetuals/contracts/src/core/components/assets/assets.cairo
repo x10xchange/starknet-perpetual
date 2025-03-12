@@ -383,9 +383,6 @@ pub mod AssetsComponent {
         fn get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
             self.num_of_active_synthetic_assets.read()
         }
-        fn get_price_validation_interval(self: @ComponentState<TContractState>) -> TimeDelta {
-            self.max_price_interval.read()
-        }
         fn get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {

@@ -192,14 +192,13 @@ pub(crate) mod Positions {
             expiration: Timestamp,
         ) {
             let position = self.get_position_snapshot(:position_id);
-            let owner_account = position.get_owner_account();
-            assert(owner_account.is_none(), POSITION_HAS_OWNER_ACCOUNT);
+            assert(position.get_owner_account().is_none(), POSITION_HAS_OWNER_ACCOUNT);
             assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
             let public_key = position.get_owner_public_key();
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .register_approval(
-                    :owner_account,
+                    owner_account: Option::Some(new_owner_account),
                     :public_key,
                     :signature,
                     args: SetOwnerAccountArgs {
@@ -241,7 +240,6 @@ pub(crate) mod Positions {
             validate_expiration(:expiration, err: SET_POSITION_OWNER_EXPIRED);
             let position = self.get_position_mut(:position_id);
             let public_key = position.get_owner_public_key();
-            assert(position.get_owner_account().is_none(), POSITION_HAS_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .consume_approved_request(
@@ -328,9 +326,7 @@ pub(crate) mod Positions {
             operator_nonce_component.use_checked_nonce(:operator_nonce);
             validate_expiration(:expiration, err: SET_PUBLIC_KEY_EXPIRED);
             let position = self.get_position_mut(:position_id);
-            let owner_account = position.get_owner_account();
             let old_public_key = position.get_owner_public_key();
-            assert(owner_account.is_some(), NO_OWNER_ACCOUNT);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
             let hash = request_approvals
                 .consume_approved_request(

@@ -3,7 +3,6 @@ use starknet::ContractAddress;
 use starkware_utils::types::PublicKey;
 use starkware_utils::types::time::time::Timestamp;
 
-
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct NewPosition {
     #[key]
