@@ -6,7 +6,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
-use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
+use starkware_utils::math::fraction::FractionTrait;
 use starkware_utils::types::HashType;
 use starkware_utils::types::time::time::Timestamp;
 
@@ -76,10 +76,10 @@ pub impl OrderImpl of OrderTrait {
         self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
     ) {
         let order_base_to_quote_ratio = FractionTrait::new(
-            numerator: *self.base_amount, denominator: (*self.quote_amount).abs(),
+            numerator: (*self.base_amount).into(), denominator: (*self.quote_amount).abs().into(),
         );
         let actual_base_to_quote_ratio = FractionTrait::new(
-            numerator: actual_amount_base, denominator: actual_amount_quote.abs(),
+            numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
         );
         assert_with_byte_array(
             order_base_to_quote_ratio <= actual_base_to_quote_ratio,
@@ -89,10 +89,10 @@ pub impl OrderImpl of OrderTrait {
         // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
         // operator's fee.
         let actual_fee_to_quote_ratio = FractionTrait::new(
-            numerator: actual_fee, denominator: actual_amount_quote.abs(),
+            numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
         );
         let order_fee_to_quote_ratio = FractionTrait::new(
-            numerator: *self.fee_amount, denominator: (*self.quote_amount).abs(),
+            numerator: (*self.fee_amount).into(), denominator: (*self.quote_amount).abs().into(),
         );
         assert_with_byte_array(
             actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,

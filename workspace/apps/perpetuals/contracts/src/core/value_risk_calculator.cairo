@@ -11,7 +11,7 @@ use perpetuals::core::types::price::{Price, PriceMulTrait};
 use perpetuals::core::types::risk_factor::RiskFactorTrait;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
-use starkware_utils::math::fraction::FractionTraitI128U128 as FractionTrait;
+use starkware_utils::math::fraction::FractionTrait;
 
 // This is the result of Price::One().mul(balance: 1)
 // which is actually 1e-6 USDC * 2^28 / 2^28 = 1
