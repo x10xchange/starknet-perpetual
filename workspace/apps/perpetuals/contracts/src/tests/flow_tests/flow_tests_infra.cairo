@@ -97,9 +97,13 @@ struct PerpetualsConfig {
     role_admin: ContractAddress,
     app_governor: ContractAddress,
     upgrade_delay: u64,
+    collateral_id: AssetId,
+    collateral_token_address: ContractAddress,
+    collateral_quantum: u64,
     max_price_interval: TimeDelta,
     max_funding_interval: TimeDelta,
     max_funding_rate: u32,
+    cancel_delay: TimeDelta,
     max_oracle_price_validity: TimeDelta,
     fee_position_owner_account: ContractAddress,
     fee_position_owner_public_key: PublicKey,
@@ -107,8 +111,9 @@ struct PerpetualsConfig {
     insurance_fund_position_owner_public_key: PublicKey,
 }
 
-impl DefaultPerpetualsConfig of Default<PerpetualsConfig> {
-    fn default() -> PerpetualsConfig {
+#[generate_trait]
+pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
+    fn new(collateral_token_address: ContractAddress) -> PerpetualsConfig {
         let mut key_gen = 1;
         let operator = AccountTrait::new(ref key_gen);
         PerpetualsConfig {
@@ -117,9 +122,13 @@ impl DefaultPerpetualsConfig of Default<PerpetualsConfig> {
             role_admin: constants::APP_ROLE_ADMIN(),
             app_governor: constants::APP_GOVERNOR(),
             upgrade_delay: constants::UPGRADE_DELAY,
+            collateral_id: constants::COLLATERAL_ASSET_ID(),
+            collateral_token_address,
+            collateral_quantum: constants::COLLATERAL_QUANTUM,
             max_price_interval: constants::MAX_PRICE_INTERVAL,
             max_funding_interval: constants::MAX_FUNDING_INTERVAL,
             max_funding_rate: constants::MAX_FUNDING_RATE,
+            cancel_delay: constants::CANCEL_DELAY,
             max_oracle_price_validity: constants::MAX_ORACLE_PRICE_VALIDITY,
             fee_position_owner_account: operator.address,
             fee_position_owner_public_key: operator.key_pair.public_key,
@@ -134,13 +143,15 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
+        self.collateral_id.serialize(ref calldata);
+        self.collateral_token_address.serialize(ref calldata);
+        self.collateral_quantum.serialize(ref calldata);
         self.max_price_interval.serialize(ref calldata);
+        self.max_oracle_price_validity.serialize(ref calldata);
         self.max_funding_interval.serialize(ref calldata);
         self.max_funding_rate.serialize(ref calldata);
-        self.max_oracle_price_validity.serialize(ref calldata);
-        self.fee_position_owner_account.serialize(ref calldata);
+        self.cancel_delay.serialize(ref calldata);
         self.fee_position_owner_public_key.serialize(ref calldata);
-        self.insurance_fund_position_owner_account.serialize(ref calldata);
         self.insurance_fund_position_owner_public_key.serialize(ref calldata);
 
         let perpetuals_contract = snforge_std::declare("Core").unwrap().contract_class();
@@ -152,7 +163,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 /// Account is a representation of any user account that can interact with the contracts.
 #[derive(Copy, Drop)]
 struct Account {
-    address: ContractAddress,
+    pub address: ContractAddress,
     pub key_pair: StarkKeyPair,
 }
 
@@ -304,9 +315,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn init() -> FlowTestState {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
         let mut key_gen = 1;
-        let perpetuals_config: PerpetualsConfig = Default::default();
-        let perpetuals_contract = Deployable::deploy(@perpetuals_config);
-
         let token_config = TokenConfig {
             name: constants::COLLATERAL_NAME(),
             symbol: constants::COLLATERAL_SYMBOL(),
@@ -315,7 +323,12 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         };
         let token_state = Deployable::deploy(@token_config);
 
-        let mut state = FlowTestState {
+        let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
+            collateral_token_address: token_state.address,
+        );
+        let perpetuals_contract = Deployable::deploy(@perpetuals_config);
+
+        FlowTestState {
             governance_admin: perpetuals_config.governance_admin,
             role_admin: perpetuals_config.role_admin,
             app_governor: perpetuals_config.app_governor,
@@ -331,9 +344,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             },
             position_id_gen: 100,
             salt: 0,
-        };
-
-        state
+        }
     }
 
     fn setup(ref self: FlowTestState, synthetics: Span<SyntheticConfig>) {
@@ -398,9 +409,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         let salt = self.generate_salt();
         let position_id = reciever.position_id;
         user.account.set_as_caller(self.perpetuals_contract);
+
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .deposit(:position_id, quantized_amount: amount, :salt);
-        DepositInfo { user, position_id, amount: amount.try_into().unwrap(), salt }
+        DepositInfo { user, position_id, amount, salt }
     }
 
     fn cancel_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
