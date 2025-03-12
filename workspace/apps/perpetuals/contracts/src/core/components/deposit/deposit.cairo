@@ -16,7 +16,7 @@ pub(crate) mod Deposit {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternalTrait;
-    use perpetuals::core::types::position::{PositionId, create_collateral_position_diff};
+    use perpetuals::core::types::position::{PositionDiff, PositionId};
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -217,9 +217,9 @@ pub(crate) mod Deposit {
             let unquantized_amount = quantized_amount * quantum.into();
             self.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
             let mut positions = get_dep_component_mut!(ref self, Positions);
-            let position_diff = create_collateral_position_diff(
-                collateral_diff: quantized_amount.into(),
-            );
+            let position_diff = PositionDiff {
+                collateral_diff: quantized_amount.into(), synthetic_diff: Option::None,
+            };
             positions.apply_diff(:position_id, :position_diff);
             self
                 .emit(

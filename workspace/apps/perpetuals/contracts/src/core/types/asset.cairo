@@ -1,7 +1,5 @@
 use core::num::traits::zero::Zero;
-use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::price::Price;
-use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
+
 
 pub mod synthetic;
 
@@ -16,24 +14,6 @@ pub enum AssetStatus {
     PENDING,
     ACTIVE,
     INACTIVE,
-}
-
-#[derive(Copy, Debug, Drop, Serde)]
-pub struct Asset {
-    pub id: AssetId,
-    pub balance: Balance,
-    pub price: Price,
-    pub risk_factor: FixedTwoDecimal,
-}
-
-#[derive(Copy, Debug, Default, Drop, Serde)]
-pub struct AssetDiffEnriched {
-    pub asset_id: AssetId,
-    pub balance_before: Balance,
-    pub balance_after: Balance,
-    pub price: Price,
-    pub risk_factor_before: FixedTwoDecimal,
-    pub risk_factor_after: FixedTwoDecimal,
 }
 
 #[generate_trait]

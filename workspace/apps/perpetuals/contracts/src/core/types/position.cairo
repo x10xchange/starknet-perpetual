@@ -1,6 +1,7 @@
-use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-use perpetuals::core::types::asset::{Asset, AssetDiffEnriched, AssetId};
+use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticDiffEnriched};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
+use perpetuals::core::types::funding::FundingIndex;
 use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
 use starkware_utils::iterable_map::{
@@ -16,9 +17,18 @@ pub struct Position {
     pub owner_account: Option<ContractAddress>,
     pub owner_public_key: PublicKey,
     pub collateral_balance: Balance,
-    pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
+    pub synthetic_balance: IterableMap<AssetId, SyntheticBalance>,
 }
 
+/// Synthetic asset in a position.
+/// - balance: The amount of the synthetic asset held in the position.
+/// - funding_index: The funding index at the time of the last update.
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub struct SyntheticBalance {
+    pub version: u8,
+    pub balance: Balance,
+    pub funding_index: FundingIndex,
+}
 
 #[derive(Copy, Debug, Drop, Hash, PartialEq, Serde)]
 pub struct PositionId {
@@ -27,29 +37,21 @@ pub struct PositionId {
 
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiff {
-    pub collateral: Balance,
-    pub synthetic: Option<(AssetId, Balance)>,
-}
-
-pub fn create_position_diff(
-    collateral_diff: Balance, synthetic_id: AssetId, synthetic_diff: Balance,
-) -> PositionDiff {
-    PositionDiff {
-        collateral: collateral_diff, synthetic: Option::Some((synthetic_id, synthetic_diff)),
-    }
-}
-pub fn create_collateral_position_diff(collateral_diff: Balance) -> PositionDiff {
-    PositionDiff { collateral: collateral_diff, synthetic: Option::None }
+    pub collateral_diff: Balance,
+    pub synthetic_diff: Option<(AssetId, Balance)>,
 }
 
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiffEnriched {
-    pub collateral: BalanceDiff,
-    pub synthetic: Option<AssetDiffEnriched>,
+    pub collateral_enriched: BalanceDiff,
+    pub synthetic_enriched: Option<SyntheticDiffEnriched>,
 }
 
-pub type PositionData = Span<Asset>;
-pub type UnchangedAssets = PositionData;
+#[derive(Copy, Debug, Drop, Serde)]
+pub struct PositionData {
+    pub synthetics: Span<SyntheticAsset>,
+    pub collateral_balance: Balance,
+}
 
 
 pub impl U32IntoPositionId of Into<u32, PositionId> {

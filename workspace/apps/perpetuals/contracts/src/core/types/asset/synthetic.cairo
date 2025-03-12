@@ -1,7 +1,8 @@
-use perpetuals::core::types::asset::AssetStatus;
+use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
+use starkware_utils::types::fixed_two_decimal::FixedTwoDecimal;
 use starkware_utils::types::time::time::Timestamp;
 
 const VERSION: u8 = 1;
@@ -26,22 +27,26 @@ pub struct SyntheticTimelyData {
     pub funding_index: FundingIndex,
 }
 
-/// Synthetic asset in a position.
-/// - balance: The amount of the synthetic asset held in the position.
-/// - funding_index: The funding index at the time of the last update.
-/// - next: The next synthetic asset id in the position.
-#[derive(Copy, Drop, Serde, starknet::Store)]
+#[derive(Copy, Debug, Drop, Serde)]
 pub struct SyntheticAsset {
-    version: u8,
+    pub id: AssetId,
     pub balance: Balance,
-    pub funding_index: FundingIndex,
+    pub price: Price,
+    pub risk_factor: FixedTwoDecimal,
+}
+
+#[derive(Copy, Debug, Default, Drop, Serde)]
+pub struct SyntheticDiffEnriched {
+    pub asset_id: AssetId,
+    pub balance_before: Balance,
+    pub balance_after: Balance,
+    pub price: Price,
+    pub risk_factor_before: FixedTwoDecimal,
+    pub risk_factor_after: FixedTwoDecimal,
 }
 
 #[generate_trait]
 pub impl SyntheticImpl of SyntheticTrait {
-    fn asset(balance: Balance, funding_index: FundingIndex) -> SyntheticAsset {
-        SyntheticAsset { version: VERSION, balance, funding_index }
-    }
     fn config(
         status: AssetStatus,
         risk_factor_first_tier_boundary: u128,
