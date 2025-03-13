@@ -34,7 +34,7 @@
         - [UnchangedAssets](#unchangedassets)
         - [BalanceDiff](#balanceDiff)
         - [AssetDiff](#assetDiff)
-        - [AssetDiffEnriched](#AssetDiffEnriched)
+        - [SyntheticDiffEnriched](#SyntheticDiffEnriched)
         - [PositionDiff](#PositionDiff)
         - [PositionDiffEnriched](#PositionDiffEnriched)
         - [PositionId](#positionid)
@@ -143,19 +143,16 @@
 ```mermaid
 classDiagram
     class CoreContract{
-        fulfillment: Map< HashType, u64>
-        accesscontrol: Component
-        nonce: Component
+        fulfillment: Map<HashType, u64>,
+        operator_nonce: Component
         pausable: Component
         replaceability: Component
         roles: Component
-        src5: Component
         assets: Component
         deposits: Component
         request_approvals: Component
         positions: Component
 
-        process_deposit()
         withdraw_request()
         withdraw()
         transfer_request()
@@ -165,17 +162,17 @@ classDiagram
         deleverage()
     }
     class Position{
-        version: u8
-        owner_account: ContractAddress
-        owner_public_key: PublicKey
-        collateral_assets_head: Option< AssetId>
-        collateral_assets: Map< AssetId, CollateralAsset>
-        synthetic_assets_head: Option< AssetId>
-        synthetic_assets: Map< AssetId, SyntheticAsset>
+        version: u8,
+        owner_account: Option< ContractAddress>,
+        owner_public_key: PublicKey,
+        collateral_balance: Balance,
+        synthetic_assets: IterableMap< AssetId, SyntheticAsset>,
     }
     class Positions{
         positions: Map< PositionId, Position>
-        get_position_unchanged_assets() -> UnchangedAssets
+        
+        get_position_assets() -> PositionData
+        get_position_tv_tr() -> PositionTVTR
         is_deleveragable() -> bool
         is_healthy() -> bool
         is_liquidatable() -> bool
@@ -186,63 +183,65 @@ classDiagram
         set_public_key()
     }
     class Assets{
-        max_funding_rate: u32
-        max_price_interval: TimeDelta
-        max_funding_interval: TimeDelta
-        last_price_validation: Timestamp
-        last_funding_tick: Timestamp
-        collateral_config: Map< AssetId, Option[CollateralConfig]>
-        synthetic_config: Map< AssetId, Option[SyntheticConfig]>
-        collateral_timely_data_head: Option[AssetId]
-        collateral_timely_data: Map <AssetId, CollateralTimelyData>
-        num_of_active_synthetic_assets: usize
-        synthetic_timely_data_head: Option[AssetId]
-        synthetic_timely_data: Map< AssetId, SyntheticTimelyData>
-        risk_factor_tiers: Map< AssetId, Vec[RiskFactor]>
-        asset_oracle: Map< AssetId, Map[PublicKey, felt252]>
-        max_oracle_price_validity: TimeDelta
+        /// 32-bit fixed-point number with a 32-bit fractional part.
+        max_funding_rate: u32,
+        max_price_interval: TimeDelta,
+        max_funding_interval: TimeDelta,
+        // Updates each price validation.
+        last_price_validation: Timestamp,
+        // Updates every funding tick.
+        last_funding_tick: Timestamp,
+        collateral_token_contract: IERC20Dispatcher,
+        collateral_quantum: u64,
+        num_of_active_synthetic_assets: usize,
+        pub synthetic_config: Map< AssetId, Option [SyntheticConfig]>,
+        pub synthetic_timely_data: IterableMap< AssetId, SyntheticTimelyData>,
+        pub risk_factor_tiers: Map<AssetId, Vec [FixedTwoDecimal] >,
+        asset_oracle: Map< AssetId, Map [PublicKey, felt252 ]>,
+        max_oracle_price_validity: TimeDelta,
+        collateral_id: Option< AssetId>,
 
-        register_collateral()
         add_oracle_to_asset()
         add_synthetic_asset()
         deactivate_synthetic()
-        get_collateral_config()
-        get_funding_validation_interval()
-        get_last_funding_tick()
-        get_last_price_validation()
-        get_max_funding_rate()
-        get_max_oracle_price_validity()
-        get_num_of_active_synthetic_assets()
-        get_price_validation_interval()
-        get_synthetic_config()
-        get_synthetic_timely_data()
-        get_risk_factor_tiers()
-        remove_oracle_from_asset()
-        update_synthetic_quorum()
         funding_tick()
         price_tick()
+        remove_oracle_from_asset()
+        update_synthetic_quorum()
+
+        get_collateral_token_contract() -> IERC20Dispatcher
+        get_collateral_quantum() -> u64
+        get_last_funding_tick() -> Timestamp
+        get_last_price_validation() -> Timestamp
+        get_max_funding_interval() -> TimeDelta
+        get_max_funding_rate() -> u32
+        get_max_price_interval() -> TimeDelta
+        get_max_oracle_price_validity() -> TimeDelta
+        get_num_of_active_synthetic_assets() -> usize
+        get_max_price_interval() -> TimeDelta
+        get_synthetic_config() -> SyntheticConfig
+        get_synthetic_timely_data() -> SyntheticTimelyData
+        get_risk_factor_tiers() -> Span< FixedTwoDecimal>
     }
     class Deposit{
         registered_deposits: Map< HashType, DepositStatus>
-        aggregate_pending_deposit: Map< felt252, u128>
-        asset_info: Map< felt252, [ContractAddress, u64]>
         cancel_delay: TimeDelta
 
         deposit()
         cancel_deposit()
-        get_deposit_status()
-        get_asset_info()
-        get_cancel_delay()
+        process_deposit()
+        get_deposit_status() -> DepositStatus
+        get_cancel_delay() -> TimeDelta
     }
     class Requests{
         approved_requests: Map< HashType, RequestStatus>
 
-        get_request_status()
+        get_request_status() -> RequestStatus
     }
-    class Nonce{
+    class OperatorNonce{
         nonce: u64
 
-        nonce()
+        get_operator_nonce() -> u64
     }
     class Pausable{
         paused: bool
@@ -290,26 +289,12 @@ classDiagram
         register_security_agent()
         remove_security_agent()
     }
-    class CollateralAsset {
-        version: u8,
-        balance: Balance
-        next: Option<AssetId>
-    }
     class SyntheticAsset{
         version: u8
         balance: Balance
         funding_index: FundingIndex
-        next: Option<AssetId>
     }
 
-    class CollateralConfig{
-        version: u8
-        token_address: ContractAddress
-        status: AssetStatus
-        risk_factor: RiskFactor
-        quantum: u64
-        quorum: u8
-    }
     class SyntheticConfig{
         version: u8
         status: AssetStatus
@@ -318,36 +303,24 @@ classDiagram
         quorum: u8
         resolution_factor: u64
     }
-    class CollateralTimelyData{
-        version: u8
-        price: Price
-        last_price_update: Timestamp
-        next: Option<AssetId>
-
-    }
     class SyntheticTimelyData{
         version: u8
         price: Price
         last_price_update: Timestamp
         funding_index: FundingIndex
-        next: Option<AssetId>
-
     }
 
     CoreContract o-- Positions
     CoreContract o-- Assets
     CoreContract o-- Deposit
     CoreContract o-- Requests
-    CoreContract o-- Nonce
+    CoreContract o-- OperatorNonce
     CoreContract o-- Pausable
     CoreContract o-- Roles
     CoreContract o-- ReplaceabilityComponent
-    Assets o-- CollateralConfig
     Assets o-- SyntheticConfig
-    Assets o-- CollateralTimelyData
     Assets o-- SyntheticTimelyData
     Positions o-- Position
-    Position o-- CollateralAsset
     Position o-- SyntheticAsset
 ```
 
@@ -368,6 +341,8 @@ Example:
 
 ### PositionTVTR
 
+The total value and total risk of a position.
+
 ```rust
 pub struct PositionTVTR {
     pub total_value: i128,
@@ -378,6 +353,8 @@ pub struct PositionTVTR {
 
 ### TVTRChange
 
+The change in terms of total value and total risk of a position.
+
 ```rust
 pub struct TVTRChange {
     pub before: PositionTVTR,
@@ -386,6 +363,11 @@ pub struct TVTRChange {
 ```
 
 ### PositionState
+
+Represents the state of a position based on its total value and total risk.
+- A position is **Deleveragable** (and also **Liquidatable**) if its total value is negative.
+- A position is **Liquidatable** if its total value is less than its total risk.
+- Otherwise, the position is considered **Healthy**.
 
 ```rust
 pub enum PositionState {
@@ -410,15 +392,6 @@ $TV<TR $
 A position is in a healthy state when:
 $TV\geq TR $
 
-### ChangeEffects
-
-```rust
-pub struct ChangeEffects {
-    pub is_healthier: bool,
-    pub is_fair_deleverage: bool,
-}
-```
-
 ### Is Healthier
 
 $$ ( \frac{TV}{TR})\_{new} \geq (\frac{TV}{TR})\_{old} $$
@@ -434,31 +407,21 @@ $$ \frac{TV\_{new}-1e^{-6}USDC}{TR\_{new}} < \frac{TV}{TR}\_{old} \leq \frac{TV}
 Deleveragerer should be [healthy](#healthy) or [healthier](#is-healthier).
 Deleveragree should be ([healthy](#healthy) or [healthier](#is-healthier)) **and** [is fair deleverage](#is-fair-deleverage)
 
-### PositionChangeResult
-
-```rust
-pub struct PositionChangeResult {
-    pub position_state_before_change: PositionState,
-    pub position_state_after_change: PositionState,
-    pub change_effects: Option<ChangeEffects>,
-}
-```
-
 ## Functions
 
-### Evaluate Position Change
+### Calculate Position TV TR Change
 
 #### Description
 
 ```rust
-pub fn evaluate_position_change(
+fn calculate_position_tvtr_change(
     unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
-) -> PositionChangeResult
+) -> PositionTVTRChange
 ```
 
 #### Logic
 1. Calculates value and risk for unchanged assets
-2. Calculates value and risk changes for collateral assets
+2. Calculates value and risk changes for collateral asset
 3. Calculates value and risk changes for synthetic assets
 4. Combines all calculations into final before/after totals
 
@@ -493,7 +456,7 @@ pub struct AssetId {
 ### Asset
 
 ```rust
-pub struct Asset {
+pub struct SyntheticAsset {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
@@ -504,59 +467,22 @@ pub struct Asset {
 ### PositionData
 
 ```rust
-pub type PositionData = Span<Asset>;
-```
-
-### UnchangedAssets
-
-```rust
-pub type UnchangedAssets = PositionData;
-```
-
-### BalanceDiff
-
-```rust
-pub struct BalanceDiff {
-    pub before: Balance,
-    pub after: Balance,
+pub struct PositionData {
+    pub synthetics: Span<SyntheticAsset>,
+    pub collateral_balance: Balance,
 }
 ```
 
-### AssetDiff
+### SyntheticDiffEnriched
 
 ```rust
-pub struct AssetDiff {
-    pub id: AssetId,
-    pub balance: BalanceDiff,
-}
-```
-
-### AssetDiffEnriched
-
-```rust
-pub struct AssetDiffEnriched {
-    pub asset: AssetDiff,
+pub struct SyntheticDiffEnriched {
+    pub asset_id: AssetId,
+    pub balance_before: Balance,
+    pub balance_after: Balance,
     pub price: Price,
     pub risk_factor_before: RiskFactor,
     pub risk_factor_after: RiskFactor,
-}
-```
-
-### PositionDiff
-
-```rust
-pub struct PositionDiff {
-    pub collaterals: Span<AssetDiff>,
-    pub synthetics: Span<AssetDiff>,
-}
-```
-
-### PositionDiffEnriched
-
-```rust
-pub struct PositionDiffEnriched {
-    pub collaterals: Span<AssetDiffEnriched>,
-    pub synthetics: Span<AssetDiffEnriched>,
 }
 ```
 
@@ -569,6 +495,13 @@ struct PositionId {
 ```
 
 ### FundingIndex
+
+`FundingIndex` represents a global funding rate tracker for each synthetic asset in the system.
+It's used to calculate funding payments between long and short position holders.
+To optimize performance, positions are only updated with the latest funding index when their
+owners execute transactions. The system then calculates the accumulated funding payment since
+the last interaction and adjusts the position's collateral balance accordingly.
+After each update, the current funding index is cached for each synthetic asset in the position.
 
 ```rust
 pub struct FundingIndex {
@@ -587,7 +520,8 @@ pub struct Balance {
 ```
 
 ### Price
-
+Price is the price of a synthetic asset in the Perps system.
+The price is the price of the minimal unit of the asset in 10^-6 USD.
 ```rust
 pub struct Price {
 	// Unsigned 28-bit fixed point decimal percision.
@@ -613,6 +547,7 @@ pub struct TimeDelta {
 ```
 
 ### FundingTick
+In `funding_tick` we get `FundingTick` for each active synthetic asset in the system.
 
 ```rust
 pub struct FundingTick {
@@ -622,7 +557,7 @@ pub struct FundingTick {
 ```
 
 ### SignedPrice
-
+In `price_tick` we get an array of `SignedPrice` for a single synthetic asset in the system/
 ```rust
 pub struct SignedPrice {
     pub signature: Signature,
@@ -646,32 +581,24 @@ pub struct RiskFactor {
 
 ```rust
 #[starknet::storage_node]
-struct Position {
-    version: u8,
-    owner_account: ContractAddress,
-    owner_public_key: felt252,
-    collateral_assets: IterableMap<AssetId, CollateralAsset>,
-    synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
+pub struct Position {
+    pub version: u8,
+    pub owner_account: Option<ContractAddress>,
+    pub owner_public_key: PublicKey,
+    pub collateral_balance: Balance,
+    pub synthetic_balance: IterableMap<AssetId, SyntheticBalance>,
 }
 ```
 
-### CollateralAsset
+### SyntheticBalance
 
 ```rust
-struct CollateralAsset {
-    version: u8,
-    pub balance: Balance,
-}
-```
-
-### SyntheticAsset
-
-```rust
-struct SyntheticAsset {
-    version: u8,
+pub struct SyntheticBalance {
+    pub version: u8,
     pub balance: Balance,
     pub funding_index: FundingIndex,
 }
+
 ```
 
 ### AssetStatus
@@ -679,44 +606,8 @@ struct SyntheticAsset {
 ```rust
 pub enum AssetStatus {
     PENDING,
-    ACTIVATED,
-    DEACTIVATED,
-}
-
-impl AssetStatusPacking of StorePacking<AssetStatus, u8> {
-    fn pack(value: AssetStatus) -> u8 {
-        match value {
-            AssetStatus::PENDING => 0,
-            AssetStatus::ACTIVATED => 1,
-            AssetStatus::DEACTIVATED => 2,
-        }
-    }
-
-    fn unpack(value: u8) -> AssetStatus {
-        match value {
-            0 => AssetStatus::PENDING,
-            1 => AssetStatus::ACTIVATED,
-            2 => AssetStatus::DEACTIVATED,
-            _ => panic_with_felt252(INVALID_STATUS),
-        }
-    }
-}
-
-```
-
-### CollateralConfig
-
-```rust
-struct CollateralConfig {
-    version: u8,
-    // Collateral ERC20 contract address
-    pub address: ContractAddress,
-    // Configurable.
-    pub status: AssetStatus,
-    pub quantum: u64,
-    pub risk_factor: RiskFactor,
-    // Number of oracles that need to sign on the price to accept it.
-    pub quorum: u8,
+    ACTIVE,
+    INACTIVE,
 }
 ```
 
@@ -725,22 +616,12 @@ struct CollateralConfig {
 ```rust
 struct SyntheticConfig {
     version: u8,
-    // Configurable
     pub status: AssetStatus,
-    // Resolution is the total number of the smallest part of a synthetic.
-    pub resolution_factor: u64,
-    // Number of oracles that need to sign on the price to accept it.
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
     pub quorum: u8,
-}
-```
-
-### CollateralTimelyData
-
-```rust
-struct CollateralTimelyData {
-    version: u8,
-    pub price: Price,
-    pub last_price_update: Timestamp,
+    // Smallest unit of a synthetic asset in the system.
+    pub resolution: u64,
 }
 ```
 
@@ -1053,53 +934,63 @@ pub trait IAssets<TContractState> {
     fn funding_tick(
         ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
     );
-    fn get_collateral_config(self: @TContractState, collateral_id: AssetId) -> CollateralConfig;
-    fn get_funding_validation_interval(self: @TContractState) -> TimeDelta;
+    fn price_tick(
+        ref self: TContractState,
+        operator_nonce: u64,
+        asset_id: AssetId,
+        oracle_price: u128,
+        signed_prices: Span<SignedPrice>,
+    );
+    fn remove_oracle_from_asset(
+        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
+    );
+    fn update_synthetic_quorum(ref self: TContractState, synthetic_id: AssetId, quorum: u8);
+    fn get_collateral_token_contract(self: @TContractState) -> IERC20Dispatcher;
+    fn get_collateral_quantum(self: @TContractState) -> u64;
     fn get_last_funding_tick(self: @TContractState) -> Timestamp;
     fn get_last_price_validation(self: @TContractState) -> Timestamp;
+    fn get_max_funding_interval(self: @TContractState) -> TimeDelta;
     fn get_max_funding_rate(self: @TContractState) -> u32;
+    fn get_max_price_interval(self: @TContractState) -> TimeDelta;
     fn get_max_oracle_price_validity(self: @TContractState) -> TimeDelta;
     fn get_num_of_active_synthetic_assets(self: @TContractState) -> usize;
-    fn get_price_validation_interval(self: @TContractState) -> TimeDelta;
+    fn get_max_price_interval(self: @TContractState) -> TimeDelta;
     fn get_synthetic_config(self: @TContractState, synthetic_id: AssetId) -> SyntheticConfig;
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
-    fn remove_oracle_from_asset(
-        ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
-    );
-    fn update_synthetic_quorum(ref self: TContractState, synthetic_id: AssetId, quorum: u8);
 }
 ```
 #### Storage
 
 ```rust
 #[storage]
-Struct Storage {
+pub struct Storage {
     /// 32-bit fixed-point number with a 32-bit fractional part.
     max_funding_rate: u32,
     max_price_interval: TimeDelta,
     max_funding_interval: TimeDelta,
     // Updates each price validation.
-    pub last_price_validation: Timestamp,
+    last_price_validation: Timestamp,
     // Updates every funding tick.
-    pub last_funding_tick: Timestamp,
-    pub collateral_config: Map<AssetId, Option<CollateralConfig>>,
+    last_funding_tick: Timestamp,
+    collateral_token_contract: IERC20Dispatcher,
+    collateral_quantum: u64,
+    num_of_active_synthetic_assets: usize,
     pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,
-    pub collateral_timely_data_head: Option<AssetId>,
-    pub collateral_timely_data: Map<AssetId, CollateralTimelyData>,
-    pub num_of_active_synthetic_assets: usize,
-    pub synthetic_timely_data_head: Option<AssetId>,
-    pub synthetic_timely_data: Map<AssetId, SyntheticTimelyData>,
-    pub risk_factor_tiers: Map<AssetId, Vec<RiskFactor>>,
+    pub synthetic_timely_data: IterableMap<AssetId, SyntheticTimelyData>,
+    pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
     asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
     max_oracle_price_validity: TimeDelta,
+    collateral_id: Option<AssetId>,
 }
+
 ```
 #### Events
 
 ```rust
+#[event]
 pub enum Event {
     OracleAdded: events::OracleAdded,
     SyntheticAdded: events::SyntheticAdded,
@@ -1107,7 +998,6 @@ pub enum Event {
     SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
     FundingTick: events::FundingTick,
     PriceTick: events::PriceTick,
-    CollateralRegistered: events::CollateralRegistered,
     OracleRemoved: events::OracleRemoved,
     AssetQuorumUpdated: events::AssetQuorumUpdated,
 }
@@ -1116,17 +1006,32 @@ pub enum Event {
 #### Errors
 ```rust
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
+pub const ASSET_ALREADY_EXISTS: felt252 = 'ASSET_ALREADY_EXISTS';
 pub const ASSET_NAME_TOO_LONG: felt252 = 'ASSET_NAME_TOO_LONG';
 pub const ASSET_NOT_ACTIVE: felt252 = 'ASSET_NOT_ACTIVE';
 pub const ASSET_NOT_EXISTS: felt252 = 'ASSET_NOT_EXISTS';
-pub const COLLATERAL_ALREADY_EXISTS: felt252 = 'COLLATERAL_ALREADY_EXISTS';
-pub const COLLATERAL_NOT_ACTIVE: felt252 = 'COLLATERAL_NOT_ACTIVE';
+pub const ASSET_REGISTERED_AS_COLLATERAL: felt252 = 'ASSET_REGISTERED_AS_COLLATERAL';
 pub const COLLATERAL_NOT_EXISTS: felt252 = 'COLLATERAL_NOT_EXISTS';
+pub const COLLATERAL_NOT_REGISTERED: felt252 = 'COLLATERAL_NOT_REGISTERED';
+pub const INACTIVE_ASSET: felt252 = 'INACTIVE_ASSET';
 pub const FUNDING_EXPIRED: felt252 = 'FUNDING_EXPIRED';
 pub const FUNDING_TICKS_NOT_SORTED: felt252 = 'FUNDING_TICKS_NOT_SORTED';
-pub const INVALID_SAME_QUORUM: felt252 = 'INVALID_SAME_QUORUM';
+pub const INVALID_FUNDING_TICK_LEN: felt252 = 'INVALID_FUNDING_TICK_LEN';
+pub const INVALID_MEDIAN: felt252 = 'INVALID_MEDIAN';
 pub const INVALID_PRICE_TIMESTAMP: felt252 = 'INVALID_PRICE_TIMESTAMP';
+pub const INVALID_SAME_QUORUM: felt252 = 'INVALID_SAME_QUORUM';
+pub const INVALID_STATUS: felt252 = 'INVALID_STATUS';
+pub const INVALID_ZERO_TOKEN_ADDRESS: felt252 = 'INVALID_ZERO_TOKEN_ADDRESS';
+pub const INVALID_ZERO_QUANTUM: felt252 = 'INVALID_ZERO_QUANTUM';
+pub const INVALID_ZERO_ASSET_ID: felt252 = 'INVALID_ZERO_ASSET_ID';
+pub const INVALID_ZERO_ASSET_NAME: felt252 = 'INVALID_ZERO_ASSET_NAME';
+pub const INVALID_ZERO_ORACLE_NAME: felt252 = 'INVALID_ZERO_ORACLE_NAME';
+pub const INVALID_ZERO_PUBLIC_KEY: felt252 = 'INVALID_ZERO_PUBLIC_KEY';
 pub const INVALID_ZERO_QUORUM: felt252 = 'INVALID_ZERO_QUORUM';
+pub const INVALID_ZERO_RESOLUTION_FACTOR: felt252 = 'INVALID_ZERO_RESOLUTION_FACTOR';
+pub const INVALID_ZERO_RF_FIRST_BOUNDRY: felt252 = 'INVALID_ZERO_RF_FIRST_BOUNDRY';
+pub const INVALID_ZERO_RF_TIER_SIZE: felt252 = 'INVALID_ZERO_RF_TIER_SIZE';
+pub const INVALID_ZERO_RF_TIERS_LEN: felt252 = 'INVALID_ZERO_RF_TIERS_LEN';
 pub const NOT_COLLATERAL: felt252 = 'NOT_COLLATERAL';
 pub const NOT_SYNTHETIC: felt252 = 'NOT_SYNTHETIC';
 pub const ORACLE_ALREADY_EXISTS: felt252 = 'ORACLE_ALREADY_EXISTS';
@@ -1138,39 +1043,45 @@ pub const SYNTHETIC_ALREADY_EXISTS: felt252 = 'SYNTHETIC_ALREADY_EXISTS';
 pub const SYNTHETIC_EXPIRED_PRICE: felt252 = 'SYNTHETIC_EXPIRED_PRICE';
 pub const SYNTHETIC_NOT_ACTIVE: felt252 = 'SYNTHETIC_NOT_ACTIVE';
 pub const SYNTHETIC_NOT_EXISTS: felt252 = 'SYNTHETIC_NOT_EXISTS';
-pub const INVALID_STATUS: felt252 = 'INVALID_STATUS';
+pub const UNSORTED_RISK_FACTOR_TIERS: felt252 = 'UNSORTED_RISK_FACTOR_TIERS';
+pub const ZERO_MAX_PRICE_INTERVAL: felt252 = 'ZERO_MAX_PRICE_INTERVAL';
+pub const ZERO_MAX_FUNDING_INTERVAL: felt252 = 'ZERO_MAX_FUNDING_INTERVAL';
+pub const ZERO_MAX_FUNDING_RATE: felt252 = 'ZERO_MAX_FUNDING_RATE';
+pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 ```
 
 ### Deposit
 
-General component for deposit, process, and cancellation.
+A component for handling deposits.
 
 #### Interface
 
 ```rust
+#[starknet::interface]
 pub trait IDeposit<TContractState> {
     fn deposit(
-        ref self: TContractState,
-        beneficiary: u32,
-        asset_id: felt252,
-        quantized_amount: u128,
-        salt: felt252,
-    ) -> HashType;
+        ref self: TContractState, position_id: PositionId, quantized_amount: u64, salt: felt252,
+    );
     fn cancel_deposit(
+        ref self: TContractState, position_id: PositionId, quantized_amount: u64, salt: felt252,
+    );
+    fn process_deposit(
         ref self: TContractState,
-        beneficiary: u32,
-        asset_id: felt252,
-        quantized_amount: u128,
+        operator_nonce: u64,
+        depositor: ContractAddress,
+        position_id: PositionId,
+        quantized_amount: u64,
         salt: felt252,
     );
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
-    fn get_asset_info(self: @TContractState, asset_id: felt252) -> (ContractAddress, u64);
     fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
 
+#[derive(Debug, Drop, PartialEq, Serde, starknet::Store)]
 pub enum DepositStatus {
-    NOT_EXIST,
-    DONE,
+    #[default]
+    NOT_REGISTERED,
+    PROCESSED,
     CANCELED,
     PENDING: Timestamp,
 }
@@ -1182,12 +1093,13 @@ pub enum DepositStatus {
 #[storage]
 pub struct Storage {
     registered_deposits: Map<HashType, DepositStatus>,
-    asset_info: Map<felt252, (ContractAddress, u64)>,
     cancel_delay: TimeDelta,
 }
 ```
 #### Events
 ```rust
+#[event]
+#[derive(Drop, PartialEq, starknet::Event)]
 pub enum Event {
     Deposit: events::Deposit,
     DepositCanceled: events::DepositCanceled,
@@ -1198,8 +1110,6 @@ pub enum Event {
 #### Errors
 ```rust
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
-pub const ASSET_ALREADY_REGISTERED: felt252 = 'ASSET_ALREADY_REGISTERED';
-pub const ASSET_NOT_REGISTERED: felt252 = 'ASSET_NOT_REGISTERED';
 pub const CANCELLETION_TIME_PASSED: felt252 = 'CANCELLETION_TIME_PASSED';
 pub const DEPOSIT_ALREADY_CANCELED: felt252 = 'DEPOSIT_ALREADY_CANCELED';
 pub const DEPOSIT_ALREADY_PROCESSED: felt252 = 'DEPOSIT_ALREADY_PROCESSED';
@@ -1210,15 +1120,15 @@ pub const INVALID_CANCEL_DELAY: felt252 = 'INVALID_CANCEL_DELAY';
 pub const ZERO_AMOUNT: felt252 = 'ZERO_AMOUNT';
 ```
 
-### Nonce
+### Operator Nonce
+A component for operator flows - checks that the nonce is valid and that the Operator is the caller.
 
-General component for deposit, process, and cancellation.
 #### Interface
 
 ```rust
 #[starknet::interface]
-pub trait INonce<TContractState> {
-    fn nonce(self: @TContractState) -> u64;
+pub trait IOperatorNonce<TContractState> {
+    fn get_operator_nonce(self: @TContractState) -> u64;
 }
 ```
 #### Storage
@@ -1231,7 +1141,8 @@ pub struct Storage {
 
 ### Pausable
 
-In charge of the pause mechanism of the contract.
+A security component for the pause mechanism.
+
 #### Interface
 
 ```rust
@@ -1299,7 +1210,7 @@ pub enum Event {
 
 ### Requests
 
-General component registration of requests and validate. In charge of approving user requests for Transfer, Withdraw, and Set Public Key flows before the operator can execute them.
+A component for registration of user requests and validation. The component allows users request the following flows: transfer_request, withdraw_request, set_public_key_request and set_owner_account_request flows before the operator can execute them.
 #### Interface
 
 ```rust
@@ -1411,12 +1322,13 @@ pub(crate) enum AccessErrors {
 
 ### Positions
 
-In charge of all position-related.
-#### Interface
+In charge of all position related flows.
+#### Public Functions
 ```rust
 #[starknet::interface]
 pub trait IPositions<TContractState> {
-    fn get_position_unchanged_assets(self: @TContractState, position_id: PositionId, position_diff: PositionDiff) -> UnchangedAssets;
+    fn get_position_assets(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn get_position_tv_tr(self: @TContractState, position_id: PositionId) -> PositionTVTR;
     fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
     fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
     fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
@@ -1458,20 +1370,257 @@ pub trait IPositions<TContractState> {
     );
 }
 ```
+##### New Position
+
+###### Description
+
+```rust
+fn new_position(
+	ref self: ContractState,
+    operator_nonce: u64,
+    position_id: PositionId,
+    owner_public_key: felt252,
+    owner_account: ContractAddress,
+)
+```
+
+###### Access Control
+
+Only the Operator can execute.
+
+###### Hash
+
+###### Validations
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. Check that the `position_id` doesn’t exist
+4. Check that `owner_public_key` is not zero
+
+###### Logic
+
+1. [Run open position validations](#validations-2)
+2. create a new position with `owner_public_key` and `owner_account` under `position_id`
+
+###### Errors
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- POSITION\_ALREADY\_EXISTS
+- INVALID\_ZERO\_PUBLIC\_KEY
+
+###### Emits
+
+[NewPosition](#newposition)
+
+##### Set Owner Account Request
+
+###### Description
+
+The user registers an set position owner account request by registering a fact.
+
+```rust
+fn set_owner_account_request(
+    ref self: ComponentState<TContractState>,
+    signature: Signature,
+    position_id: PositionId,
+    new_owner_account: ContractAddress,
+    expiration: Timestamp,
+)
+```
+
+###### Access Control
+
+Anyone can execute.
+
+###### Hash
+
+[get\_message\_hash](#get-message-hash) on [SetOwnerAccount](#setowneraccount) with `new_public_key`.
+
+###### Validations
+
+1. position has no owner account.
+2. `new_owner_account` is not zero.
+3. Request is not registered already.
+4. caller address is `new_owner_account`
+5. [signature validation](#signature)
+
+###### Logic
+
+1. Run validation
+2. Register a request to set owner account using the requests component
+
+###### Errors
+
+- INVALID\_POSITION
+- POSITION_HAS_OWNER_ACCOUNT
+- INVALID_ZERO_OWNER_ACCOUNT
+- REQUEST_ALREADY_REGISTERED
+- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
+- INVALID\_STARK\_KEY\_SIGNATURE
+
+###### Emits
+
+[SetOwnerAccountRequest](#setowneraccountrequest)
+
+##### Set Owner Account
+
+###### Description
+
+Updates the account owner only for a no-owner position.
+
+```rust
+fn set_owner_account(
+    ref self: ContractState,
+    operator_nonce: u64,
+    // SetOwnerAccountArgs
+    position_id: PositionId,
+    public_key: felt252,
+    new_account_owner: ContractAddress,
+    expiration: Timestamp,
+)
+```
+
+###### Access Control
+
+Only the Operator can execute.
+
+###### Hash
+
+[get\_message\_hash](#get-message-hash) on [SetOwnerAccountArgs](#setowneraccountargs) with position `public_key`.
+
+###### Validations
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Expiration validation](#expiration)
+4. [Position check](#position-1)
+5. [Request approval check on set public key message](#requests-1)
+
+###### Logic
+
+1. Run validations
+2. Set the `new_owner_account` as the owner account of the position
+
+###### Errors
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- SET_POSITION_OWNER_EXPIRED
+- INVALID\_POSITION
+- INVALID\_STARK\_SIGNATURE
+
+###### Emits
+
+[SetOwnerAccount](#setowneraccount)
+
+##### Set Public Key Request
+
+###### Description
+
+The user registers an update position public key request by registering a fact.
+
+```rust
+fn set_public_key_request(
+    ref self: ComponentState<TContractState>,
+    signature: Signature,
+    position_id: PositionId,
+    new_public_key: PublicKey,
+    expiration: Timestamp,
+)
+```
+
+###### Access Control
+
+Anyone can execute.
+
+###### Hash
+
+[get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
+
+###### Validations
+
+1. [signature validation](#signature)
+2. `new_public_key` is not the same as the current public key
+3. caller address is the owner account of the position
+4. Request is not registered already.
+
+###### Logic
+
+1. Run validation
+2. Register a request to set public key using the requests component
+
+###### Errors
+
+- INVALID\_POSITION
+- REQUEST_ALREADY_REGISTERED
+- NO_OWNER_ACCOUNT
+- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
+- INVALID\_STARK\_KEY\_SIGNATURE
+
+###### Emits
+
+[SetPublicKeyRequest](#setpublickeyrequest)
+
+##### Set Public Key
+
+###### Description
+
+Update the public key of a position.
+
+```rust
+fn set_public_key(
+    ref self: ContractState,
+    operator_nonce: u64,
+    // SetPublicKeyArgs
+    position_id: PositionId,
+    new_public_key: felt252,
+    expiration: Timestamp,
+)
+```
+
+###### Access Control
+
+Only the Operator can execute.
+
+###### Hash
+
+[get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
+
+###### Validations
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Expiration validation](#expiration)
+4. [Request approval check on set public key message](#requests-1)
+
+###### Logic
+
+1. Run [validations](#validations-15)
+2. Update the public key of the position to the `new_public_key`
+3. Mark request as processed
+
+
+###### Errors
+
+- PAUSED
+- INVALID\_NONCE
+- ONLY\_OPERATOR
+- SET\_PUBLIC\_KEY\_EXPIRED
+- INVALID\_POSITION
+- REQUEST_NOT_REGISTERED
+- REQUEST_ALREADY_PROCESSED
+
+###### Emits
+
+[SetPublicKey](#setpublickey)
+
 #### Storage
 ```rust
 pub const FEE_POSITION: PositionId = PositionId { value: 0 };
 pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
-
-#[starknet::storage_node]
-pub struct Position {
-    pub version: u8,
-    pub owner_account: ContractAddress,
-    pub owner_public_key: PublicKey,
-    pub collateral_assets: IterableMap<AssetId, CollateralAsset>,
-    pub synthetic_assets: IterableMap<AssetId, SyntheticAsset>,
-}
-
 
 #[storage]
 pub struct Storage {
@@ -1484,8 +1633,8 @@ pub struct Storage {
 #[derive(Drop, PartialEq, starknet::Event)]
 pub enum Event {
     NewPosition: events::NewPosition,
-    SetOwnerAccountRequest: events::SetOwnerAccountRequest,
     SetOwnerAccount: events::SetOwnerAccount,
+    SetOwnerAccountRequest: events::SetOwnerAccountRequest,
     SetPublicKey: events::SetPublicKey,
     SetPublicKeyRequest: events::SetPublicKeyRequest,
 }
@@ -1493,7 +1642,7 @@ pub enum Event {
 #### Errors
 
 ```rust
-pub const INVALID_POSITION: felt252 = 'INVALID_POSITION';
+pub const POSITION_DOESNT_EXIST: felt252 = 'POSITION_DOESNT_EXIST';
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
 pub const CALLER_IS_NOT_OWNER_ACCOUNT: felt252 = 'CALLER_IS_NOT_OWNER_ACCOUNT';
 pub const SET_POSITION_OWNER_EXPIRED: felt252 = 'SET_POSITION_OWNER_EXPIRED';
@@ -1501,8 +1650,9 @@ pub const SET_PUBLIC_KEY_EXPIRED: felt252 = 'SET_PUBLIC_KEY_EXPIRED';
 pub const NO_OWNER_ACCOUNT: felt252 = 'NO_OWNER_ACCOUNT';
 pub const POSITION_ALREADY_EXISTS: felt252 = 'POSITION_ALREADY_EXISTS';
 pub const POSITION_HAS_OWNER_ACCOUNT: felt252 = 'POSITION_HAS_OWNER_ACCOUNT';
-pub const INVALID_PUBLIC_KEY: felt252 = 'INVALID_PUBLIC_KEY';
-
+pub const INVALID_ZERO_PUBLIC_KEY: felt252 = 'INVALID_ZERO_PUBLIC_KEY';
+pub const INVALID_ZERO_OWNER_ACCOUNT: felt252 = 'INVALID_ZERO_OWNER_ACCOUNT';
+pub const SAME_PUBLIC_KEY: felt252 = 'SAME_PUBLIC_KEY';
 ```
 
 ## Storage
@@ -1540,27 +1690,14 @@ struct Storage {
 
 ### Pause
 
-Checking that the contract is not paused. This is done using [SW pausable component](https://github.com/starkware-industries/starknet-apps/blob/dev/workspace/packages/contracts/src/components/pausable/pausable.cairo):
-
-```rust
-self.pausable.assert_not_paused()
-```
-
+Checking that the contract is not paused. This is done using pausable component.
 ### Position
 
 Checking that the position exists in the system.
 
 ### Operator Nonce
 
-Checking that the caller of the function is the Operator. This is done using [SW roles component](https://github.com/starkware-industries/starknet-apps/blob/dev/workspace/packages/contracts/src/components/roles/roles.cairo):
-Check that the system nonce sent is the same as the contract nonce. This is done using Nonce component:
-
-```rust
-self.roles.only_operator()
-// The operator_nonce is the parameters we got in the function call data
-// nonces.use_checked_nonce also increments the nonce by 1
-self.nonce.use_checked_nonce(nonce: operator_nonce)
-```
+Checking that the caller of the function is the Operator and checks that the operator nonce received is the same as in the component. This is done using OperatorNonce component.
 
 ### Signature
 
@@ -1570,48 +1707,24 @@ When a position has owner account the flows that require 2 phases (deposit, with
 
 #### Public key signature
 
-This is done using the [OZ account/src/utils/signature.cairo](https://github.com/OpenZeppelin/cairo-contracts/blob/main/packages/account/src/utils/signature.cairo):
-
-```
-is_valid_stark_signature(msg_hash, public_key, signature)
-```
+This is done using the [OZ account/src/utils/signature.cairo](https://github.com/OpenZeppelin/cairo-contracts/blob/main/packages/account/src/utils/signature.cairo).
 
 ### Expiration
 
-Checking that the expiration timestamp of the transaction hasn’t expired:
+Checking that the expiration timestamp of the transaction hasn’t expired.
 
-```rust
-expiration <= get_block_timestamp()
-```
 
 ### Requests
 
 Checking if there’s an approved request in the [requests component](#requests) ([deposit component](#deposit)) for the current (deposit) flow.
 
-```rust
-self.request_approvals.consume_approved_request(hash);
-```
-
 ### Funding
 
-For each funding tick we update all the synthetic funding indexes and the storage timestamp of `last_funding_tick`. Each time we validate funding, we check that:
-
-```rust
-get_block_timestamp() - self.last_funding_tick.read() < self.funding_validation_interval.read()
-```
+At the start of each flow, we check if `max_funding_interval` has passed since the `last price validation.`
 
 ### Price
 
-At the start of each flow, we check if `price_validation_interval` has passed since the `last price validation.` If that’s the case, we iterate through the active synthetic and collateral assets in the system and check if any asset has expired. Then, we update the `last_price_validation`.
-
-```rust
-if get_block_timestamp() - last_price_validation <  price_validation_interval:
-    continue;
-else:
-For asset in <synthetic_timely_data/collateral_timely_data>:
-    get_block_timestamp() - asset.last_price_update < price_validation_interval
-    self.last_price_validation.write(get_block_timestamp())
-```
+At the start of each flow, we check if `max_price_interval` has passed since the `last price validation.` If that’s the case, we iterate over all active synthetics in the system and checking if the `max_price_interval` has passed since its' `last_price_update`. Then, we update the `last_price_validation`.
 
 ### Amount
 
@@ -1619,15 +1732,11 @@ Validate that the amount is positive/negative according to the flow.
 
 ### Asset
 
-Checking that the asset exists in the system and is not delisted.
-
-- Withdraw, Deposit asset\_ids must be collaterals
-- Trade, Liquidate \- quote, fee asset\_ids must be collaterals
-- Deleverage \- quote is active collateral. base must be synthetic, it can be inactive.
+Checking that the asset exists in the system and is active.
 
 ### Fulfillment
 
-Check whether the transaction hasn’t already been completed by checking whether the fulfillment storage map value of the message hash is 0 or not entirely fulfilled.
+Check whether the order hasn’t already been completely fulfilled by checking whether the fulfillment storage map value of the message hash is smaller than the order base amount.
 
 ### Fundamental
 
@@ -1637,44 +1746,27 @@ Position after the change is [healthy](#healthy) or [is healthier](#is-healthier
 
 ```rust
 pub const CANT_DELEVERAGE_PENDING_ASSET: felt252 = 'CANT_DELEVERAGE_PENDING_ASSET';
+pub const CANT_TRADE_WITH_FEE_POSITION: felt252 = 'CANT_TRADE_WITH_FEE_POSITION';
+pub const CANT_LIQUIDATE_IF_POSITION: felt252 = 'CANT_LIQUIDATE_IF_POSITION';
 pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
-pub const DIFFERENT_QUOTE_ASSET_IDS: felt252 = 'DIFFERENT_QUOTE_ASSET_IDS';
+pub const QUOTE_ASSET_ID_NOT_COLLATERAL: felt252 = 'QUOTE_ASSET_ID_NOT_COLLATERAL';
 pub const FEE_ASSET_AMOUNT_MISMATCH: felt252 = 'FEE_ASSET_AMOUNT_MISMATCH';
-pub const INSUFFICIENT_FUNDS: felt252 = 'INSUFFICIENT_FUNDS';
+pub const INVALID_ACTUAL_BASE_SIGN: felt252 = 'INVALID_ACTUAL_BASE_SIGN';
+pub const INVALID_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_ACTUAL_QUOTE_SIGN';
+pub const INVALID_AMOUNT_SIGN: felt252 = 'INVALID_AMOUNT_SIGN';
 pub const INVALID_DELEVERAGE_BASE_CHANGE: felt252 = 'INVALID_DELEVERAGE_BASE_CHANGE';
-pub const INVALID_FUNDING_TICK_LEN: felt252 = 'INVALID_FUNDING_TICK_LEN';
-pub const INVALID_NEGATIVE_FEE: felt252 = 'INVALID_NEGATIVE_FEE';
 pub const INVALID_NON_SYNTHETIC_ASSET: felt252 = 'INVALID_NON_SYNTHETIC_ASSET';
 pub const INVALID_OWNER_SIGNATURE: felt252 = 'INVALID_ACCOUNT_OWNER_SIGNATURE';
-pub const INVALID_ACTUAL_BASE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_BASE_SIGN';
-pub const INVALID_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_TRADE_ACTUAL_QUOTE_SIGN';
-pub const INVALID_SAME_POSITIONS: felt252 = 'INVALID_TRADE_SAME_POSITIONS';
-pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_QUOTE_AMOUNT_SIGN';
-pub const INVALID_WRONG_AMOUNT_SIGN: felt252 = 'INVALID_TRADE_WRONG_AMOUNT_SIGN';
-pub const INVALID_TRANSFER_AMOUNT: felt252 = 'INVALID_TRANSFER_AMOUNT';
+pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_QUOTE_AMOUNT_SIGN';
+pub const INVALID_SAME_POSITIONS: felt252 = 'INVALID_SAME_POSITIONS';
 pub const INVALID_ZERO_AMOUNT: felt252 = 'INVALID_ZERO_AMOUNT';
-pub const POSITION_IS_NOT_DELEVERAGABLE: felt252 = 'POSITION_IS_NOT_DELEVERAGABLE';
-pub const POSITION_IS_NOT_FAIR_DELEVERAGE: felt252 = 'POSITION_IS_NOT_FAIR_DELEVERAGE';
-pub const POSITION_IS_NOT_HEALTHIER: felt252 = 'POSITION_IS_NOT_HEALTHIER';
-pub const POSITION_IS_NOT_LIQUIDATABLE: felt252 = 'POSITION_IS_NOT_LIQUIDATABLE';
 pub const POSITION_UNHEALTHY: felt252 = 'POSITION_UNHEALTHY';
+pub const SAME_BASE_QUOTE_ASSET_IDS: felt252 = 'SAME_BASE_QUOTE_ASSET_IDS';
 pub const TRANSFER_EXPIRED: felt252 = 'TRANSFER_EXPIRED';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
 
 pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)
-}
-
-pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {
-    format!("INVALID_FUNDING_RATE synthetic_id: {:?}", synthetic_id)
-}
-
-pub fn order_expired_err(position_id: PositionId) -> ByteArray {
-    format!("ORDER_EXPIRED position_id: {:?}", position_id)
-}
-
-pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
-    format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
 }
 
 pub fn illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
@@ -1685,6 +1777,33 @@ pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
     format!("ILLEGAL_FEE_TO_QUOTE_RATIO position_id: {:?}", position_id)
 }
 
+pub fn illegal_zero_fee() -> ByteArray {
+    format!("NON_ZERO_FEE_IN_LIQUIDATE_INSURANCE_FUND")
+}
+
+pub fn invalid_funding_rate_err(synthetic_id: AssetId) -> ByteArray {
+    format!("INVALID_FUNDING_RATE synthetic_id: {:?}", synthetic_id)
+}
+
+pub fn order_expired_err(position_id: PositionId) -> ByteArray {
+    format!("ORDER_EXPIRED position_id: {:?}", position_id)
+}
+
+pub fn position_not_deleveragable(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_DELEVERAGABLE position_id: {:?}", position_id)
+}
+
+pub fn position_not_fair_deleverage(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_FAIR_DELEVERAGE position_id: {:?}", position_id)
+}
+
+pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray {
+    format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
+}
+
+pub fn position_not_liquidatable(position_id: PositionId) -> ByteArray {
+    format!("POSITION_IS_NOT_LIQUIDATABLE position_id: {:?}", position_id)
+}
 ```
 ## Events
 
@@ -1692,6 +1811,7 @@ pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
 
 ```rust
 #[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct NewPosition {
     #[key]
     pub position_id: PositionId,
@@ -1705,20 +1825,22 @@ pub struct NewPosition {
 #### SetOwnerAccountRequest
 ```rust
 #[derive(starknet::Event)]
-pub struct SetOwnerAccount {
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct SetOwnerAccountRequest {
     #[key]
     pub position_id: PositionId,
     #[key]
     pub public_key: PublicKey,
     #[key]
     pub new_owner_account: ContractAddress,
+    pub expiration: Timestamp,
     pub set_owner_account_hash: felt252,
 }
-
 ```
 #### SetOwnerAccount
 ```rust
 #[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct SetOwnerAccount {
     #[key]
     pub position_id: PositionId,
@@ -1760,46 +1882,48 @@ pub struct SetPublicKey {
 ```
 #### Deposit
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Deposit {
     #[key]
-    pub beneficiary: u32,
+    pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
 }
 ```
+
+#### DepositProcessed
+```rust
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct DepositProcessed {
+    #[key]
+    pub position_id: PositionId,
+    #[key]
+    pub depositing_address: ContractAddress,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
+    #[key]
+    pub deposit_request_hash: felt252,
+}
+```
+
 #### DepositCanceled
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct DepositCanceled {
     #[key]
-    pub beneficiary: u32,
+    pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
-    #[key]
-    pub deposit_request_hash: felt252,
-}
-```
-#### DepositProcessed
-```rust
-#[derive(starknet::Event)]
-pub struct DepositProcessed {
-    #[key]
-    pub beneficiary: u32,
-    #[key]
-    pub depositing_address: ContractAddress,
-    pub asset_id: felt252,
-    pub quantized_amount: u128,
-    pub unquantized_amount: u128,
+    pub collateral_id: AssetId,
+    pub quantized_amount: u64,
+    pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
 }
@@ -1808,7 +1932,7 @@ pub struct DepositProcessed {
 #### WithdrawRequest
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct WithdrawRequest {
     #[key]
     pub position_id: PositionId,
@@ -1825,7 +1949,7 @@ pub struct WithdrawRequest {
 #### Withdraw
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Withdraw {
     #[key]
     pub position_id: PositionId,
@@ -1841,7 +1965,7 @@ pub struct Withdraw {
 
 #### Trade
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Trade {
     #[key]
     pub order_a_position_id: PositionId,
@@ -1872,7 +1996,7 @@ pub struct Trade {
 
 #### TransferRequest
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct TransferRequest {
     #[key]
     pub recipient: PositionId,
@@ -1889,7 +2013,7 @@ pub struct TransferRequest {
 #### Transfer
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Transfer {
     #[key]
     pub recipient: PositionId,
@@ -1929,12 +2053,12 @@ pub struct Liquidate {
 
 #### Deleverage
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct Deleverage {
     #[key]
-    pub deleveraged_position: PositionId,
+    pub deleveraged_position_id: PositionId,
     #[key]
-    pub deleverager_position: PositionId,
+    pub deleverager_position_id: PositionId,
     pub deleveraged_base_asset_id: AssetId,
     pub deleveraged_base_amount: i64,
     pub deleveraged_quote_asset_id: AssetId,
@@ -1945,8 +2069,7 @@ pub struct Deleverage {
 #### FundingTick
 
 ```rust
-
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct FundingTick {
     #[key]
     pub asset_id: AssetId,
@@ -1957,7 +2080,7 @@ pub struct FundingTick {
 #### PriceTick
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct PriceTick {
     #[key]
     pub asset_id: AssetId,
@@ -1967,7 +2090,7 @@ pub struct PriceTick {
 
 #### AssetActivated
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct AssetActivated {
     #[key]
     pub asset_id: AssetId,
@@ -1977,7 +2100,7 @@ pub struct AssetActivated {
 #### SyntheticAdded
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct SyntheticAdded {
     #[key]
     pub asset_id: AssetId,
@@ -1992,7 +2115,7 @@ pub struct SyntheticAdded {
 #### SyntheticAssetDeactivated
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct SyntheticAssetDeactivated {
     #[key]
     pub asset_id: AssetId,
@@ -2002,7 +2125,7 @@ pub struct SyntheticAssetDeactivated {
 #### AssetQuorumUpdated
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct AssetQuorumUpdated {
     #[key]
     pub asset_id: AssetId,
@@ -2014,7 +2137,7 @@ pub struct AssetQuorumUpdated {
 #### OracleRemoved
 
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct OracleRemoved {
     #[key]
     pub asset_id: AssetId,
@@ -2025,7 +2148,7 @@ pub struct OracleRemoved {
 
 #### OracleAdded
 ```rust
-#[derive(starknet::Event)]
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct OracleAdded {
     #[key]
     pub asset_id: AssetId,
@@ -2033,18 +2156,6 @@ pub struct OracleAdded {
     #[key]
     pub oracle_public_key: PublicKey,
     pub oracle_name: felt252,
-}
-```
-
-#### CollateralRegistered
-```rust
-#[derive(starknet::Event)]
-pub struct CollateralRegistered {
-    #[key]
-    pub asset_id: AssetId,
-    #[key]
-    pub token_address: ContractAddress,
-    pub quantum: u64,
 }
 ```
 
@@ -2057,78 +2168,39 @@ pub struct CollateralRegistered {
 It only runs once when deploying the contract and is used to initialize the state of the contract.
 
 ```rust
-fn constructor(
+#[constructor]
+pub fn constructor(
     ref self: ContractState,
     governance_admin: ContractAddress,
     upgrade_delay: u64,
+    collateral_id: AssetId,
+    collateral_token_address: ContractAddress,
+    // Collateral quantum must make the minimal collateral unit == 10^-6 USD. For more details
+    // see `SN_PERPS_SCALE` in the `price.cairo` file.
+    collateral_quantum: u64,
     max_price_interval: TimeDelta,
+    max_oracle_price_validity: TimeDelta,
     max_funding_interval: TimeDelta,
     max_funding_rate: u32,
-    max_oracle_price_validity: TimeDelta,
     cancel_delay: TimeDelta,
-    fee_position_owner_account: ContractAddress,
     fee_position_owner_public_key: PublicKey,
-    insurance_fund_position_owner_account: ContractAddress,
     insurance_fund_position_owner_public_key: PublicKey,
-)
+) 
 ```
 
 #### Validations
+1. all inputs are non zero (except upgrade_delay)
+2. all component havn't been initilized before.
 
 #### Logic
 
-1. Initialize roles with governance\_admin address.
-2. Update replaceability upgrade delay.
-3. Initialize assets: set max\_price\_interval, max\_funding\_interval, and max\_funding\_rate.
-4. Initialize deposits.
-5. Initialize positions: create fee and insurance fund positions.
+1. Initialize roles with `governance_admin` address.
+2. Initialize replaceability with `upgrade_delay`.
+3. Initialize assets with: `collateral_id`, `collateral_token_address`, `collateral_quantum`, `max_price_interval`, `max_funding_interval`, `max_funding_rate`, `max_oracle_price_validity`.
+4. Initialize deposits with `cancel_delay`.
+5. Initialize positions: create fee position with `fee_position_owner_public_key` and insurance fund position with `insurance_fund_position_owner_public_key`.
 
 ## Public Functions
-
-### New Position
-
-#### Description
-
-```rust
-fn new_position(
-	ref self: ContractState,
-    operator_nonce: u64,
-    position_id: PositionId,
-    owner_public_key: felt252,
-    owner_account: ContractAddress,
-)
-```
-
-#### Access Control
-
-Only the Operator can execute.
-
-#### Hash
-
-#### Validations
-
-1. [Pausable check](#pausable)
-2. [Operator Nonce check](#operator-nonce)
-3. Check that the `position_id` doesn’t exist
-4. Check that `owner_public_key` is not zero
-
-#### Logic
-
-6. [Run open position validations](#validations-2)
-7. `self.positions[positionId].owner_public_key = owner_public_key`
-8. `self.positions[positionId].owner_account = owner_account`
-
-#### Errors
-
-- PAUSED
-- ONLY\_OPERATOR
-- INVALID\_NONCE
-- POSITION\_ALREADY\_EXISTS
-- INVALID\_PUBLIC\_KEY
-
-#### Emits
-
-[NewPosition](#newposition)
 
 ### Deposit
 
@@ -2862,208 +2934,6 @@ Only the Operator can execute.
 - POSITION_IS_NOT_HEALTHIER
 - CANT_DELEVERAGE_PENDING_ASSET
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
-
-### Set Owner Account Request
-
-#### Description
-
-The user registers an set position owner account request by registering a fact.
-
-```rust
-fn set_owner_account_request(
-    ref self: ComponentState<TContractState>,
-    signature: Signature,
-    position_id: PositionId,
-    new_owner_account: ContractAddress,
-    expiration: Timestamp,
-)
-```
-
-#### Access Control
-
-Anyone can execute.
-
-#### Hash
-
-[get\_message\_hash](#get-message-hash) on [SetOwnerAccount](#setowneraccount) with `new_public_key`.
-
-#### Validations
-
-1. [signature validation](#signature)
-2. self.positions\[`update_position_public_key_message.position_id`\].owner \ == NO\_OWNER
-3. Request is new
-4. caller address is `new_owner_account`
-
-#### Logic
-
-1. Run validation
-2. Register a request to set owner account using the requests component
-
-#### Errors
-
-- INVALID\_POSITION
-- REQUEST_ALREADY_REGISTERED
-- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
-- INVALID\_STARK\_KEY\_SIGNATURE
-
-#### Emits
-
-[SetOwnerAccountRequest](#setowneraccountrequest)
-
-### Set Owner Account
-
-#### Description
-
-Updates the account owner only for a no-owner position.
-
-```rust
-fn set_owner_account(
-    ref self: ContractState,
-    operator_nonce: u64,
-    // SetOwnerAccountArgs
-    position_id: PositionId,
-    public_key: felt252,
-    new_account_owner: ContractAddress,
-    expiration: Timestamp,
-)
-```
-
-#### Access Control
-
-Only the Operator can execute.
-
-#### Hash
-
-[get\_message\_hash](#get-message-hash) on [SetOwnerAccountArgs](#setowneraccountargs) with position `public_key`.
-
-#### Validations
-
-1. [Pausable check](#pausable)
-2. [Operator Nonce check](#operator-nonce)
-3. [Expiration validation](#expiration)
-4. [Position check](#position-1)
-5. Self.positions\[position\_id\].owner \== NO\_OWNER
-6. [Request approval check on set public key message](#requests-1)
-
-#### Logic
-
-1. Run [validations](#validations-13)
-2. Self.positions\[position\_id\].owner \= owner
-
-#### Errors
-
-- PAUSED
-- ONLY\_OPERATOR
-- INVALID\_NONCE
-- SET_POSITION_OWNER_EXPIRED
-- INVALID\_POSITION
-- POSITION_HAS_OWNER_ACCOUNT
-- INVALID\_STARK\_SIGNATURE
-
-#### Emits
-
-[SetOwnerAccount](#setowneraccount)
-
-### Set Public Key Request
-
-#### Description
-
-The user registers an update position public key request by registering a fact.
-
-```rust
-fn set_public_key_request(
-    ref self: ContractState,
-    // SetPublicKeyArgs
-    position_id: PositionId,
-    new_public_key: felt252,
-    expiration: Timestamp,
-)
-```
-
-#### Access Control
-
-Anyone can execute.
-
-#### Hash
-
-[get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
-
-#### Validations
-
-1. [signature validation](#signature)
-2. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER
-3. Request is new
-
-#### Logic
-
-1. Run validation
-2. Register a request to set public key using the requests component
-
-#### Errors
-
-- INVALID\_POSITION
-- REQUEST_ALREADY_REGISTERED
-- CALLER\_IS\_NOT\_OWNER\_ACCOUNT
-- INVALID\_STARK\_KEY\_SIGNATURE
-
-#### Emits
-
-[SetPublicKeyRequest](#setpublickeyrequest)
-
-### Set Public Key
-
-#### Description
-
-Update the public key of a position.
-
-```rust
-fn set_public_key(
-    ref self: ContractState,
-    operator_nonce: u64,
-    // SetPublicKeyArgs
-    position_id: PositionId,
-    new_public_key: felt252,
-    expiration: Timestamp,
-)
-```
-
-#### Access Control
-
-Only the Operator can execute.
-
-#### Hash
-
-[get\_message\_hash](#get-message-hash) on [SetPublicKeyArgs](#setpublickeyargs) with `new_public_key`.
-
-#### Validations
-
-1. [Pausable check](#pausable)
-2. [Operator Nonce check](#operator-nonce)
-3. [Expiration validation](#expiration)
-4. self.positions\[`update_position_public_key_message.position_id`\].owner \!= NO\_OWNER
-5. [Request approval check on set public key message](#requests-1)
-
-#### Logic
-
-1. Run [validations](#validations-15)
-2. `self.positions[position_id].public_key.write(new_public_key)`
-3. Mark request as done
-
-
-#### Errors
-
-- PAUSED
-- INVALID\_NONCE
-- ONLY\_OPERATOR
-- SET\_PUBLIC\_KEY\_EXPIRED
-- INVALID\_POSITION
-- NO\_OWNER\_ACCOUNT
-- REQUEST_NOT_REGISTERED
-- REQUEST_ALREADY_PROCESSED
-
-#### Emits
-
-[SetPublicKey](#setpublickey)
 
 ### Funding Tick
 

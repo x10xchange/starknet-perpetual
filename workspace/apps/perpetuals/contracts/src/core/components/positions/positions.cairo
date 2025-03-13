@@ -102,8 +102,8 @@ pub(crate) mod Positions {
         }
 
         /// This function is mostly used as view function - it's better to use the
-        /// `evaluate_position_change` function as it gives all the information needed at the same
-        /// cost.
+        /// `calculate_position_tvtr_change` function as it gives all the information needed at the
+        /// same cost.
         fn is_healthy(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
             let position = self.get_position_snapshot(:position_id);
             let position_state = self._get_position_state(:position);
@@ -111,8 +111,8 @@ pub(crate) mod Positions {
         }
 
         /// This function is mostly used as view function - it's better to use the
-        /// `evaluate_position_change` function as it gives all the information needed at the same
-        /// cost.
+        /// `calculate_position_tvtr_change` function as it gives all the information needed at the
+        /// same cost.
         fn is_liquidatable(self: @ComponentState<TContractState>, position_id: PositionId) -> bool {
             let position = self.get_position_snapshot(:position_id);
             let position_state = self._get_position_state(:position);
@@ -121,8 +121,8 @@ pub(crate) mod Positions {
         }
 
         /// This function is mostly used as view function - it's better to use the
-        /// `evaluate_position_change` function as it gives all the information needed at the same
-        /// cost.
+        /// `calculate_position_tvtr_change` function as it gives all the information needed at the
+        /// same cost.
         fn is_deleveragable(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> bool {
