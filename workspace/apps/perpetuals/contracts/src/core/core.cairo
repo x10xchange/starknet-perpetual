@@ -17,11 +17,11 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
-        DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
-        INVALID_AMOUNT_SIGN, INVALID_DELEVERAGE_BASE_CHANGE, INVALID_NON_SYNTHETIC_ASSET,
-        INVALID_QUOTE_AMOUNT_SIGN, INVALID_QUOTE_FEE_AMOUNT, INVALID_SAME_POSITIONS,
-        INVALID_ZERO_AMOUNT, QUOTE_ASSET_ID_NOT_COLLATERAL, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
+        ASSET_ID_NOT_COLLATERAL, CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION,
+        CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN,
+        INVALID_ACTUAL_QUOTE_SIGN, INVALID_AMOUNT_SIGN, INVALID_DELEVERAGE_BASE_CHANGE,
+        INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN, INVALID_QUOTE_FEE_AMOUNT,
+        INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
         fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
@@ -948,8 +948,8 @@ pub mod Core {
 
             // Validate asset ids.
             let collateral_id = self.assets.get_collateral_id();
-            assert(order.quote_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
-            assert(order.fee_asset_id == collateral_id, QUOTE_ASSET_ID_NOT_COLLATERAL);
+            assert(order.quote_asset_id == collateral_id, ASSET_ID_NOT_COLLATERAL);
+            assert(order.fee_asset_id == collateral_id, ASSET_ID_NOT_COLLATERAL);
         }
 
         fn _validate_trade(

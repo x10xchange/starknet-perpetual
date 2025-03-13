@@ -2686,13 +2686,13 @@ Only the Operator can execute.
 5. [public key signature](#public-key-signature) on each `Order`
 6. [All fee amounts are positive (actuals and order)](#amounts)
 7. [Expiration validation](#expiration)
-8. [Assets check](#asset)
+8. [Synthetic asset check](#asset)
 9. `order_a.position_id != order_b.position_id`
 10. Positions are not `FEE_POSITION`.
 11. `order_a.quote.amount` and `order_a.base.amount` have opposite signs and are non-zero.
 12. `order_b.quote.amount` and `order_b.base.amount` have opposite signs and are non-zero.
-13. `quote.asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) registered and active collateral.
-14. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active collateral/synthetic.
+13. `quote_asset_id` and `fee_asset_id` of both orders are the same (`order_a.quote.asset_id` \= `order_b.quote.asset_id`) the collateral id.
+14. `order_x`.`base.asset_id` of both orders are the same (`order_a`.`base.asset_id` \= `order_b.base.asset_id`) registered and active synthetic.
 15. `order_a.quote.amount` and `order_b.quote.amount` have opposite sign
 16. `actual_amount_base_a and actual_amount_quote_a are non-zero.`
 17. `order_a.base.amount` and `actual_amount_base_a` have the same sign.
@@ -2709,12 +2709,8 @@ Only the Operator can execute.
 1. Run validations
 2. Subtract the fees from each position collateral.
 3. Add the fees to the fee\_position.
-4. If `order_X.base_type.asset_id` is synthetic:
-   1. Add the `actual_amount_base_a` to the `order_a` position synthetic.
-   2. Subtract the `actual_amount_base_a` from the `order_b` position synthetic.
-5. Else:
-   1. Add the `actual_amount_base_a` to the `order_a` position collateral.
-   2. Subtract the `actual_amount_base_a` from the `order_b` position collateral.
+4. Add the `actual_amount_base_a` to the `order_a` position synthetic.
+5. Subtract the `actual_amount_base_a` from the `order_b` position synthetic.
 6. Add the `actual_amount_quote_a` to the `order_a` position collateral.
 7. Subtract the `actual_amount_quote_a` from the `order_b` position collateral.
 8. [Fundamental validation](#fundamental) for both positions in trade.
@@ -2735,23 +2731,20 @@ Only the Operator can execute.
 - INVALID\_POSITION
 - INVALID_STARK_KEY_SIGNATURE
 - FULFILLMENT_EXCEEDED
-- INVALID_TRADE_SAME_POSITIONS
+- INVALID_SAME_POSITIONS
+- CANT_TRADE_WITH_FEE_POSITION
+- DIFFERENT_BASE_ASSET_IDS
 - INVALID\_ZERO\_AMOUNT
 - ORDER\_EXPIRED
-- COLLATERAL_NOT_EXISTS
-- COLLATERAL\_NOT\_ACTIVE
-- INVALID_TRADE_WRONG_AMOUNT_SIGN
+- INVALID_AMOUNT_SIGN
+- INVALID_QUOTE_FEE_AMOUNT
 - ASSET_NOT_ACTIVE
 - NOT_SYNTHETIC
-- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN
-- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN
-- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN
-- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO
-- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO
-- DIFFERENT\_QUOTE\_ASSET\_IDS
-- DIFFERENT\_BASE\_ASSET\_IDS
-- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN
-- ASSET\_NOT\_EXISTS
+- INVALID_QUOTE_AMOUNT_SIGN
+- INVALID_ACTUAL_BASE_SIGN
+- INVALID_ACTUAL_QUOTE_SIGN
+- ILLEGAL_BASE_TO_QUOTE_RATIO
+- ILLEGAL_FEE_TO_QUOTE_RATIO
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
 ### Liquidate
@@ -2770,8 +2763,7 @@ fn liquidate(
 	actual_amount_base_liquidated: i64,
 	actual_amount_quote_liquidated: i64,
 	actual_liquidator_fee: i64,
-	fee_asset_id: AssetId,
-	fee_amount: u64
+	liquidated_fee_amount: u64
 )
 ```
 
@@ -2787,40 +2779,39 @@ Only the Operator can execute.
 
 1. [Pausable check](#pausable)
 2. [Operator Nonce check](#operator-nonce)
-3. [All fees amounts are non negative (actuals and order)](#amounts)
-4. [Expiration validation](#expiration)
-5. [Assets check](#asset)
-6. [Funding validation](#funding)
-7. [Price validation](#price)
-8. [public key signature](#public-key-signature) on `liquidator_order`
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [public key signature](#public-key-signature) on
+6. [All fees amounts are non negative (actuals and order)](#amounts)
+7. [Expiration validation](#expiration)
+8. [Synthetic asset check](#asset)
 9. `liquidated_position_id != liquidator_order.position_id`
 10. Positions are not `FEE_POSITION`.
-11. If `INSURANCE_FUND_POSITION` is liquidator or liquidated, the liquidated fee amount should be zero.
-12. `liquidator_order.quote_type.asset_id` is registered and active collateral
+11. Positions are not `INSURANCE_FUND_POSITION`.
+12. `liquidator_order.quote_asset_id` and `liquidator_order.fee_asset_id` are the collateral asset id.
 13. `liquidator_order.base.asset_id` is registered and active synthetic or collateral.
 14. `liquidated_position_id.is_liquidatable()==true`
-15. `liquidator_order.quote.amount` and `liquidator_order.base.amount` have opposite signs.
-16. `liquidator_order.base.amount` and `actual_amount_base_liquidated` have opposite signs.
-17. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
-18. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
-19. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
-20. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
+15. |liquidator_order,quote_amount| > liquidator_order.fee_amount.
+16. `liquidator_order.quote_amount` and `liquidator_order.base_amount` have opposite signs and are non_zero.
+17. `liquidator_order.base_amount` and `actual_amount_base_liquidated` have opposite signs.
+18. `liquidator_order.quote.amount` and `actual_amount_quote_liquidated` have opposite signs.
+19. `actual_amount_base_liquidated` is non zero.
+20. `actual_amount_quote_liquidated` is non zero.
+21. `|fulfillment[liquidator_order_hash]|+|actual_amount_base_liquidated|≤|liquidator_order.base.amount|`
+22. `actual_liquidator_fee / |actual_amount_quote_liquidated| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
+23. `actual_amount_base_liquidated / |actual_amount_quote_liquidated| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
 
 #### Logic
 
 1. Run validations
-2. If `liquidator_order.base.asset_id` is synthetic:
-   1. `positions[liquidated_position_id].syntethic_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`
-   2. `positions[liquidator_order.position_id].syntethic_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`
-3. Else:
-   1. `positions[liquidated_position].collateral_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`
-   2. `positions[liquidator_order.position_id].collateral_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`
-4. `positions[liquidated_position].collateral_assets[liquidator_order.quote.asset_id] += actual_amount_quote_liquidated`
-5. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.quote.asset_id] -= actual_amount_quote_liquidated`
-6. `positions[liquidator_order.position_id].collateral_assets[liquidator_order.fee.asset_id] -= liquidator_fee`
-7. `positions[fee_position].collateral_assets[liquidator_position.fee.asset_id] += liquidator_fee`
-8. `positions[liquidated_position].collateral_assets[insurance_fund_fee.asset_id] -= insurance_fund_fee_amount`
-9. `positions[insurance_fund].collateral_assets[insurance_fund_fee.asset_id] += insurance_fund_fee_amount`
+2. `positions[liquidated_position_id].syntethic_assets[liquidated_position.base.asset_id] += actual_amount_base_liquidated`
+3. `positions[liquidator_order.position_id].syntethic_assets[liquidator_position.base.asset_id] -= actual_amount_base_liquidated`
+4. `positions[liquidated_position].collateral_asset += actual_amount_quote_liquidated`
+5. `positions[liquidator_order.position_id].collateral_asset -= actual_amount_quote_liquidated`
+6. `positions[liquidator_order.position_id].collateral_asset -= liquidator_fee`
+7. `positions[fee_position].collateral_asset += liquidator_fee`
+8. `positions[liquidated_position].collateral_asset -= insurance_fund_fee_amount`
+9. `positions[insurance_fund].collateral_asset += insurance_fund_fee_amount`
 10. `fulfillment[liquidator_order_hash] -= actual_amount_base_liquidated`
 11. [Fundamental validation](#fundamental) for both positions.
 
@@ -2839,22 +2830,20 @@ Only the Operator can execute.
 - INVALID_STARK_KEY_SIGNATURE
 - FULFILLMENT_EXCEEDED
 - INVALID_TRADE_SAME_POSITIONS
+- CANT_TRADE_WITH_FEE_POSITION
+- INSURANCE_FUND_POSITION
 - INVALID\_ZERO\_AMOUNT
 - ORDER\_EXPIRED
-- COLLATERAL_NOT_EXISTS
-- COLLATERAL\_NOT\_ACTIVE
 - INVALID_TRADE_WRONG_AMOUNT_SIGN
-- NOT_SYNTHETIC
+- INVALID_AMOUNT_SIGN
+- INVALID_QUOTE_FEE_AMOUNT
 - ASSET_NOT_ACTIVE
-- INVALID\_TRADE\_WRONG\_AMOUNT\_SIGN
-- INVALID\_TRADE\_ACTUAL\_BASE\_SIGN
-- INVALID\_TRADE\_ACTUAL\_QUOTE\_SIGN
-- ILLEGAL\_BASE\_TO\_QUOTE\_RATIO
-- ILLEGAL\_FEE\_TO\_QUOTE\_RATIO
-- DIFFERENT\_QUOTE\_ASSET\_IDS
-- DIFFERENT\_BASE\_ASSET\_IDS
-- INVALID\_TRADE\_QUOTE\_AMOUNT\_SIGN
-- ASSET\_NOT\_EXISTS
+- NOT_SYNTHETIC
+- INVALID_QUOTE_AMOUNT_SIGN
+- INVALID_ACTUAL_BASE_SIGN
+- INVALID_ACTUAL_QUOTE_SIGN
+- ILLEGAL_BASE_TO_QUOTE_RATIO
+- ILLEGAL_FEE_TO_QUOTE_RATIO
 - POSITION_IS_NOT_LIQUIDATABLE
 - POSITION_IS_NOT_HEALTHIER
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
@@ -2869,8 +2858,8 @@ When a user position [is deleveragable](#deleveragable), the system can match th
 fn deleverage(
 	ref self: ContractState,
     operator_nonce: u64,
-    deleveraged_position: PositionId,
-    deleverager_position: PositionId,
+    deleveraged_position_id: PositionId,
+    deleverager_position_id: PositionId,
     base_asset_id: AssetId,
     deleveraged_base_amount: i64,
     deleveraged_quote_amount: i64,
