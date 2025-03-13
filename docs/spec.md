@@ -95,6 +95,7 @@
         - [Trade](#trade)
         - [Liquidate](#liquidate)
         - [Deleverage](#deleverage)
+        - [InactiveAssetRebalancing](#InactiveAssetRebalancing)
         - [TransferRequest](#transferrequest)
         - [Transfer](#transfer)
         - [SetOwnerAccount](#setowneraccount)
@@ -121,6 +122,7 @@
         - [Trade](#trade-1)
         - [Liquidate](#liquidate-1)
         - [Deleverage](#deleverage-1)
+        - [InactiveAssetRebalancing](#InactiveAssetRebalancing-1)
         - [Set Owner Account](#set-owner-account)
         - [Set Public Key Request](#set-public-key-request)
         - [Set Public Key](#set-public-key)
@@ -160,6 +162,7 @@ classDiagram
         trade()
         liquidate()
         deleverage()
+        inactive_asset_rebalancing()
     }
     class Position{
         version: u8,
@@ -170,17 +173,17 @@ classDiagram
     }
     class Positions{
         positions: Map< PositionId, Position>
-        
-        get_position_assets() -> PositionData
-        get_position_tv_tr() -> PositionTVTR
-        is_deleveragable() -> bool
-        is_healthy() -> bool
-        is_liquidatable() -> bool
+
         new_position()
         set_owner_account_request()
         set_owner_account()
         set_public_key_request()
         set_public_key()
+        get_position_assets() -> PositionData
+        get_position_tv_tr() -> PositionTVTR
+        is_deleveragable() -> bool
+        is_healthy() -> bool
+        is_liquidatable() -> bool
     }
     class Assets{
         /// 32-bit fixed-point number with a 32-bit fractional part.
@@ -416,7 +419,7 @@ Deleveragree should be ([healthy](#healthy) or [healthier](#is-healthier)) **and
 ```rust
 fn calculate_position_tvtr_change(
     unchanged_assets: UnchangedAssets, position_diff_enriched: PositionDiffEnriched,
-) -> PositionTVTRChange
+) -> TVTRChange
 ```
 
 #### Logic
@@ -621,7 +624,7 @@ struct SyntheticConfig {
     pub risk_factor_tier_size: u128,
     pub quorum: u8,
     // Smallest unit of a synthetic asset in the system.
-    pub resolution: u64,
+    pub resolution_factor: u64,
 }
 ```
 
@@ -1327,11 +1330,6 @@ In charge of all position related flows.
 ```rust
 #[starknet::interface]
 pub trait IPositions<TContractState> {
-    fn get_position_assets(self: @TContractState, position_id: PositionId) -> PositionData;
-    fn get_position_tv_tr(self: @TContractState, position_id: PositionId) -> PositionTVTR;
-    fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
-    fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
-    fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
     // Position Flows
     fn new_position(
         ref self: TContractState,
@@ -1368,6 +1366,12 @@ pub trait IPositions<TContractState> {
         new_public_key: PublicKey,
         expiration: Timestamp,
     );
+
+    fn get_position_assets(self: @TContractState, position_id: PositionId) -> PositionData;
+    fn get_position_tv_tr(self: @TContractState, position_id: PositionId) -> PositionTVTR;
+    fn is_deleveragable(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_healthy(self: @TContractState, position_id: PositionId) -> bool;
+    fn is_liquidatable(self: @TContractState, position_id: PositionId) -> bool;
 }
 ```
 ##### New Position
@@ -1745,7 +1749,6 @@ Position after the change is [healthy](#healthy) or [is healthier](#is-healthier
 ## Errors
 
 ```rust
-pub const CANT_DELEVERAGE_PENDING_ASSET: felt252 = 'CANT_DELEVERAGE_PENDING_ASSET';
 pub const CANT_TRADE_WITH_FEE_POSITION: felt252 = 'CANT_TRADE_WITH_FEE_POSITION';
 pub const CANT_LIQUIDATE_IF_POSITION: felt252 = 'CANT_LIQUIDATE_IF_POSITION';
 pub const DIFFERENT_BASE_ASSET_IDS: felt252 = 'DIFFERENT_BASE_ASSET_IDS';
@@ -1754,7 +1757,7 @@ pub const FEE_ASSET_AMOUNT_MISMATCH: felt252 = 'FEE_ASSET_AMOUNT_MISMATCH';
 pub const INVALID_ACTUAL_BASE_SIGN: felt252 = 'INVALID_ACTUAL_BASE_SIGN';
 pub const INVALID_ACTUAL_QUOTE_SIGN: felt252 = 'INVALID_ACTUAL_QUOTE_SIGN';
 pub const INVALID_AMOUNT_SIGN: felt252 = 'INVALID_AMOUNT_SIGN';
-pub const INVALID_DELEVERAGE_BASE_CHANGE: felt252 = 'INVALID_DELEVERAGE_BASE_CHANGE';
+pub const INVALID_BASE_CHANGE: felt252 = 'INVALID_BASE_CHANGE';
 pub const INVALID_NON_SYNTHETIC_ASSET: felt252 = 'INVALID_NON_SYNTHETIC_ASSET';
 pub const INVALID_OWNER_SIGNATURE: felt252 = 'INVALID_ACCOUNT_OWNER_SIGNATURE';
 pub const INVALID_QUOTE_AMOUNT_SIGN: felt252 = 'INVALID_QUOTE_AMOUNT_SIGN';
@@ -2066,6 +2069,20 @@ pub struct Deleverage {
 }
 ```
 
+#### InactiveAssetRebalancing
+```rust
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct InactiveAssetRebalancing {
+    #[key]
+    pub position_id_a: PositionId,
+    #[key]
+    pub position_id_b: PositionId,
+    pub base_asset_id: AssetId,
+    pub base_amount_a: i64,
+    pub quote_amount_a: i64,
+}
+```
+
 #### FundingTick
 
 ```rust
@@ -2185,7 +2202,7 @@ pub fn constructor(
     cancel_delay: TimeDelta,
     fee_position_owner_public_key: PublicKey,
     insurance_fund_position_owner_public_key: PublicKey,
-) 
+)
 ```
 
 #### Validations
@@ -2211,8 +2228,7 @@ The user registers a deposit request using the [Deposit component](#deposit) \- 
 ```rust
 fn deposit(
 	ref self: ContractState,
-    beneficiary: u32,
-	asset_id: felt252,
+    position_id: PositionId,
     quantized_amount: u64,
     salt: felt252,
 )
@@ -2353,7 +2369,7 @@ The user cancels a registered deposit request in the Deposit component.
 ```rust
 fn cancel_pending_deposit(
 	ref self: ContractState,
-    beneficiary: u32,
+    position_id: PositionId,
 	asset_id: felt252,
     quantized_amount: u128,
     salt: felt252,
@@ -2415,11 +2431,9 @@ The user registers a withdraw request by registering a fact.
 fn withdraw_request(
     ref self: ContractState,
     signature: Signature,
-    operator_nonce: u64,
     // WithdrawArgs
     recipient: ContractAddress,
     position_id: PositionId,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     salt: felt252,
@@ -2437,7 +2451,9 @@ Anyone can execute.
 #### Validations
 
 1. [signature validation](#signature)
-2. Request is new
+2. Amount is non zero.
+3. Caller is the owner address.
+4. Request is new
 
 #### Logic
 
@@ -2447,6 +2463,7 @@ Anyone can execute.
 #### Errors
 
 - INVALID\_POSITION
+- INVALID\_ZERO\_AMOUNT
 - REQUEST_ALREADY_REGISTERED
 - CALLER\_IS\_NOT\_OWNER\_ACCOUNT
 - INVALID\_STARK\_KEY\_SIGNATURE
@@ -2468,7 +2485,6 @@ fn withdraw(
     // WithdrawArgs
     recipient: ContractAddress,
     position_id: PositionId,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     salt: felt252,
@@ -2489,21 +2505,17 @@ Only the Operator can execute.
 2. [Operator Nonce check](#operator-nonce)
 3. [Funding validation](#funding)
 4. [Price validation](#price)
-5. [Collateral amount is positive](#amount)
-6. [Expiration validation](#expiration)
-7. [Collateral check](#asset)
-8. [Request approval check on withdraw message](#requests-1)
-9. `collateral.asset_id.balance_of(perps contract) - collateral.amount * collateral.asset_id.quantum >= pending_deposits[collateral.asset_id] * collateral.asset_id.quantum`
+5. [Expiration validation](#expiration)
+6. [Request approval check on withdraw message](#requests-1)
 
-This means that the withdraw is not taking money from the `pending_deposits`
 
 #### Logic
 
 1. Run [withdraw validations](#validations-7)
-3. Remove the amount from the position collateral.
-4. `ERC20::transfer(recipient, amount * collateral.asset_id.quantum)`
-5. Mark withdraw request done in the requests component
-6. [Fundamental validation](#fundamental)
+2. Mark withdraw request done in the requests component
+3. [Fundamental validation](#fundamental)
+4. Remove the amount from the position collateral.
+5. `ERC20::transfer(recipient, amount * collateral.asset_id.quantum)`
 
 #### Errors
 
@@ -2514,17 +2526,10 @@ This means that the withdraw is not taking money from the `pending_deposits`
 - SYNTHETIC\_NOT\_EXISTS
 - SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
-- COLLATERAL\_NOT\_ACTIVE
 - WITHDRAW_EXPIRED
-- COLLATERAL_NOT_EXISTS
-- COLLATERAL\_NOT\_ACTIVE
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
-- INSUFFICIENT_FUNDS
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
-- APPLY\_DIFF\_MISMATCH
-- ASSET\_NOT\_EXISTS
-- NOT_SYNTHETIC
 
 #### Emits
 
@@ -2541,7 +2546,6 @@ fn transfer_request(
     // TransferArgs
     recipient: PositionId,
     position_id: PositionId,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     salt: felt252,
@@ -2559,7 +2563,9 @@ Anyone can execute.
 #### Validations
 
 1. [signature validation](#signature)
-2. Request is new
+2. Amount is non zero.
+3. Caller is the owner address.
+4. Request is new
 
 #### Logic
 
@@ -2573,6 +2579,7 @@ Anyone can execute.
 #### Errors
 
 - INVALID\_POSITION
+- INVALID\_ZERO\_AMOUNT
 - REQUEST_ALREADY_REGISTERED
 - CALLER\_IS\_NOT\_OWNER\_ACCOUNT
 - INVALID\_STARK\_KEY\_SIGNATURE
@@ -2590,7 +2597,6 @@ fn transfer(
     // TransferArgs
     recipient: PositionId,
     position_id: PositionId,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     salt: felt252,
@@ -2612,11 +2618,9 @@ Only the Operator can execute.
 3. [Funding validation](#funding)
 4. [Price validation](#price)
 5. [Position check](#position) for `transfer_args.position_id`  and `transfer_args.recipient`
-6. [Collateral amount is positive](#amount)
-7. [Expiration validation](#expiration)
-8. [Collateral check](#asset)
-9. [Request approval check on transfer message](#requests-1)
-10. `recipient != position_id`.
+6. [Expiration validation](#expiration)
+7. `recipient != position_id`.
+8. [Request approval check on transfer message](#requests-1)
 
 #### Logic
 
@@ -2638,16 +2642,10 @@ Only the Operator can execute.
 - SYNTHETIC\_NOT\_EXISTS
 - SYNTHETIC\_EXPIRED\_PRICE
 - INVALID\_POSITION
-- COLLATERAL\_NOT\_ACTIVE
 - TRANSFER_EXPIRED
-- COLLATERAL_NOT_EXISTS
-- COLLATERAL\_NOT\_ACTIVE
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
-- APPLY\_DIFF\_MISMATCH
-- ASSET\_NOT\_EXISTS
-- NOT_SYNTHETIC
 
 
 ### Trade
@@ -2873,9 +2871,8 @@ fn deleverage(
     operator_nonce: u64,
     deleveraged_position: PositionId,
     deleverager_position: PositionId,
-    deleveraged_base_asset_id: AssetId,
+    base_asset_id: AssetId,
     deleveraged_base_amount: i64,
-    deleveraged_quote_asset_id: AssetId,
     deleveraged_quote_amount: i64,
 )
 ```
@@ -2892,21 +2889,19 @@ Only the Operator can execute.
 4. [Funding validation](#funding)
 5. [Price validation](#price)
 6. `deleveraged_position != deleverager_position`
-7. deleveraged\_base.asset\_id must be a registered synthetic and can be either active or inactive.
-8. deleveraged\_quote.asset\_id must be a registered collateral.
-9. If base\_asset\_id is active:
-   1. deleveraged\_position.is\_deleveragable() \== true
-10. base\_deleveraged.amount and quote\_deleveraged.amount have opposite signs.
-11. `deleveraged_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleveraged_position.balance|, and` both should `have the same sign.`
-12. `deleverager_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleverager_position.balance|, and both should have opposite sign.`
+7. base.asset\_id must be a registered active synthetic.
+8. deleveraged\_position.is\_deleveragable() \== true
+9. deleveraged\_base\_amount and deleveraged\_quote\_amount have opposite signs.
+10. `deleveraged_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleveraged_position.balance|, and` both should `have the same sign.`
+11. `deleverager_position.balance decreases in magnitude after the change: |base_deleveraged.amount| must not exceed |deleverager_position.balance|, and both should have opposite sign.`
 
 #### Logic
 
 1. [Run Validations](#validations-12).
-2. `positions[position_delevereged].syntethic_assets[base_delevereged.asset_id] += base_delevereged.amount`
-3. `positions[position_deleverager].syntethic_assets[base_delevereged.asset_id] -= base_delevereged.amount`
-4. `positions[position_delevereged].collateral_assets[quote_delevereged.asset_id] += quote_delevereged.amount`
-5. `positions[position_deleverager].collateral_assets[quote_delevereged.asset_id] -= quote_delevereged.amount`
+2. `positions[position_delevereged].syntethic_assets[base_delevereged._asset_id] += deleveraged_base_amount`
+3. `positions[position_deleverager].syntethic_assets[base_asset_id] -= deleveraged_base_amount`
+4. `positions[position_delevereged].collateral_asset += deleveraged_quote_amount`
+5. `positions[position_deleverager].collateral_asset -= deleveraged_quote_amount`
 6. [Fundamental validation](#fundamental) for both positions.
 
 #### Emits
@@ -2925,15 +2920,81 @@ Only the Operator can execute.
 - COLLATERAL\_NOT\_ACTIVE
 - INVALID_NON_SYNTHETIC_ASSET
 - INVALID_WRONG_AMOUNT_SIGN
-- INVALID_DELEVERAGE_BASE_CHANGE
+- INVALID_BASE_CHANGE
 - INVALID_POSITION
 - ASSET_NOT_EXISTS
 - NOT_SYNTHETIC
 - POSITION_IS_NOT_DELEVERAGABLE
 - POSITION_IS_NOT_FAIR_DELEVERAGE
 - POSITION_IS_NOT_HEALTHIER
-- CANT_DELEVERAGE_PENDING_ASSET
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
+### InactiveAssetRebalancing
+
+#### Description
+
+When a position `a` has a positive amount of an inactive asset, the system can match with a position `b` which has a negative amount of inactive asset, both without position’s signature, to clean inactive assets from the system.
+
+```rust
+fn inactive_asset_rebalancing(
+	ref self: ContractState,
+    operator_nonce: u64,
+    position_a: PositionId,
+    position_b: PositionId,
+    base_asset_id: AssetId,
+    base_amount_a: i64,
+    quote_amount_a: i64,
+)
+```
+
+#### Access Control
+
+Only the Operator can execute.
+
+#### Validations
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Assets check](#asset)
+4. [Funding validation](#funding)
+5. [Price validation](#price)
+6. `position_a != position_b`
+7. base\_asset\_id must be a registered inactive synthetic asset.
+8. base\_amount\_a and quote\_amount\_a have opposite signs.
+9. `position_a.balance decreases in magnitude after the change: |base_amount| must not exceed |position_a.balance|, and` both should `have the same sign.`
+10. `position_b.balance decreases in magnitude after the change: |base_amount| must not exceed |position_b.balance|, and both should have opposite sign.`
+
+#### Logic
+
+1. [Run Validations](#validations-12).
+2. `positions[position_a].syntethic_assets[base_asset_id] += base_amount_a`
+3. `positions[position_b].syntethic_assets[base_asset_id] -= base_amount_a`
+4. `positions[position_a].collateral_asset += quote_amount_a`
+5. `positions[position_b].collateral_asset -= quote_amount_a`
+
+#### Emits
+[inactiveassetrebalancing](#inactiveassetrebalancing)
+
+#### Errors
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- SYNTHETIC\_NOT\_EXISTS
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- INVALID_ZERO_AMOUNT
+- COLLATERAL_NOT_EXISTS
+- COLLATERAL\_NOT\_ACTIVE
+- INVALID_NON_SYNTHETIC_ASSET
+- INVALID_WRONG_AMOUNT_SIGN
+- INVALID_BASE_CHANGE
+- INVALID_POSITION
+- ASSET_NOT_EXISTS
+- ACTIVE_SYNTHETIC
+- POSITION_IS_NOT_HEALTHIER
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
 
 ### Funding Tick
 
@@ -3298,7 +3359,7 @@ Only APP\_GOVERNOR can execute.
 1. `self.roles.only_app_governor()`
 2. asset\_id does not exist in the system - check existance in both collateral and synthetic config.
 3. Lenght of `risk_factor_tiers` is non zero.
-4. `risk_factor_first_tier_boundary`, `risk_factor_tier_size`, `quorum`, and `resolution` are non zero.
+4. `risk_factor_first_tier_boundary`, `risk_factor_tier_size`, `quorum`, and `resolution_factor` are non zero.
 5. Lenght of `risk_factor_tiers` is non zero.
 6. All values in 0\<= \`risk_factor_tiers`\<= 100\.
 7. `risk_factor_tiers` is sorted.

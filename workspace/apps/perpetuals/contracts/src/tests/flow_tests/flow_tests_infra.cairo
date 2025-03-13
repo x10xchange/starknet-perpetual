@@ -2,6 +2,7 @@ use core::num::traits::Zero;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
+use perpetuals::core::components::deposit::Deposit::deposit_hash;
 use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
@@ -18,6 +19,7 @@ use perpetuals::core::types::price::{PRICE_SCALE, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
+use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
@@ -29,18 +31,22 @@ use starkware_utils::test_utils::{
 };
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
+use super::flow_test_deposit_validations::{
+    check_status_deposit, event_check_deposit, validate_balance_deposit,
+};
+
 
 const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 
 #[derive(Copy, Drop)]
 pub struct User {
-    position_id: PositionId,
-    account: Account,
+    pub position_id: PositionId,
+    pub account: Account,
 }
 
 #[derive(Copy, Drop)]
-struct Oracle {
+pub struct Oracle {
     account: Account,
     name: felt252,
 }
@@ -214,6 +220,12 @@ pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
     }
 }
 
+#[derive(Drop)]
+pub struct EventState {
+    spy: EventSpy,
+    event_index: u32,
+}
+
 /// FlowTestState is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
 pub struct FlowTestState {
@@ -228,6 +240,18 @@ pub struct FlowTestState {
     oracle_b: Oracle,
     position_id_gen: u32,
     salt: felt252,
+    event_info: EventState,
+}
+
+#[generate_trait]
+impl PrivateEventStateImpl of PrivateEventStateTrait {
+    fn get_next_event(
+        ref self: EventState, contract_address: ContractAddress,
+    ) -> @(ContractAddress, Event) {
+        self.event_index += 1;
+        let events = self.spy.get_events().emitted_by(contract_address).events;
+        events[self.event_index - 1]
+    }
 }
 
 #[generate_trait]
@@ -344,6 +368,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             },
             position_id_gen: 100,
             salt: 0,
+            event_info: EventState { spy: snforge_std::spy_events(), event_index: 0 },
         }
     }
 
@@ -398,6 +423,45 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn deposit(ref self: FlowTestState, user: User, reciever: User, amount: u64) -> DepositInfo {
+        let user_balance_before = self.token_state.balance_of(user.account.address);
+        let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
+        let expected_time = Time::now().add(delta: Time::days(1));
+
+        let deposit_info = self.deposit_internal(:user, :reciever, :amount);
+
+        let deposit_hash = deposit_hash(
+            token_address: self.token_state.address,
+            depositor: user.account.address,
+            position_id: user.position_id,
+            quantized_amount: amount,
+            salt: deposit_info.salt,
+        );
+
+        event_check_deposit(
+            :user,
+            :amount,
+            :deposit_hash,
+            event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+        );
+
+        validate_balance_deposit(
+            token_state: self.token_state,
+            user_address: user.account.address,
+            contract_address: self.perpetuals_contract,
+            expected_user_balance: user_balance_before - amount.into(),
+            expected_contract_balance: contract_balance_before + amount.into(),
+        );
+
+        check_status_deposit(
+            contract_address: self.perpetuals_contract, :deposit_hash, :expected_time,
+        );
+
+        deposit_info
+    }
+
+    fn deposit_internal(
+        ref self: FlowTestState, user: User, reciever: User, amount: u64,
+    ) -> DepositInfo {
         self.token_state.fund(recipient: user.account.address, amount: amount.into());
         self
             .token_state
