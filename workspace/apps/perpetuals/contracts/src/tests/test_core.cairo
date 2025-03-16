@@ -799,7 +799,6 @@ fn test_successful_deposit() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user = Default::default();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
@@ -839,9 +838,7 @@ fn test_successful_deposit() {
         spied_event: events[0],
         position_id: user.position_id,
         depositing_address: user.address,
-        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
@@ -905,7 +902,6 @@ fn test_successful_process_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -949,9 +945,7 @@ fn test_successful_process_deposit() {
         spied_event: events[0],
         position_id: user.position_id,
         depositing_address: user.address,
-        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
@@ -969,7 +963,6 @@ fn test_successful_cancel_deposit() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let collateral_cfg_id = cfg.collateral_cfg.collateral_id.into();
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
 
     // Fund user.
@@ -1023,9 +1016,7 @@ fn test_successful_cancel_deposit() {
         spied_event: events[0],
         position_id: user.position_id,
         depositing_address: user.address,
-        collateral_id: collateral_cfg_id,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 

@@ -3,7 +3,9 @@ use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
 use perpetuals::core::components::deposit::Deposit::deposit_hash;
-use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
+use perpetuals::core::components::deposit::interface::{
+    DepositStatus, IDepositDispatcher, IDepositDispatcherTrait,
+};
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
 };
@@ -19,6 +21,10 @@ use perpetuals::core::types::price::{PRICE_SCALE, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
+use perpetuals::tests::event_test_utils::{
+    assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
+};
+use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
@@ -31,9 +37,6 @@ use starkware_utils::test_utils::{
 };
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
-use super::flow_test_deposit_validations::{
-    check_status_deposit, event_check_deposit, validate_balance_deposit,
-};
 
 
 const TIME_STEP: u64 = MINUTE;
@@ -51,7 +54,7 @@ pub struct Oracle {
     name: felt252,
 }
 
-#[derive(Drop)]
+#[derive(Drop, Copy)]
 pub struct DepositInfo {
     // position_id can represent a different user than the depositor.
     user: User,
@@ -427,7 +430,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
         let expected_time = Time::now().add(delta: Time::days(1));
 
-        let deposit_info = self.deposit_internal(:user, :reciever, :amount);
+        let deposit_info = self.execute_deposit(:user, :reciever, :amount);
 
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
@@ -437,29 +440,37 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             salt: deposit_info.salt,
         );
 
-        event_check_deposit(
-            :user,
-            :amount,
-            :deposit_hash,
-            event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+        assert_deposit_event_with_expected(
+            spied_event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            depositing_address: user.account.address,
+            quantized_amount: amount,
+            deposit_request_hash: deposit_hash,
         );
 
-        validate_balance_deposit(
+        validate_balance(
             token_state: self.token_state,
-            user_address: user.account.address,
-            contract_address: self.perpetuals_contract,
-            expected_user_balance: user_balance_before - amount.into(),
-            expected_contract_balance: contract_balance_before + amount.into(),
+            address: user.account.address,
+            expected_balance: user_balance_before - amount.into(),
+        );
+        validate_balance(
+            token_state: self.token_state,
+            address: self.perpetuals_contract,
+            expected_balance: contract_balance_before + amount.into(),
         );
 
-        check_status_deposit(
-            contract_address: self.perpetuals_contract, :deposit_hash, :expected_time,
-        );
+        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .get_deposit_status(:deposit_hash);
+        if let DepositStatus::PENDING(timestamp) = status {
+            assert!(timestamp == expected_time);
+        } else {
+            panic!("Deposit not found");
+        }
 
         deposit_info
     }
 
-    fn deposit_internal(
+    fn execute_deposit(
         ref self: FlowTestState, user: User, reciever: User, amount: u64,
     ) -> DepositInfo {
         self.token_state.fund(recipient: user.account.address, amount: amount.into());
@@ -490,6 +501,32 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn process_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
+        self.execute_process_deposit(:deposit_info);
+        let user = deposit_info.user;
+        let amount = deposit_info.amount;
+
+        let deposit_hash = deposit_hash(
+            token_address: self.token_state.address,
+            depositor: user.account.address,
+            position_id: user.position_id,
+            quantized_amount: amount,
+            salt: deposit_info.salt,
+        );
+
+        assert_deposit_processed_event_with_expected(
+            spied_event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            depositing_address: user.account.address,
+            quantized_amount: amount,
+            deposit_request_hash: deposit_hash,
+        );
+
+        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .get_deposit_status(:deposit_hash);
+        assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
+    }
+
+    fn execute_process_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
 

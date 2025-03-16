@@ -37,17 +37,15 @@ pub fn assert_deposit_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     depositing_address: ContractAddress,
-    collateral_id: AssetId,
     quantized_amount: u64,
-    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::Deposit {
         position_id,
         depositing_address,
-        collateral_id,
+        collateral_id: COLLATERAL_ASSET_ID(),
         quantized_amount,
-        unquantized_amount,
+        unquantized_amount: quantized_amount * COLLATERAL_QUANTUM.into(),
         deposit_request_hash,
     };
 
@@ -63,17 +61,15 @@ pub fn assert_deposit_canceled_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     depositing_address: ContractAddress,
-    collateral_id: AssetId,
     quantized_amount: u64,
-    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositCanceled {
         position_id,
         depositing_address,
-        collateral_id,
+        collateral_id: COLLATERAL_ASSET_ID(),
         quantized_amount,
-        unquantized_amount,
+        unquantized_amount: quantized_amount * COLLATERAL_QUANTUM.into(),
         deposit_request_hash,
     };
     assert_expected_event_emitted(
@@ -88,17 +84,15 @@ pub fn assert_deposit_processed_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     depositing_address: ContractAddress,
-    collateral_id: AssetId,
     quantized_amount: u64,
-    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositProcessed {
         position_id,
         depositing_address,
-        collateral_id,
+        collateral_id: COLLATERAL_ASSET_ID(),
         quantized_amount,
-        unquantized_amount,
+        unquantized_amount: quantized_amount * COLLATERAL_QUANTUM.into(),
         deposit_request_hash,
     };
     assert_expected_event_emitted(
