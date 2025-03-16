@@ -732,9 +732,8 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 :operator_nonce,
                 deleveraged_position_id: deleveraged_user.position_id,
                 deleverager_position_id: deleverager_user.position_id,
-                deleveraged_base_asset_id: base_asset_id,
+                base_asset_id: base_asset_id,
                 deleveraged_base_amount: deleveraged_base,
-                deleveraged_quote_asset_id: constants::COLLATERAL_ASSET_ID(),
                 deleveraged_quote_amount: deleveraged_quote,
             );
     }

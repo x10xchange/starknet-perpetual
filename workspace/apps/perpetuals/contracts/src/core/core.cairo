@@ -8,6 +8,7 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
+    use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -17,22 +18,22 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        ASSET_ID_NOT_COLLATERAL, CANT_DELEVERAGE_PENDING_ASSET, CANT_LIQUIDATE_IF_POSITION,
-        CANT_TRADE_WITH_FEE_POSITION, DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN,
-        INVALID_ACTUAL_QUOTE_SIGN, INVALID_AMOUNT_SIGN, INVALID_DELEVERAGE_BASE_CHANGE,
-        INVALID_NON_SYNTHETIC_ASSET, INVALID_QUOTE_AMOUNT_SIGN, INVALID_QUOTE_FEE_AMOUNT,
-        INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED, WITHDRAW_EXPIRED,
-        fulfillment_exceeded_err, order_expired_err,
+        ASSET_ID_NOT_COLLATERAL, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
+        DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
+        INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_QUOTE_AMOUNT_SIGN,
+        INVALID_QUOTE_FEE_AMOUNT, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, SYNTHETIC_IS_ACTIVE,
+        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::ICore;
     use perpetuals::core::types::asset::synthetic::SyntheticDiffEnriched;
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::balance::BalanceDiff;
+    use perpetuals::core::types::balance::{Balance, BalanceDiff};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{
         Position, PositionDiff, PositionDiffEnriched, PositionId, PositionTrait,
     };
+    use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::value_risk_calculator::{
@@ -42,7 +43,8 @@ pub mod Core {
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StoragePath, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+        Map, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
@@ -164,6 +166,7 @@ pub mod Core {
         #[flat]
         PositionsEvent: Positions::Event,
         Deleverage: events::Deleverage,
+        InactiveAssetPositionReduced: events::InactiveAssetPositionReduced,
         Liquidate: events::Liquidate,
         Trade: events::Trade,
         Transfer: events::Transfer,
@@ -377,7 +380,9 @@ pub mod Core {
         ///
         /// Validations:
         /// - The contract must not be paused.
-        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
         /// - Validates both the sender and recipient positions exist.
         /// - Ensures the amount is positive.
         /// - Validates the expiration time.
@@ -430,7 +435,9 @@ pub mod Core {
         ///
         /// Validations:
         /// - The contract must not be paused.
-        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
         /// - Validates signatures for both orders using the public keys of their respective owners.
         /// - Ensures the fee amounts in both orders are positive.
         /// - Validates that the base and quote asset types match between the two orders.
@@ -585,7 +592,9 @@ pub mod Core {
         ///
         /// Validations:
         /// - The contract must not be paused.
-        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
         /// - Validates signatures for liquidator order using the public keys of it owner.
         /// - Ensures the fee amounts are positive.
         /// - Validates that the base and quote asset types match between the liquidator and
@@ -761,12 +770,14 @@ pub mod Core {
         ///
         /// Validations:
         /// - The contract must not be paused.
-        /// - Performs operator flow validations [`_validate_operator_flow`].
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
         /// - Verifies the signs of amounts:
         ///   - Ensures the opposite sign of amounts in base and quote.
         ///   - Ensures the sign of amounts in each position is consistent.
-        /// - If base asset is active, validates the deleveraged position is deleveragable.
-        /// - If base asset is inactive, it can always be deleveraged.
+        /// - Verifies that the base asset is active.
+        /// - validates the deleveraged position is deleveragable.
         ///
         /// Execution:
         /// - Update the position, based on `delevereged_base_asset`.
@@ -777,9 +788,8 @@ pub mod Core {
             operator_nonce: u64,
             deleveraged_position_id: PositionId,
             deleverager_position_id: PositionId,
-            deleveraged_base_asset_id: AssetId,
+            base_asset_id: AssetId,
             deleveraged_base_amount: i64,
-            deleveraged_quote_asset_id: AssetId,
             deleveraged_quote_amount: i64,
         ) {
             /// Validations:
@@ -794,61 +804,40 @@ pub mod Core {
                 .positions
                 .get_position_snapshot(position_id: deleverager_position_id);
 
+            // Validate base asset is synthetic active asset.
+            self.assets.validate_synthetic_active(synthetic_id: base_asset_id);
             self
-                ._validate_deleverage(
-                    :deleveraged_position_id,
-                    :deleverager_position_id,
-                    :deleveraged_position,
-                    :deleverager_position,
-                    :deleveraged_base_asset_id,
-                    :deleveraged_base_amount,
-                    :deleveraged_quote_asset_id,
-                    :deleveraged_quote_amount,
+                ._validate_imposed_reduction_trade(
+                    position_id_a: deleveraged_position_id,
+                    position_id_b: deleverager_position_id,
+                    position_a: deleveraged_position,
+                    position_b: deleverager_position,
+                    :base_asset_id,
+                    base_amount_a: deleveraged_base_amount,
+                    quote_amount_a: deleveraged_quote_amount,
                 );
 
             /// Execution:
             let deleveraged_position_diff = PositionDiff {
                 collateral_diff: deleveraged_quote_amount.into(),
-                synthetic_diff: Option::Some(
-                    (deleveraged_base_asset_id, deleveraged_base_amount.into()),
-                ),
+                synthetic_diff: Option::Some((base_asset_id, deleveraged_base_amount.into())),
             };
             // Passing the negative of actual amounts to deleverager as it is linked to
             // deleveraged.
             let deleverager_position_diff = PositionDiff {
                 collateral_diff: -deleveraged_quote_amount.into(),
-                synthetic_diff: Option::Some(
-                    (deleveraged_base_asset_id, -deleveraged_base_amount.into()),
-                ),
+                synthetic_diff: Option::Some((base_asset_id, -deleveraged_base_amount.into())),
             };
 
             /// Validations - Fundamentals:
-            match self.assets.get_synthetic_config(deleveraged_base_asset_id).status {
-                // If the synthetic asset is active, the position should be deleveragable
-                // and changed to fair deleverage and healthier.
-                AssetStatus::ACTIVE => {
-                    self
-                        ._validate_deleveraged_position(
-                            position_id: deleveraged_position_id,
-                            position: deleveraged_position,
-                            position_diff: deleveraged_position_diff,
-                            is_active_asset: true,
-                        )
-                },
-                // In case of inactive synthetic asset, the position should changed to fair
-                // deleverage and healthy or healthier.
-                AssetStatus::INACTIVE => {
-                    self
-                        ._validate_deleveraged_position(
-                            position_id: deleveraged_position_id,
-                            position: deleveraged_position,
-                            position_diff: deleveraged_position_diff,
-                            is_active_asset: false,
-                        )
-                },
-                // In case of pending synthetic asset, error should be thrown.
-                AssetStatus::PENDING => panic_with_felt252(CANT_DELEVERAGE_PENDING_ASSET),
-            }
+            // The deleveraged position should be deleveragable before
+            // and healthy or healthier after and the deleverage must be fair.
+            self
+                ._validate_deleveraged_position(
+                    position_id: deleveraged_position_id,
+                    position: deleveraged_position,
+                    position_diff: deleveraged_position_diff,
+                );
             self
                 ._validate_healthy_or_healthier_position(
                     position_id: deleverager_position_id,
@@ -873,10 +862,94 @@ pub mod Core {
                     events::Deleverage {
                         deleveraged_position_id,
                         deleverager_position_id,
-                        deleveraged_base_asset_id,
+                        base_asset_id,
                         deleveraged_base_amount,
-                        deleveraged_quote_asset_id,
+                        quote_asset_id: self.assets.get_collateral_id(),
                         deleveraged_quote_amount,
+                    },
+                )
+        }
+
+        /// Executes a trade between position with inactive synthetic assets.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
+        /// - Verifies that the base asset is inactive.
+        /// - Verifies the signs of amounts:
+        ///   - Ensures the opposite sign of amounts in base and quote.
+        ///   - Ensures the sign of amounts in each position is consistent.
+        ///
+        /// Execution:
+        /// - Update the position, based on `base_asset`.
+        /// - Adjust collateral balances based on `quote_amount`.
+        fn reduce_inactive_asset_position(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id_a: PositionId,
+            position_id_b: PositionId,
+            base_asset_id: AssetId,
+            base_amount_a: i64,
+        ) {
+            /// Validations:
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+
+            let position_a = self.positions.get_position_snapshot(position_id: position_id_a);
+            let position_b = self.positions.get_position_snapshot(position_id: position_id_b);
+
+            // Validate base asset is inactive synthetic.
+            if let Option::Some(config) = self.assets.synthetic_config.read(base_asset_id) {
+                assert(config.status == AssetStatus::INACTIVE, SYNTHETIC_IS_ACTIVE);
+            } else {
+                panic_with_felt252(NOT_SYNTHETIC);
+            }
+            let base_balance: Balance = base_amount_a.into();
+            let quote_amount_a: i64 = -1
+                * self
+                    .assets
+                    .get_synthetic_price(synthetic_id: base_asset_id)
+                    .mul(rhs: base_balance)
+                    .try_into()
+                    .expect('QUOTE_AMOUNT_OVERFLOW');
+            self
+                ._validate_imposed_reduction_trade(
+                    :position_id_a,
+                    :position_id_b,
+                    :position_a,
+                    :position_b,
+                    :base_asset_id,
+                    :base_amount_a,
+                    :quote_amount_a,
+                );
+
+            /// Execution:
+            let position_diff_a = PositionDiff {
+                collateral_diff: quote_amount_a.into(),
+                synthetic_diff: Option::Some((base_asset_id, base_amount_a.into())),
+            };
+            // Passing the negative of actual amounts to position_b as it is linked to position_a.
+            let position_diff_b = PositionDiff {
+                collateral_diff: -quote_amount_a.into(),
+                synthetic_diff: Option::Some((base_asset_id, -base_amount_a.into())),
+            };
+
+            // Apply diffs
+            self.positions.apply_diff(position_id: position_id_a, position_diff: position_diff_a);
+            self.positions.apply_diff(position_id: position_id_b, position_diff: position_diff_b);
+
+            self
+                .emit(
+                    events::InactiveAssetPositionReduced {
+                        position_id_a,
+                        position_id_b,
+                        base_asset_id,
+                        base_amount_a,
+                        quote_asset_id: self.assets.get_collateral_id(),
+                        quote_amount_a,
                     },
                 )
         }
@@ -1014,51 +1087,37 @@ pub mod Core {
                 .into();
 
             assert(!have_same_sign(amount, position_base_balance), INVALID_AMOUNT_SIGN);
-            assert(amount.abs() <= position_base_balance.abs(), INVALID_DELEVERAGE_BASE_CHANGE);
+            assert(amount.abs() <= position_base_balance.abs(), INVALID_BASE_CHANGE);
         }
 
-        fn _validate_deleverage(
+        fn _validate_imposed_reduction_trade(
             ref self: ContractState,
-            deleveraged_position_id: PositionId,
-            deleverager_position_id: PositionId,
-            deleveraged_position: StoragePath<Position>,
-            deleverager_position: StoragePath<Position>,
-            deleveraged_base_asset_id: AssetId,
-            deleveraged_base_amount: i64,
-            deleveraged_quote_asset_id: AssetId,
-            deleveraged_quote_amount: i64,
+            position_id_a: PositionId,
+            position_id_b: PositionId,
+            position_a: StoragePath<Position>,
+            position_b: StoragePath<Position>,
+            base_asset_id: AssetId,
+            base_amount_a: i64,
+            quote_amount_a: i64,
         ) {
             // Validate positions.
-            assert(deleveraged_position_id != deleverager_position_id, INVALID_SAME_POSITIONS);
+            assert(position_id_a != position_id_b, INVALID_SAME_POSITIONS);
 
             // Non-zero amount check.
-            assert(deleveraged_base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            assert(deleveraged_quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-
-            // Assets check.
-            assert(
-                self.assets.is_synthetic(asset_id: deleveraged_base_asset_id),
-                INVALID_NON_SYNTHETIC_ASSET,
-            );
+            assert(base_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(quote_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
 
             // Sign Validation for amounts.
-            assert(
-                !have_same_sign(deleveraged_base_amount, deleveraged_quote_amount),
-                INVALID_AMOUNT_SIGN,
-            );
+            assert(!have_same_sign(base_amount_a, quote_amount_a), INVALID_AMOUNT_SIGN);
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
             self
                 ._validate_synthetic_shrinks(
-                    position: deleveraged_position,
-                    asset_id: deleveraged_base_asset_id,
-                    amount: deleveraged_base_amount,
+                    position: position_a, asset_id: base_asset_id, amount: base_amount_a,
                 );
             self
                 ._validate_synthetic_shrinks(
-                    position: deleverager_position,
-                    asset_id: deleveraged_base_asset_id,
-                    amount: -deleveraged_base_amount,
+                    position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
                 );
         }
 
@@ -1109,7 +1168,6 @@ pub mod Core {
             position_id: PositionId,
             position: StoragePath<Position>,
             position_diff: PositionDiff,
-            is_active_asset: bool,
         ) {
             let unchanged_synthetics = self
                 .positions
@@ -1118,7 +1176,7 @@ pub mod Core {
             let position_diff_enriched = self.enrich_position_diff(:position, :position_diff);
 
             deleveraged_position_validations(
-                :position_id, :unchanged_synthetics, :position_diff_enriched, :is_active_asset,
+                :position_id, :unchanged_synthetics, :position_diff_enriched,
             );
         }
 

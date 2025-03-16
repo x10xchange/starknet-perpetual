@@ -204,9 +204,8 @@ fn test_caller_failures() {
             operator_nonce: Zero::zero(),
             deleveraged_position_id: POSITION_ID_1,
             deleverager_position_id: POSITION_ID_1,
-            deleveraged_base_asset_id: cfg.collateral_cfg.collateral_id,
+            base_asset_id: cfg.collateral_cfg.collateral_id,
             deleveraged_base_amount: 0,
-            deleveraged_quote_asset_id: cfg.collateral_cfg.collateral_id,
             deleveraged_quote_amount: 0,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
@@ -1546,7 +1545,6 @@ fn test_successful_deleverage() {
     let BASE = 10;
     let QUOTE = -500;
 
-    let collateral_id = cfg.collateral_cfg.collateral_id;
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
 
     // State change:
@@ -1565,9 +1563,8 @@ fn test_successful_deleverage() {
             :operator_nonce,
             deleveraged_position_id: deleveraged.position_id,
             deleverager_position_id: deleverager.position_id,
-            deleveraged_base_asset_id: synthetic_id,
+            base_asset_id: synthetic_id,
             deleveraged_base_amount: BASE,
-            deleveraged_quote_asset_id: collateral_id,
             deleveraged_quote_amount: QUOTE,
         );
 
@@ -1577,9 +1574,9 @@ fn test_successful_deleverage() {
         spied_event: events[0],
         deleveraged_position_id: deleveraged.position_id,
         deleverager_position_id: deleverager.position_id,
-        deleveraged_base_asset_id: synthetic_id,
+        base_asset_id: synthetic_id,
         deleveraged_base_amount: BASE,
-        deleveraged_quote_asset_id: collateral_id,
+        quote_asset_id: cfg.collateral_cfg.collateral_id,
         deleveraged_quote_amount: QUOTE,
     );
 
@@ -1644,7 +1641,6 @@ fn test_unfair_deleverage() {
     let BASE = 10;
     let QUOTE = -10;
 
-    let collateral_id = cfg.collateral_cfg.collateral_id;
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
 
     // State change:
@@ -1662,9 +1658,8 @@ fn test_unfair_deleverage() {
             :operator_nonce,
             deleveraged_position_id: deleveraged.position_id,
             deleverager_position_id: deleverager.position_id,
-            deleveraged_base_asset_id: synthetic_id,
+            base_asset_id: synthetic_id,
             deleveraged_base_amount: BASE,
-            deleveraged_quote_asset_id: collateral_id,
             deleveraged_quote_amount: QUOTE,
         );
 }

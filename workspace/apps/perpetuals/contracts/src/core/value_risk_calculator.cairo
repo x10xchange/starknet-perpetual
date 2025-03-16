@@ -131,17 +131,14 @@ pub fn deleveraged_position_validations(
     position_id: PositionId,
     unchanged_synthetics: Span<SyntheticAsset>,
     position_diff_enriched: PositionDiffEnriched,
-    is_active_asset: bool,
 ) {
     let tvtr = calculate_position_tvtr_change(:unchanged_synthetics, :position_diff_enriched);
     let position_state_before_change = get_position_state(position_tvtr: tvtr.before);
 
-    if is_active_asset {
-        assert_with_byte_array(
-            position_state_before_change == PositionState::Deleveragable,
-            position_not_deleveragable(:position_id),
-        );
-    }
+    assert_with_byte_array(
+        position_state_before_change == PositionState::Deleveragable,
+        position_not_deleveragable(:position_id),
+    );
 
     assert_healthy_or_healthier(:position_id, :tvtr);
     assert_with_byte_array(
