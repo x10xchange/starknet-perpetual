@@ -804,7 +804,6 @@ pub mod Core {
                 .positions
                 .get_position_snapshot(position_id: deleverager_position_id);
 
-            // Validate base asset is synthetic active asset.
             self.assets.validate_synthetic_active(synthetic_id: base_asset_id);
             self
                 ._validate_imposed_reduction_trade(
