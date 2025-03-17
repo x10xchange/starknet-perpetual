@@ -23,7 +23,8 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -41,7 +42,6 @@ use starkware_utils::test_utils::{
 };
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
-
 
 const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
@@ -67,7 +67,7 @@ pub struct DepositInfo {
     salt: felt252,
 }
 
-#[derive(Drop)]
+#[derive(Drop, Copy)]
 pub struct WithdrawInfo {
     // recipient can represent a different user than the withdrawer.
     user: User,
@@ -669,6 +669,54 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn withdraw(ref self: FlowTestState, withdraw_info: WithdrawInfo) {
+        let user = withdraw_info.user;
+        let amount = withdraw_info.amount;
+        let user_balance_before = self.token_state.balance_of(user.account.address);
+        let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
+        let position_dispatcher = IPositionsDispatcher {
+            contract_address: self.perpetuals_contract,
+        };
+        let collateral_balance_before = position_dispatcher
+            .get_position_assets(position_id: withdraw_info.user.position_id)
+            .collateral_balance;
+        self.execute_withdraw(:withdraw_info);
+
+        let collateral_balance_after = position_dispatcher
+            .get_position_assets(position_id: withdraw_info.user.position_id)
+            .collateral_balance;
+
+        assert_eq!(
+            collateral_balance_before - withdraw_info.amount.into(), collateral_balance_after,
+        );
+
+        validate_balance(
+            token_state: self.token_state,
+            address: user.account.address,
+            expected_balance: user_balance_before
+                + (withdraw_info.amount * constants::COLLATERAL_QUANTUM).into(),
+        );
+        validate_balance(
+            token_state: self.token_state,
+            address: self.perpetuals_contract,
+            expected_balance: contract_balance_before
+                - (withdraw_info.amount * constants::COLLATERAL_QUANTUM).into(),
+        );
+
+        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
+            .get_request_status(request_hash: withdraw_info.hash);
+        assert!(status == RequestStatus::PROCESSED, "Withdraw not processed");
+
+        assert_withdraw_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            recipient: user.account.address,
+            amount: amount,
+            expiration: withdraw_info.expiration,
+            withdraw_request_hash: withdraw_info.hash,
+        );
+    }
+
+    fn execute_withdraw(ref self: FlowTestState, withdraw_info: WithdrawInfo) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
