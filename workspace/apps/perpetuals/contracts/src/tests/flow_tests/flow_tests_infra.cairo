@@ -23,13 +23,16 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
+use starkware_utils::components::request_approvals::interface::{
+    IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
+};
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
@@ -71,6 +74,7 @@ pub struct WithdrawInfo {
     recipient: ContractAddress,
     amount: u64,
     expiration: Timestamp,
+    hash: felt252,
     salt: felt252,
 }
 
@@ -598,6 +602,27 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn withdraw_request(
         ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
     ) -> WithdrawInfo {
+        let withdraw_info = self.execute_withdraw_request(:user, :recipient, :amount, :expiration);
+
+        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
+            .get_request_status(request_hash: withdraw_info.hash);
+        assert!(status == RequestStatus::PENDING);
+
+        assert_withdraw_request_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            recipient: recipient.account.address,
+            amount: amount.try_into().unwrap(),
+            expiration: expiration,
+            withdraw_request_hash: withdraw_info.hash,
+        );
+
+        withdraw_info
+    }
+
+    fn execute_withdraw_request(
+        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
+    ) -> WithdrawInfo {
         let salt = self.generate_salt();
         let recipient_address = recipient.account.address;
         let withdraw_args = WithdrawArgs {
@@ -626,6 +651,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             recipient: recipient_address,
             amount: amount.try_into().unwrap(),
             expiration,
+            hash: msg_hash,
             salt,
         }
     }

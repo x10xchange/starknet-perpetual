@@ -110,13 +110,17 @@ pub fn assert_withdraw_request_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     recipient: ContractAddress,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     withdraw_request_hash: felt252,
 ) {
     let expected_event = events::WithdrawRequest {
-        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
+        position_id,
+        recipient,
+        collateral_id: COLLATERAL_ASSET_ID(),
+        amount,
+        expiration,
+        withdraw_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -130,13 +134,17 @@ pub fn assert_withdraw_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     recipient: ContractAddress,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     withdraw_request_hash: felt252,
 ) {
     let expected_event = events::Withdraw {
-        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
+        position_id,
+        recipient,
+        collateral_id: COLLATERAL_ASSET_ID(),
+        amount,
+        expiration,
+        withdraw_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event,
