@@ -122,7 +122,7 @@ struct PerpetualsConfig {
 
 #[generate_trait]
 pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
-    fn new(collateral_token_address: ContractAddress) -> PerpetualsConfig {
+    fn new(collateral_token_address: ContractAddress, collateral_quantum: u64) -> PerpetualsConfig {
         let mut key_gen = 1;
         let operator = AccountTrait::new(ref key_gen);
         PerpetualsConfig {
@@ -133,7 +133,7 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
             upgrade_delay: constants::UPGRADE_DELAY,
             collateral_id: constants::COLLATERAL_ASSET_ID(),
             collateral_token_address,
-            collateral_quantum: constants::COLLATERAL_QUANTUM,
+            collateral_quantum,
             max_price_interval: constants::MAX_PRICE_INTERVAL,
             max_funding_interval: constants::MAX_FUNDING_INTERVAL,
             max_funding_rate: constants::MAX_FUNDING_RATE,
@@ -226,7 +226,6 @@ pub fn create_synthetic_config(asset_name: felt252) -> SyntheticConfig {
 #[derive(Drop)]
 pub struct EventState {
     spy: EventSpy,
-    event_index: u32,
 }
 
 /// FlowTestState is the main struct that holds the state of the flow tests.
@@ -237,6 +236,7 @@ pub struct FlowTestState {
     app_governor: ContractAddress,
     perpetuals_contract: ContractAddress,
     token_state: TokenState,
+    collateral_quantum: u64,
     key_gen: felt252,
     operator: Account,
     oracle_a: Oracle,
@@ -248,12 +248,11 @@ pub struct FlowTestState {
 
 #[generate_trait]
 impl PrivateEventStateImpl of PrivateEventStateTrait {
-    fn get_next_event(
+    fn get_last_event(
         ref self: EventState, contract_address: ContractAddress,
     ) -> @(ContractAddress, Event) {
-        self.event_index += 1;
         let events = self.spy.get_events().emitted_by(contract_address).events;
-        events[self.event_index - 1]
+        events[events.len() - 1]
     }
 }
 
@@ -349,9 +348,9 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             owner: constants::COLLATERAL_OWNER(),
         };
         let token_state = Deployable::deploy(@token_config);
-
+        let collateral_quantum = constants::COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
-            collateral_token_address: token_state.address,
+            collateral_token_address: token_state.address, :collateral_quantum,
         );
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
 
@@ -361,6 +360,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             app_governor: perpetuals_config.app_governor,
             perpetuals_contract,
             token_state,
+            collateral_quantum,
             key_gen,
             operator: perpetuals_config.operator,
             oracle_a: Oracle {
@@ -371,7 +371,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             },
             position_id_gen: 100,
             salt: 0,
-            event_info: EventState { spy: snforge_std::spy_events(), event_index: 0 },
+            event_info: EventState { spy: snforge_std::spy_events() },
         }
     }
 
@@ -425,12 +425,12 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn deposit(ref self: FlowTestState, user: User, reciever: User, amount: u64) -> DepositInfo {
+    fn deposit(ref self: FlowTestState, user: User, receiver: User, amount: u64) -> DepositInfo {
         let user_balance_before = self.token_state.balance_of(user.account.address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
-        let expected_time = Time::now().add(delta: Time::days(1));
+        let expected_time = Time::now();
 
-        let deposit_info = self.execute_deposit(:user, :reciever, :amount);
+        let deposit_info = self.execute_deposit(:user, :receiver, :amount);
 
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
@@ -440,23 +440,25 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             salt: deposit_info.salt,
         );
 
+        let unquantized_amount = amount * self.collateral_quantum;
         assert_deposit_event_with_expected(
-            spied_event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             position_id: user.position_id,
             depositing_address: user.account.address,
             quantized_amount: amount,
+            :unquantized_amount,
             deposit_request_hash: deposit_hash,
         );
 
         validate_balance(
             token_state: self.token_state,
             address: user.account.address,
-            expected_balance: user_balance_before - amount.into(),
+            expected_balance: user_balance_before - unquantized_amount.into(),
         );
         validate_balance(
             token_state: self.token_state,
             address: self.perpetuals_contract,
-            expected_balance: contract_balance_before + amount.into(),
+            expected_balance: contract_balance_before + unquantized_amount.into(),
         );
 
         let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
@@ -471,18 +473,17 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn execute_deposit(
-        ref self: FlowTestState, user: User, reciever: User, amount: u64,
+        ref self: FlowTestState, user: User, receiver: User, amount: u64,
     ) -> DepositInfo {
-        self.token_state.fund(recipient: user.account.address, amount: amount.into());
         self
             .token_state
             .approve(
                 owner: user.account.address,
                 spender: self.perpetuals_contract,
-                amount: amount.into(),
+                amount: (amount * self.collateral_quantum).into(),
             );
         let salt = self.generate_salt();
-        let position_id = reciever.position_id;
+        let position_id = receiver.position_id;
         user.account.set_as_caller(self.perpetuals_contract);
 
         IDepositDispatcher { contract_address: self.perpetuals_contract }
@@ -514,10 +515,11 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         );
 
         assert_deposit_processed_event_with_expected(
-            spied_event: self.event_info.get_next_event(contract_address: self.perpetuals_contract),
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             position_id: user.position_id,
             depositing_address: user.account.address,
             quantized_amount: amount,
+            unquantized_amount: amount * self.collateral_quantum,
             deposit_request_hash: deposit_hash,
         );
 
@@ -540,13 +542,13 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn deposit_and_process(ref self: FlowTestState, user: User, reciever: User, amount: u64) {
-        let deposit_info = self.deposit(:user, :reciever, :amount);
+    fn deposit_and_process(ref self: FlowTestState, user: User, receiver: User, amount: u64) {
+        let deposit_info = self.deposit(:user, :receiver, :amount);
         self.process_deposit(deposit_info);
     }
 
     fn self_deposit(ref self: FlowTestState, user: User, amount: u64) {
-        self.deposit_and_process(:user, reciever: user, :amount);
+        self.deposit_and_process(:user, receiver: user, :amount);
     }
 
     fn withdraw_request(
@@ -598,15 +600,14 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn request_and_withdraw(
-        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
-    ) {
+    fn request_and_withdraw(ref self: FlowTestState, user: User, recipient: User, amount: u128) {
+        let expiration = Time::now().add(Time::seconds(10));
         let withdraw_info = self.withdraw_request(:user, :recipient, :amount, :expiration);
         self.withdraw(withdraw_info);
     }
 
-    fn self_withdraw(ref self: FlowTestState, user: User, amount: u128, expiration: Timestamp) {
-        self.request_and_withdraw(:user, recipient: user, :amount, :expiration);
+    fn self_withdraw(ref self: FlowTestState, user: User, amount: u128) {
+        self.request_and_withdraw(:user, recipient: user, :amount);
     }
 
     fn transfer_request(
