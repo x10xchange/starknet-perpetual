@@ -22,7 +22,8 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
-    assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
+    assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
+    assert_deposit_processed_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -492,6 +493,49 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn cancel_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
+        let user = deposit_info.user;
+        let amount = deposit_info.amount;
+        let user_balance_before = self.token_state.balance_of(user.account.address);
+        let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
+
+        self.execute_cancel_deposit(:deposit_info);
+
+        let deposit_hash = deposit_hash(
+            token_address: self.token_state.address,
+            depositor: user.account.address,
+            position_id: user.position_id,
+            quantized_amount: amount,
+            salt: deposit_info.salt,
+        );
+
+        let unquantized_amount = amount * self.collateral_quantum;
+
+        validate_balance(
+            token_state: self.token_state,
+            address: user.account.address,
+            expected_balance: user_balance_before + unquantized_amount.into(),
+        );
+        validate_balance(
+            token_state: self.token_state,
+            address: self.perpetuals_contract,
+            expected_balance: contract_balance_before - unquantized_amount.into(),
+        );
+
+        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .get_deposit_status(:deposit_hash);
+        assert!(status == DepositStatus::CANCELED, "Deposit not canceled");
+
+        assert_deposit_canceled_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            depositing_address: user.account.address,
+            quantized_amount: amount,
+            :unquantized_amount,
+            deposit_request_hash: deposit_hash,
+        );
+    }
+
+    fn execute_cancel_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
         deposit_info.user.account.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .cancel_deposit(

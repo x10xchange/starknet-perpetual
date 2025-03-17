@@ -63,6 +63,7 @@ pub fn assert_deposit_canceled_event_with_expected(
     position_id: PositionId,
     depositing_address: ContractAddress,
     quantized_amount: u64,
+    unquantized_amount: u64,
     deposit_request_hash: felt252,
 ) {
     let expected_event = deposit_events::DepositCanceled {
@@ -70,7 +71,7 @@ pub fn assert_deposit_canceled_event_with_expected(
         depositing_address,
         collateral_id: COLLATERAL_ASSET_ID(),
         quantized_amount,
-        unquantized_amount: quantized_amount * COLLATERAL_QUANTUM.into(),
+        unquantized_amount,
         deposit_request_hash,
     };
     assert_expected_event_emitted(

@@ -1019,6 +1019,7 @@ fn test_successful_cancel_deposit() {
         position_id: user.position_id,
         depositing_address: user.address,
         quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
     );
 
