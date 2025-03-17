@@ -550,9 +550,21 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     }
 
     fn process_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
-        self.execute_process_deposit(:deposit_info);
         let user = deposit_info.user;
         let amount = deposit_info.amount;
+        let position_dispatcher = IPositionsDispatcher {
+            contract_address: self.perpetuals_contract,
+        };
+        let collateral_balance_before = position_dispatcher
+            .get_position_assets(position_id: deposit_info.position_id)
+            .collateral_balance;
+        self.execute_process_deposit(:deposit_info);
+
+        let collateral_balance_after = position_dispatcher
+            .get_position_assets(position_id: deposit_info.position_id)
+            .collateral_balance;
+
+        assert!(collateral_balance_before + amount.into() == collateral_balance_after);
 
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
@@ -562,6 +574,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             salt: deposit_info.salt,
         );
 
+        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .get_deposit_status(:deposit_hash);
+        assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
+
         assert_deposit_processed_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             position_id: user.position_id,
@@ -570,10 +586,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             unquantized_amount: amount * self.collateral_quantum,
             deposit_request_hash: deposit_hash,
         );
-
-        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .get_deposit_status(:deposit_hash);
-        assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
     }
 
     fn execute_process_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
