@@ -9,11 +9,13 @@ use perpetuals::core::components::deposit::interface::{
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
 };
+use perpetuals::core::components::positions::Positions::FEE_POSITION;
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
+use perpetuals::core::types::asset::synthetic::SyntheticAsset;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::order::Order;
@@ -24,9 +26,9 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_transfer_event_with_expected,
-    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_trade_event_with_expected,
+    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -834,7 +836,94 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         order_b: Order,
         base: i64,
         quote: i64,
-        fee: u64,
+        fee_a: u64,
+        fee_b: u64,
+    ) {
+        let asset_id = order_a.base_asset_id;
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        let user_a_balance_before = dispatcher.get_position_assets(position_id: user_a.position_id);
+        let user_a_collateral_balance_before = user_a_balance_before.collateral_balance;
+        let user_a_synthetic_balance_before = get_synthetic_balance(
+            assets: user_a_balance_before.synthetics, :asset_id,
+        );
+        let user_b_balance_before = dispatcher.get_position_assets(position_id: user_b.position_id);
+        let user_b_collateral_balance_before = user_b_balance_before.collateral_balance;
+        let user_b_synthetic_balance_before = get_synthetic_balance(
+            assets: user_b_balance_before.synthetics, :asset_id,
+        );
+        let fee_position_balance_before = dispatcher
+            .get_position_assets(position_id: FEE_POSITION)
+            .collateral_balance;
+
+        self.execute_trade(:user_a, :user_b, :order_a, :order_b, :base, :quote, :fee_a, :fee_b);
+
+        self
+            .validate_collateral_after_action(
+                position_id: user_a.position_id,
+                expected_balance: user_a_collateral_balance_before
+                    + (quote - fee_a.try_into().unwrap()).into(),
+            );
+
+        self
+            .validate_collateral_after_action(
+                position_id: user_b.position_id,
+                expected_balance: user_b_collateral_balance_before
+                    - (quote + fee_b.try_into().unwrap()).into(),
+            );
+
+        self
+            .validate_synthetic_after_action(
+                position_id: user_a.position_id,
+                :asset_id,
+                expected_balance: user_a_synthetic_balance_before + base.into(),
+            );
+
+        self
+            .validate_synthetic_after_action(
+                position_id: user_b.position_id,
+                :asset_id,
+                expected_balance: user_b_synthetic_balance_before - base.into(),
+            );
+
+        self
+            .validate_collateral_after_action(
+                position_id: FEE_POSITION,
+                expected_balance: fee_position_balance_before + (fee_a + fee_b).into(),
+            );
+
+        let hash_a = order_a.get_message_hash(user_a.account.key_pair.public_key);
+        let hash_b = order_b.get_message_hash(user_b.account.key_pair.public_key);
+
+        assert_trade_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            order_base_asset_id: asset_id,
+            order_a_position_id: order_a.position_id,
+            order_a_base_amount: order_a.base_amount,
+            order_a_quote_amount: order_a.quote_amount,
+            fee_a_amount: order_a.fee_amount,
+            order_b_position_id: order_b.position_id,
+            order_b_base_amount: order_b.base_amount,
+            order_b_quote_amount: order_b.quote_amount,
+            fee_b_amount: order_b.fee_amount,
+            actual_amount_base_a: base,
+            actual_amount_quote_a: quote,
+            actual_fee_a: fee_a,
+            actual_fee_b: fee_b,
+            order_a_hash: hash_a,
+            order_b_hash: hash_b,
+        );
+    }
+
+    fn execute_trade(
+        ref self: FlowTestState,
+        user_a: User,
+        user_b: User,
+        order_a: Order,
+        order_b: Order,
+        base: i64,
+        quote: i64,
+        fee_a: u64,
+        fee_b: u64,
     ) {
         let operator_nonce = self.get_nonce();
         let signature_a = user_a
@@ -854,8 +943,8 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 :order_b,
                 actual_amount_base_a: base,
                 actual_amount_quote_a: quote,
-                actual_fee_a: fee,
-                actual_fee_b: fee,
+                actual_fee_a: fee_a,
+                actual_fee_b: fee_b,
             );
     }
 
@@ -957,9 +1046,32 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         assert_eq!(collateral_balance, expected_balance);
     }
+
+    fn validate_synthetic_after_action(
+        ref self: FlowTestState,
+        position_id: PositionId,
+        asset_id: AssetId,
+        expected_balance: Balance,
+    ) {
+        let synthetic_assets = IPositionsDispatcher { contract_address: self.perpetuals_contract }
+            .get_position_assets(:position_id)
+            .synthetics;
+        let synthetic_balance = get_synthetic_balance(assets: synthetic_assets, :asset_id);
+
+        assert_eq!(synthetic_balance, expected_balance);
+    }
     /// TODO: add all the necessary functions to interact with the contract.
 }
 
 pub fn advance_time(seconds: u64) {
     start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
+}
+
+fn get_synthetic_balance(assets: Span<SyntheticAsset>, asset_id: AssetId) -> Balance {
+    for asset in assets {
+        if asset.id == @asset_id {
+            return asset.balance.clone();
+        }
+    }
+    0_i64.into()
 }
