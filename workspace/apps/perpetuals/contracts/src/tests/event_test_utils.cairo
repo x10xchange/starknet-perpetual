@@ -301,13 +301,17 @@ pub fn assert_transfer_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     recipient: PositionId,
-    collateral_id: AssetId,
     amount: u64,
     expiration: Timestamp,
     transfer_request_hash: felt252,
 ) {
     let expected_event = events::Transfer {
-        position_id, recipient, collateral_id, amount, expiration, transfer_request_hash,
+        position_id,
+        recipient,
+        collateral_id: COLLATERAL_ASSET_ID(),
+        amount,
+        expiration,
+        transfer_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event,

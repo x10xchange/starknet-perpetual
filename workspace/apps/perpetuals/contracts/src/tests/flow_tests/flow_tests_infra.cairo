@@ -15,6 +15,7 @@ use perpetuals::core::components::positions::interface::{
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
+use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::SignedPrice;
@@ -23,8 +24,9 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -511,11 +513,11 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         self.execute_process_deposit(:deposit_args);
 
-        let collateral_balance_after = position_dispatcher
-            .get_position_assets(position_id: deposit_args.position_id)
-            .collateral_balance;
-
-        assert!(collateral_balance_before + amount.into() == collateral_balance_after);
+        self
+            .validate_collateral_after_action(
+                position_id: deposit_args.position_id,
+                expected_balance: collateral_balance_before + amount.into(),
+            );
 
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
@@ -617,22 +619,22 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
         let amount = withdraw_args.amount;
         let address = user.account.address;
+        let position_id = withdraw_args.position_id;
         let user_balance_before = self.token_state.balance_of(address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
         let position_dispatcher = IPositionsDispatcher {
             contract_address: self.perpetuals_contract,
         };
         let collateral_balance_before = position_dispatcher
-            .get_position_assets(position_id: withdraw_args.position_id)
+            .get_position_assets(:position_id)
             .collateral_balance;
 
         self.execute_withdraw(:withdraw_args);
 
-        let collateral_balance_after = position_dispatcher
-            .get_position_assets(position_id: withdraw_args.position_id)
-            .collateral_balance;
-
-        assert_eq!(collateral_balance_before - amount.into(), collateral_balance_after);
+        self
+            .validate_collateral_after_action(
+                :position_id, expected_balance: collateral_balance_before - amount.into(),
+            );
 
         validate_balance(
             token_state: self.token_state,
@@ -651,7 +653,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         assert_withdraw_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
-            position_id: withdraw_args.position_id,
+            :position_id,
             recipient: address,
             amount: amount,
             expiration: withdraw_args.expiration,
@@ -736,7 +738,47 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         transfer_args
     }
 
-    fn transfer(ref self: FlowTestState, transfer_args: TransferArgs) {
+    fn transfer(ref self: FlowTestState, user: User, transfer_args: TransferArgs) {
+        let amount = transfer_args.amount;
+        let recipient = transfer_args.recipient;
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        let user_collateral_balance_before = dispatcher
+            .get_position_assets(position_id: user.position_id)
+            .collateral_balance;
+        let recipient_collateral_balance_before = dispatcher
+            .get_position_assets(position_id: recipient)
+            .collateral_balance;
+
+        self.execute_transfer(:transfer_args);
+
+        let msg_hash = transfer_args.get_message_hash(public_key: user.account.key_pair.public_key);
+        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
+            .get_request_status(request_hash: msg_hash);
+        assert!(status == RequestStatus::PROCESSED);
+
+        self
+            .validate_collateral_after_action(
+                position_id: user.position_id,
+                expected_balance: user_collateral_balance_before - amount.into(),
+            );
+
+        self
+            .validate_collateral_after_action(
+                position_id: recipient,
+                expected_balance: recipient_collateral_balance_before + amount.into(),
+            );
+
+        assert_transfer_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            :recipient,
+            :amount,
+            expiration: transfer_args.expiration,
+            transfer_request_hash: msg_hash,
+        );
+    }
+
+    fn execute_transfer(ref self: FlowTestState, transfer_args: TransferArgs) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
@@ -758,7 +800,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         expiration: Timestamp,
     ) {
         let transfer_args = self.transfer_request(:user, :recipient, :amount, :expiration);
-        self.transfer(transfer_args);
+        self.transfer(:user, :transfer_args);
     }
 
     fn create_order(
@@ -902,6 +944,18 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
         // Activate the synthetic asset.
         self.price_tick(:synthetic_config, oracle_price: TEN_POW_15.into());
+    }
+
+    fn validate_collateral_after_action(
+        self: @FlowTestState, position_id: PositionId, expected_balance: Balance,
+    ) {
+        let collateral_balance = IPositionsDispatcher {
+            contract_address: *self.perpetuals_contract,
+        }
+            .get_position_assets(:position_id)
+            .collateral_balance;
+
+        assert_eq!(collateral_balance, expected_balance);
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
