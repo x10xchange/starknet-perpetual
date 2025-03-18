@@ -23,8 +23,8 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -616,7 +616,8 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn withdraw(ref self: FlowTestState, user: User, withdraw_args: WithdrawArgs) {
         let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
         let amount = withdraw_args.amount;
-        let user_balance_before = self.token_state.balance_of(user.account.address);
+        let address = user.account.address;
+        let user_balance_before = self.token_state.balance_of(address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
         let position_dispatcher = IPositionsDispatcher {
             contract_address: self.perpetuals_contract,
@@ -635,7 +636,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         validate_balance(
             token_state: self.token_state,
-            address: user.account.address,
+            :address,
             expected_balance: user_balance_before + (amount * self.collateral_quantum).into(),
         );
         validate_balance(
@@ -651,7 +652,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         assert_withdraw_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             position_id: withdraw_args.position_id,
-            recipient: user.account.address,
+            recipient: address,
             amount: amount,
             expiration: withdraw_args.expiration,
             withdraw_request_hash: msg_hash,
@@ -686,7 +687,33 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         ref self: FlowTestState,
         user: User,
         recipient: PositionId,
-        amount: u128,
+        amount: u64,
+        expiration: Timestamp,
+    ) -> TransferArgs {
+        let transfer_args = self.execute_transfer_request(:user, :recipient, :amount, :expiration);
+        let msg_hash = transfer_args.get_message_hash(public_key: user.account.key_pair.public_key);
+
+        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
+            .get_request_status(request_hash: msg_hash);
+        assert!(status == RequestStatus::PENDING);
+
+        assert_transfer_request_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: user.position_id,
+            :recipient,
+            :amount,
+            :expiration,
+            transfer_request_hash: msg_hash,
+        );
+
+        transfer_args
+    }
+
+    fn execute_transfer_request(
+        ref self: FlowTestState,
+        user: User,
+        recipient: PositionId,
+        amount: u64,
         expiration: Timestamp,
     ) -> TransferArgs {
         let salt = self.generate_salt();
@@ -695,7 +722,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             salt,
             expiration,
             collateral_id: constants::COLLATERAL_ASSET_ID(),
-            amount: amount.try_into().unwrap(),
+            amount,
             recipient,
         };
         let msg_hash = transfer_args.get_message_hash(public_key: user.account.key_pair.public_key);
@@ -704,12 +731,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         user.account.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer_request(
-                signature,
-                :recipient,
-                position_id: user.position_id,
-                amount: amount.try_into().unwrap(),
-                :expiration,
-                :salt,
+                signature, :recipient, position_id: user.position_id, :amount, :expiration, :salt,
             );
         transfer_args
     }
@@ -732,7 +754,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         ref self: FlowTestState,
         user: User,
         recipient: PositionId,
-        amount: u128,
+        amount: u64,
         expiration: Timestamp,
     ) {
         let transfer_args = self.transfer_request(:user, :recipient, :amount, :expiration);

@@ -2147,7 +2147,6 @@ fn test_successful_transfer() {
         spied_event: events[0],
         position_id: transfer_args.position_id,
         recipient: transfer_args.recipient,
-        collateral_id: transfer_args.collateral_id,
         amount: transfer_args.amount,
         expiration: transfer_args.expiration,
         transfer_request_hash: msg_hash,
