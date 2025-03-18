@@ -17,7 +17,7 @@ use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::price::{PRICE_SCALE, SignedPrice};
+use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
@@ -35,7 +35,7 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TWO_POW_40};
+use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TEN_POW_15, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
@@ -92,7 +92,7 @@ impl OracleImpl of OracleTrait {
     fn sign_price(
         self: @Oracle, oracle_price: u128, timestamp: u32, asset_name: felt252,
     ) -> SignedPrice {
-        let packed_timestamp_price = (timestamp.into() + oracle_price * PRICE_SCALE.into()).into();
+        let packed_timestamp_price = (timestamp.into() + oracle_price * TWO_POW_32.into()).into();
         let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40.into();
         let msg_hash = core::pedersen::pedersen(oracle_name_asset_name, packed_timestamp_price);
         SignedPrice {
@@ -239,7 +239,7 @@ pub struct FlowTestState {
     governance_admin: ContractAddress,
     role_admin: ContractAddress,
     app_governor: ContractAddress,
-    perpetuals_contract: ContractAddress,
+    pub perpetuals_contract: ContractAddress,
     token_state: TokenState,
     collateral_quantum: u64,
     key_gen: felt252,
@@ -302,37 +302,6 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         dispatcher.register_operator(account: *self.operator.address);
     }
 
-    fn add_synthetic(self: @FlowTestState, synthetic_config: @SyntheticConfig) {
-        let dispatcher = IAssetsDispatcher { contract_address: *self.perpetuals_contract };
-        self.set_app_governor_as_caller();
-        dispatcher
-            .add_synthetic_asset(
-                *synthetic_config.asset_id,
-                risk_factor_tiers: *synthetic_config.risk_factor_tiers,
-                risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
-                risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
-                quorum: *synthetic_config.quorum,
-                resolution_factor: *synthetic_config.resolution_factor,
-            );
-
-        self.set_app_governor_as_caller();
-        dispatcher
-            .add_oracle_to_asset(
-                *synthetic_config.asset_id,
-                *self.oracle_a.account.key_pair.public_key,
-                *self.oracle_a.name,
-                *synthetic_config.asset_name,
-            );
-
-        self.set_app_governor_as_caller();
-        dispatcher
-            .add_oracle_to_asset(
-                *synthetic_config.asset_id,
-                *self.oracle_b.account.key_pair.public_key,
-                *self.oracle_b.name,
-                *synthetic_config.asset_name,
-            );
-    }
     fn generate_salt(ref self: FlowTestState) -> felt252 {
         self.salt += 1;
         self.salt
@@ -383,7 +352,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
     fn setup(ref self: FlowTestState, synthetics: Span<SyntheticConfig>) {
         self.set_roles();
         for synthetic_config in synthetics {
-            self.add_synthetic(synthetic_config);
+            self.add_active_synthetic(synthetic_config);
         }
         advance_time(HOUR);
     }
@@ -904,6 +873,40 @@ pub impl FlowTestStateImpl of FlowTestTrait {
                 deleveraged_base_amount: deleveraged_base,
                 deleveraged_quote_amount: deleveraged_quote,
             );
+    }
+
+    fn add_active_synthetic(ref self: FlowTestState, synthetic_config: @SyntheticConfig) {
+        let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+        self.set_app_governor_as_caller();
+        dispatcher
+            .add_synthetic_asset(
+                *synthetic_config.asset_id,
+                risk_factor_tiers: *synthetic_config.risk_factor_tiers,
+                risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
+                risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
+                quorum: *synthetic_config.quorum,
+                resolution_factor: *synthetic_config.resolution_factor,
+            );
+
+        self.set_app_governor_as_caller();
+        dispatcher
+            .add_oracle_to_asset(
+                *synthetic_config.asset_id,
+                self.oracle_a.account.key_pair.public_key,
+                self.oracle_a.name,
+                *synthetic_config.asset_name,
+            );
+
+        self.set_app_governor_as_caller();
+        dispatcher
+            .add_oracle_to_asset(
+                *synthetic_config.asset_id,
+                self.oracle_b.account.key_pair.public_key,
+                self.oracle_b.name,
+                *synthetic_config.asset_name,
+            );
+        // Activate the synthetic asset.
+        self.price_tick(:synthetic_config, oracle_price: TEN_POW_15.into());
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }

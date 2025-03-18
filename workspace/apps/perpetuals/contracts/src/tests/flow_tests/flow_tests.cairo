@@ -1,4 +1,4 @@
-use super::flow_tests_infra::FlowTestTrait;
+use perpetuals::tests::flow_tests::flow_tests_infra::FlowTestTrait;
 
 #[test]
 fn flow_test_deposit_and_withdraw() {

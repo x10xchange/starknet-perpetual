@@ -444,7 +444,7 @@ pub fn check_synthetic_asset(
 
 pub fn validate_balance(token_state: TokenState, address: ContractAddress, expected_balance: u128) {
     let balance_to_check = token_state.balance_of(address);
-    assert!(balance_to_check == expected_balance);
+    assert_eq!(balance_to_check, expected_balance);
 }
 
 // Utils for dispatcher usage.
