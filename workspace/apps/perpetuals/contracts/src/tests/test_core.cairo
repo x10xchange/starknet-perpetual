@@ -1563,7 +1563,6 @@ fn test_successful_deleverage() {
         deleverager_position_id: deleverager.position_id,
         base_asset_id: synthetic_id,
         deleveraged_base_amount: BASE,
-        quote_asset_id: cfg.collateral_cfg.collateral_id,
         deleveraged_quote_amount: QUOTE,
     );
 

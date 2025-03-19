@@ -249,7 +249,6 @@ pub fn assert_deleverage_event_with_expected(
     deleverager_position_id: PositionId,
     base_asset_id: AssetId,
     deleveraged_base_amount: i64,
-    quote_asset_id: AssetId,
     deleveraged_quote_amount: i64,
 ) {
     let expected_event = events::Deleverage {
@@ -257,7 +256,7 @@ pub fn assert_deleverage_event_with_expected(
         deleverager_position_id,
         base_asset_id,
         deleveraged_base_amount,
-        quote_asset_id,
+        quote_asset_id: COLLATERAL_ASSET_ID(),
         deleveraged_quote_amount,
     };
     assert_expected_event_emitted(

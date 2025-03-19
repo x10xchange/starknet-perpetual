@@ -25,10 +25,11 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
-    assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
+    assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -516,7 +517,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.execute_process_deposit(:deposit_args);
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: deposit_args.position_id,
                 expected_balance: collateral_balance_before + amount.into(),
             );
@@ -562,7 +563,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.process_deposit(deposit_args);
     }
 
-    fn self_deposit(ref self: FlowTestState, user: User, amount: u64) {
+    fn self_deposit_and_process(ref self: FlowTestState, user: User, amount: u64) {
         self.deposit_and_process(:user, receiver: user, :amount);
     }
 
@@ -634,7 +635,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.execute_withdraw(:withdraw_args);
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 :position_id, expected_balance: collateral_balance_before - amount.into(),
             );
 
@@ -683,7 +684,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.withdraw(user, withdraw_args);
     }
 
-    fn self_withdraw(ref self: FlowTestState, user: User, amount: u128) {
+    fn self_request_and_withdraw(ref self: FlowTestState, user: User, amount: u128) {
         self.request_and_withdraw(:user, recipient: user, :amount);
     }
 
@@ -759,13 +760,13 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         assert!(status == RequestStatus::PROCESSED);
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: user.position_id,
                 expected_balance: user_collateral_balance_before - amount.into(),
             );
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: recipient,
                 expected_balance: recipient_collateral_balance_before + amount.into(),
             );
@@ -858,35 +859,35 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.execute_trade(:user_a, :user_b, :order_a, :order_b, :base, :quote, :fee_a, :fee_b);
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: user_a.position_id,
                 expected_balance: user_a_collateral_balance_before
                     + (quote - fee_a.try_into().unwrap()).into(),
             );
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: user_b.position_id,
                 expected_balance: user_b_collateral_balance_before
                     - (quote + fee_b.try_into().unwrap()).into(),
             );
 
         self
-            .validate_synthetic_after_action(
+            .validate_synthetic_balance(
                 position_id: user_a.position_id,
                 :asset_id,
                 expected_balance: user_a_synthetic_balance_before + base.into(),
             );
 
         self
-            .validate_synthetic_after_action(
+            .validate_synthetic_balance(
                 position_id: user_b.position_id,
                 :asset_id,
                 expected_balance: user_b_synthetic_balance_before - base.into(),
             );
 
         self
-            .validate_collateral_after_action(
+            .validate_collateral_balance(
                 position_id: FEE_POSITION,
                 expected_balance: fee_position_balance_before + (fee_a + fee_b).into(),
             );
@@ -983,8 +984,75 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         ref self: FlowTestState,
         deleveraged_user: User,
         deleverager_user: User,
-        deleveraged_base: i64,
         base_asset_id: AssetId,
+        deleveraged_base: i64,
+        deleveraged_quote: i64,
+    ) {
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        let deleveraged_balance_before = dispatcher
+            .get_position_assets(position_id: deleveraged_user.position_id);
+        let deleveraged_collateral_balance_before = deleveraged_balance_before.collateral_balance;
+        let deleveraged_synthetic_balance_before = get_synthetic_balance(
+            assets: deleveraged_balance_before.synthetics, asset_id: base_asset_id,
+        );
+        let deleverager_balance_before = dispatcher
+            .get_position_assets(position_id: deleverager_user.position_id);
+        let deleverager_collateral_balance_before = deleverager_balance_before.collateral_balance;
+        let deleverager_synthetic_balance_before = get_synthetic_balance(
+            assets: deleverager_balance_before.synthetics, asset_id: base_asset_id,
+        );
+
+        self
+            .execute_deleverage(
+                :deleveraged_user,
+                :deleverager_user,
+                :base_asset_id,
+                :deleveraged_base,
+                :deleveraged_quote,
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: deleveraged_user.position_id,
+                expected_balance: deleveraged_collateral_balance_before + deleveraged_quote.into(),
+            );
+
+        self
+            .validate_synthetic_balance(
+                position_id: deleveraged_user.position_id,
+                asset_id: base_asset_id,
+                expected_balance: deleveraged_synthetic_balance_before + deleveraged_base.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: deleverager_user.position_id,
+                expected_balance: deleverager_collateral_balance_before - deleveraged_quote.into(),
+            );
+
+        self
+            .validate_synthetic_balance(
+                position_id: deleverager_user.position_id,
+                asset_id: base_asset_id,
+                expected_balance: deleverager_synthetic_balance_before - deleveraged_base.into(),
+            );
+
+        assert_deleverage_event_with_expected(
+            spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
+            deleveraged_position_id: deleveraged_user.position_id,
+            deleverager_position_id: deleverager_user.position_id,
+            base_asset_id: base_asset_id,
+            deleveraged_base_amount: deleveraged_base,
+            deleveraged_quote_amount: deleveraged_quote,
+        );
+    }
+
+    fn execute_deleverage(
+        ref self: FlowTestState,
+        deleveraged_user: User,
+        deleverager_user: User,
+        base_asset_id: AssetId,
+        deleveraged_base: i64,
         deleveraged_quote: i64,
     ) {
         let operator_nonce = self.get_nonce();
@@ -1035,7 +1103,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         self.price_tick(:synthetic_config, oracle_price: TEN_POW_15.into());
     }
 
-    fn validate_collateral_after_action(
+    fn validate_collateral_balance(
         self: @FlowTestState, position_id: PositionId, expected_balance: Balance,
     ) {
         let collateral_balance = IPositionsDispatcher {
@@ -1047,13 +1115,10 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         assert_eq!(collateral_balance, expected_balance);
     }
 
-    fn validate_synthetic_after_action(
-        ref self: FlowTestState,
-        position_id: PositionId,
-        asset_id: AssetId,
-        expected_balance: Balance,
+    fn validate_synthetic_balance(
+        self: @FlowTestState, position_id: PositionId, asset_id: AssetId, expected_balance: Balance,
     ) {
-        let synthetic_assets = IPositionsDispatcher { contract_address: self.perpetuals_contract }
+        let synthetic_assets = IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_assets(:position_id)
             .synthetics;
         let synthetic_balance = get_synthetic_balance(assets: synthetic_assets, :asset_id);
