@@ -55,6 +55,15 @@ const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 pub struct User {
     pub position_id: PositionId,
     pub account: Account,
+    initial_balance: u64,
+    pub is_address_registered: bool,
+}
+
+#[generate_trait]
+pub impl UserTraitImpl of UserTrait {
+    fn set_as_caller(self: @User, contract_address: ContractAddress) {
+        self.account.set_as_caller(:contract_address);
+    }
 }
 
 #[derive(Copy, Drop)]
@@ -64,11 +73,10 @@ pub struct Oracle {
 }
 
 #[derive(Drop, Copy)]
-pub struct DepositArgs {
-    // position_id can represent a different user than the depositor.
-    user: User,
+pub struct DepositInfo {
+    depositor: Account,
     position_id: PositionId,
-    amount: u64,
+    quantized_amount: u64,
     salt: felt252,
 }
 
@@ -291,6 +299,12 @@ impl PrivateFlowTestStateImpl of PrivateFlowTestStateTrait {
         self.salt += 1;
         self.salt
     }
+
+    fn get_position_collateral_balance(self: @FlowTestState, position_id: PositionId) -> Balance {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_assets(position_id)
+            .collateral_balance
+    }
 }
 
 /// FlowTestTrait is the interface for the FlowTestState struct. It is the sole way to interact with
@@ -342,24 +356,37 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         advance_time(HOUR);
     }
 
-    fn new_user(ref self: FlowTestState) -> User {
+    fn new_user(ref self: FlowTestState, register_address: bool) -> User {
         let account = AccountTrait::new(ref self.key_gen);
 
-        self.token_state.fund(account.address, constants::USER_INIT_BALANCE);
+        let initial_balance = constants::USER_INIT_BALANCE
+            .try_into()
+            .expect('Value should not overflow');
+        self.token_state.fund(account.address, initial_balance.into());
 
         let operator_nonce = self.get_nonce();
         let position_id = self.generate_position_id();
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         self.operator.set_as_caller(self.perpetuals_contract);
+        let owner_account = if register_address {
+            account.address
+        } else {
+            Zero::zero()
+        };
         dispatcher
             .new_position(
                 operator_nonce,
                 position_id: position_id.into(),
                 owner_public_key: account.key_pair.public_key,
-                owner_account: account.address,
+                :owner_account,
             );
 
-        User { position_id: PositionId { value: position_id }, account }
+        User {
+            position_id: PositionId { value: position_id },
+            account,
+            initial_balance,
+            is_address_registered: register_address,
+        }
     }
 
     fn price_tick(ref self: FlowTestState, synthetic_config: @SyntheticConfig, oracle_price: u128) {
@@ -384,26 +411,35 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             );
     }
 
-    fn deposit(ref self: FlowTestState, user: User, receiver: User, amount: u64) -> DepositArgs {
-        let user_balance_before = self.token_state.balance_of(user.account.address);
+    fn deposit(ref self: FlowTestState, user: User, quantized_amount: u64) -> DepositInfo {
+        let unquantized_amount = quantized_amount * self.collateral_quantum;
+        let depositor = if user.is_address_registered {
+            user.account
+        } else {
+            self.token_state.fund(self.operator.address, unquantized_amount.into());
+            self.operator
+        };
+        let user_balance_before = self.token_state.balance_of(depositor.address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
-        let expected_time = Time::now();
+        let now = Time::now();
 
-        let deposit_args = self.execute_deposit(:user, :receiver, :amount);
+        self
+            .token_state
+            .approve(
+                owner: depositor.address,
+                spender: self.perpetuals_contract,
+                amount: unquantized_amount.into(),
+            );
+        let salt = self.generate_salt();
+        let position_id = user.position_id;
 
-        let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
-            depositor: user.account.address,
-            position_id: user.position_id,
-            quantized_amount: amount,
-            salt: deposit_args.salt,
-        );
-
-        let unquantized_amount = amount * self.collateral_quantum;
+        depositor.set_as_caller(self.perpetuals_contract);
+        IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .deposit(:position_id, :quantized_amount, :salt);
 
         validate_balance(
             token_state: self.token_state,
-            address: user.account.address,
+            address: depositor.address,
             expected_balance: user_balance_before - unquantized_amount.into(),
         );
         validate_balance(
@@ -412,66 +448,48 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             expected_balance: contract_balance_before + unquantized_amount.into(),
         );
 
-        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .get_deposit_status(:deposit_hash);
-        if let DepositStatus::PENDING(timestamp) = status {
-            assert!(timestamp == expected_time);
-        } else {
-            panic!("Deposit not found");
-        }
+        let deposit_hash = deposit_hash(
+            token_address: self.token_state.address,
+            depositor: depositor.address,
+            position_id: user.position_id,
+            :quantized_amount,
+            :salt,
+        );
+        self.validate_deposit_status(:deposit_hash, expected_status: DepositStatus::PENDING(now));
 
         assert_deposit_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             position_id: user.position_id,
-            depositing_address: user.account.address,
-            quantized_amount: amount,
+            depositing_address: depositor.address,
+            :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
         );
 
-        deposit_args
+        DepositInfo { depositor, position_id, quantized_amount, salt }
     }
 
-    fn execute_deposit(
-        ref self: FlowTestState, user: User, receiver: User, amount: u64,
-    ) -> DepositArgs {
-        self
-            .token_state
-            .approve(
-                owner: user.account.address,
-                spender: self.perpetuals_contract,
-                amount: (amount * self.collateral_quantum).into(),
-            );
-        let salt = self.generate_salt();
-        let position_id = receiver.position_id;
-        user.account.set_as_caller(self.perpetuals_contract);
-
-        IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(:position_id, quantized_amount: amount, :salt);
-        DepositArgs { user, position_id, amount, salt }
-    }
-
-    fn cancel_deposit(ref self: FlowTestState, deposit_args: DepositArgs) {
-        let user = deposit_args.user;
-        let amount = deposit_args.amount;
-        let user_balance_before = self.token_state.balance_of(user.account.address);
+    fn cancel_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
+        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
+        let user_balance_before = self.token_state.balance_of(depositor.address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
 
-        self.execute_cancel_deposit(:deposit_args);
-
+        depositor.set_as_caller(self.perpetuals_contract);
+        IDepositDispatcher { contract_address: self.perpetuals_contract }
+            .cancel_deposit(:position_id, :quantized_amount, :salt);
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
-            depositor: user.account.address,
-            position_id: user.position_id,
-            quantized_amount: amount,
-            salt: deposit_args.salt,
+            depositor: depositor.address,
+            :position_id,
+            :quantized_amount,
+            :salt,
         );
 
-        let unquantized_amount = amount * self.collateral_quantum;
+        let unquantized_amount = quantized_amount * self.collateral_quantum;
 
         validate_balance(
             token_state: self.token_state,
-            address: user.account.address,
+            address: depositor.address,
             expected_balance: user_balance_before + unquantized_amount.into(),
         );
         validate_balance(
@@ -480,91 +498,55 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             expected_balance: contract_balance_before - unquantized_amount.into(),
         );
 
-        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .get_deposit_status(:deposit_hash);
-        assert!(status == DepositStatus::CANCELED, "Deposit not canceled");
+        self.validate_deposit_status(:deposit_hash, expected_status: DepositStatus::CANCELED);
 
         assert_deposit_canceled_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
-            position_id: user.position_id,
-            depositing_address: user.account.address,
-            quantized_amount: amount,
+            :position_id,
+            depositing_address: depositor.address,
+            :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
         );
     }
 
-    fn execute_cancel_deposit(ref self: FlowTestState, deposit_args: DepositArgs) {
-        deposit_args.user.account.set_as_caller(self.perpetuals_contract);
+    fn process_deposit(ref self: FlowTestState, deposit_info: DepositInfo) {
+        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
+        let collateral_balance_before = self.get_position_collateral_balance(position_id);
+
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .cancel_deposit(
-                position_id: deposit_args.position_id,
-                quantized_amount: deposit_args.amount.into(),
-                salt: deposit_args.salt,
+            .process_deposit(
+                :operator_nonce,
+                depositor: depositor.address,
+                :position_id,
+                :quantized_amount,
+                :salt,
             );
-    }
-
-    fn process_deposit(ref self: FlowTestState, deposit_args: DepositArgs) {
-        let user = deposit_args.user;
-        let amount = deposit_args.amount;
-        let position_dispatcher = IPositionsDispatcher {
-            contract_address: self.perpetuals_contract,
-        };
-        let collateral_balance_before = position_dispatcher
-            .get_position_assets(position_id: deposit_args.position_id)
-            .collateral_balance;
-
-        self.execute_process_deposit(:deposit_args);
-
         self
             .validate_collateral_balance(
-                position_id: deposit_args.position_id,
-                expected_balance: collateral_balance_before + amount.into(),
+                :position_id, expected_balance: collateral_balance_before + quantized_amount.into(),
             );
 
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
-            depositor: user.account.address,
-            position_id: user.position_id,
-            quantized_amount: amount,
-            salt: deposit_args.salt,
+            depositor: depositor.address,
+            :position_id,
+            :quantized_amount,
+            :salt,
         );
 
-        let status = IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .get_deposit_status(:deposit_hash);
-        assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
+        self.validate_deposit_status(:deposit_hash, expected_status: DepositStatus::PROCESSED);
 
         assert_deposit_processed_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
-            position_id: user.position_id,
-            depositing_address: user.account.address,
-            quantized_amount: amount,
-            unquantized_amount: amount * self.collateral_quantum,
+            :position_id,
+            depositing_address: depositor.address,
+            :quantized_amount,
+            unquantized_amount: quantized_amount * self.collateral_quantum,
             deposit_request_hash: deposit_hash,
         );
-    }
-
-    fn execute_process_deposit(ref self: FlowTestState, deposit_args: DepositArgs) {
-        let operator_nonce = self.get_nonce();
-        self.operator.set_as_caller(self.perpetuals_contract);
-
-        IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .process_deposit(
-                :operator_nonce,
-                depositor: deposit_args.user.account.address,
-                position_id: deposit_args.user.position_id,
-                quantized_amount: deposit_args.amount.into(),
-                salt: deposit_args.salt,
-            );
-    }
-
-    fn deposit_and_process(ref self: FlowTestState, user: User, receiver: User, amount: u64) {
-        let deposit_args = self.deposit(:user, :receiver, :amount);
-        self.process_deposit(deposit_args);
-    }
-
-    fn self_deposit_and_process(ref self: FlowTestState, user: User, amount: u64) {
-        self.deposit_and_process(:user, receiver: user, :amount);
     }
 
     fn withdraw_request(
@@ -733,7 +715,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         let msg_hash = transfer_args.get_message_hash(public_key: user.account.key_pair.public_key);
         let signature = user.account.sign_message(message: msg_hash);
 
-        user.account.set_as_caller(self.perpetuals_contract);
+        user.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer_request(
                 signature, :recipient, position_id: user.position_id, :amount, :expiration, :salt,
@@ -1102,17 +1084,31 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         // Activate the synthetic asset.
         self.price_tick(:synthetic_config, oracle_price: TEN_POW_15.into());
     }
+    /// TODO: add all the necessary functions to interact with the contract.
+}
+
+#[generate_trait]
+pub impl FlowTestStateValidationsImpl of FlowTestValidationsTrait {
+    fn validate_request_approval(
+        self: @FlowTestState, request_hash: felt252, expected_status: RequestStatus,
+    ) {
+        let status = IRequestApprovalsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_request_status(request_hash);
+        assert_eq!(status, expected_status);
+    }
+
+    fn validate_deposit_status(
+        self: @FlowTestState, deposit_hash: felt252, expected_status: DepositStatus,
+    ) {
+        let status = IDepositDispatcher { contract_address: *self.perpetuals_contract }
+            .get_deposit_status(deposit_hash);
+        assert_eq!(status, expected_status);
+    }
 
     fn validate_collateral_balance(
         self: @FlowTestState, position_id: PositionId, expected_balance: Balance,
     ) {
-        let collateral_balance = IPositionsDispatcher {
-            contract_address: *self.perpetuals_contract,
-        }
-            .get_position_assets(:position_id)
-            .collateral_balance;
-
-        assert_eq!(collateral_balance, expected_balance);
+        assert_eq!(self.get_position_collateral_balance(position_id), expected_balance);
     }
 
     fn validate_synthetic_balance(
@@ -1125,7 +1121,6 @@ pub impl FlowTestStateImpl of FlowTestTrait {
 
         assert_eq!(synthetic_balance, expected_balance);
     }
-    /// TODO: add all the necessary functions to interact with the contract.
 }
 
 pub fn advance_time(seconds: u64) {
