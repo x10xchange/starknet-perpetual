@@ -72,12 +72,20 @@ pub struct Oracle {
     name: felt252,
 }
 
-#[derive(Drop, Copy)]
 pub struct DepositInfo {
     depositor: Account,
     position_id: PositionId,
     quantized_amount: u64,
     salt: felt252,
+}
+
+pub struct WithdrawInfo {
+    recipient: ContractAddress,
+    position_id: PositionId,
+    amount: u64,
+    expiration: Timestamp,
+    salt: felt252,
+    request_hash: felt252,
 }
 
 #[generate_trait]
@@ -235,6 +243,7 @@ pub struct FlowTestState {
     pub perpetuals_contract: ContractAddress,
     token_state: TokenState,
     collateral_quantum: u64,
+    collateral_id: AssetId,
     key_gen: felt252,
     operator: Account,
     oracle_a: Oracle,
@@ -334,6 +343,7 @@ pub impl FlowTestStateImpl of FlowTestTrait {
             perpetuals_contract,
             token_state,
             collateral_quantum,
+            collateral_id: perpetuals_config.collateral_id,
             key_gen,
             operator: perpetuals_config.operator,
             oracle_a: Oracle {
@@ -549,125 +559,81 @@ pub impl FlowTestStateImpl of FlowTestTrait {
         );
     }
 
-    fn withdraw_request(
-        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
-    ) -> WithdrawArgs {
-        let withdraw_args = self.execute_withdraw_request(:user, :recipient, :amount, :expiration);
-        let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
+    fn withdraw_request(ref self: FlowTestState, user: User, amount: u64) -> WithdrawInfo {
+        let recipient = user.account.address;
+        let position_id = user.position_id;
+        let expiration = Time::now().add(Time::seconds(10));
+        let salt = self.generate_salt();
 
-        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
-            .get_request_status(request_hash: msg_hash);
-        assert!(status == RequestStatus::PENDING);
+        let request_hash = WithdrawArgs {
+            recipient, position_id, collateral_id: self.collateral_id, amount, expiration, salt,
+        }
+            .get_message_hash(public_key: user.account.key_pair.public_key);
+        let signature = user.account.sign_message(message: request_hash);
+
+        user.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw_request(:signature, :recipient, :position_id, :amount, :expiration, :salt);
+
+        self.validate_request_approval(:request_hash, expected_status: RequestStatus::PENDING);
 
         assert_withdraw_request_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
-            position_id: user.position_id,
-            recipient: recipient.account.address,
-            amount: amount.try_into().unwrap(),
+            :position_id,
+            :recipient,
+            :amount,
             expiration: expiration,
-            withdraw_request_hash: msg_hash,
+            withdraw_request_hash: request_hash,
         );
 
-        withdraw_args
+        WithdrawInfo { recipient, position_id, amount, expiration, salt, request_hash }
     }
 
-    fn execute_withdraw_request(
-        ref self: FlowTestState, user: User, recipient: User, amount: u128, expiration: Timestamp,
-    ) -> WithdrawArgs {
-        let salt = self.generate_salt();
-        let recipient_address = recipient.account.address;
-        let withdraw_args = WithdrawArgs {
-            position_id: user.position_id,
-            salt,
-            expiration,
-            collateral_id: constants::COLLATERAL_ASSET_ID(),
-            amount: amount.try_into().unwrap(),
-            recipient: recipient_address,
-        };
-        let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
-        let signature = user.account.sign_message(message: msg_hash);
+    fn withdraw(ref self: FlowTestState, withdraw_info: WithdrawInfo) {
+        let WithdrawInfo {
+            recipient, position_id, amount, expiration, salt, request_hash,
+        } = withdraw_info;
 
-        user.account.set_as_caller(self.perpetuals_contract);
-        ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .withdraw_request(
-                signature,
-                recipient: recipient_address,
-                position_id: user.position_id,
-                amount: amount.try_into().unwrap(),
-                :expiration,
-                :salt,
-            );
-        withdraw_args
-    }
-
-    fn withdraw(ref self: FlowTestState, user: User, withdraw_args: WithdrawArgs) {
-        let msg_hash = withdraw_args.get_message_hash(public_key: user.account.key_pair.public_key);
-        let amount = withdraw_args.amount;
-        let address = user.account.address;
-        let position_id = withdraw_args.position_id;
-        let user_balance_before = self.token_state.balance_of(address);
+        let user_balance_before = self.token_state.balance_of(recipient);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
-        let position_dispatcher = IPositionsDispatcher {
+        let position_balance_before = IPositionsDispatcher {
             contract_address: self.perpetuals_contract,
-        };
-        let collateral_balance_before = position_dispatcher
+        }
             .get_position_assets(:position_id)
             .collateral_balance;
 
-        self.execute_withdraw(:withdraw_args);
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw(:operator_nonce, :recipient, :position_id, :amount, :expiration, :salt);
 
         self
             .validate_collateral_balance(
-                :position_id, expected_balance: collateral_balance_before - amount.into(),
+                :position_id, expected_balance: position_balance_before - amount.into(),
             );
 
+        let unquantized_amount = (amount * self.collateral_quantum).into();
         validate_balance(
             token_state: self.token_state,
-            :address,
-            expected_balance: user_balance_before + (amount * self.collateral_quantum).into(),
+            address: recipient,
+            expected_balance: user_balance_before + unquantized_amount,
         );
         validate_balance(
             token_state: self.token_state,
             address: self.perpetuals_contract,
-            expected_balance: contract_balance_before - (amount * self.collateral_quantum).into(),
+            expected_balance: contract_balance_before - unquantized_amount,
         );
 
-        let status = IRequestApprovalsDispatcher { contract_address: self.perpetuals_contract }
-            .get_request_status(request_hash: msg_hash);
-        assert!(status == RequestStatus::PROCESSED, "Withdraw not processed");
+        self.validate_request_approval(:request_hash, expected_status: RequestStatus::PROCESSED);
 
         assert_withdraw_event_with_expected(
             spied_event: self.event_info.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
-            recipient: address,
-            amount: amount,
-            expiration: withdraw_args.expiration,
-            withdraw_request_hash: msg_hash,
+            :recipient,
+            :amount,
+            :expiration,
+            withdraw_request_hash: request_hash,
         );
-    }
-
-    fn execute_withdraw(ref self: FlowTestState, withdraw_args: WithdrawArgs) {
-        let operator_nonce = self.get_nonce();
-        self.operator.set_as_caller(self.perpetuals_contract);
-        ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .withdraw(
-                :operator_nonce,
-                recipient: withdraw_args.recipient,
-                position_id: withdraw_args.position_id,
-                amount: withdraw_args.amount.try_into().unwrap(),
-                expiration: withdraw_args.expiration,
-                salt: withdraw_args.salt,
-            );
-    }
-
-    fn request_and_withdraw(ref self: FlowTestState, user: User, recipient: User, amount: u128) {
-        let expiration = Time::now().add(Time::seconds(10));
-        let withdraw_args = self.withdraw_request(:user, :recipient, :amount, :expiration);
-        self.withdraw(user, withdraw_args);
-    }
-
-    fn self_request_and_withdraw(ref self: FlowTestState, user: User, amount: u128) {
-        self.request_and_withdraw(:user, recipient: user, :amount);
     }
 
     fn transfer_request(

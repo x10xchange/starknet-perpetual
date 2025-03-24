@@ -7,6 +7,7 @@ fn flow_test_deposit_and_withdraw() {
     let user = flow_test_state.new_user(register_address: false);
     let deposit_info = flow_test_state.deposit(:user, quantized_amount: 100);
     flow_test_state.process_deposit(:deposit_info);
-    flow_test_state.self_request_and_withdraw(:user, amount: 50);
+    let withdraw_info = flow_test_state.withdraw_request(:user, amount: 50);
+    flow_test_state.withdraw(:withdraw_info);
     // TODO: check balance
 }
