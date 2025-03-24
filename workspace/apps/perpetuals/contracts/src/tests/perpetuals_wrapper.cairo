@@ -41,14 +41,12 @@ use starkware_utils::components::request_approvals::interface::{
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, HOUR, MINUTE, TEN_POW_15, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
-use starkware_utils::test_utils::{
-    Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
-};
+use starkware_utils::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
 
-const TIME_STEP: u64 = MINUTE;
-const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
+pub const TIME_STEP: u64 = MINUTE;
+pub const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 
 pub struct DepositInfo {
     depositor: Account,
@@ -157,6 +155,10 @@ pub struct Oracle {
 
 #[generate_trait]
 impl OracleImpl of OracleTrait {
+    fn new(secret_key: felt252, name: felt252) -> Oracle {
+        let account = AccountTrait::new(secret_key);
+        Oracle { account, name }
+    }
     fn sign_price(
         self: @Oracle, oracle_price: u128, timestamp: u32, asset_name: felt252,
     ) -> SignedPrice {
@@ -258,7 +260,7 @@ pub struct PerpetualsWrapper {
     governance_admin: ContractAddress,
     role_admin: ContractAddress,
     app_governor: ContractAddress,
-    pub perpetuals_contract: ContractAddress,
+    perpetuals_contract: ContractAddress,
     token_state: TokenState,
     collateral_quantum: u64,
     collateral_id: AssetId,
@@ -325,16 +327,9 @@ impl PrivatePerpetualsWrapperImpl of PrivatePerpetualsWrapperTrait {
 /// FlowTestTrait is the interface for the PerpetualsWrapper struct. It is the sole way to interact
 /// with the contract by calling the following wrapper functions.
 #[generate_trait]
-pub impl PerpetualsWrapperImpl of FlowTestTrait {
-    fn init() -> PerpetualsWrapper {
+pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
+    fn init(token_state: TokenState) -> PerpetualsWrapper {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
-        let token_config = TokenConfig {
-            name: constants::COLLATERAL_NAME(),
-            symbol: constants::COLLATERAL_SYMBOL(),
-            initial_supply: constants::INITIAL_SUPPLY,
-            owner: constants::COLLATERAL_OWNER(),
-        };
-        let token_state = Deployable::deploy(@token_config);
         let collateral_quantum = constants::COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
