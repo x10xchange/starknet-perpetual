@@ -8,7 +8,7 @@ use perpetuals::core::components::deposit::interface::{
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
 };
-use perpetuals::core::components::positions::Positions::FEE_POSITION;
+use perpetuals::core::components::positions::Positions::{FEE_POSITION, INSURANCE_FUND_POSITION};
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
@@ -26,9 +26,9 @@ use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
     assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
-    assert_trade_event_with_expected, assert_transfer_event_with_expected,
-    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_liquidate_event_with_expected, assert_trade_event_with_expected,
+    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
+    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
@@ -817,12 +817,33 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         liquidator_order: OrderInfo,
         liquidated_base: i64,
         liquidated_quote: i64,
-        liquidated_fee: u64,
+        liquidated_insurance_fee: u64,
         liquidator_fee: u64,
     ) {
         let OrderInfo {
-            order: liquidator_order, signature: liquidator_signature, hash: _,
+            order: liquidator_order, signature: liquidator_signature, hash: liquidator_hash,
         } = liquidator_order;
+        let asset_id = liquidator_order.base_asset_id;
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        let liquidated_balance_before = dispatcher
+            .get_position_assets(position_id: liquidated_user.position_id);
+        let liquidated_collateral_balance_before = liquidated_balance_before.collateral_balance;
+        let liquidated_synthetic_balance_before = get_synthetic_balance(
+            assets: liquidated_balance_before.synthetics, :asset_id,
+        );
+        let liquidator_balance_before = dispatcher
+            .get_position_assets(position_id: liquidator_order.position_id);
+        let liquidator_collateral_balance_before = liquidator_balance_before.collateral_balance;
+        let liquidator_synthetic_balance_before = get_synthetic_balance(
+            assets: liquidator_balance_before.synthetics, :asset_id,
+        );
+        let fee_position_balance_before = dispatcher
+            .get_position_assets(position_id: FEE_POSITION)
+            .collateral_balance;
+        let insurance_fee_position_balance_before = dispatcher
+            .get_position_assets(position_id: INSURANCE_FUND_POSITION)
+            .collateral_balance;
+
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
 
@@ -835,8 +856,67 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
                 actual_amount_base_liquidated: liquidated_base,
                 actual_amount_quote_liquidated: liquidated_quote,
                 actual_liquidator_fee: liquidator_fee,
-                liquidated_fee_amount: liquidated_fee,
+                liquidated_fee_amount: liquidated_insurance_fee,
             );
+
+        self
+            .validate_collateral_balance(
+                position_id: liquidated_user.position_id,
+                expected_balance: liquidated_collateral_balance_before
+                    - liquidated_insurance_fee.into()
+                    + liquidated_quote.into(),
+            );
+
+        self
+            .validate_synthetic_balance(
+                position_id: liquidated_user.position_id,
+                :asset_id,
+                expected_balance: -liquidated_synthetic_balance_before + liquidated_base.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: liquidator_order.position_id,
+                expected_balance: liquidator_collateral_balance_before
+                    - liquidated_insurance_fee.into()
+                    - liquidated_quote.into(),
+            );
+
+        self
+            .validate_synthetic_balance(
+                position_id: liquidator_order.position_id,
+                :asset_id,
+                expected_balance: -liquidator_synthetic_balance_before - liquidated_base.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: FEE_POSITION,
+                expected_balance: fee_position_balance_before + liquidator_fee.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: INSURANCE_FUND_POSITION,
+                expected_balance: insurance_fee_position_balance_before
+                    + liquidated_insurance_fee.into(),
+            );
+
+        assert_liquidate_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            liquidated_position_id: liquidated_user.position_id,
+            liquidator_order_position_id: liquidator_order.position_id,
+            liquidator_order_base_asset_id: asset_id,
+            liquidator_order_base_amount: liquidator_order.base_amount,
+            collateral_id: self.collateral_id,
+            liquidator_order_quote_amount: liquidator_order.quote_amount,
+            liquidator_order_fee_amount: liquidator_order.fee_amount,
+            actual_amount_base_liquidated: liquidated_base,
+            actual_amount_quote_liquidated: liquidated_quote,
+            actual_liquidator_fee: liquidator_fee,
+            insurance_fund_fee_amount: liquidated_insurance_fee,
+            liquidator_order_hash: liquidator_hash,
+        );
     }
 
     fn deleverage(
