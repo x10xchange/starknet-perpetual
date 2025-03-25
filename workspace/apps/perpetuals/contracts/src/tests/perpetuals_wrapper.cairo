@@ -538,7 +538,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
     }
 
-    fn withdraw_request(ref self: PerpetualsWrapper, ref user: User, amount: u64) -> RequestInfo {
+    fn withdraw_request(ref self: PerpetualsWrapper, user: User, amount: u64) -> RequestInfo {
         let account = user.account;
         let position_id = user.position_id;
         let recipient = account.address;
@@ -621,7 +621,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn transfer_request(
-        ref self: PerpetualsWrapper, ref sender: User, recipient: User, amount: u64,
+        ref self: PerpetualsWrapper, sender: User, recipient: User, amount: u64,
     ) -> RequestInfo {
         let expiration = Time::now().add(delta: Time::weeks(1));
 
