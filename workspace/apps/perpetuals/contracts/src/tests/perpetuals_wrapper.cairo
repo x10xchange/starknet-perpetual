@@ -1,3 +1,4 @@
+use core::num::traits::Pow;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -17,11 +18,13 @@ use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
 use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
+use perpetuals::core::value_risk_calculator::PositionTVTR;
 use perpetuals::tests::constants;
 use perpetuals::tests::event_test_utils::{
     assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
@@ -39,7 +42,7 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, HOUR, MINUTE, TEN_POW_15, TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{DAY, HOUR, MINUTE, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
@@ -1016,7 +1019,14 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
                 );
         }
         // Activate the synthetic asset.
-        self.price_tick(:synthetic_config, oracle_price: TEN_POW_15.into());
+        self.price_tick(:synthetic_config, oracle_price: 10_u128.pow(21));
+    }
+
+    fn funding_tick(ref self: PerpetualsWrapper, funding_ticks: Span<FundingTick>) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        IAssetsDispatcher { contract_address: self.perpetuals_contract }
+            .funding_tick(:operator_nonce, :funding_ticks);
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
@@ -1057,6 +1067,22 @@ pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
         let synthetic_balance = get_synthetic_balance(assets: synthetic_assets, :asset_id);
 
         assert_eq!(synthetic_balance, expected_balance);
+    }
+
+    fn validate_total_value(
+        self: @PerpetualsWrapper, position_id: PositionId, expected_total_value: i128,
+    ) {
+        let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
+        let PositionTVTR { total_value, .. } = dispatcher.get_position_tv_tr(position_id);
+        assert_eq!(total_value, expected_total_value);
+    }
+
+    fn validate_total_risk(
+        self: @PerpetualsWrapper, position_id: PositionId, expected_total_risk: u128,
+    ) {
+        let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
+        let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
+        assert_eq!(total_risk, expected_total_risk);
     }
 }
 
