@@ -1,4 +1,3 @@
-use core::num::traits::Pow;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -15,8 +14,8 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
-use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
@@ -42,7 +41,7 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, HOUR, MINUTE, TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{DAY, MINUTE, TEN_POW_18, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
@@ -50,6 +49,7 @@ use starkware_utils::types::{PublicKey, Signature};
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
+const ORACLE_SECRET_KEY_OFFSET: felt252 = 1000;
 
 pub struct DepositInfo {
     depositor: Account,
@@ -124,15 +124,15 @@ pub impl UserTraitImpl of UserTrait {
 
 #[derive(Copy, Drop)]
 pub struct Oracle {
-    account: Account,
+    key_pair: StarkKeyPair,
     name: felt252,
 }
 
 #[generate_trait]
 impl OracleImpl of OracleTrait {
     fn new(secret_key: felt252, name: felt252) -> Oracle {
-        let account = AccountTrait::new(secret_key);
-        Oracle { account, name }
+        let key_pair = StarkCurveKeyPairImpl::from_secret_key(secret_key);
+        Oracle { key_pair, name }
     }
     fn sign_price(
         self: @Oracle, oracle_price: u128, timestamp: u32, asset_name: felt252,
@@ -140,11 +140,11 @@ impl OracleImpl of OracleTrait {
         let packed_timestamp_price = (timestamp.into() + oracle_price * TWO_POW_32.into()).into();
         let oracle_name_asset_name = *self.name + asset_name * TWO_POW_40.into();
         let msg_hash = core::pedersen::pedersen(oracle_name_asset_name, packed_timestamp_price);
+        let (r, s) = (*self).key_pair.sign(msg_hash).unwrap();
+        let signature = array![r, s].span();
+
         SignedPrice {
-            signature: self.account.sign_message(msg_hash),
-            signer_public_key: *self.account.key_pair.public_key,
-            timestamp,
-            oracle_price,
+            signature, signer_public_key: *self.key_pair.public_key, timestamp, oracle_price,
         }
     }
 }
@@ -219,15 +219,46 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 }
 
 #[derive(Drop)]
-pub struct SyntheticConfig {
+pub struct SyntheticInfo {
     pub asset_name: felt252,
     pub asset_id: AssetId,
-    pub risk_factor_tiers: Span<u8>,
-    pub risk_factor_first_tier_boundary: u128,
-    pub risk_factor_tier_size: u128,
+    pub risk_factor_data: RiskFactorTiers,
     pub oracles: Span<Oracle>,
     pub resolution_factor: u64,
 }
+
+#[derive(Drop)]
+pub struct RiskFactorTiers {
+    pub tiers: Span<u8>,
+    pub first_tier_boundary: u128,
+    pub tier_size: u128,
+}
+
+#[generate_trait]
+pub impl SyntheticInfoImpl of SyntheticInfoTrait {
+    fn new(
+        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8,
+    ) -> SyntheticInfo {
+        let mut oracles = array![];
+        for i in 0..oracles_len {
+            oracles
+                .append(
+                    OracleTrait::new(
+                        secret_key: i.into() + ORACLE_SECRET_KEY_OFFSET, name: i.into(),
+                    ),
+                );
+        }
+
+        SyntheticInfo {
+            asset_name,
+            asset_id: AssetIdTrait::new(value: asset_name),
+            risk_factor_data,
+            oracles: oracles.span(),
+            resolution_factor: constants::SYNTHETIC_RESOLUTION_FACTOR,
+        }
+    }
+}
+
 
 /// PerpetualsWrapper is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
@@ -316,7 +347,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
 
-        PerpetualsWrapper {
+        let perpetual_wrapper = PerpetualsWrapper {
             governance_admin: perpetuals_config.governance_admin,
             role_admin: perpetuals_config.role_admin,
             app_governor: perpetuals_config.app_governor,
@@ -327,15 +358,9 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             operator: perpetuals_config.operator,
             event_info: snforge_std::spy_events(),
             salt_gen: 0,
-        }
-    }
-
-    fn setup(ref self: PerpetualsWrapper, synthetics: Span<SyntheticConfig>) {
-        self.set_roles();
-        for synthetic_config in synthetics {
-            self.add_active_synthetic(synthetic_config);
-        }
-        advance_time(HOUR);
+        };
+        perpetual_wrapper.set_roles();
+        perpetual_wrapper
     }
 
     fn new_position(
@@ -351,7 +376,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn price_tick(
-        ref self: PerpetualsWrapper, synthetic_config: @SyntheticConfig, oracle_price: u128,
+        ref self: PerpetualsWrapper, synthetic_config: @SyntheticInfo, oracle_price: u128,
     ) {
         let timestamp = Time::now().seconds.try_into().unwrap();
         let mut signed_prices = array![];
@@ -995,15 +1020,19 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
     }
 
-    fn add_active_synthetic(ref self: PerpetualsWrapper, synthetic_config: @SyntheticConfig) {
+    fn add_active_synthetic(
+        ref self: PerpetualsWrapper, synthetic_config: @SyntheticInfo, price: u128,
+    ) {
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
         self.set_app_governor_as_caller();
         dispatcher
             .add_synthetic_asset(
                 *synthetic_config.asset_id,
-                risk_factor_tiers: *synthetic_config.risk_factor_tiers,
-                risk_factor_first_tier_boundary: *synthetic_config.risk_factor_first_tier_boundary,
-                risk_factor_tier_size: *synthetic_config.risk_factor_tier_size,
+                risk_factor_tiers: *synthetic_config.risk_factor_data.tiers,
+                risk_factor_first_tier_boundary: *synthetic_config
+                    .risk_factor_data
+                    .first_tier_boundary,
+                risk_factor_tier_size: *synthetic_config.risk_factor_data.tier_size,
                 quorum: synthetic_config.oracles.len().try_into().unwrap(),
                 resolution_factor: *synthetic_config.resolution_factor,
             );
@@ -1013,13 +1042,13 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             dispatcher
                 .add_oracle_to_asset(
                     *synthetic_config.asset_id,
-                    *oracle.account.key_pair.public_key,
+                    *oracle.key_pair.public_key,
                     *oracle.name,
                     *synthetic_config.asset_name,
                 );
         }
         // Activate the synthetic asset.
-        self.price_tick(:synthetic_config, oracle_price: 10_u128.pow(21));
+        self.price_tick(:synthetic_config, oracle_price: price * TEN_POW_18.into());
     }
 
     fn funding_tick(ref self: PerpetualsWrapper, funding_ticks: Span<FundingTick>) {
