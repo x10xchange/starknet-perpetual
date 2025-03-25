@@ -46,7 +46,7 @@ use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
 
 pub const TIME_STEP: u64 = MINUTE;
-pub const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
+const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 
 pub struct DepositInfo {
     depositor: Account,
@@ -72,13 +72,13 @@ pub struct OrderInfo {
 
 /// Account is a representation of any user account that can interact with the contracts.
 #[derive(Copy, Drop)]
-struct Account {
+pub struct Account {
     pub address: ContractAddress,
     pub key_pair: StarkKeyPair,
 }
 
 #[generate_trait]
-impl AccountImpl of AccountTrait {
+pub impl AccountImpl of AccountTrait {
     fn new(secret_key: felt252) -> Account {
         let key_pair = StarkCurveKeyPairImpl::from_secret_key(secret_key);
         let address = declare_and_deploy("AccountUpgradeable", array![key_pair.public_key]);
@@ -100,7 +100,6 @@ pub struct User {
     pub position_id: PositionId,
     pub account: Account,
     initial_balance: u64,
-    salt: felt252,
 }
 
 #[generate_trait]
@@ -113,37 +112,10 @@ pub impl UserTraitImpl of UserTrait {
             .expect('Value should not overflow');
         token_state.fund(account.address, initial_balance.into());
 
-        User { position_id, account, initial_balance, salt: 0 }
+        User { position_id, account, initial_balance }
     }
     fn set_as_caller(self: @User, contract_address: ContractAddress) {
         self.account.set_as_caller(:contract_address);
-    }
-    fn generate_salt(ref self: User) -> felt252 {
-        self.salt += 1;
-        self.salt
-    }
-    fn create_order(
-        ref self: User,
-        base_amount: i64,
-        base_asset_id: AssetId,
-        quote_amount: i64,
-        fee_amount: u64,
-    ) -> OrderInfo {
-        let expiration = Time::now().add(delta: Time::weeks(1));
-        let salt = self.generate_salt();
-        let order = Order {
-            position_id: self.position_id,
-            base_asset_id,
-            base_amount,
-            quote_asset_id: constants::COLLATERAL_ASSET_ID(),
-            quote_amount,
-            fee_asset_id: constants::COLLATERAL_ASSET_ID(),
-            fee_amount,
-            expiration,
-            salt,
-        };
-        let hash = order.get_message_hash(self.account.key_pair.public_key);
-        OrderInfo { order, signature: self.account.sign_message(hash), hash }
     }
 }
 
@@ -257,15 +229,16 @@ pub struct SyntheticConfig {
 /// PerpetualsWrapper is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
 pub struct PerpetualsWrapper {
-    governance_admin: ContractAddress,
-    role_admin: ContractAddress,
-    app_governor: ContractAddress,
-    perpetuals_contract: ContractAddress,
-    token_state: TokenState,
-    collateral_quantum: u64,
-    collateral_id: AssetId,
-    operator: Account,
-    event_info: EventSpy,
+    pub governance_admin: ContractAddress,
+    pub role_admin: ContractAddress,
+    pub app_governor: ContractAddress,
+    pub perpetuals_contract: ContractAddress,
+    pub token_state: TokenState,
+    pub collateral_quantum: u64,
+    pub collateral_id: AssetId,
+    pub operator: Account,
+    pub event_info: EventSpy,
+    salt_gen: felt252,
 }
 
 #[generate_trait]
@@ -275,6 +248,10 @@ impl PrivateEventStateImpl of PrivateEventStateTrait {
     ) -> @(ContractAddress, Event) {
         let events = self.event_info.get_events().emitted_by(contract_address).events;
         events[events.len() - 1]
+    }
+    fn generate_salt(ref self: PerpetualsWrapper) -> felt252 {
+        self.salt_gen += 1;
+        self.salt_gen
     }
 }
 
@@ -346,6 +323,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             collateral_id: perpetuals_config.collateral_id,
             operator: perpetuals_config.operator,
             event_info: snforge_std::spy_events(),
+            salt_gen: 0,
         }
     }
 
@@ -394,13 +372,12 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
 
     fn deposit(
         ref self: PerpetualsWrapper,
-        ref depositor: User,
+        depositor: Account,
         position_id: PositionId,
         quantized_amount: u64,
     ) -> DepositInfo {
         let unquantized_amount = quantized_amount * self.collateral_quantum;
-        let position_id = depositor.position_id;
-        let address = depositor.account.address;
+        let address = depositor.address;
         let user_balance_before = self.token_state.balance_of(account: address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
         let now = Time::now();
@@ -412,7 +389,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
                 spender: self.perpetuals_contract,
                 amount: unquantized_amount.into(),
             );
-        let salt = depositor.generate_salt();
+        let salt = self.generate_salt();
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
@@ -448,7 +425,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             deposit_request_hash: deposit_hash,
         );
 
-        DepositInfo { depositor: depositor.account, position_id, quantized_amount, salt }
+        DepositInfo { depositor, position_id, quantized_amount, salt }
     }
 
     fn cancel_deposit(ref self: PerpetualsWrapper, deposit_info: DepositInfo) {
@@ -538,7 +515,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         let position_id = user.position_id;
         let recipient = account.address;
         let expiration = Time::now().add(Time::seconds(10));
-        let salt = user.generate_salt();
+        let salt = self.generate_salt();
 
         let request_hash = WithdrawArgs {
             recipient, position_id, collateral_id: self.collateral_id, amount, expiration, salt,
@@ -620,7 +597,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     ) -> RequestInfo {
         let expiration = Time::now().add(delta: Time::weeks(1));
 
-        let salt = sender.generate_salt();
+        let salt = self.generate_salt();
         let transfer_args = TransferArgs {
             position_id: sender.position_id,
             salt,
@@ -710,6 +687,31 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             expiration: expiration,
             transfer_request_hash: request_hash,
         );
+    }
+
+    fn create_order(
+        ref self: PerpetualsWrapper,
+        user: User,
+        base_amount: i64,
+        base_asset_id: AssetId,
+        quote_amount: i64,
+        fee_amount: u64,
+    ) -> OrderInfo {
+        let expiration = Time::now().add(delta: Time::weeks(1));
+        let salt = self.generate_salt();
+        let order = Order {
+            position_id: user.position_id,
+            base_asset_id,
+            base_amount,
+            quote_asset_id: self.collateral_id,
+            quote_amount,
+            fee_asset_id: self.collateral_id,
+            fee_amount,
+            expiration,
+            salt,
+        };
+        let hash = order.get_message_hash(user.account.key_pair.public_key);
+        OrderInfo { order, signature: user.account.sign_message(hash), hash }
     }
 
     fn trade(
