@@ -13,6 +13,7 @@ assert_macros.workspace = true
 snforge_std.workspace = true
 openzeppelin_testing.workspace = true
 snforge_scarb_plugin.workspace = true
+starkware_utils_testing.workspace = true
 
 [[target.starknet-contract]]
 sierra = true

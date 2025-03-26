@@ -11,9 +11,9 @@ use perpetuals::tests::constants::*;
 use snforge_std::cheatcodes::events::Event;
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use starknet::ContractAddress;
-use starkware_utils::test_utils::assert_expected_event_emitted;
 use starkware_utils::types::PublicKey;
 use starkware_utils::types::time::time::Timestamp;
+use starkware_utils_testing::test_utils::assert_expected_event_emitted;
 
 
 pub fn assert_new_position_event_with_expected(

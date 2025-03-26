@@ -7,7 +7,7 @@ use snforge_std::test_address;
 use starknet::ContractAddress;
 use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
 use starkware_utils::components::roles::interface::IRoles;
-use starkware_utils::test_utils::cheat_caller_address_once;
+use starkware_utils_testing::test_utils::cheat_caller_address_once;
 
 type ComponentState = OperatorNonceComponent::ComponentState<NonceMock::ContractState>;
 

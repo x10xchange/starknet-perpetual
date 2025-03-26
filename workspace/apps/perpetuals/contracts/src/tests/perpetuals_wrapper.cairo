@@ -43,9 +43,11 @@ use starkware_utils::components::request_approvals::interface::{
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, MINUTE, TEN_POW_18, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
-use starkware_utils::test_utils::{Deployable, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
+use starkware_utils_testing::test_utils::{
+    Deployable, TokenState, TokenTrait, cheat_caller_address_once,
+};
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;

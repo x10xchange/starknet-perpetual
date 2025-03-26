@@ -29,9 +29,11 @@ use starkware_utils::components::roles::interface::{
 };
 use starkware_utils::constants::{MAX_U128, TWO_POW_32, TWO_POW_40};
 use starkware_utils::iterable_map::*;
-use starkware_utils::test_utils::{TokenConfig, TokenState, TokenTrait, cheat_caller_address_once};
 use starkware_utils::types::Signature;
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
+use starkware_utils_testing::test_utils::{
+    TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
+};
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.

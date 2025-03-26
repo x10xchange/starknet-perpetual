@@ -54,11 +54,11 @@ use starkware_utils::components::roles::interface::IRoles;
 use starkware_utils::constants::{HOUR, MAX_U128};
 use starkware_utils::iterable_map::*;
 use starkware_utils::message_hash::OffchainMessageHash;
-use starkware_utils::test_utils::{
+use starkware_utils::types::time::time::{Time, Timestamp};
+use starkware_utils_testing::test_utils::{
     Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
     cheat_caller_address_once,
 };
-use starkware_utils::types::time::time::{Time, Timestamp};
 
 
 #[test]
