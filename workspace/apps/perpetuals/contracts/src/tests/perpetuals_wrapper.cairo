@@ -123,7 +123,7 @@ pub impl UserTraitImpl of UserTrait {
 }
 
 #[derive(Copy, Drop)]
-pub struct Oracle {
+struct Oracle {
     key_pair: StarkKeyPair,
     name: felt252,
 }
@@ -257,6 +257,18 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
             resolution_factor: constants::SYNTHETIC_RESOLUTION_FACTOR,
         }
     }
+
+    fn sign_price(self: @SyntheticInfo, oracle_price: u128) -> Span<SignedPrice> {
+        let timestamp = Time::now().seconds.try_into().unwrap();
+        let mut signed_prices = array![];
+        for oracle in self.oracles {
+            let signed_price = oracle
+                .sign_price(:oracle_price, :timestamp, asset_name: *self.asset_name);
+            signed_prices.append(signed_price);
+        }
+
+        signed_prices.span()
+    }
 }
 
 
@@ -375,16 +387,9 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             .new_position(:operator_nonce, :position_id, :owner_public_key, :owner_account);
     }
 
-    fn price_tick(
-        ref self: PerpetualsWrapper, synthetic_config: @SyntheticInfo, oracle_price: u128,
-    ) {
-        let timestamp = Time::now().seconds.try_into().unwrap();
-        let mut signed_prices = array![];
-        for oracle in synthetic_config.oracles {
-            let signed_price = oracle
-                .sign_price(:oracle_price, :timestamp, asset_name: *synthetic_config.asset_name);
-            signed_prices.append(signed_price);
-        }
+    fn price_tick(ref self: PerpetualsWrapper, synthetic_info: @SyntheticInfo, price: u128) {
+        let oracle_price = price * TEN_POW_18.into();
+        let signed_prices = synthetic_info.sign_price(:oracle_price);
         advance_time(TIME_STEP);
 
         let operator_nonce = self.get_nonce();
@@ -392,9 +397,9 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         IAssetsDispatcher { contract_address: self.perpetuals_contract }
             .price_tick(
                 :operator_nonce,
-                asset_id: *synthetic_config.asset_id,
+                asset_id: *synthetic_info.asset_id,
                 :oracle_price,
-                signed_prices: signed_prices.span(),
+                signed_prices: signed_prices,
             );
     }
 
@@ -1021,34 +1026,34 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn add_active_synthetic(
-        ref self: PerpetualsWrapper, synthetic_config: @SyntheticInfo, price: u128,
+        ref self: PerpetualsWrapper, synthetic_info: @SyntheticInfo, initial_price: u128,
     ) {
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
         self.set_app_governor_as_caller();
         dispatcher
             .add_synthetic_asset(
-                *synthetic_config.asset_id,
-                risk_factor_tiers: *synthetic_config.risk_factor_data.tiers,
-                risk_factor_first_tier_boundary: *synthetic_config
+                *synthetic_info.asset_id,
+                risk_factor_tiers: *synthetic_info.risk_factor_data.tiers,
+                risk_factor_first_tier_boundary: *synthetic_info
                     .risk_factor_data
                     .first_tier_boundary,
-                risk_factor_tier_size: *synthetic_config.risk_factor_data.tier_size,
-                quorum: synthetic_config.oracles.len().try_into().unwrap(),
-                resolution_factor: *synthetic_config.resolution_factor,
+                risk_factor_tier_size: *synthetic_info.risk_factor_data.tier_size,
+                quorum: synthetic_info.oracles.len().try_into().unwrap(),
+                resolution_factor: *synthetic_info.resolution_factor,
             );
 
-        for oracle in synthetic_config.oracles {
+        for oracle in synthetic_info.oracles {
             self.set_app_governor_as_caller();
             dispatcher
                 .add_oracle_to_asset(
-                    *synthetic_config.asset_id,
+                    *synthetic_info.asset_id,
                     *oracle.key_pair.public_key,
                     *oracle.name,
-                    *synthetic_config.asset_name,
+                    *synthetic_info.asset_name,
                 );
         }
         // Activate the synthetic asset.
-        self.price_tick(:synthetic_config, oracle_price: price * TEN_POW_18.into());
+        self.price_tick(:synthetic_info, price: initial_price);
     }
 
     fn funding_tick(ref self: PerpetualsWrapper, funding_ticks: Span<FundingTick>) {
