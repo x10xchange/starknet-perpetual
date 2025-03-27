@@ -274,9 +274,9 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
 }
 
 
-/// PerpetualsWrapper is the main struct that holds the state of the flow tests.
+/// PerpsTestsFacade is the main struct that holds the state of the flow tests.
 #[derive(Drop)]
-pub struct PerpetualsWrapper {
+pub struct PerpsTestsFacade {
     pub governance_admin: ContractAddress,
     pub role_admin: ContractAddress,
     pub app_governor: ContractAddress,
@@ -290,44 +290,40 @@ pub struct PerpetualsWrapper {
 }
 
 #[generate_trait]
-impl PrivateEventStateImpl of PrivateEventStateTrait {
+impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
     fn get_last_event(
-        ref self: PerpetualsWrapper, contract_address: ContractAddress,
+        ref self: PerpsTestsFacade, contract_address: ContractAddress,
     ) -> @(ContractAddress, Event) {
         let events = self.event_info.get_events().emitted_by(contract_address).events;
         events[events.len() - 1]
     }
-    fn generate_salt(ref self: PerpetualsWrapper) -> felt252 {
+    fn generate_salt(ref self: PerpsTestsFacade) -> felt252 {
         self.salt_gen += 1;
         self.salt_gen
     }
-}
-
-#[generate_trait]
-impl PrivatePerpetualsWrapperImpl of PrivatePerpetualsWrapperTrait {
-    fn get_nonce(self: @PerpetualsWrapper) -> u64 {
+    fn get_nonce(self: @PerpsTestsFacade) -> u64 {
         let dispatcher = IOperatorNonceDispatcher { contract_address: *self.perpetuals_contract };
         self.operator.set_as_caller(*self.perpetuals_contract);
         dispatcher.get_operator_nonce()
     }
 
-    fn set_app_governor_as_caller(self: @PerpetualsWrapper) {
+    fn set_app_governor_as_caller(self: @PerpsTestsFacade) {
         cheat_caller_address_once(
             contract_address: *self.perpetuals_contract, caller_address: *self.app_governor,
         );
     }
-    fn set_app_role_admin_as_caller(self: @PerpetualsWrapper) {
+    fn set_app_role_admin_as_caller(self: @PerpsTestsFacade) {
         cheat_caller_address_once(
             contract_address: *self.perpetuals_contract, caller_address: *self.role_admin,
         );
     }
-    fn set_governance_admin_as_caller(self: @PerpetualsWrapper) {
+    fn set_governance_admin_as_caller(self: @PerpsTestsFacade) {
         cheat_caller_address_once(
             contract_address: *self.perpetuals_contract, caller_address: *self.governance_admin,
         );
     }
 
-    fn set_roles(self: @PerpetualsWrapper) {
+    fn set_roles(self: @PerpsTestsFacade) {
         let dispatcher = IRolesDispatcher { contract_address: *self.perpetuals_contract };
 
         self.set_governance_admin_as_caller();
@@ -341,7 +337,7 @@ impl PrivatePerpetualsWrapperImpl of PrivatePerpetualsWrapperTrait {
     }
 
     fn get_position_collateral_balance(
-        self: @PerpetualsWrapper, position_id: PositionId,
+        self: @PerpsTestsFacade, position_id: PositionId,
     ) -> Balance {
         IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_assets(position_id)
@@ -349,11 +345,11 @@ impl PrivatePerpetualsWrapperImpl of PrivatePerpetualsWrapperTrait {
     }
 }
 
-/// FlowTestTrait is the interface for the PerpetualsWrapper struct. It is the sole way to interact
+/// FlowTestTrait is the interface for the PerpsTestsFacade struct. It is the sole way to interact
 /// with the contract by calling the following wrapper functions.
 #[generate_trait]
-pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
-    fn init(token_state: TokenState) -> PerpetualsWrapper {
+pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
+    fn init(token_state: TokenState) -> PerpsTestsFacade {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
         let collateral_quantum = constants::COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
@@ -361,7 +357,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
 
-        let perpetual_wrapper = PerpetualsWrapper {
+        let perpetual_wrapper = PerpsTestsFacade {
             governance_admin: perpetuals_config.governance_admin,
             role_admin: perpetuals_config.role_admin,
             app_governor: perpetuals_config.app_governor,
@@ -378,7 +374,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn new_position(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         position_id: PositionId,
         owner_public_key: felt252,
         owner_account: ContractAddress,
@@ -389,7 +385,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
             .new_position(:operator_nonce, :position_id, :owner_public_key, :owner_account);
     }
 
-    fn price_tick(ref self: PerpetualsWrapper, synthetic_info: @SyntheticInfo, price: u128) {
+    fn price_tick(ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, price: u128) {
         let oracle_price = price * TEN_POW_18.into();
         let signed_prices = synthetic_info.sign_price(:oracle_price);
         advance_time(TIME_STEP);
@@ -406,7 +402,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn deposit(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         depositor: Account,
         position_id: PositionId,
         quantized_amount: u64,
@@ -463,7 +459,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         DepositInfo { depositor, position_id, quantized_amount, salt }
     }
 
-    fn cancel_deposit(ref self: PerpetualsWrapper, deposit_info: DepositInfo) {
+    fn cancel_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
         let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
         let user_balance_before = self.token_state.balance_of(depositor.address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
@@ -505,7 +501,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
     }
 
-    fn process_deposit(ref self: PerpetualsWrapper, deposit_info: DepositInfo) {
+    fn process_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
         let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
         let collateral_balance_before = self.get_position_collateral_balance(position_id);
 
@@ -545,7 +541,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         );
     }
 
-    fn withdraw_request(ref self: PerpetualsWrapper, user: User, amount: u64) -> RequestInfo {
+    fn withdraw_request(ref self: PerpsTestsFacade, user: User, amount: u64) -> RequestInfo {
         let account = user.account;
         let position_id = user.position_id;
         let recipient = account.address;
@@ -577,7 +573,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         RequestInfo { recipient: user, position_id, amount, expiration, salt, request_hash }
     }
 
-    fn withdraw(ref self: PerpetualsWrapper, withdraw_info: RequestInfo) {
+    fn withdraw(ref self: PerpsTestsFacade, withdraw_info: RequestInfo) {
         let RequestInfo {
             recipient, position_id, amount, expiration, salt, request_hash,
         } = withdraw_info;
@@ -628,7 +624,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn transfer_request(
-        ref self: PerpetualsWrapper, sender: User, recipient: User, amount: u64,
+        ref self: PerpsTestsFacade, sender: User, recipient: User, amount: u64,
     ) -> RequestInfo {
         let expiration = Time::now().add(delta: Time::weeks(1));
 
@@ -673,7 +669,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         }
     }
 
-    fn transfer(ref self: PerpetualsWrapper, transfer_info: RequestInfo) {
+    fn transfer(ref self: PerpsTestsFacade, transfer_info: RequestInfo) {
         let RequestInfo {
             recipient, position_id, amount, expiration, salt, request_hash,
         } = transfer_info;
@@ -725,7 +721,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn create_order(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         user: User,
         base_amount: i64,
         base_asset_id: AssetId,
@@ -750,7 +746,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn trade(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         order_info_a: OrderInfo,
         order_info_b: OrderInfo,
         base: i64,
@@ -849,7 +845,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn liquidate(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         liquidated_user: User,
         liquidator_order: OrderInfo,
         liquidated_base: i64,
@@ -957,7 +953,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn deleverage(
-        ref self: PerpetualsWrapper,
+        ref self: PerpsTestsFacade,
         deleveraged_user: User,
         deleverager_user: User,
         base_asset_id: AssetId,
@@ -1028,7 +1024,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
     }
 
     fn add_active_synthetic(
-        ref self: PerpetualsWrapper, synthetic_info: @SyntheticInfo, initial_price: u128,
+        ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, initial_price: u128,
     ) {
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
         self.set_app_governor_as_caller();
@@ -1058,7 +1054,7 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
         self.price_tick(:synthetic_info, price: initial_price);
     }
 
-    fn funding_tick(ref self: PerpetualsWrapper, funding_ticks: Span<FundingTick>) {
+    fn funding_tick(ref self: PerpsTestsFacade, funding_ticks: Span<FundingTick>) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IAssetsDispatcher { contract_address: self.perpetuals_contract }
@@ -1068,9 +1064,9 @@ pub impl PerpetualsWrapperImpl of PerpetualsWrapperTrait {
 }
 
 #[generate_trait]
-pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
+pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
     fn validate_request_approval(
-        self: @PerpetualsWrapper, request_hash: felt252, expected_status: RequestStatus,
+        self: @PerpsTestsFacade, request_hash: felt252, expected_status: RequestStatus,
     ) {
         let status = IRequestApprovalsDispatcher { contract_address: *self.perpetuals_contract }
             .get_request_status(request_hash);
@@ -1078,7 +1074,7 @@ pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
     }
 
     fn validate_deposit_status(
-        self: @PerpetualsWrapper, deposit_hash: felt252, expected_status: DepositStatus,
+        self: @PerpsTestsFacade, deposit_hash: felt252, expected_status: DepositStatus,
     ) {
         let status = IDepositDispatcher { contract_address: *self.perpetuals_contract }
             .get_deposit_status(deposit_hash);
@@ -1086,13 +1082,13 @@ pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
     }
 
     fn validate_collateral_balance(
-        self: @PerpetualsWrapper, position_id: PositionId, expected_balance: Balance,
+        self: @PerpsTestsFacade, position_id: PositionId, expected_balance: Balance,
     ) {
         assert_eq!(self.get_position_collateral_balance(position_id), expected_balance);
     }
 
     fn validate_synthetic_balance(
-        self: @PerpetualsWrapper,
+        self: @PerpsTestsFacade,
         position_id: PositionId,
         asset_id: AssetId,
         expected_balance: Balance,
@@ -1106,7 +1102,7 @@ pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
     }
 
     fn validate_total_value(
-        self: @PerpetualsWrapper, position_id: PositionId, expected_total_value: i128,
+        self: @PerpsTestsFacade, position_id: PositionId, expected_total_value: i128,
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_value, .. } = dispatcher.get_position_tv_tr(position_id);
@@ -1114,7 +1110,7 @@ pub impl PerpetualsWrapperValidationsImpl of FlowTestValidationsTrait {
     }
 
     fn validate_total_risk(
-        self: @PerpetualsWrapper, position_id: PositionId, expected_total_risk: u128,
+        self: @PerpsTestsFacade, position_id: PositionId, expected_total_risk: u128,
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
