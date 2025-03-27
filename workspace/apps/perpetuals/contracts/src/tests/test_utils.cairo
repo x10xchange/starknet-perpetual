@@ -32,7 +32,7 @@ use starkware_utils::iterable_map::*;
 use starkware_utils::types::Signature;
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
-    TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
+    Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
@@ -303,6 +303,15 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
     state
 }
 
+pub fn create_token_state() -> TokenState {
+    let token_config = TokenConfig {
+        name: COLLATERAL_NAME(),
+        symbol: COLLATERAL_SYMBOL(),
+        initial_supply: INITIAL_SUPPLY,
+        owner: COLLATERAL_OWNER(),
+    };
+    Deployable::deploy(@token_config)
+}
 
 pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);

@@ -24,7 +24,7 @@ use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
-use perpetuals::tests::constants;
+use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
     assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
     assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
@@ -32,7 +32,7 @@ use perpetuals::tests::event_test_utils::{
     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
     assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
-use perpetuals::tests::test_utils::validate_balance;
+use perpetuals::tests::test_utils::{create_token_state, validate_balance};
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
@@ -41,7 +41,7 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, MINUTE, TEN_POW_18, TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{DAY, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils::types::{PublicKey, Signature};
@@ -69,6 +69,7 @@ pub struct RequestInfo {
     request_hash: felt252,
 }
 
+#[derive(Copy, Drop)]
 pub struct OrderInfo {
     order: Order,
     signature: Signature,
@@ -112,9 +113,7 @@ pub impl UserTraitImpl of UserTrait {
     fn new(token_state: TokenState, secret_key: felt252, position_id: PositionId) -> User {
         let account = AccountTrait::new(secret_key);
 
-        let initial_balance = constants::USER_INIT_BALANCE
-            .try_into()
-            .expect('Value should not overflow');
+        let initial_balance = USER_INIT_BALANCE.try_into().expect('Value should not overflow');
         token_state.fund(account.address, initial_balance.into());
 
         User { position_id, account, initial_balance }
@@ -178,18 +177,18 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
         let operator = AccountTrait::new('OPERATOR');
         PerpetualsConfig {
             operator,
-            governance_admin: constants::GOVERNANCE_ADMIN(),
-            role_admin: constants::APP_ROLE_ADMIN(),
-            app_governor: constants::APP_GOVERNOR(),
-            upgrade_delay: constants::UPGRADE_DELAY,
-            collateral_id: constants::COLLATERAL_ASSET_ID(),
+            governance_admin: GOVERNANCE_ADMIN(),
+            role_admin: APP_ROLE_ADMIN(),
+            app_governor: APP_GOVERNOR(),
+            upgrade_delay: UPGRADE_DELAY,
+            collateral_id: COLLATERAL_ASSET_ID(),
             collateral_token_address,
             collateral_quantum,
-            max_price_interval: constants::MAX_PRICE_INTERVAL,
-            max_funding_interval: constants::MAX_FUNDING_INTERVAL,
-            max_funding_rate: constants::MAX_FUNDING_RATE,
-            cancel_delay: constants::CANCEL_DELAY,
-            max_oracle_price_validity: constants::MAX_ORACLE_PRICE_VALIDITY,
+            max_price_interval: MAX_PRICE_INTERVAL,
+            max_funding_interval: MAX_FUNDING_INTERVAL,
+            max_funding_rate: MAX_FUNDING_RATE,
+            cancel_delay: CANCEL_DELAY,
+            max_oracle_price_validity: MAX_ORACLE_PRICE_VALIDITY,
             fee_position_owner_account: operator.address,
             fee_position_owner_public_key: operator.key_pair.public_key,
             insurance_fund_position_owner_account: operator.address,
@@ -242,7 +241,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
         asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8,
     ) -> SyntheticInfo {
         let mut oracles = array![];
-        for i in 0..oracles_len {
+        for i in 1..oracles_len + 1 {
             oracles
                 .append(
                     OracleTrait::new(
@@ -256,7 +255,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
             asset_id: AssetIdTrait::new(value: asset_name),
             risk_factor_data,
             oracles: oracles.span(),
-            resolution_factor: constants::SYNTHETIC_RESOLUTION_FACTOR,
+            resolution_factor: SYNTHETIC_RESOLUTION_FACTOR,
         }
     }
 
@@ -351,7 +350,7 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
 pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn init(token_state: TokenState) -> PerpsTestsFacade {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
-        let collateral_quantum = constants::COLLATERAL_QUANTUM;
+        let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
         );
@@ -386,7 +385,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn price_tick(ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, price: u128) {
-        let oracle_price = price * TEN_POW_18.into();
+        // 10^12 == ORACLE_SCALE_SN_PERPS_RATIO.
+        let oracle_price = price * (*synthetic_info.resolution_factor).into() * TEN_POW_12.into();
+
         let signed_prices = synthetic_info.sign_price(:oracle_price);
         advance_time(TIME_STEP);
 
@@ -1061,6 +1062,53 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .funding_tick(:operator_nonce, :funding_ticks);
     }
     /// TODO: add all the necessary functions to interact with the contract.
+}
+
+#[derive(Drop)]
+pub struct TestDataState {
+    pub perpetual_contract_data: PerpsTestsFacade,
+    position_id_gen: u32,
+    key_gen: felt252,
+}
+
+#[generate_trait]
+impl PrivateTestDataStateImpl of PrivateTestDataStateTrait {
+    fn generate_position_id(ref self: TestDataState) -> PositionId {
+        self.position_id_gen += 1;
+        PositionId { value: self.position_id_gen }
+    }
+
+    fn generate_key(ref self: TestDataState) -> felt252 {
+        self.key_gen += 1;
+        self.key_gen
+    }
+}
+
+#[generate_trait]
+pub impl TestDataStateImpl of TestDataStateTrait {
+    fn new() -> TestDataState {
+        TestDataState {
+            perpetual_contract_data: PerpsTestsFacadeTrait::init(create_token_state()),
+            position_id_gen: 100,
+            key_gen: 0,
+        }
+    }
+
+    fn new_user_with_position(ref self: TestDataState) -> User {
+        let user = UserTrait::new(
+            self.perpetual_contract_data.token_state,
+            secret_key: self.generate_key(),
+            position_id: self.generate_position_id(),
+        );
+        self
+            .perpetual_contract_data
+            .new_position(
+                position_id: user.position_id,
+                owner_public_key: user.account.key_pair.public_key,
+                owner_account: user.account.address,
+            );
+        user
+    }
 }
 
 #[generate_trait]

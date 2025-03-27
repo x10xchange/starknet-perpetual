@@ -4,5 +4,6 @@ mod event_test_utils;
 mod flow_tests;
 mod mocks;
 mod perps_tests_facade;
+mod system_tests;
 mod test_core;
 mod test_utils;
