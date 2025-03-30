@@ -1,4 +1,3 @@
-use perpetuals::core::types::asset::AssetIdTrait;
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::perps_tests_facade::*;
@@ -161,4 +160,121 @@ fn test_deleverage_after_funding_tick() {
 //         deleveraged_base: -1,
 //         deleveraged_quote: 101,
 //     );
+}
+
+#[test]
+fn test_deleverage_after_price_tick() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut test_data_state: TestDataState = TestDataStateTrait::new();
+
+    test_data_state
+        .perpetual_contract_data
+        .add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 20);
+
+    // Create users.
+    let delevereged_user = test_data_state.new_user_with_position();
+    let delevereger_user = test_data_state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user = test_data_state
+        .perpetual_contract_data
+        .deposit(
+            depositor: delevereger_user.account,
+            position_id: delevereger_user.position_id,
+            quantized_amount: 100000,
+        );
+    test_data_state.perpetual_contract_data.process_deposit(deposit_info: deposit_info_user);
+
+    // Create orders.
+    let order_delevereged_user = test_data_state
+        .perpetual_contract_data
+        .create_order(
+            user: delevereged_user,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -33,
+            fee_amount: 3,
+        );
+    let order_delevereger_user = test_data_state
+        .perpetual_contract_data
+        .create_order(
+            user: delevereger_user,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 30,
+            fee_amount: 4,
+        );
+
+    // Make trades.
+    test_data_state
+        .perpetual_contract_data
+        .trade(
+            order_info_a: order_delevereged_user,
+            order_info_b: order_delevereger_user,
+            base: 2,
+            quote: -33,
+            fee_a: 3,
+            fee_b: 4,
+        );
+
+    //                            TV                                  TR                    TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Delevereged User:   -36 + 2 * 20 = 4                    2 * 20 * 0.1 = 4               1
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_value(position_id: delevereged_user.position_id, expected_total_value: 4);
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_risk(position_id: delevereged_user.position_id, expected_total_risk: 4);
+
+    test_data_state.perpetual_contract_data.price_tick(synthetic_info: @synthetic_info, price: 10);
+
+    //                            TV                                  TR                    TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Delevereged User:   -36 + 2 * 10 = -16                  2 * 10 * 0.1 = 2               -8
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_value(position_id: delevereged_user.position_id, expected_total_value: -16);
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_risk(position_id: delevereged_user.position_id, expected_total_risk: 2);
+
+    test_data_state
+        .perpetual_contract_data
+        .deleverage(
+            deleveraged_user: delevereged_user,
+            deleverager_user: delevereger_user,
+            base_asset_id: asset_id,
+            deleveraged_base: -1,
+            deleveraged_quote: 18,
+        );
+
+    //                            TV                                  TR                    TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Delevereged User:    -18 + 1 * 10 = -8                 1 * 10 * 0.1 = 1               -8
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_value(position_id: delevereged_user.position_id, expected_total_value: -8);
+    test_data_state
+        .perpetual_contract_data
+        .validate_total_risk(position_id: delevereged_user.position_id, expected_total_risk: 1);
+    // TODO(Tomer-StarkWare): add the following assertion.
+// test_data_state
+// .perpetual_contract_data
+// .deleverage(
+//     deleveraged_user: delevereged_user,
+//     deleverager_user: delevereger_user,
+//     base_asset_id: asset_id,
+//     deleveraged_base: -1,
+//     deleveraged_quote: 18,
+// );
 }
