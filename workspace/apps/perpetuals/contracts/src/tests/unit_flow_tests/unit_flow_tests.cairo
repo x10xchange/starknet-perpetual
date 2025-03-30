@@ -8,7 +8,6 @@ use super::unit_flow_infra::{TestDataState, TestDataStateTrait};
 #[test]
 fn test_deleverage_after_funding_tick() {
     // Setup.
-    // let mut data_generator = DataGeneratorTrait::new();
     let risk_factor_data = RiskFactorTiers {
         tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
