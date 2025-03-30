@@ -32,7 +32,7 @@ use perpetuals::tests::event_test_utils::{
     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
     assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
-use perpetuals::tests::test_utils::{create_token_state, validate_balance};
+use perpetuals::tests::test_utils::validate_balance;
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
@@ -348,7 +348,7 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
 /// with the contract by calling the following wrapper functions.
 #[generate_trait]
 pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
-    fn init(token_state: TokenState) -> PerpsTestsFacade {
+    fn new(token_state: TokenState) -> PerpsTestsFacade {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
@@ -1064,52 +1064,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     /// TODO: add all the necessary functions to interact with the contract.
 }
 
-#[derive(Drop)]
-pub struct TestDataState {
-    pub perpetual_contract_data: PerpsTestsFacade,
-    position_id_gen: u32,
-    key_gen: felt252,
-}
-
-#[generate_trait]
-impl PrivateTestDataStateImpl of PrivateTestDataStateTrait {
-    fn generate_position_id(ref self: TestDataState) -> PositionId {
-        self.position_id_gen += 1;
-        PositionId { value: self.position_id_gen }
-    }
-
-    fn generate_key(ref self: TestDataState) -> felt252 {
-        self.key_gen += 1;
-        self.key_gen
-    }
-}
-
-#[generate_trait]
-pub impl TestDataStateImpl of TestDataStateTrait {
-    fn new() -> TestDataState {
-        TestDataState {
-            perpetual_contract_data: PerpsTestsFacadeTrait::init(create_token_state()),
-            position_id_gen: 100,
-            key_gen: 0,
-        }
-    }
-
-    fn new_user_with_position(ref self: TestDataState) -> User {
-        let user = UserTrait::new(
-            self.perpetual_contract_data.token_state,
-            secret_key: self.generate_key(),
-            position_id: self.generate_position_id(),
-        );
-        self
-            .perpetual_contract_data
-            .new_position(
-                position_id: user.position_id,
-                owner_public_key: user.account.key_pair.public_key,
-                owner_account: user.account.address,
-            );
-        user
-    }
-}
 
 #[generate_trait]
 pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {

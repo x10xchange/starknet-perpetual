@@ -1,7 +1,9 @@
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::perps_tests_facade::*;
+use perpetuals::tests::unit_flow_infra::*;
 use starkware_utils::constants::MAX_U128;
+use super::unit_flow_infra::{TestDataState, TestDataStateTrait};
 
 #[test]
 fn test_deleverage_after_funding_tick() {

@@ -2,7 +2,7 @@ use core::num::traits::Zero;
 use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
 use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait;
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
-use perpetuals::tests::mocks::nonce::NonceMock;
+use perpetuals::tests::components::mock_nonce::NonceMock;
 use snforge_std::test_address;
 use starknet::ContractAddress;
 use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
