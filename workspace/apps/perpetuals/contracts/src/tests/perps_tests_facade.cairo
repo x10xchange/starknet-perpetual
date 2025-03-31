@@ -906,14 +906,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .validate_synthetic_balance(
                 position_id: liquidated_user.position_id,
                 :asset_id,
-                expected_balance: -liquidated_synthetic_balance_before + liquidated_base.into(),
+                expected_balance: liquidated_synthetic_balance_before + liquidated_base.into(),
             );
 
         self
             .validate_collateral_balance(
                 position_id: liquidator_order.position_id,
                 expected_balance: liquidator_collateral_balance_before
-                    - liquidated_insurance_fee.into()
+                    - liquidator_fee.into()
                     - liquidated_quote.into(),
             );
 
@@ -921,7 +921,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .validate_synthetic_balance(
                 position_id: liquidator_order.position_id,
                 :asset_id,
-                expected_balance: -liquidator_synthetic_balance_before - liquidated_base.into(),
+                expected_balance: liquidator_synthetic_balance_before - liquidated_base.into(),
             );
 
         self
