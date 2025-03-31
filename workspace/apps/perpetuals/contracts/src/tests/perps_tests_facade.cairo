@@ -15,7 +15,7 @@ use perpetuals::core::components::positions::interface::{
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
+use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
@@ -26,6 +26,7 @@ use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
+    assert_add_synthetic_event_with_expected, assert_deactivate_synthetic_asset_event_with_expected,
     assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
     assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
     assert_liquidate_event_with_expected, assert_trade_event_with_expected,
@@ -1041,6 +1042,21 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 resolution_factor: *synthetic_info.resolution_factor,
             );
 
+        assert_add_synthetic_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            asset_id: *synthetic_info.asset_id,
+            risk_factor_tiers: *synthetic_info.risk_factor_data.tiers,
+            risk_factor_first_tier_boundary: *synthetic_info.risk_factor_data.first_tier_boundary,
+            risk_factor_tier_size: *synthetic_info.risk_factor_data.tier_size,
+            resolution_factor: *synthetic_info.resolution_factor,
+            quorum: synthetic_info.oracles.len().try_into().unwrap(),
+        );
+
+        assert_eq!(
+            dispatcher.get_synthetic_config(synthetic_id: *synthetic_info.asset_id).status,
+            AssetStatus::PENDING,
+        );
+
         for oracle in synthetic_info.oracles {
             self.set_app_governor_as_caller();
             dispatcher
@@ -1053,6 +1069,16 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         }
         // Activate the synthetic asset.
         self.price_tick(:synthetic_info, price: initial_price);
+    }
+
+    fn deactivate_synthetic(ref self: PerpsTestsFacade, synthetic_id: AssetId) {
+        let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+        dispatcher.deactivate_synthetic(:synthetic_id);
+        assert_deactivate_synthetic_asset_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            asset_id: synthetic_id,
+        );
+        assert_eq!(dispatcher.get_synthetic_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
     fn funding_tick(ref self: PerpsTestsFacade, funding_ticks: Span<FundingTick>) {
