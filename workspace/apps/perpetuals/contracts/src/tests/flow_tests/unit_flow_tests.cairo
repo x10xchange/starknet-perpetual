@@ -637,3 +637,124 @@ fn test_liquidate_after_price_tick() {
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 }
+
+#[test]
+fn test_flow_get_risk_factor() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1, 50, 100].span(), first_tier_boundary: 2001, tier_size: 1000,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    // Create users.
+    let user_1 = state.new_user_with_position();
+    let user_2 = state.new_user_with_position();
+
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: user_1.account, position_id: user_1.position_id, quantized_amount: 10000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    let deposit_info_user_2 = state
+        .facade
+        .deposit(
+            depositor: user_2.account, position_id: user_2.position_id, quantized_amount: 10000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_2);
+
+    // Create orders.
+    let order_user_1 = state
+        .facade
+        .create_order(
+            user: user_1,
+            base_amount: 10,
+            base_asset_id: asset_id,
+            quote_amount: -10000,
+            fee_amount: 0,
+        );
+    let order_user_2 = state
+        .facade
+        .create_order(
+            user: user_2,
+            base_amount: -20,
+            base_asset_id: asset_id,
+            quote_amount: 20000,
+            fee_amount: 0,
+        );
+
+    // Test:
+    // No synthetic assets.
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 0);
+
+    // Partial fulfillment.
+    state
+        .facade
+        .trade(
+            order_info_a: order_user_1,
+            order_info_b: order_user_2,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // 2000 * 1%.
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 20);
+
+    // Partial fulfillment.
+    state
+        .facade
+        .trade(
+            order_info_a: order_user_1,
+            order_info_b: order_user_2,
+            base: 1,
+            quote: -1000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // index = (3000 - 2001)/1000 = 1;
+    // 3000 * 50%.
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 1500);
+
+    // Partial fulfillment.
+    state
+        .facade
+        .trade(
+            order_info_a: order_user_1,
+            order_info_b: order_user_2,
+            base: 1,
+            quote: -1000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // index = (4000 - 2001)/1000 = 2;
+    // 4000 * 100%.
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 4000);
+
+    // Partial fulfillment.
+    state
+        .facade
+        .trade(
+            order_info_a: order_user_1,
+            order_info_b: order_user_2,
+            base: 5,
+            quote: -5000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+    // index = (9000 - 2001)/1000 = 7 > 3; (last index)
+    // 9000 * 100%.
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 9000);
+}
