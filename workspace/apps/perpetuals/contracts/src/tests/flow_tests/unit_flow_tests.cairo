@@ -460,3 +460,180 @@ fn test_liquidate_after_funding_tick() {
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 }
+
+#[test]
+fn test_liquidate_after_price_tick() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 10);
+
+    // Create users.
+    let liquidated_user = state.new_user_with_position();
+    let liquidator_user_1 = state.new_user_with_position();
+    let liquidator_user_2 = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: liquidator_user_1.account,
+            position_id: liquidator_user_1.position_id,
+            quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    let deposit_info_user_2 = state
+        .facade
+        .deposit(
+            depositor: liquidator_user_2.account,
+            position_id: liquidator_user_2.position_id,
+            quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_2);
+
+    // Create orders.
+    let order_liquidated_user = state
+        .facade
+        .create_order(
+            user: liquidated_user,
+            base_amount: -3,
+            base_asset_id: asset_id,
+            quote_amount: 66,
+            fee_amount: 6,
+        );
+
+    let mut order_liquidator_user_1 = state
+        .facade
+        .create_order(
+            user: liquidator_user_1,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -44,
+            fee_amount: 4,
+        );
+
+    let mut order_liquidator_user_2 = state
+        .facade
+        .create_order(
+            user: liquidator_user_2,
+            base_amount: 1,
+            base_asset_id: asset_id,
+            quote_amount: -22,
+            fee_amount: 2,
+        );
+
+    // Make trade.
+    state
+        .facade
+        .trade(
+            order_info_a: order_liquidated_user,
+            order_info_b: order_liquidator_user_1,
+            base: -2,
+            quote: 44,
+            fee_a: 2,
+            fee_b: 4,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: order_liquidated_user,
+            order_info_b: order_liquidator_user_2,
+            base: -1,
+            quote: 22,
+            fee_a: 1,
+            fee_b: 1,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // liquidated User:     63 - 3 * 10 = 33                 |-3 * 10 * 0.1| = 3           12
+    state
+        .facade
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 33);
+    state
+        .facade
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 3);
+
+    state.facade.price_tick(synthetic_info: @synthetic_info, price: 20);
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // liquidated User:     63 - 3 * 20 = 3                  |-3 * 20 * 0.1| = 6            0.5
+    state
+        .facade
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 3);
+    state
+        .facade
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 6);
+
+    order_liquidator_user_1 = state
+        .facade
+        .create_order(
+            user: liquidator_user_1,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 41,
+            fee_amount: 1,
+        );
+    state
+        .facade
+        .liquidate(
+            :liquidated_user,
+            liquidator_order: order_liquidator_user_1,
+            liquidated_base: 2,
+            liquidated_quote: -41,
+            liquidated_insurance_fee: 1,
+            liquidator_fee: 1,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // liquidated User:      21 - 1 * 20 = 1                  |-1 * 20 * 0.1| = 2          0.5
+    state
+        .facade
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 1);
+    state
+        .facade
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 2);
+
+    order_liquidator_user_2 = state
+        .facade
+        .create_order(
+            user: liquidator_user_2,
+            base_amount: -1,
+            base_asset_id: asset_id,
+            quote_amount: 20,
+            fee_amount: 1,
+        );
+    state
+        .facade
+        .liquidate(
+            :liquidated_user,
+            liquidator_order: order_liquidator_user_2,
+            liquidated_base: 1,
+            liquidated_quote: -20,
+            liquidated_insurance_fee: 0,
+            liquidator_fee: 1,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // Delevereged User:        1 + 0 = 1                     0 * 100 * 0.01 = 0            -
+    state
+        .facade
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 1);
+    state
+        .facade
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
+}
