@@ -72,7 +72,7 @@ pub struct RequestInfo {
 
 #[derive(Copy, Drop)]
 pub struct OrderInfo {
-    order: Order,
+    pub order: Order,
     signature: Signature,
     hash: felt252,
 }
@@ -220,7 +220,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
     }
 }
 
-#[derive(Drop)]
+#[derive(Drop, Copy)]
 pub struct SyntheticInfo {
     pub asset_name: felt252,
     pub asset_id: AssetId,
@@ -229,7 +229,7 @@ pub struct SyntheticInfo {
     pub resolution_factor: u64,
 }
 
-#[derive(Drop)]
+#[derive(Drop, Copy)]
 pub struct RiskFactorTiers {
     pub tiers: Span<u8>,
     pub first_tier_boundary: u128,
@@ -390,7 +390,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let oracle_price = price * (*synthetic_info.resolution_factor).into() * TEN_POW_12.into();
 
         let signed_prices = synthetic_info.sign_price(:oracle_price);
-        advance_time(TIME_STEP);
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
