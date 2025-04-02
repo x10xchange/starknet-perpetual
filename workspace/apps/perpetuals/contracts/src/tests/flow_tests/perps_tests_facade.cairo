@@ -61,6 +61,7 @@ pub struct DepositInfo {
     salt: felt252,
 }
 
+#[derive(Copy, Drop)]
 pub struct RequestInfo {
     recipient: User,
     position_id: PositionId,
@@ -696,7 +697,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         self
             .validate_request_approval(
-                request_hash: request_hash, expected_status: RequestStatus::PENDING,
+                request_hash: request_hash, expected_status: RequestStatus::PROCESSED,
             );
 
         self

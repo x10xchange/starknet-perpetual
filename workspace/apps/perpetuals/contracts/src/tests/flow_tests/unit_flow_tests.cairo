@@ -758,3 +758,66 @@ fn test_flow_get_risk_factor() {
     // 9000 * 100%.
     state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 9000);
 }
+
+#[test]
+fn test_transfer() {
+    // Setup.
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    // Create users.
+    let user_1 = state.new_user_with_position();
+    let user_2 = state.new_user_with_position();
+    let user_3 = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: user_1.account, position_id: user_1.position_id, quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    // Transfer.
+    let mut transfer_info = state
+        .facade
+        .transfer_request(sender: user_1, recipient: user_2, amount: 40000);
+    state.facade.transfer(:transfer_info);
+
+    transfer_info = state.facade.transfer_request(sender: user_1, recipient: user_3, amount: 20000);
+    state.facade.transfer(:transfer_info);
+
+    transfer_info = state.facade.transfer_request(sender: user_2, recipient: user_3, amount: 10000);
+    state.facade.transfer(:transfer_info);
+
+    transfer_info = state.facade.transfer_request(sender: user_2, recipient: user_1, amount: 5000);
+    state.facade.transfer(:transfer_info);
+
+    // TODO(TomerStarkware): add the following transfer
+    // transfer_info = state.facade.transfer_request(sender: user_1, recipient: user_2, amount:
+    // 30000);
+    // state.facade.transfer(:transfer_info);
+
+    //                 COLLATERAL
+    // User 1:           45,000
+    // User 2:           25,000
+    // User 3:           30,000
+
+    // Withdraw.
+    let mut withdraw_info = state.facade.withdraw_request(user: user_1, amount: 15000);
+    state.facade.withdraw(:withdraw_info);
+
+    withdraw_info = state.facade.withdraw_request(user: user_1, amount: 30000);
+    state.facade.withdraw(:withdraw_info);
+
+    withdraw_info = state.facade.withdraw_request(user: user_2, amount: 15000);
+    state.facade.withdraw(:withdraw_info);
+
+    withdraw_info = state.facade.withdraw_request(user: user_2, amount: 10000);
+    state.facade.withdraw(:withdraw_info);
+
+    withdraw_info = state.facade.withdraw_request(user: user_3, amount: 30000);
+    state.facade.withdraw(:withdraw_info);
+    // TODO(TomerStarkware): add the following withdraw
+// withdraw_info = state.facade.withdraw_request(user: user_2, amount: 30000);
+// state.facade.withdraw(:withdraw_info);
+}
