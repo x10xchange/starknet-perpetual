@@ -1081,6 +1081,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         assert_eq!(dispatcher.get_synthetic_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
+    fn reduce_inactive_asset_position(
+        ref self: PerpsTestsFacade,
+        position_id_a: PositionId,
+        position_id_b: PositionId,
+        base_asset_id: AssetId,
+        base_amount_a: i64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .reduce_inactive_asset_position(
+                :operator_nonce, :position_id_a, :position_id_b, :base_asset_id, :base_amount_a,
+            );
+    }
+
     fn funding_tick(ref self: PerpsTestsFacade, funding_ticks: Span<FundingTick>) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
