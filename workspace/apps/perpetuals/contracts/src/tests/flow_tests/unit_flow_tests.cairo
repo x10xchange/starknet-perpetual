@@ -45,6 +45,7 @@ fn test_deleverage_after_funding_tick() {
     state.facade.process_deposit(deposit_info: deposit_info_user_2);
 
     // Create orders.
+    // User willing to buy 2 synthetic assets for 168 (quote) + 20 (fee).
     let order_deleveraged_user = state
         .facade
         .create_order(
@@ -76,6 +77,7 @@ fn test_deleverage_after_funding_tick() {
         );
 
     // Make trades.
+    // User recieves 1 synthetic asset for 84 (quote) + 10 (fee).
     state
         .facade
         .trade(
@@ -87,6 +89,7 @@ fn test_deleverage_after_funding_tick() {
             fee_b: 3,
         );
 
+    // User recieves 1 synthetic asset for 84 (quote) + 10 (fee).
     state
         .facade
         .trade(
@@ -191,6 +194,7 @@ fn test_deleverage_after_price_tick() {
     state.facade.process_deposit(deposit_info: deposit_info_user);
 
     // Create orders.
+    // User willing to buy 2 synthetic assets for 33 (quote) + 3 (fee).
     let order_deleveraged_user = state
         .facade
         .create_order(
@@ -211,6 +215,7 @@ fn test_deleverage_after_price_tick() {
         );
 
     // Make trades.
+    // User recieves 2 synthetic asset for 3 (quote) + 3 (fee).
     state
         .facade
         .trade(
@@ -316,6 +321,7 @@ fn test_liquidate_after_funding_tick() {
     state.facade.process_deposit(deposit_info: deposit_info_user_2);
 
     // Create orders.
+    // User willing to buy 3 synthetic assets for 285 (quote) + 20 (fee).
     let order_liquidated_user = state
         .facade
         .create_order(
@@ -347,6 +353,7 @@ fn test_liquidate_after_funding_tick() {
         );
 
     // Make trade.
+    // User recieves 2 synthetic asset for 190 (quote) + 2 (fee).
     state
         .facade
         .trade(
@@ -358,6 +365,7 @@ fn test_liquidate_after_funding_tick() {
             fee_b: 0,
         );
 
+    // User recieves 1 synthetic asset for 95 (quote) + 0 (fee).
     state
         .facade
         .trade(
@@ -502,6 +510,7 @@ fn test_liquidate_after_price_tick() {
     state.facade.process_deposit(deposit_info: deposit_info_user_2);
 
     // Create orders.
+    // User willing to sell 3 synthetic assets for 66 (quote) - 6 (fee).
     let order_liquidated_user = state
         .facade
         .create_order(
@@ -533,6 +542,7 @@ fn test_liquidate_after_price_tick() {
         );
 
     // Make trade.
+    // User gives 2 synthetic asset for 44 (quote) - 2 (fee).
     state
         .facade
         .trade(
@@ -544,6 +554,7 @@ fn test_liquidate_after_price_tick() {
             fee_b: 4,
         );
 
+    // User recieves 1 synthetic asset for 22 (quote) - 1 (fee).
     state
         .facade
         .trade(
