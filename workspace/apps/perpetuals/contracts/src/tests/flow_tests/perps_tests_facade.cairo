@@ -1072,6 +1072,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn deactivate_synthetic(ref self: PerpsTestsFacade, synthetic_id: AssetId) {
+        self.set_app_governor_as_caller();
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
         dispatcher.deactivate_synthetic(:synthetic_id);
         assert_deactivate_synthetic_asset_event_with_expected(
@@ -1089,6 +1090,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         base_amount_a: i64,
     ) {
         let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .reduce_inactive_asset_position(
                 :operator_nonce, :position_id_a, :position_id_b, :base_asset_id, :base_amount_a,
