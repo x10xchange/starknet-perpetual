@@ -20,7 +20,7 @@ use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::price::SignedPrice;
+use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
@@ -240,7 +240,7 @@ pub struct RiskFactorTiers {
 #[generate_trait]
 pub impl SyntheticInfoImpl of SyntheticInfoTrait {
     fn new(
-        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8,
+        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8, asset_id: felt252,
     ) -> SyntheticInfo {
         let mut oracles = array![];
         for i in 1..oracles_len + 1 {
@@ -254,7 +254,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
 
         SyntheticInfo {
             asset_name,
-            asset_id: AssetIdTrait::new(value: asset_name),
+            asset_id: AssetIdTrait::new(value: asset_id),
             risk_factor_data,
             oracles: oracles.span(),
             resolution_factor: SYNTHETIC_RESOLUTION_FACTOR,
@@ -335,14 +335,6 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
 
         self.set_app_role_admin_as_caller();
         dispatcher.register_operator(account: *self.operator.address);
-    }
-
-    fn get_position_collateral_balance(
-        self: @PerpsTestsFacade, position_id: PositionId,
-    ) -> Balance {
-        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
-            .get_position_assets(position_id)
-            .collateral_balance
     }
 }
 
@@ -1102,6 +1094,28 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
         IAssetsDispatcher { contract_address: self.perpetuals_contract }
             .funding_tick(:operator_nonce, :funding_ticks);
+    }
+
+    fn get_position_synthetic_balance(
+        self: @PerpsTestsFacade, position_id: PositionId, synthetic_id: AssetId,
+    ) -> Balance {
+        let assets = IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_assets(position_id);
+        get_synthetic_balance(assets: assets.synthetics, asset_id: synthetic_id)
+    }
+
+    fn get_position_collateral_balance(
+        self: @PerpsTestsFacade, position_id: PositionId,
+    ) -> Balance {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_assets(position_id)
+            .collateral_balance
+    }
+
+    fn get_synthetic_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
+        IAssetsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_synthetic_timely_data(synthetic_id: synthetic_id)
+            .price
     }
     /// TODO: add all the necessary functions to interact with the contract.
 }
