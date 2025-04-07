@@ -8,13 +8,13 @@ pub struct Deposit {
     pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    #[key]
-    pub salt: felt252,
     pub collateral_id: AssetId,
     pub quantized_amount: u64,
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    #[key]
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -23,13 +23,13 @@ pub struct DepositProcessed {
     pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    #[key]
-    pub salt: felt252,
     pub collateral_id: AssetId,
     pub quantized_amount: u64,
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    #[key]
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -38,11 +38,11 @@ pub struct DepositCanceled {
     pub position_id: PositionId,
     #[key]
     pub depositing_address: ContractAddress,
-    #[key]
-    pub salt: felt252,
     pub collateral_id: AssetId,
     pub quantized_amount: u64,
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    #[key]
+    pub salt: felt252,
 }
