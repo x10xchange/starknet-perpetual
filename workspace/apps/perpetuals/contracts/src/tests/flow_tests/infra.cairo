@@ -242,8 +242,13 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
             .expect('Value should not overflow');
         let quote = base * buy.order_info.order.quote_amount / buy.order_info.order.base_amount;
 
-        let fee_a = ((quote * self.fee_percentage.into()) / 100).abs();
-        let fee_b = ((quote * self.fee_percentage.into()) / 100).abs();
+        let fee_a = buy.order_info.order.fee_amount
+            * quote.abs()
+            / buy.order_info.order.quote_amount.abs();
+
+        let fee_b = sell.order_info.order.fee_amount
+            * quote.abs()
+            / sell.order_info.order.quote_amount.abs();
 
         self
             .flow_test_base
