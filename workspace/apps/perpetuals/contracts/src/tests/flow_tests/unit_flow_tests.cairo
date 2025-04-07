@@ -281,6 +281,141 @@ fn test_deleverage_after_price_tick() {
 }
 
 #[test]
+fn test_deleverage_by_recieving_asset() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
+
+    // Create users.
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    // Create orders.
+    let order_deleveraged_user = state
+        .facade
+        .create_order(
+            user: deleveraged_user,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 210,
+            fee_amount: 0,
+        );
+
+    let order_deleverager_user = state
+        .facade
+        .create_order(
+            user: deleverager_user,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -210,
+            fee_amount: 0,
+        );
+
+    // Make trades.
+    state
+        .facade
+        .trade(
+            order_info_a: order_deleveraged_user,
+            order_info_b: order_deleverager_user,
+            base: -2,
+            quote: 210,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:    210 - 2 * 100 = 10                 2 * 100 * 0.01 = 2           5
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 10);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
+
+    advance_time(10000);
+    let mut new_funding_index = FundingIndex { value: -6 * FUNDING_SCALE };
+    state
+        .facade
+        .funding_tick(
+            funding_ticks: array![
+                FundingTick { asset_id: asset_id, funding_index: new_funding_index },
+            ]
+                .span(),
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   198 - 2 * 100 = -2                 2 * 100 * 0.01 = 2           - 1
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: -2);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
+
+    state
+        .facade
+        .deleverage(
+            deleveraged_user: deleveraged_user,
+            deleverager_user: deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: 1,
+            deleveraged_quote: -99,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:     99 - 1 * 100 = -1                1 * 100 * 0.01 = 1           - 1
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: -1);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 1);
+    // TODO(Tomer-StarkWare): add the following checks.
+// state
+//     .facade
+//     .deleverage(
+//         deleveraged_user: deleveraged_user,
+//         deleverager_user: deleverager_user,
+//         base_asset_id: asset_id,
+//         deleveraged_base: 1,
+//         deleveraged_quote: -99,
+//     );
+
+    // //                            TV                                  TR                 TV / TR
+// //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+// // deleveraged User:     0 + 0 * 100 = 0                0 * 100 * 0.01 = 0             -
+// state
+//     .facade
+//     .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value:
+//     0);
+// state
+//     .facade
+//     .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+}
+
+#[test]
 fn test_liquidate_after_funding_tick() {
     // Setup.
     let risk_factor_data = RiskFactorTiers {
