@@ -107,6 +107,7 @@ pub(crate) mod Deposit {
                     events::Deposit {
                         position_id,
                         depositing_address: caller_address,
+                        salt,
                         collateral_id: get_dep_component!(@self, Assets).get_collateral_id(),
                         quantized_amount,
                         unquantized_amount,
@@ -165,6 +166,7 @@ pub(crate) mod Deposit {
                     events::DepositCanceled {
                         position_id,
                         depositing_address: caller_address,
+                        salt,
                         collateral_id: assets.get_collateral_id(),
                         quantized_amount,
                         unquantized_amount,
@@ -238,6 +240,7 @@ pub(crate) mod Deposit {
                     events::DepositProcessed {
                         position_id,
                         depositing_address: depositor,
+                        salt,
                         collateral_id: assets.get_collateral_id(),
                         quantized_amount,
                         unquantized_amount,
