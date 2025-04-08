@@ -6,8 +6,8 @@ use perpetuals::core::types::position::PositionId;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use starkware_utils::constants::HOUR;
 use starkware_utils::math::abs::Abs;
-use crate::core::types::price::PriceMulTrait;
 use crate::core::types::funding::{FUNDING_SCALE, FundingIndex};
+use crate::core::types::price::PriceMulTrait;
 use crate::tests::test_utils::create_token_state;
 
 
@@ -200,9 +200,11 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         self.flow_test_base.facade.funding_tick(funding_ticks: funding_ticks.span());
     }
 
-    fn price_tick(ref self: FlowTestExtended, asset_index: u32, price: u128) {
-        let synthetic_info = self.synthetics.at(asset_index);
-        self.flow_test_base.facade.price_tick(:synthetic_info, :price);
+    fn price_tick(ref self: FlowTestExtended, prices: Span<(u32, u128)>) {
+        for (asset_index, price) in prices {
+            let synthetic_info = self.synthetics.at(*asset_index);
+            self.flow_test_base.facade.price_tick(synthetic_info, price: *price);
+        }
     }
 
     fn create_order_request(
@@ -242,12 +244,12 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
             .expect('Value should not overflow');
         let quote = base * buy.order_info.order.quote_amount / buy.order_info.order.base_amount;
 
-        let fee_a = buy.order_info.order.fee_amount
-            * quote.abs()
+        let fee_a = quote.abs()
+            * buy.order_info.order.fee_amount
             / buy.order_info.order.quote_amount.abs();
 
-        let fee_b = sell.order_info.order.fee_amount
-            * quote.abs()
+        let fee_b = quote.abs()
+            * sell.order_info.order.fee_amount
             / sell.order_info.order.quote_amount.abs();
 
         self

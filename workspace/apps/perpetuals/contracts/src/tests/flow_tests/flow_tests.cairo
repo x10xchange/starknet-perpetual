@@ -2,8 +2,8 @@ use perpetuals::tests::flow_tests::infra::*;
 
 #[test]
 fn two_users_two_synthetics() {
-    /// This test is for demonstration purposes only. It will be changed to a more
-    /// realistic test in the future.
+    /// Link to spreadsheet with calculations:
+    /// https://docs.google.com/spreadsheets/d/1BIJ6Oq7hAsF-Vb6EJSQFYbCQJMyrncuWDC4NoKLiV1U/edit?gid=0#gid=0
 
     let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
     let user_a = test.new_user();
@@ -47,8 +47,7 @@ fn two_users_two_synthetics() {
     ///                          9_939          | -1 * (0 - 1)    |  10 * (0 - (-1))   = 9_950
     test.validate_total_value(user_b, 9_950);
 
-    test.price_tick(BTC_ASSET, 1100);
-    test.price_tick(ETH_ASSET, 600);
+    test.price_tick(array![(BTC_ASSET, 1100), (ETH_ASSET, 600)].span());
 
     ////                collateral |    BTC    |    ETH
     ///                   14_024   |  1*1100   |  -10*600  = 9_124
@@ -73,9 +72,21 @@ fn two_users_two_synthetics() {
     ///                   9124     - 11     = 9113
     test.validate_total_value(user_a, 9113);
 
+    ////                collateral  fee
+    ///                   10_754     - 10     = 10_744
+    test.validate_total_value(user_b, 10_744);
+
     test.trade(sell_eth_a, buy_eth_b);
 
     ////                 old TV     sold       fee     received
     ///                   9113    -10*600     - 51    + 10*512
     test.validate_total_value(user_a, 8182);
+
+    ////                 BTC       |     ETH
+    ///               2*110*0.1   |  20*600*0.5 = 1420
+    test.validate_total_risk(user_a, 6220);
+
+    ////                 old TV     bought       fee     paid
+    ///                  10_744      10*600     - 51    + 10*512
+    test.validate_total_value(user_b, 11_573);
 }
