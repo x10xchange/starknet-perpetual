@@ -1,4 +1,5 @@
 use core::cmp::min;
+use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::num::traits::{Pow, Zero};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
@@ -64,23 +65,28 @@ pub struct OrderRequest {
     pub actual_base: u64,
 }
 
-#[derive(Drop)]
 pub struct FlowTestExtended {
     pub flow_test_base: FlowTestBase,
-    pub synthetics: Span<SyntheticInfo>,
+    pub synthetics: Felt252Dict<Nullable<SyntheticInfo>>,
     pub fee_percentage: u8,
 }
 
-pub const BTC_ASSET: u32 = 0;
-pub const ETH_ASSET: u32 = 1;
-pub const STRK_ASSET: u32 = 2;
-pub const SOL_ASSET: u32 = 3;
-pub const DOGE_ASSET: u32 = 4;
-pub const PEPE_ASSET: u32 = 5;
-pub const ETC_ASSET: u32 = 6;
-pub const TAO_ASSET: u32 = 7;
-pub const XRP_ASSET: u32 = 8;
-pub const ADA_ASSET: u32 = 9;
+impl DestructFlowTestExtended of Destruct<FlowTestExtended> {
+    fn destruct(self: FlowTestExtended) nopanic {
+        let FlowTestExtended { flow_test_base: _, synthetics: _, fee_percentage: _ } = self;
+    }
+}
+
+pub const BTC_ASSET: felt252 = 'BTC';
+pub const ETH_ASSET: felt252 = 'ETH';
+pub const STRK_ASSET: felt252 = 'STRK';
+pub const SOL_ASSET: felt252 = 'SOL';
+pub const DOGE_ASSET: felt252 = 'DOGE';
+pub const PEPE_ASSET: felt252 = 'PEPE';
+pub const ETC_ASSET: felt252 = 'ETC';
+pub const TAO_ASSET: felt252 = 'TAO';
+pub const XRP_ASSET: felt252 = 'XRP';
+pub const ADA_ASSET: felt252 = 'ADA';
 
 #[generate_trait]
 pub impl FlowTestImpl of FlowTestExtendedTrait {
@@ -88,51 +94,27 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let risk_factor_tiers = RiskFactorTiers {
             tiers: array![10, 20, 50].span(), first_tier_boundary: 10_000, tier_size: 1000,
         };
-        let synthetics = array![
-            SyntheticInfoTrait::new(
-                asset_name: 'BTC', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 1,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'ETH', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 2,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'STRK',
-                risk_factor_data: risk_factor_tiers,
-                oracles_len: 1,
-                asset_id: 3,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 4,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 5,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 6,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 7,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 8,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL', risk_factor_data: risk_factor_tiers, oracles_len: 1, asset_id: 9,
-            ),
-            SyntheticInfoTrait::new(
-                asset_name: 'SOL',
-                risk_factor_data: risk_factor_tiers,
-                oracles_len: 1,
-                asset_id: 10,
-            ),
-        ]
-            .span();
-
+        let mut synthetics = Default::default();
         let mut flow_test_base = FlowTestBaseTrait::new();
 
         let mut initial_price = 2_u128.pow(10);
-        for synthetic_info in synthetics {
-            flow_test_base.facade.add_active_synthetic(:synthetic_info, :initial_price);
+        for asset_name in array![
+            BTC_ASSET,
+            ETH_ASSET,
+            STRK_ASSET,
+            SOL_ASSET,
+            DOGE_ASSET,
+            PEPE_ASSET,
+            ETC_ASSET,
+            TAO_ASSET,
+            XRP_ASSET,
+            ADA_ASSET,
+        ] {
+            let synthetic_info = SyntheticInfoTrait::new(
+                :asset_name, risk_factor_data: risk_factor_tiers, oracles_len: 1,
+            );
+            flow_test_base.facade.add_active_synthetic(@synthetic_info, :initial_price);
+            synthetics.insert(asset_name, NullableTrait::new(synthetic_info));
             initial_price /= 2;
         }
 
@@ -168,49 +150,56 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
     ) -> RequestInfo {
         self.flow_test_base.facade.transfer_request(:sender, :recipient, :amount)
     }
-    fn deactivate_synthetic(ref self: FlowTestExtended, asset_index: u32) {
-        let synthetic_info = self.synthetics.at(asset_index);
-        self.flow_test_base.facade.deactivate_synthetic(synthetic_id: *synthetic_info.asset_id);
+    fn deactivate_synthetic(ref self: FlowTestExtended, asset: felt252) {
+        let synthetic_info = self.synthetics.get(asset);
+        self.flow_test_base.facade.deactivate_synthetic(synthetic_id: synthetic_info.asset_id);
     }
 
-    fn hourly_funding_tick(ref self: FlowTestExtended, funding_indexes: Span<(u32, i64)>) {
+    fn hourly_funding_tick(ref self: FlowTestExtended, funding_indexes: Span<(felt252, i64)>) {
         advance_time(HOUR);
-        let mut funding_ticks = array![];
-        let mut current_asset_index = BTC_ASSET;
-        for (asset_index, funding_index) in funding_indexes {
-            let asset_id = *self.synthetics.at(current_asset_index).asset_id;
-            if *asset_index == current_asset_index {
-                let funding_index = FundingIndex { value: *funding_index * FUNDING_SCALE };
-                funding_ticks.append(FundingTick { asset_id, funding_index });
-                current_asset_index += 1;
-            } else {
-                while (current_asset_index < *asset_index) {
-                    let asset_id = *self.synthetics.at(current_asset_index).asset_id;
-                    funding_ticks.append(FundingTick { asset_id, funding_index: Zero::zero() });
-                    current_asset_index += 1;
-                }
-            };
+        let mut funding_indexes_dict = Default::default();
+        for (asset, index) in funding_indexes {
+            funding_indexes_dict.insert(*asset, NullableTrait::new(*index));
         }
-        while (current_asset_index < self.synthetics.len()) {
-            let asset_id = *self.synthetics.at(current_asset_index).asset_id;
-            funding_ticks.append(FundingTick { asset_id, funding_index: Zero::zero() });
-            current_asset_index += 1;
+        let mut funding_ticks = array![];
+
+        for asset in array![
+            ADA_ASSET,
+            BTC_ASSET,
+            ETC_ASSET,
+            ETH_ASSET,
+            SOL_ASSET,
+            TAO_ASSET,
+            XRP_ASSET,
+            DOGE_ASSET,
+            PEPE_ASSET,
+            STRK_ASSET,
+        ] {
+            let asset_id = self.synthetics.get(asset).asset_id;
+            let index_ptr = funding_indexes_dict.get(asset);
+            let funding_index = if index_ptr.is_null() {
+                Zero::zero()
+            } else {
+                FundingIndex { value: index_ptr.deref() * FUNDING_SCALE }
+            };
+
+            funding_ticks.append(FundingTick { asset_id, funding_index });
         }
 
         self.flow_test_base.facade.funding_tick(funding_ticks: funding_ticks.span());
     }
 
-    fn price_tick(ref self: FlowTestExtended, prices: Span<(u32, u128)>) {
-        for (asset_index, price) in prices {
-            let synthetic_info = self.synthetics.at(*asset_index);
-            self.flow_test_base.facade.price_tick(synthetic_info, price: *price);
+    fn price_tick(ref self: FlowTestExtended, prices: Span<(felt252, u128)>) {
+        for (asset, price) in prices {
+            let synthetic_info = self.synthetics.get(*asset).deref();
+            self.flow_test_base.facade.price_tick(@synthetic_info, price: *price);
         }
     }
 
     fn create_order_request(
-        ref self: FlowTestExtended, user: User, asset_index: u32, base: i64,
+        ref self: FlowTestExtended, user: User, asset: felt252, base: i64,
     ) -> OrderRequest {
-        let synthetic_info = self.synthetics.get(asset_index).unwrap();
+        let synthetic_info = self.synthetics.get(asset).deref();
         let synthetic_price = self
             .flow_test_base
             .facade
@@ -323,32 +312,32 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         ref self: FlowTestExtended,
         deleveraged_user: User,
         deleverager_user: User,
-        asset_index: u32,
+        asset: felt252,
         deleveraged_base: i64,
         deleveraged_quote: i64,
     ) {
-        let synthetic_info = self.synthetics.at(asset_index);
+        let synthetic_info = self.synthetics.get(asset).deref();
         self
             .flow_test_base
             .facade
             .deleverage(
                 :deleveraged_user,
                 :deleverager_user,
-                base_asset_id: *synthetic_info.asset_id,
+                base_asset_id: synthetic_info.asset_id,
                 :deleveraged_base,
                 :deleveraged_quote,
             );
     }
 
     fn reduce_inactive_asset_position(
-        ref self: FlowTestExtended, asset_index: u32, user_a: User, user_b: User,
+        ref self: FlowTestExtended, asset: felt252, user_a: User, user_b: User,
     ) {
-        let synthetic_info = self.synthetics.at(asset_index);
+        let synthetic_info = self.synthetics.get(asset).deref();
         let balance_a: i64 = self
             .flow_test_base
             .facade
             .get_position_synthetic_balance(
-                position_id: user_a.position_id, synthetic_id: *synthetic_info.asset_id,
+                position_id: user_a.position_id, synthetic_id: synthetic_info.asset_id,
             )
             .into();
 
@@ -356,7 +345,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
             .flow_test_base
             .facade
             .get_position_synthetic_balance(
-                position_id: user_b.position_id, synthetic_id: *synthetic_info.asset_id,
+                position_id: user_b.position_id, synthetic_id: synthetic_info.asset_id,
             )
             .into();
 
@@ -373,7 +362,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
             .reduce_inactive_asset_position(
                 position_id_a: user_a.position_id,
                 position_id_b: user_b.position_id,
-                base_asset_id: *synthetic_info.asset_id,
+                base_asset_id: synthetic_info.asset_id,
                 :base_amount_a,
             );
     }

@@ -12,7 +12,7 @@ fn test_deleverage_after_funding_tick() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -171,7 +171,7 @@ fn test_deleverage_after_price_tick() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -287,7 +287,7 @@ fn test_deleverage_by_recieving_asset() {
         tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -423,7 +423,7 @@ fn test_liquidate_after_funding_tick() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -612,7 +612,7 @@ fn test_liquidate_after_price_tick() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -792,7 +792,7 @@ fn test_flow_get_risk_factor() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -976,7 +976,7 @@ fn test_transfer_withdraw_with_negative_collateral() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -1052,7 +1052,7 @@ fn test_reduce_synthetic() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -1151,7 +1151,7 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
     };
     // Create a custom asset configuration to test interesting risk factor scenarios.
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 
@@ -1380,7 +1380,7 @@ fn test_status_change_by_deposit() {
         tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
     let synthetic_info = SyntheticInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
     );
     let asset_id = synthetic_info.asset_id;
 

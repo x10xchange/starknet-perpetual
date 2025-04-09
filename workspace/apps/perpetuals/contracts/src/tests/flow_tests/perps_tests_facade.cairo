@@ -240,7 +240,7 @@ pub struct RiskFactorTiers {
 #[generate_trait]
 pub impl SyntheticInfoImpl of SyntheticInfoTrait {
     fn new(
-        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8, asset_id: felt252,
+        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8,
     ) -> SyntheticInfo {
         let mut oracles = array![];
         for i in 1..oracles_len + 1 {
@@ -254,7 +254,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
 
         SyntheticInfo {
             asset_name,
-            asset_id: AssetIdTrait::new(value: asset_id),
+            asset_id: AssetIdTrait::new(value: asset_name),
             risk_factor_data,
             oracles: oracles.span(),
             resolution_factor: SYNTHETIC_RESOLUTION_FACTOR,

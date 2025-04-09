@@ -12,14 +12,14 @@ fn two_users_two_synthetics() {
     test.process_deposit(test.deposit(user_a, 10_000));
     test.process_deposit(test.deposit(user_b, 10_000));
 
-    let sell_eth_a = test.create_order_request(user: user_a, asset_index: ETH_ASSET, base: -10);
-    let buy_eth_b = test.create_order_request(user: user_b, asset_index: ETH_ASSET, base: 200);
+    let sell_eth_a = test.create_order_request(user: user_a, asset: ETH_ASSET, base: -10);
+    let buy_eth_b = test.create_order_request(user: user_b, asset: ETH_ASSET, base: 200);
     let (buy_eth_b, _) = test.trade(buy_eth_b, sell_eth_a);
 
-    let buy_btc_a = test.create_order_request(user: user_a, asset_index: BTC_ASSET, base: 1);
-    let sell_btc_b = test.create_order_request(user: user_b, asset_index: BTC_ASSET, base: -2);
+    let buy_btc_a = test.create_order_request(user: user_a, asset: BTC_ASSET, base: 1);
+    let sell_btc_b = test.create_order_request(user: user_b, asset: BTC_ASSET, base: -2);
     let (_, sell_btc_b) = test.trade(buy_btc_a, sell_btc_b);
-    let sell_eth_a = test.create_order_request(user: user_a, asset_index: ETH_ASSET, base: -10);
+    let sell_eth_a = test.create_order_request(user: user_a, asset: ETH_ASSET, base: -10);
 
     ////                collateral (1st fee   2nd fee)   |    BTC    |    ETH
     ///                   14_035   (  -51       -10  )   |  1*1024   |  -10*512    = 9_939
@@ -65,7 +65,7 @@ fn two_users_two_synthetics() {
     ///               1*110*0.1   |  10*600*0.1 = 710
     test.validate_total_risk(user_b, 710);
 
-    let buy_btc_a = test.create_order_request(user: user_a, asset_index: BTC_ASSET, base: 1);
+    let buy_btc_a = test.create_order_request(user: user_a, asset: BTC_ASSET, base: 1);
     test.trade(buy_btc_a, sell_btc_b);
 
     ////                collateral  fee
