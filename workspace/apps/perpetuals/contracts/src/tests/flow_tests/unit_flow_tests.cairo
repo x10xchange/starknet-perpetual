@@ -1164,14 +1164,14 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
     let support_user = state.new_user_with_position();
 
     // Deposit to users.
-    let deposit_info_user_1 = state
+    let deposit_info_support_user = state
         .facade
         .deposit(
             depositor: support_user.account,
             position_id: support_user.position_id,
             quantized_amount: 100000,
         );
-    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+    state.facade.process_deposit(deposit_info: deposit_info_support_user);
 
     // Create orders.
     let mut order_primary_user = state
@@ -1371,4 +1371,170 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
             fee_a: 0,
             fee_b: 0,
         );
+}
+
+#[test]
+fn test_status_change_by_deposit() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1, asset_id: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
+
+    // Create users.
+    let primary_user = state.new_user_with_position();
+    let support_user = state.new_user_with_position();
+
+    // Deposit to users.
+    let mut deposit_info_user = state
+        .facade
+        .deposit(
+            depositor: support_user.account,
+            position_id: support_user.position_id,
+            quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user);
+
+    // Create orders.
+    let mut order_primary_user = state
+        .facade
+        .create_order(
+            user: primary_user,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -195,
+            fee_amount: 0,
+        );
+
+    let mut order_support_user = state
+        .facade
+        .create_order(
+            user: support_user,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 195,
+            fee_amount: 0,
+        );
+
+    // Make trades.
+    state
+        .facade
+        .trade(
+            order_info_a: order_primary_user,
+            order_info_b: order_support_user,
+            base: 2,
+            quote: -195,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   -195 + 2 * 100 = 5                 2 * 100 * 0.01 = 2           2.5
+    state
+        .facade
+        .validate_total_value(position_id: primary_user.position_id, expected_total_value: 5);
+    state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    advance_time(10000);
+    let mut new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
+    state
+        .facade
+        .funding_tick(
+            funding_ticks: array![
+                FundingTick { asset_id: asset_id, funding_index: new_funding_index },
+            ]
+                .span(),
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   -203 + 2 * 100 = -3                 2 * 100 * 0.01 = 2         -1.5
+    state
+        .facade
+        .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
+    state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    deposit_info_user = state
+        .facade
+        .deposit(
+            depositor: primary_user.account,
+            position_id: primary_user.position_id,
+            quantized_amount: 4,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user);
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   -199 + 2 * 100 = 1                 2 * 100 * 0.01 = 2           0.5
+
+    state
+        .facade
+        .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
+    state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    deposit_info_user = state
+        .facade
+        .deposit(
+            depositor: primary_user.account,
+            position_id: primary_user.position_id,
+            quantized_amount: 1,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user);
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   -198 + 2 * 100 = 2                 2 * 100 * 0.01 = 2            1
+    state
+        .facade
+        .validate_total_value(position_id: primary_user.position_id, expected_total_value: 2);
+    state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    // Create orders.
+    let mut order_primary_user = state
+        .facade
+        .create_order(
+            user: primary_user,
+            base_amount: -1,
+            base_asset_id: asset_id,
+            quote_amount: 100,
+            fee_amount: 0,
+        );
+
+    let mut order_support_user = state
+        .facade
+        .create_order(
+            user: support_user,
+            base_amount: 1,
+            base_asset_id: asset_id,
+            quote_amount: -100,
+            fee_amount: 0,
+        );
+
+    // Make trades.
+    state
+        .facade
+        .trade(
+            order_info_a: order_primary_user,
+            order_info_b: order_support_user,
+            base: -1,
+            quote: 100,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:   -98 + 1 * 100 = 2                  1 * 100 * 0.01 = 1            2
+    state
+        .facade
+        .validate_total_value(position_id: primary_user.position_id, expected_total_value: 2);
+    state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 1);
 }
