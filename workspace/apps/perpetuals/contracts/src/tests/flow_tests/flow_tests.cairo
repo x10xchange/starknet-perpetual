@@ -54,7 +54,7 @@ fn two_users_two_synthetics() {
     test.validate_total_value(user_a, 9124);
 
     ////                 BTC       |     ETH
-    ///               1*110*0.1   |  10*600*0.1 = 710
+    ///               1*1100*0.1   |  10*600*0.1 = 710
     test.validate_total_risk(user_a, 710);
 
     ////                collateral |    BTC    |    ETH
@@ -62,7 +62,7 @@ fn two_users_two_synthetics() {
     test.validate_total_value(user_b, 10_754);
 
     ////                 BTC       |     ETH
-    ///               1*110*0.1   |  10*600*0.1 = 710
+    ///               1*1100*0.1   |  10*600*0.1 = 710
     test.validate_total_risk(user_b, 710);
 
     let buy_btc_a = test.create_order_request(user: user_a, asset: BTC_ASSET, base: 1);
@@ -83,10 +83,14 @@ fn two_users_two_synthetics() {
     test.validate_total_value(user_a, 8182);
 
     ////                 BTC       |     ETH
-    ///               2*110*0.1   |  20*600*0.5 = 1420
-    test.validate_total_risk(user_a, 6220);
+    ///               2*1100*0.1   |  20*600*0.2 = 2620
+    test.validate_total_risk(user_a, 2620);
 
     ////                 old TV     bought       fee     paid
     ///                  10_744      10*600     - 51    + 10*512
     test.validate_total_value(user_b, 11_573);
+
+    ////                 BTC       |     ETH
+    ///               2*1100*0.1   |  20*600*0.2 = 2620
+    test.validate_total_risk(user_b, 2620);
 }
