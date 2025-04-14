@@ -313,8 +313,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         deleveraged_user: User,
         deleverager_user: User,
         asset: felt252,
-        deleveraged_base: i64,
-        deleveraged_quote: i64,
+        base: i64,
+        quote: i64,
     ) {
         let synthetic_info = self.synthetics.get(asset).deref();
         self
@@ -324,8 +324,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
                 :deleveraged_user,
                 :deleverager_user,
                 base_asset_id: synthetic_info.asset_id,
-                :deleveraged_base,
-                :deleveraged_quote,
+                deleveraged_base: base,
+                deleveraged_quote: quote,
             );
     }
 
