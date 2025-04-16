@@ -69,7 +69,7 @@ fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
     let after_minus_epsilon_ratio = FractionTrait::new(
         numerator: after.total_value - EPSILON, denominator: after.total_risk,
     );
-    after_minus_epsilon_ratio < before_ratio && before_ratio <= after_ratio
+    after_minus_epsilon_ratio <= before_ratio && before_ratio <= after_ratio
 }
 
 /// Returns the state of a position.
