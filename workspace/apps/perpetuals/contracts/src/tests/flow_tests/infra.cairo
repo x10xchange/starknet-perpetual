@@ -150,6 +150,9 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
     ) -> RequestInfo {
         self.flow_test_base.facade.transfer_request(:sender, :recipient, :amount)
     }
+    fn transfer(ref self: FlowTestExtended, transfer_info: RequestInfo) {
+        self.flow_test_base.facade.transfer(:transfer_info)
+    }
     fn deactivate_synthetic(ref self: FlowTestExtended, asset: felt252) {
         let synthetic_info = self.synthetics.get(asset);
         self.flow_test_base.facade.deactivate_synthetic(synthetic_id: synthetic_info.asset_id);

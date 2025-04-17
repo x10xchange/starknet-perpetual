@@ -96,6 +96,118 @@ fn test_two_users_two_synthetics() {
 }
 
 #[test]
+fn test_two_users_ten_synthetics_flow() {
+    let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
+    let user_a = test.new_user();
+    let user_b = test.new_user();
+
+    test.process_deposit(test.deposit(user_a, 2_000_000));
+    test.process_deposit(test.deposit(user_b, 2_000_000));
+
+    let sell_btc_a = test.create_order_request(user: user_a, asset: BTC_ASSET, base: -1);
+    let buy_btc_b = test.create_order_request(user: user_b, asset: BTC_ASSET, base: 1);
+    test.trade(buy_btc_b, sell_btc_a);
+
+    let sell_eth_a = test.create_order_request(user: user_a, asset: ETH_ASSET, base: -2);
+    let buy_eth_b = test.create_order_request(user: user_b, asset: ETH_ASSET, base: 2);
+    test.trade(buy_eth_b, sell_eth_a);
+
+    let sell_strk_a = test.create_order_request(user: user_a, asset: STRK_ASSET, base: -4);
+    let buy_strk_b = test.create_order_request(user: user_b, asset: STRK_ASSET, base: 4);
+    test.trade(buy_strk_b, sell_strk_a);
+
+    let sell_sol_a = test.create_order_request(user: user_a, asset: SOL_ASSET, base: -8);
+    let buy_sol_b = test.create_order_request(user: user_b, asset: SOL_ASSET, base: 8);
+    test.trade(buy_sol_b, sell_sol_a);
+
+    let sell_doge_a = test.create_order_request(user: user_a, asset: DOGE_ASSET, base: -16);
+    let buy_doge_b = test.create_order_request(user: user_b, asset: DOGE_ASSET, base: 16);
+    test.trade(buy_doge_b, sell_doge_a);
+
+    let buy_pepe_a = test.create_order_request(user: user_a, asset: PEPE_ASSET, base: 32);
+    let sell_pepe_b = test.create_order_request(user: user_b, asset: PEPE_ASSET, base: -32);
+    test.trade(buy_pepe_a, sell_pepe_b);
+
+    let buy_etc_a = test.create_order_request(user: user_a, asset: ETC_ASSET, base: 64);
+    let sell_etc_b = test.create_order_request(user: user_b, asset: ETC_ASSET, base: -64);
+    test.trade(buy_etc_a, sell_etc_b);
+
+    let buy_tao_a = test.create_order_request(user: user_a, asset: TAO_ASSET, base: 128);
+    let sell_tao_b = test.create_order_request(user: user_b, asset: TAO_ASSET, base: -128);
+    test.trade(buy_tao_a, sell_tao_b);
+
+    let buy_xrp_a = test.create_order_request(user: user_a, asset: XRP_ASSET, base: 256);
+    let sell_xrp_b = test.create_order_request(user: user_b, asset: XRP_ASSET, base: -256);
+    test.trade(buy_xrp_a, sell_xrp_b);
+
+    let buy_ada_a = test.create_order_request(user: user_a, asset: ADA_ASSET, base: 512);
+    let sell_ada_b = test.create_order_request(user: user_b, asset: ADA_ASSET, base: -512);
+    test.trade(buy_ada_a, sell_ada_b);
+
+    test.validate_total_value(user_a, 1_999_900); // 2_000_000 - 100 (fees)
+    test.validate_total_risk(user_a, 1_020);
+
+    test.validate_total_value(user_b, 1_999_900); // 2_000_000 - 100 (fees)
+    test.validate_total_risk(user_b, 1_020);
+
+    test
+        .price_tick(
+            array![
+                (BTC_ASSET, 1_024 + 100), // Value diff user_a: -100, user_b: +100. Risk(both): 112
+                (ETH_ASSET, 512 + 100), // Value diff user_a: -200, user_b: +200. Risk(both): 122
+                (STRK_ASSET, 256 + 100), // Value diff user_a: -400, user_b: +400. Risk(both): 142
+                (SOL_ASSET, 128 + 100), // Value diff user_a: -800, user_b: +800. Risk(both): 182
+                (DOGE_ASSET, 64 + 100), // Value diff user_a: -1600, user_b: +1600. Risk(both): 262
+                (PEPE_ASSET, 32 + 100), // Value diff user_a: +3200, user_b: -3200. Risk(both): 422 
+                (ETC_ASSET, 16 + 100), // Value diff user_a: +6400, user_b: -6400. Risk(both): 742
+                (TAO_ASSET, 8 + 100), // Value diff user_a: +12800, user_b: -12800. Risk(both): 2764
+                (XRP_ASSET, 4 + 100), // Value diff user_a: +25600, user_b: -25600 Risk(both): 13312
+                (ADA_ASSET, 2 + 100) // Value diff user_a: +51200, user_b: -51200 Risk(both): 26112
+            ]
+                .span() // Total value diff: user_a: +96100, user_b: -96100. Total risk:(both) 44_172
+        );
+
+    test
+        .hourly_funding_tick(
+            array![
+                (BTC_ASSET, 1), // Value diff user_a: +1, user_b: -1
+                (ETH_ASSET, -1), // Value diff user_a: -2, user_b: +2
+                (STRK_ASSET, 1), // Value diff user_a: +4, user_b: -4
+                (SOL_ASSET, -1), // Value diff user_a: -8, user_b: +8
+                (DOGE_ASSET, 1), // Value diff user_a: +16, user_b: -16
+                (PEPE_ASSET, -1), // Value diff user_a: +32, user_b: -32
+                (ETC_ASSET, 1), // Value diff user_a: -64, user_b: +64
+                (TAO_ASSET, -1), // Value diff user_a: +128, user_b: -128
+                (XRP_ASSET, 1), // Value diff user_a: -256, user_b: +256
+                (ADA_ASSET, -1) // Value diff user_a: +512, user_b: -512
+            ]
+                .span() // Total value diff: user_a: +363, user_b: -363
+        );
+
+    // user_a total value: 2_000_000 - 100(fees) + 96100(price tick) + 363(funding_tick)
+    test.validate_total_value(user_a, 2_096_363);
+    test.validate_total_risk(user_a, 44_172);
+
+    // user_b total value: 2_000_000 - 100(fees) - 96100(price tick) - 363(funding_tick)
+    test.validate_total_value(user_b, 1_903_437);
+    test.validate_total_risk(user_b, 44_172);
+
+    test.withdraw(test.withdraw_request(user_a, 1_000_000));
+    test.withdraw(test.withdraw_request(user_b, 1_000_000));
+
+    // TODO(uriel): After transfer fix, change transfer amount to 1_000_000
+    test.transfer(test.transfer_request(sender: user_a, recipient: user_b, amount: 500_000));
+
+    // user_a total value: 2_096_363 - 1_000_000(withdraw) - 500_000(transfer) = 596_363
+    test.validate_total_value(user_a, 596_363);
+    test.validate_total_risk(user_a, 44_172);
+
+    // user_b total value: 1_903_437 - 1_000_000(withdraw) + 500_000(transfer) = 1_403_437
+    test.validate_total_value(user_b, 1_403_437);
+    test.validate_total_risk(user_b, 44_172);
+}
+
+#[test]
 fn test_long_deleverage_after_funding_tick() {
     // Setup:
     let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
