@@ -972,19 +972,19 @@ pub mod Core {
                 collateral_diff: amount.into(), synthetic_diff: Option::None,
             };
 
-            // Execute transfer
-            self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
-
-            self
-                .positions
-                .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
-
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
             self
                 ._validate_healthy_or_healthier_position(
                     :position_id, :position, position_diff: position_diff_sender,
                 );
+
+            // Execute transfer
+            self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
+
+            self
+                .positions
+                .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
         }
 
         fn _update_fulfillment(

@@ -53,6 +53,7 @@ use starkware_utils::components::request_approvals::interface::{IRequestApproval
 use starkware_utils::components::roles::interface::IRoles;
 use starkware_utils::constants::{HOUR, MAX_U128};
 use starkware_utils::iterable_map::*;
+use starkware_utils::math::abs::Abs;
 use starkware_utils::message_hash::OffchainMessageHash;
 use starkware_utils::types::time::time::{Time, Timestamp};
 use starkware_utils_testing::test_utils::{
@@ -2112,7 +2113,7 @@ fn test_successful_transfer() {
         salt: sender.salt_counter,
         expiration: expiration,
         collateral_id,
-        amount: TRANSFER_AMOUNT,
+        amount: COLLATERAL_BALANCE_AMOUNT.abs().into(),
     };
 
     let mut spy = snforge_std::spy_events();
@@ -2166,7 +2167,7 @@ fn test_successful_transfer() {
     let sender_collateral_balance = state
         .positions
         .get_collateral_provisional_balance(position: sender_position);
-    assert!(sender_collateral_balance == COLLATERAL_BALANCE_AMOUNT.into() - TRANSFER_AMOUNT.into());
+    assert_eq!(sender_collateral_balance, 0_i64.into());
 
     let recipient_position = state
         .positions
@@ -2174,9 +2175,7 @@ fn test_successful_transfer() {
     let recipient_collateral_balance = state
         .positions
         .get_collateral_provisional_balance(position: recipient_position);
-    assert!(
-        recipient_collateral_balance == COLLATERAL_BALANCE_AMOUNT.into() + TRANSFER_AMOUNT.into(),
-    );
+    assert_eq!(recipient_collateral_balance, (2 * COLLATERAL_BALANCE_AMOUNT).into());
 }
 
 #[test]

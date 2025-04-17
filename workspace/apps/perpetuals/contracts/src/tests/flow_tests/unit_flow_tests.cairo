@@ -938,21 +938,16 @@ fn test_transfer() {
     transfer_info = state.facade.transfer_request(sender: user_2, recipient: user_1, amount: 5000);
     state.facade.transfer(:transfer_info);
 
-    // TODO(TomerStarkware): add the following transfer
-    // transfer_info = state.facade.transfer_request(sender: user_1, recipient: user_2, amount:
-    // 30000);
-    // state.facade.transfer(:transfer_info);
+    transfer_info = state.facade.transfer_request(sender: user_1, recipient: user_2, amount: 30000);
+    state.facade.transfer(:transfer_info);
 
     //                 COLLATERAL
-    // User 1:           45,000
-    // User 2:           25,000
+    // User 1:           15,000
+    // User 2:           55,000
     // User 3:           30,000
 
     // Withdraw.
     let mut withdraw_info = state.facade.withdraw_request(user: user_1, amount: 15000);
-    state.facade.withdraw(:withdraw_info);
-
-    withdraw_info = state.facade.withdraw_request(user: user_1, amount: 30000);
     state.facade.withdraw(:withdraw_info);
 
     withdraw_info = state.facade.withdraw_request(user: user_2, amount: 15000);
@@ -961,11 +956,11 @@ fn test_transfer() {
     withdraw_info = state.facade.withdraw_request(user: user_2, amount: 10000);
     state.facade.withdraw(:withdraw_info);
 
+    withdraw_info = state.facade.withdraw_request(user: user_2, amount: 30000);
+    state.facade.withdraw(:withdraw_info);
+
     withdraw_info = state.facade.withdraw_request(user: user_3, amount: 30000);
     state.facade.withdraw(:withdraw_info);
-    // TODO(TomerStarkware): add the following withdraw
-// withdraw_info = state.facade.withdraw_request(user: user_2, amount: 30000);
-// state.facade.withdraw(:withdraw_info);
 }
 
 #[test]
