@@ -448,6 +448,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
+            :salt,
         );
 
         DepositInfo { depositor, position_id, quantized_amount, salt }
@@ -532,6 +533,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :quantized_amount,
             unquantized_amount: quantized_amount * self.collateral_quantum,
             deposit_request_hash: deposit_hash,
+            :salt,
         );
     }
 

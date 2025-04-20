@@ -41,6 +41,7 @@ pub fn assert_deposit_event_with_expected(
     quantized_amount: u64,
     unquantized_amount: u64,
     deposit_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = deposit_events::Deposit {
         position_id,
@@ -49,6 +50,7 @@ pub fn assert_deposit_event_with_expected(
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
+        salt,
     };
 
     assert_expected_event_emitted(
@@ -92,6 +94,7 @@ pub fn assert_deposit_processed_event_with_expected(
     quantized_amount: u64,
     unquantized_amount: u64,
     deposit_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = deposit_events::DepositProcessed {
         position_id,
@@ -100,6 +103,7 @@ pub fn assert_deposit_processed_event_with_expected(
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
+        salt,
     };
     assert_expected_event_emitted(
         :spied_event,

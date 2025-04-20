@@ -111,6 +111,7 @@ pub(crate) mod Deposit {
                         quantized_amount,
                         unquantized_amount,
                         deposit_request_hash: deposit_hash,
+                        salt,
                     },
                 );
         }
@@ -242,6 +243,7 @@ pub(crate) mod Deposit {
                         quantized_amount,
                         unquantized_amount,
                         deposit_request_hash: deposit_hash,
+                        salt,
                     },
                 );
         }

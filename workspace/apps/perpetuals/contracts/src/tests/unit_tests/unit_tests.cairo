@@ -843,6 +843,7 @@ fn test_successful_deposit() {
         quantized_amount: DEPOSIT_AMOUNT,
         unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
     );
 
     // Check after deposit:
@@ -952,6 +953,7 @@ fn test_successful_process_deposit() {
         quantized_amount: DEPOSIT_AMOUNT,
         unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
     );
 
     let status = state.deposits.get_deposit_status(:deposit_hash);

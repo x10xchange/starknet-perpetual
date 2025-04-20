@@ -13,6 +13,7 @@ pub struct Deposit {
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -26,6 +27,7 @@ pub struct DepositProcessed {
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
