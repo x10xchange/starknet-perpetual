@@ -493,6 +493,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
+            :salt,
         );
     }
 
@@ -564,6 +565,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :amount,
             expiration: expiration,
             withdraw_request_hash: request_hash,
+            :salt,
         );
 
         RequestInfo { recipient: user, position_id, amount, expiration, salt, request_hash }
@@ -616,6 +618,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :amount,
             :expiration,
             withdraw_request_hash: request_hash,
+            :salt,
         );
     }
 
@@ -658,6 +661,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :amount,
             :expiration,
             transfer_request_hash: request_hash,
+            :salt,
         );
 
         RequestInfo {
@@ -713,6 +717,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :amount,
             expiration: expiration,
             transfer_request_hash: request_hash,
+            :salt,
         );
     }
 

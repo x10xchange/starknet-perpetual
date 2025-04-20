@@ -69,6 +69,7 @@ pub fn assert_deposit_canceled_event_with_expected(
     quantized_amount: u64,
     unquantized_amount: u64,
     deposit_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = deposit_events::DepositCanceled {
         position_id,
@@ -77,6 +78,7 @@ pub fn assert_deposit_canceled_event_with_expected(
         quantized_amount,
         unquantized_amount,
         deposit_request_hash,
+        salt,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -121,9 +123,10 @@ pub fn assert_withdraw_request_event_with_expected(
     amount: u64,
     expiration: Timestamp,
     withdraw_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = events::WithdrawRequest {
-        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
+        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash, salt,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -141,9 +144,10 @@ pub fn assert_withdraw_event_with_expected(
     amount: u64,
     expiration: Timestamp,
     withdraw_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = events::Withdraw {
-        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash,
+        position_id, recipient, collateral_id, amount, expiration, withdraw_request_hash, salt,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -274,9 +278,10 @@ pub fn assert_transfer_request_event_with_expected(
     amount: u64,
     expiration: Timestamp,
     transfer_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = events::TransferRequest {
-        position_id, recipient, collateral_id, amount, expiration, transfer_request_hash,
+        position_id, recipient, collateral_id, amount, expiration, transfer_request_hash, salt,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -294,9 +299,10 @@ pub fn assert_transfer_event_with_expected(
     amount: u64,
     expiration: Timestamp,
     transfer_request_hash: felt252,
+    salt: felt252,
 ) {
     let expected_event = events::Transfer {
-        position_id, recipient, collateral_id, amount, expiration, transfer_request_hash,
+        position_id, recipient, collateral_id, amount, expiration, transfer_request_hash, salt,
     };
     assert_expected_event_emitted(
         :spied_event,

@@ -765,6 +765,7 @@ fn test_successful_withdraw() {
         amount: withdraw_args.amount,
         expiration: withdraw_args.expiration,
         withdraw_request_hash: hash,
+        salt: withdraw_args.salt,
     );
     assert_withdraw_event_with_expected(
         spied_event: events[1],
@@ -774,6 +775,7 @@ fn test_successful_withdraw() {
         amount: withdraw_args.amount,
         expiration: withdraw_args.expiration,
         withdraw_request_hash: hash,
+        salt: withdraw_args.salt,
     );
     // Check:
     let user_balance = token_state.balance_of(user.address);
@@ -1027,6 +1029,7 @@ fn test_successful_cancel_deposit() {
         quantized_amount: DEPOSIT_AMOUNT,
         unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
         deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
     );
 
     // Check after deposit cancellation:
@@ -2153,6 +2156,7 @@ fn test_successful_transfer() {
         amount: transfer_args.amount,
         expiration: transfer_args.expiration,
         transfer_request_hash: msg_hash,
+        salt: transfer_args.salt,
     );
     assert_transfer_event_with_expected(
         spied_event: events[1],
@@ -2162,6 +2166,7 @@ fn test_successful_transfer() {
         amount: transfer_args.amount,
         expiration: transfer_args.expiration,
         transfer_request_hash: msg_hash,
+        salt: transfer_args.salt,
     );
 
     // Check:
@@ -3050,4 +3055,3 @@ fn test_successful_remove_nonexistent_oracle() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
 }
-

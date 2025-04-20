@@ -41,4 +41,5 @@ pub struct DepositCanceled {
     pub unquantized_amount: u64,
     #[key]
     pub deposit_request_hash: felt252,
+    pub salt: felt252,
 }

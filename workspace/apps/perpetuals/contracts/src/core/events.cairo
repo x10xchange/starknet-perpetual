@@ -14,6 +14,7 @@ pub struct WithdrawRequest {
     pub expiration: Timestamp,
     #[key]
     pub withdraw_request_hash: felt252,
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -27,6 +28,7 @@ pub struct Withdraw {
     pub expiration: Timestamp,
     #[key]
     pub withdraw_request_hash: felt252,
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -113,6 +115,7 @@ pub struct TransferRequest {
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,
+    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -126,4 +129,5 @@ pub struct Transfer {
     pub expiration: Timestamp,
     #[key]
     pub transfer_request_hash: felt252,
+    pub salt: felt252,
 }

@@ -256,6 +256,7 @@ pub mod Core {
                         amount,
                         expiration,
                         withdraw_request_hash: hash,
+                        salt,
                     },
                 );
         }
@@ -325,6 +326,7 @@ pub mod Core {
                         amount,
                         expiration,
                         withdraw_request_hash: hash,
+                        salt,
                     },
                 );
         }
@@ -372,6 +374,7 @@ pub mod Core {
                         amount,
                         expiration,
                         transfer_request_hash: hash,
+                        salt,
                     },
                 );
         }
@@ -427,6 +430,7 @@ pub mod Core {
                         amount,
                         expiration,
                         transfer_request_hash: hash,
+                        salt,
                     },
                 );
         }
