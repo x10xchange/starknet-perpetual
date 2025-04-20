@@ -151,16 +151,26 @@ fn test_deleverage_after_funding_tick() {
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 1);
-    // TODO(Tomer-StarkWare): add the following assertion.
-// state
-//     .facade
-//      .deleverage(
-//         deleveraged_user: deleveraged_user,
-//         deleverager_user: deleverager_user_2,
-//         base_asset_id: asset_id,
-//         deleveraged_base: -1,
-//         deleveraged_quote: 101,
-//     );
+
+    state
+        .facade
+        .deleverage(
+            deleveraged_user: deleveraged_user,
+            deleverager_user: deleverager_user_2,
+            base_asset_id: asset_id,
+            deleveraged_base: -1,
+            deleveraged_quote: 101,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:     0 + 0 * 100 = 0                  0 * 100 * 0.01 = 0            -
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 0);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
 }
 
 #[test]
@@ -268,16 +278,25 @@ fn test_deleverage_after_price_tick() {
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 1);
-    // TODO(Tomer-StarkWare): add the following assertion.
-// state
-// .facade
-// .deleverage(
-//     deleveraged_user: deleveraged_user,
-//     deleverager_user: deleverager_user,
-//     base_asset_id: asset_id,
-//     deleveraged_base: -1,
-//     deleveraged_quote: 18,
-// );
+
+    state
+        .facade
+        .deleverage(
+            deleveraged_user: deleveraged_user,
+            deleverager_user: deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: -1,
+            deleveraged_quote: 18,
+        );
+    //                            TV                                  TR                    TV/TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:     0 + 0 * 10 = 0                     0 * 10 * 0.1 = 0              0
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 0);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
 }
 
 #[test]
@@ -392,27 +411,26 @@ fn test_deleverage_by_recieving_asset() {
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 1);
-    // TODO(Tomer-StarkWare): add the following checks.
-// state
-//     .facade
-//     .deleverage(
-//         deleveraged_user: deleveraged_user,
-//         deleverager_user: deleverager_user,
-//         base_asset_id: asset_id,
-//         deleveraged_base: 1,
-//         deleveraged_quote: -99,
-//     );
 
-    // //                            TV                                  TR                 TV / TR
-// //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
-// // deleveraged User:     0 + 0 * 100 = 0                0 * 100 * 0.01 = 0             -
-// state
-//     .facade
-//     .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value:
-//     0);
-// state
-//     .facade
-//     .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+    state
+        .facade
+        .deleverage(
+            deleveraged_user: deleveraged_user,
+            deleverager_user: deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: 1,
+            deleveraged_quote: -99,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // deleveraged User:     0 + 0 * 100 = 0                0 * 100 * 0.01 = 0              -
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 0);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
 }
 
 #[test]

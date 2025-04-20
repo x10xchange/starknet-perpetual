@@ -60,6 +60,9 @@ fn get_position_state(position_tvtr: PositionTVTR) -> PositionState {
 /// The position is fair if the total_value divided by the total_risk is the almost before and after
 /// the change - the before_ratio needs to be between after_ratio-epsilon and after ratio.
 fn is_fair_deleverage(before: PositionTVTR, after: PositionTVTR) -> bool {
+    if after.total_risk == 0 {
+        return after.total_value == 0;
+    }
     let before_ratio = FractionTrait::new(
         numerator: before.total_value, denominator: before.total_risk,
     );
