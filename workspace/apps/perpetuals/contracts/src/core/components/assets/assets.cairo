@@ -215,13 +215,14 @@ pub mod AssetsComponent {
             );
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
-            let prev_risk_factor = 0_u8;
+            let mut prev_risk_factor = 0_u8;
             for risk_factor in risk_factor_tiers {
                 assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
                 self
                     .risk_factor_tiers
                     .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
                     .push(RiskFactorTrait::new(*risk_factor));
+                prev_risk_factor = *risk_factor;
             }
             self
                 .emit(
