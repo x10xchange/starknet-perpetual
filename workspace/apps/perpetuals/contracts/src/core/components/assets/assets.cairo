@@ -15,10 +15,11 @@ pub mod AssetsComponent {
         INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
         INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
         INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
-        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED,
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
+        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -588,24 +589,6 @@ pub mod AssetsComponent {
                 self.last_price_validation.write(current_time);
             }
         }
-
-        fn validate_oracle_signature(
-            self: @ComponentState<TContractState>, asset_id: AssetId, signed_price: SignedPrice,
-        ) {
-            let packed_asset_oracle = self
-                .asset_oracle
-                .entry(asset_id)
-                .read(signed_price.signer_public_key);
-            let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
-                * TWO_POW_32.into()
-                + signed_price.timestamp.into();
-            let msg_hash = core::pedersen::pedersen(packed_asset_oracle, packed_price_timestamp);
-            validate_stark_signature(
-                public_key: signed_price.signer_public_key,
-                :msg_hash,
-                signature: signed_price.signature,
-            );
-        }
     }
 
     #[generate_trait]
@@ -751,6 +734,7 @@ pub mod AssetsComponent {
                 .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
+            assert(packed_asset_oracle.is_non_zero(), ORACLE_PUBLIC_KEY_NOT_REGISTERED);
             let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
                 * TWO_POW_32.into()
                 + signed_price.timestamp.into();
