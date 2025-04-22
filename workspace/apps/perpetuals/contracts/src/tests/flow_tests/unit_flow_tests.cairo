@@ -1963,3 +1963,32 @@ fn test_status_change_by_trade() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 0);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 0);
 }
+
+#[test]
+#[should_panic(expected: 'SYNTHETIC_EXPIRED_PRICE')]
+fn test_late_funding() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
+
+    advance_time(100000);
+    let mut new_funding_index = FundingIndex { value: FUNDING_SCALE };
+    state
+        .facade
+        .funding_tick(
+            funding_ticks: array![
+                FundingTick { asset_id: asset_id, funding_index: new_funding_index },
+            ]
+                .span(),
+        );
+}
