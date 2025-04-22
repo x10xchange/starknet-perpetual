@@ -368,7 +368,7 @@ pub(crate) mod Positions {
         ) {
             // Checks that the component has not been initialized yet.
             let fee_position = self.positions.entry(FEE_POSITION);
-            assert(fee_position.get_owner_public_key().is_zero(), ALREADY_INITIALIZED);
+            assert(fee_position.version.read().is_zero(), ALREADY_INITIALIZED);
 
             // Checks that the input public keys are non-zero.
             assert(fee_position_owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
