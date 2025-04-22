@@ -352,6 +352,9 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            // check recipient position exists
+            self.positions.get_position_snapshot(position_id: recipient);
+
             let position = self.positions.get_position_snapshot(:position_id);
             let collateral_id = self.assets.get_collateral_id();
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);

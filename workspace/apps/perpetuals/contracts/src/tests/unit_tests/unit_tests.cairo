@@ -2018,6 +2018,7 @@ fn test_successful_transfer_request_using_public_key() {
     let user = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
+    init_position(cfg: @cfg, ref :state, user: recipient);
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
@@ -2061,6 +2062,7 @@ fn test_successful_transfer_request_with_owner() {
     let user = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_2, key_pair: KEY_PAIR_2());
     init_position_with_owner(cfg: @cfg, ref :state, :user);
+    init_position_with_owner(cfg: @cfg, ref :state, user: recipient);
 
     // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));

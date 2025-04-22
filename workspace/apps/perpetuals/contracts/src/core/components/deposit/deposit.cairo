@@ -76,6 +76,9 @@ pub(crate) mod Deposit {
             quantized_amount: u64,
             salt: felt252,
         ) {
+            // check recipient position exists
+            get_dep_component_mut!(ref self, Positions).get_position_snapshot(:position_id);
+
             assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
             let caller_address = get_caller_address();
             let assets = get_dep_component!(@self, Assets);
