@@ -37,7 +37,8 @@ use perpetuals::tests::event_test_utils::{
     assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
     assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_update_synthetic_quorum_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -2930,6 +2931,8 @@ fn test_successful_add_and_remove_oracle() {
             :asset_name,
         );
 
+    state.update_synthetic_quorum(:synthetic_id, quorum: 2);
+
     // Add another oracle for the same asset id.
     let asset_name = 'ASSET_NAME';
     let oracle_name = 'ORCL';
@@ -2946,15 +2949,18 @@ fn test_successful_add_and_remove_oracle() {
     state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
 
     let events = spy.get_events().emitted_by(test_address()).events;
+    assert_update_synthetic_quorum_event_with_expected(
+        spied_event: events[1], asset_id: synthetic_id, new_quorum: 2, old_quorum: 1,
+    );
     assert_add_oracle_event_with_expected(
-        spied_event: events[1],
+        spied_event: events[2],
         asset_id: synthetic_id,
         :asset_name,
         oracle_public_key: key_pair.public_key,
         :oracle_name,
     );
     assert_remove_oracle_event_with_expected(
-        spied_event: events[2], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,
+        spied_event: events[3], asset_id: synthetic_id, oracle_public_key: key_pair.public_key,
     );
 }
 
