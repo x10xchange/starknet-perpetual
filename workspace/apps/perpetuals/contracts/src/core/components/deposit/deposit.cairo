@@ -8,7 +8,6 @@ pub(crate) mod Deposit {
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
     use perpetuals::core::components::assets::AssetsComponent;
-    use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::interface::{DepositStatus, IDeposit};
     use perpetuals::core::components::deposit::{errors, events};

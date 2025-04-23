@@ -53,6 +53,7 @@ pub trait IAssets<TContractState> {
     fn get_max_price_interval(self: @TContractState) -> TimeDelta;
     fn get_max_oracle_price_validity(self: @TContractState) -> TimeDelta;
     fn get_num_of_active_synthetic_assets(self: @TContractState) -> usize;
+    fn get_collateral_id(self: @TContractState) -> AssetId;
     fn get_synthetic_config(self: @TContractState, synthetic_id: AssetId) -> SyntheticConfig;
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,

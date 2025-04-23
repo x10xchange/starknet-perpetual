@@ -83,6 +83,7 @@ classDiagram
         get_max_price_interval() -> TimeDelta
         get_max_oracle_price_validity() -> TimeDelta
         get_num_of_active_synthetic_assets() -> usize
+        get_collateral_id() -> AssetId
         get_max_price_interval() -> TimeDelta
         get_synthetic_config() -> SyntheticConfig
         get_synthetic_timely_data() -> SyntheticTimelyData

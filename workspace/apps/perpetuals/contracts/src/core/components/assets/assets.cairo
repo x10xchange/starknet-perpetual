@@ -386,6 +386,9 @@ pub mod AssetsComponent {
         fn get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
             self.num_of_active_synthetic_assets.read()
         }
+        fn get_collateral_id(self: @ComponentState<TContractState>) -> AssetId {
+            self.collateral_id.read().expect(COLLATERAL_NOT_REGISTERED)
+        }
         fn get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
@@ -502,10 +505,6 @@ pub mod AssetsComponent {
             self.max_oracle_price_validity.write(max_oracle_price_validity);
             self.last_funding_tick.write(Time::now());
             self.last_price_validation.write(Time::now());
-        }
-
-        fn get_collateral_id(self: @ComponentState<TContractState>) -> AssetId {
-            self.collateral_id.read().expect(COLLATERAL_NOT_REGISTERED)
         }
 
         fn get_synthetic_price(
