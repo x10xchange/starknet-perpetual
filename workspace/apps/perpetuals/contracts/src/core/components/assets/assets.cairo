@@ -145,7 +145,7 @@ pub mod AssetsComponent {
             self.emit(events::OracleAdded { asset_id, asset_name, oracle_public_key, oracle_name });
         }
 
-        /// Add asset is called by the operator to add a new synthetic asset.
+        /// Add asset is called by the app governer to add a new synthetic asset.
         ///
         /// Validations:
         /// - Only the app_governor can call this function.
@@ -247,7 +247,6 @@ pub mod AssetsComponent {
         /// Execution:
         /// - Deactivate synthetic_config.
         ///     - Set the asset as active = false.
-        /// - remove asset from `synthetic_timely_data` map
         /// - Decrement the number of active synthetic assets.
         ///
         /// When a synthetic asset is inactive, it can no longer be traded or liquidated. It also

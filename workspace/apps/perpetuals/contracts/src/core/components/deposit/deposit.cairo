@@ -67,7 +67,6 @@ pub(crate) mod Deposit {
         /// - Transfers the quantized amount from the user to the contract.
         /// - Registers the deposit request.
         /// - Updates the deposit status to pending.
-        /// - Updates the aggregate_quantized_pending_deposits.
         /// - Emits a Deposit event.
         fn deposit(
             ref self: ComponentState<TContractState>,
@@ -128,7 +127,6 @@ pub(crate) mod Deposit {
         /// Execution:
         /// - Transfers the quantized amount back to the user.
         /// - Updates the deposit status to canceled.
-        /// - Updates the aggregate_quantized_pending_deposits.
         /// - Emits a DepositCanceled event.
         fn cancel_deposit(
             ref self: ComponentState<TContractState>,

@@ -499,19 +499,19 @@ pub(crate) mod Positions {
         /// current funding index.
         ///
         /// The main collateral balance is updated using the following formula:
-        /// main_collateral_balance += synthetic_balance * (global_funding_index - funding_index).
+        /// main_collateral_balance += synthetic_balance * (old_funding_index - new_funding_index).
         /// After the adjustment, the `funding_index` is set to `global_funding_index`.
         ///
         /// Example:
         /// main_collateral_balance = 1000;
         /// synthetic_balance = 50;
-        /// funding_index = 200;
-        /// global_funding_index = 210;
+        /// old_funding_index = 200;
+        /// new_funding_index = 210;
         ///
         /// new_synthetic_balance = 300;
         ///
         /// After the update:
-        /// main_collateral_balance = 1500; // 1000 + 50 * (210 - 200)
+        /// main_collateral_balance = 500; // 1000 + 50 * (200 - 210)
         /// synthetic_balance = 300;
         /// synthetic_funding_index = 210;
         ///
