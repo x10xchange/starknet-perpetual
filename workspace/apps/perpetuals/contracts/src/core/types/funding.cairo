@@ -4,7 +4,7 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::price::{Price, PriceMulTrait};
 use starkware_utils::errors::assert_with_byte_array;
-use starkware_utils::math::utils::mul_wide_and_div;
+use starkware_utils::math::utils::mul_wide_and_floor_div;
 
 pub const FUNDING_SCALE: i64 = 2_i64.pow(32);
 
@@ -33,7 +33,7 @@ pub trait FundingIndexMulTrait {
 
 impl FundingIndexMul of FundingIndexMulTrait {
     fn mul(self: @FundingIndex, balance: Balance) -> Balance {
-        let result = mul_wide_and_div(*self.value, balance.into(), FUNDING_SCALE)
+        let result = mul_wide_and_floor_div(*self.value, balance.into(), FUNDING_SCALE)
             .expect('Funding index mul overflow');
         BalanceTrait::new(result.try_into().unwrap())
     }
@@ -146,65 +146,95 @@ mod tests {
         let index = FundingIndex { value: FUNDING_SCALE / 2 };
         let balance = BalanceTrait::new(1_000_000_000);
         let result: i64 = index.mul(balance).into();
-        assert!(result == 500_000_000, "Expected 500000000, got {}", result);
+        assert_eq!(result, 500_000_000);
 
-        /// Test the case that the funding is 1.
-        let index = FundingIndex { value: FUNDING_SCALE };
+        /// Test the case that the funding is negative half.
+        let index = FundingIndex { value: -FUNDING_SCALE / 2 };
         let balance = BalanceTrait::new(1_000_000_000);
         let result: i64 = index.mul(balance).into();
-        assert!(result == 1_000_000_000, "Expected 1000000000, got {}", result);
+        assert_eq!(result, -500_000_000);
 
-        /// Test the case that the balance is odd number and the funding is half.
+        /// Test the case that the funding is half and the balance is negative.
+        let index = FundingIndex { value: FUNDING_SCALE / 2 };
+        let balance = BalanceTrait::new(-1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, -500_000_000);
+
+        /// Test the case that the funding is negative half and the balance is negative.
+        let index = FundingIndex { value: -FUNDING_SCALE / 2 };
+        let balance = BalanceTrait::new(-1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 500_000_000);
+
+        /// Test the case that the funding is half and the balance is odd.
         let index = FundingIndex { value: FUNDING_SCALE / 2 };
         let balance = BalanceTrait::new(1_000_000_001);
         let result: i64 = index.mul(balance).into();
-        assert!(result == 500_000_000, "Expected 500000000, got {}", result);
+        assert_eq!(result, 500_000_000);
 
-        /// Test the case that the funding is 0.
-        let index = FundingIndex { value: 0 };
-        let balance = BalanceTrait::new(1_000_000_000);
+        /// Test the case that the funding is negative half and the balance is odd.
+        let index = FundingIndex { value: -FUNDING_SCALE / 2 };
+        let balance = BalanceTrait::new(1_000_000_001);
         let result: i64 = index.mul(balance).into();
-        assert!(result == 0, "Expected 0, got {}", result);
-
-        /// Test the case that the balance is 0.
-        let index = FundingIndex { value: FUNDING_SCALE };
-        let balance = BalanceTrait::new(0);
-        let result: i64 = index.mul(balance).into();
-        assert!(result == 0, "Expected 0, got {}", result);
-
-        /// Test the case that the balance is negative.
-        let index = FundingIndex { value: FUNDING_SCALE };
-        let balance = BalanceTrait::new(-1_000_000_000);
-        let result: i64 = index.mul(balance).into();
-        assert!(result == -1_000_000_000, "Expected -1000000000, got {}", result);
-
-        /// Test the case that the funding is negative.
-        let index = FundingIndex { value: -FUNDING_SCALE };
-        let balance = BalanceTrait::new(1_000_000_000);
-        let result: i64 = index.mul(balance).into();
-        assert!(result == -1_000_000_000, "Expected -1000000000, got {}", result);
-
-        /// Test the case that the funding is negative and the balance is negative.
-        let index = FundingIndex { value: -FUNDING_SCALE };
-        let balance = BalanceTrait::new(-1_000_000_000);
-        let result: i64 = index.mul(balance).into();
-        assert!(result == 1_000_000_000, "Expected 1000000000, got {}", result);
+        assert_eq!(result, -500_000_001);
 
         /// Test the case that the funding is half and the balance is negative and odd.
         let index = FundingIndex { value: FUNDING_SCALE / 2 };
         let balance = BalanceTrait::new(-1_000_000_001);
         let result: i64 = index.mul(balance).into();
-        assert!(result == -500_000_000, "Expected -500000000, got {}", result);
+        assert_eq!(result, -500_000_001);
+
+        /// Test the case that the funding is negative half and the balance is negative and odd.
+        let index = FundingIndex { value: -FUNDING_SCALE / 2 };
+        let balance = BalanceTrait::new(-1_000_000_001);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 500_000_000);
+
+        /// Test the case that the funding is 1.
+        let index = FundingIndex { value: FUNDING_SCALE };
+        let balance = BalanceTrait::new(1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 1_000_000_000);
+
+        /// Test the case that the balance is negative one.
+        let index = FundingIndex { value: FUNDING_SCALE };
+        let balance = BalanceTrait::new(-1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, -1_000_000_000);
+
+        /// Test the case that the funding is negative.
+        let index = FundingIndex { value: -FUNDING_SCALE };
+        let balance = BalanceTrait::new(1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, -1_000_000_000);
+
+        /// Test the case that the funding is negative and the balance is negative.
+        let index = FundingIndex { value: -FUNDING_SCALE };
+        let balance = BalanceTrait::new(-1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 1_000_000_000);
+
+        /// Test the case that the funding is 0.
+        let index = FundingIndex { value: 0 };
+        let balance = BalanceTrait::new(1_000_000_000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 0);
+
+        /// Test the case that the balance is 0.
+        let index = FundingIndex { value: FUNDING_SCALE };
+        let balance = BalanceTrait::new(0);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 0);
 
         // extended contributed test
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(225000000);
         let result: i64 = index.mul(balance).into();
-        assert!(result == 2024999, "Expected 2024999, got {}", result);
+        assert_eq!(result, 2024999);
 
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(-225000000);
         let result: i64 = index.mul(balance).into();
-        assert!(result == -2024999, "Expected -2024999, got {}", result);
+        assert_eq!(result, -2025000);
     }
 }
