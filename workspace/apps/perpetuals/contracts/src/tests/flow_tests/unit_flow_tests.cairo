@@ -1992,3 +1992,102 @@ fn test_late_funding() {
                 .span(),
         );
 }
+
+#[test]
+#[should_panic(expected: 'INVALID_BASE_CHANGE')]
+fn test_liquidate_change_sign() {
+    // Setup.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 103);
+
+    // Create users.
+    let user_1 = state.new_user_with_position();
+    let user_2 = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_2 = state
+        .facade
+        .deposit(
+            depositor: user_2.account, position_id: user_2.position_id, quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_2);
+
+    // Create orders.
+    let mut order_user_1 = state
+        .facade
+        .create_order(
+            user: user_1,
+            base_amount: 3,
+            base_asset_id: asset_id,
+            quote_amount: -306,
+            fee_amount: 0,
+        );
+
+    let mut order_user_2 = state
+        .facade
+        .create_order(
+            user: user_2,
+            base_amount: -3,
+            base_asset_id: asset_id,
+            quote_amount: 306,
+            fee_amount: 0,
+        );
+
+    // Make trade.
+    state
+        .facade
+        .trade(
+            order_info_a: order_user_1,
+            order_info_b: order_user_2,
+            base: 3,
+            quote: -306,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // User 1:             -306 + 3 * 103 = 3                  3 * 105 * 0.01 = 3           1
+    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: 3);
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
+
+    // Price tick.
+    state.facade.price_tick(synthetic_info: @synthetic_info, price: 100);
+
+    //                            TV                                  TR                 TV / TR
+    //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
+    // User 1:             -306 + 3 * 100 = -6                 3 * 100 * 0.01 = 3          -2
+
+    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: -6);
+    state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
+
+    // Liquidate.
+    order_user_2 = state
+        .facade
+        .create_order(
+            user: user_2,
+            base_amount: 5,
+            base_asset_id: asset_id,
+            quote_amount: -505,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .liquidate(
+            liquidated_user: user_1,
+            liquidator_order: order_user_2,
+            liquidated_base: -5,
+            liquidated_quote: 505,
+            liquidated_insurance_fee: 0,
+            liquidator_fee: 0,
+        );
+}

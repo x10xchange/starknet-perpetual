@@ -8,7 +8,7 @@ pub mod Core {
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-    use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
+    use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, SYNTHETIC_NOT_EXISTS};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -55,6 +55,9 @@ pub mod Core {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::errors::assert_with_byte_array;
+    use starkware_utils::iterable_map::{
+        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+    };
     use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::message_hash::OffchainMessageHash;
@@ -1153,11 +1156,22 @@ pub mod Core {
         }
 
         fn _validate_liquidated_position(
-            self: @ContractState,
+            ref self: ContractState,
             position_id: PositionId,
             position: StoragePath<Position>,
             position_diff: PositionDiff,
         ) {
+            let (synthetic_diff_id, synthetic_diff_balance) = if let Option::Some((id, balance)) =
+                position_diff
+                .synthetic_diff {
+                (id, balance)
+            } else {
+                panic_with_felt252(SYNTHETIC_NOT_EXISTS)
+            };
+            self
+                ._validate_synthetic_shrinks(
+                    :position, asset_id: synthetic_diff_id, amount: synthetic_diff_balance.into(),
+                );
             let unchanged_synthetics = self
                 .positions
                 .get_position_unchanged_synthetics(:position, :position_diff);
