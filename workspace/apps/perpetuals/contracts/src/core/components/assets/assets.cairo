@@ -762,7 +762,7 @@ pub mod AssetsComponent {
             /// If `max_price_interval` has passed since `last_price_validation`, validate
             /// synthetic prices and update `last_price_validation` to current time.
             let max_price_interval = self.max_price_interval.read();
-            if current_time.sub(self.last_price_validation.read()) >= max_price_interval {
+            if current_time.sub(self.last_price_validation.read()) > max_price_interval {
                 self._validate_synthetic_prices(current_time, max_price_interval);
                 self.last_price_validation.write(current_time);
             }

@@ -2343,7 +2343,20 @@ fn test_validate_prices() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
     let user: User = Default::default();
     init_position(cfg: @cfg, ref :state, :user);
-    let new_time: u64 = Time::now().add(delta: state.get_max_price_interval()).into();
+    let old_time = Time::now();
+    let mut new_time: u64 = Time::now().add(delta: state.get_max_price_interval()).into();
+    let asset_name = 'ASSET_NAME';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_2() };
+    let synthetic_id = cfg.synthetic_cfg.synthetic_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: synthetic_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
     start_cheat_block_timestamp_global(block_timestamp: new_time);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
@@ -2359,7 +2372,7 @@ fn test_validate_prices() {
         );
 
     // Setup parameters:
-    let expiration = Time::now().add(Time::days(1));
+    let expiration = Time::now().add(Time::days(3));
 
     let withdraw_args = WithdrawArgs {
         position_id: user.position_id,
@@ -2371,6 +2384,26 @@ fn test_validate_prices() {
     };
     let hash = withdraw_args.get_message_hash(user.get_public_key());
     let signature = user.sign_message(hash);
+
+    assert_eq!(state.assets.get_last_price_validation(), old_time);
+
+    let oracle_old_time: u64 = Time::now().into();
+    let oracle_price: u128 = ORACLE_PRICE;
+    let operator_nonce = state.get_operator_nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            :oracle_price,
+            signed_prices: [
+                oracle1
+                    .get_signed_price(:oracle_price, timestamp: oracle_old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+
+    new_time = Time::now().add(delta: state.get_max_price_interval()).into();
+    start_cheat_block_timestamp_global(block_timestamp: new_time);
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
@@ -2392,7 +2425,8 @@ fn test_validate_prices() {
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
         );
-    assert!(state.assets.get_last_price_validation().into() == new_time);
+
+    assert_eq!(state.assets.get_last_price_validation().into(), new_time);
 }
 
 #[test]
