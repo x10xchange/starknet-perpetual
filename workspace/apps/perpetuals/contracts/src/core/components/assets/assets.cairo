@@ -11,15 +11,16 @@ pub mod AssetsComponent {
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
         INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
-        INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
-        INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        INVALID_TIME_DECREASING, INVALID_TIME_DISTANCE_TO_BLOCK, INVALID_ZERO_ASSET_ID,
+        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
+        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION_FACTOR,
+        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
+        ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS,
+        ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
+        ZERO_MAX_PRICE_INTERVAL,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -43,7 +44,7 @@ pub mod AssetsComponent {
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
+    use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40, WEEK};
     use starkware_utils::iterable_map::{
         IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
@@ -51,6 +52,9 @@ pub mod AssetsComponent {
     use starkware_utils::types::PublicKey;
     use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
     use starkware_utils::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
+
+    pub const MAX_DISTANCE_TO_BLOCK_TIME: u64 = WEEK;
+
 
     #[storage]
     pub struct Storage {
@@ -71,6 +75,7 @@ pub mod AssetsComponent {
         asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
         collateral_id: Option<AssetId>,
+        pub appliction_time: Timestamp,
     }
 
     #[event]
@@ -264,6 +269,22 @@ pub mod AssetsComponent {
             self.emit(events::SyntheticAssetDeactivated { asset_id: synthetic_id });
         }
 
+        fn application_time_tick(
+            ref self: ComponentState<TContractState>, operator_nonce: u64, app_timestamp: Timestamp,
+        ) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
+            operator_nonce_component.use_checked_nonce(:operator_nonce);
+            let current_blockchain_time = Time::now();
+            let current_time = self._current_time();
+            assert(app_timestamp >= current_time, INVALID_TIME_DECREASING);
+            assert(
+                app_timestamp.sub(other: current_blockchain_time).seconds <= MAX_DISTANCE_TO_BLOCK_TIME,
+                INVALID_TIME_DISTANCE_TO_BLOCK,
+            );
+            self.appliction_time.write(app_timestamp);
+        }
+
         /// Funding tick is called by the operator to update the funding index of all synthetic
         /// assets.
         ///
@@ -291,18 +312,18 @@ pub mod AssetsComponent {
             operator_nonce: u64,
             funding_ticks: Span<FundingTick>,
         ) {
+            let now = self._current_time();
             get_dep_component!(@self, Pausable).assert_not_paused();
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
             operator_nonce_component.use_checked_nonce(:operator_nonce);
-
             assert(
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
                 INVALID_FUNDING_TICK_LEN,
             );
-            self._validate_price_interval_integrity(current_time: Time::now());
+            self._validate_price_interval_integrity(current_time: now);
 
             let last_funding_tick = self.last_funding_tick.read();
-            let time_diff: u64 = (Time::now().sub(other: last_funding_tick)).into();
+            let time_diff: u64 = (now.sub(other: last_funding_tick)).into();
             let mut prev_synthetic_id: AssetId = Zero::zero();
             let max_funding_rate = self.max_funding_rate.read();
             for funding_tick in funding_ticks {
@@ -321,7 +342,7 @@ pub mod AssetsComponent {
                     );
                 prev_synthetic_id = synthetic_id;
             }
-            self.last_funding_tick.write(Time::now());
+            self.last_funding_tick.write(now);
         }
 
         /// Price tick for an asset to update the price of the asset.
@@ -408,6 +429,10 @@ pub mod AssetsComponent {
                 tiers.append(risk_factor_tiers.at(i).read());
             }
             tiers.span()
+        }
+
+        fn get_current_application_time(self: @ComponentState<TContractState>) -> Timestamp {
+            return self._current_time();
         }
 
         /// Remove oracle from asset.
@@ -504,6 +529,7 @@ pub mod AssetsComponent {
             self.max_oracle_price_validity.write(max_oracle_price_validity);
             self.last_funding_tick.write(Time::now());
             self.last_price_validation.write(Time::now());
+            self.appliction_time.write(Time::now());
         }
 
         fn get_synthetic_price(
@@ -574,7 +600,7 @@ pub mod AssetsComponent {
         /// - Funding interval validation.
         /// - Prices validation.
         fn validate_assets_integrity(ref self: ComponentState<TContractState>) {
-            let current_time = Time::now();
+            let current_time = self._current_time();
             // Funding validation.
             assert(
                 current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
@@ -595,6 +621,10 @@ pub mod AssetsComponent {
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
+        fn _current_time(self: @ComponentState<TContractState>) -> Timestamp {
+            self.appliction_time.read()
+        }
+
         fn _get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
@@ -659,12 +689,10 @@ pub mod AssetsComponent {
 
             let mut previous_public_key_opt: Option<PublicKey> = Option::None;
 
-            let now: u64 = Time::now().into();
+            let now: u64 = self._current_time().into();
             let max_oracle_price_validity = self.max_oracle_price_validity.read();
             let from = now - max_oracle_price_validity.into();
-            // Add 2 minutes to allow timestamps that were signed after the block timestamp as the
-            // timestamp is the open block timestamp and there could be a scenario where the oracle
-            // signed the price after the block was opened and still got into the block.
+            // Add 2 minutes to allow timestamps that were signed after the current timestamp
             let to = now + 2 * MINUTE;
 
             for signed_price in signed_prices {
@@ -706,7 +734,7 @@ pub mod AssetsComponent {
 
             let mut synthetic_timely_data = self._get_synthetic_timely_data(synthetic_id: asset_id);
             synthetic_timely_data.price = price;
-            synthetic_timely_data.last_price_update = Time::now();
+            synthetic_timely_data.last_price_update = self._current_time();
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
             // If the asset is pending, it'll be activated.

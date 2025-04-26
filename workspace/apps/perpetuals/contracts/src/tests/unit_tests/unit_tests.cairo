@@ -2244,7 +2244,12 @@ fn test_validate_synthetic_prices_expired() {
     init_position(cfg: @cfg, ref :state, :user);
     // Set the block timestamp to be after the price validation interval
     let now = Time::now().add(delta: Time::days(count: 2));
-    start_cheat_block_timestamp_global(block_timestamp: now.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(),
+            app_timestamp: now,
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .assets
@@ -2360,6 +2365,12 @@ fn test_validate_prices() {
     start_cheat_block_timestamp_global(block_timestamp: new_time);
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(),
+            app_timestamp: Timestamp { seconds: new_time },
+        );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);    
+    state
         .assets
         .funding_tick(
             operator_nonce: state.get_operator_nonce(),
@@ -2388,8 +2399,15 @@ fn test_validate_prices() {
     assert_eq!(state.assets.get_last_price_validation(), old_time);
 
     let oracle_old_time: u64 = Time::now().into();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(),
+            app_timestamp: Timestamp { seconds: oracle_old_time },
+        );
     let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .price_tick(
             :operator_nonce,
@@ -2403,8 +2421,12 @@ fn test_validate_prices() {
         );
 
     new_time = Time::now().add(delta: state.get_max_price_interval()).into();
-    start_cheat_block_timestamp_global(block_timestamp: new_time);
-
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(),
+            app_timestamp: Timestamp { seconds: new_time },
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .withdraw_request(
@@ -2478,7 +2500,10 @@ fn test_funding_tick_basic() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let new_time = Time::now().add(Time::seconds(HOUR));
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(), app_timestamp: new_time.into(),
+        );
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 3.
@@ -2521,7 +2546,10 @@ fn test_invalid_funding_rate() {
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
 
     let new_time = Time::now().add(Time::seconds(HOUR));
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(), app_timestamp: new_time.into(),
+        );
 
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     // Funding index is 4.
@@ -2587,8 +2615,13 @@ fn test_price_tick_basic() {
     let old_time: u64 = Time::now().into();
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(), app_timestamp: new_time.into(),
+        );
+
     let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
@@ -2664,8 +2697,11 @@ fn test_price_tick_odd() {
     let old_time: u64 = Time::now().into();
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(), app_timestamp: new_time.into(),
+        );
     let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
@@ -2723,8 +2759,11 @@ fn test_price_tick_even() {
     let old_time: u64 = Time::now().into();
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(), app_timestamp: new_time.into(),
+        );
     let oracle_price: u128 = ORACLE_PRICE;
     let operator_nonce = state.get_operator_nonce();
     state
@@ -2841,8 +2880,10 @@ fn test_price_tick_old_oracle() {
         );
     let old_time: u64 = Time::now().into();
     let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY + Time::seconds(1));
-    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(operator_nonce: state.get_operator_nonce(), app_timestamp: new_time);
+
     let oracle_price = 1000;
     let operator_nonce = state.get_operator_nonce();
     state
@@ -2926,9 +2967,15 @@ fn test_price_tick_golden() {
         oracle_price,
     };
     start_cheat_block_timestamp_global(
-        block_timestamp: Timestamp { seconds: timestamp.into() + 1 }.into(),
+        block_timestamp: Timestamp { seconds: timestamp.into() }.into(),
     );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .application_time_tick(
+            operator_nonce: state.get_operator_nonce(),
+            app_timestamp: Timestamp { seconds: timestamp.into() + 1 },
+        );
+
     let operator_nonce = state.get_operator_nonce();
     state
         .price_tick(
@@ -2938,7 +2985,7 @@ fn test_price_tick_golden() {
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert!(data.last_price_update == Time::now());
+    assert!(data.last_price_update == Timestamp { seconds: timestamp.into() + 1 });
     assert!(data.price.value() == 6430);
 }
 

@@ -28,6 +28,11 @@ pub trait IAssets<TContractState> {
         resolution_factor: u64,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
+
+    fn application_time_tick(
+        ref self: TContractState, operator_nonce: u64, app_timestamp: Timestamp,
+    );
+
     fn funding_tick(
         ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
     );
@@ -59,4 +64,5 @@ pub trait IAssets<TContractState> {
         self: @TContractState, synthetic_id: AssetId,
     ) -> SyntheticTimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
+    fn get_current_application_time(self: @TContractState) -> Timestamp;
 }

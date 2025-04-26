@@ -261,8 +261,10 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
         }
     }
 
-    fn sign_price(self: @SyntheticInfo, oracle_price: u128) -> Span<SignedPrice> {
-        let timestamp = Time::now().seconds.try_into().unwrap();
+    fn sign_price(
+        self: @SyntheticInfo, oracle_price: u128, current_time: Timestamp,
+    ) -> Span<SignedPrice> {
+        let timestamp: u32 = current_time.seconds.try_into().unwrap();
         let mut signed_prices = array![];
         for oracle in self.oracles {
             let signed_price = oracle
@@ -379,10 +381,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn price_tick(ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, price: u128) {
+        let current_time = IAssetsDispatcher { contract_address: self.perpetuals_contract }
+            .get_current_application_time();
         // 10^12 == ORACLE_SCALE_SN_PERPS_RATIO.
         let oracle_price = price * (*synthetic_info.resolution_factor).into() * TEN_POW_12.into();
 
-        let signed_prices = synthetic_info.sign_price(:oracle_price);
+        let signed_prices = synthetic_info.sign_price(:oracle_price, :current_time);
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -1103,6 +1107,16 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .funding_tick(:operator_nonce, :funding_ticks);
     }
 
+    fn advance_time(ref self: PerpsTestsFacade, seconds: u64) {
+        let current_time = IAssetsDispatcher { contract_address: self.perpetuals_contract }
+            .get_current_application_time();
+        let new_time = current_time.seconds + seconds;
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        IAssetsDispatcher { contract_address: self.perpetuals_contract }
+            .application_time_tick(operator_nonce, Timestamp { seconds: new_time });
+    }
+
     fn get_position_synthetic_balance(
         self: @PerpsTestsFacade, position_id: PositionId, synthetic_id: AssetId,
     ) -> Balance {
@@ -1181,10 +1195,6 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
         assert_eq!(total_risk, expected_total_risk);
     }
-}
-
-pub fn advance_time(seconds: u64) {
-    start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
 }
 
 fn get_synthetic_balance(assets: Span<SyntheticAsset>, asset_id: AssetId) -> Balance {

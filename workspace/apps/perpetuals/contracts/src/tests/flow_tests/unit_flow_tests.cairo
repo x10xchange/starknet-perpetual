@@ -111,7 +111,7 @@ fn test_deleverage_after_funding_tick() {
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 7 * FUNDING_SCALE };
     state
         .facade
@@ -371,7 +371,7 @@ fn test_deleverage_by_recieving_asset() {
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: -6 * FUNDING_SCALE };
     state
         .facade
@@ -540,7 +540,7 @@ fn test_liquidate_after_funding_tick() {
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 3);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     state
         .facade
@@ -1116,7 +1116,7 @@ fn test_reduce_synthetic() {
     state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: 5);
     state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 3 * FUNDING_SCALE };
     state
         .facade
@@ -1227,7 +1227,7 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 5);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 2 * FUNDING_SCALE };
     state
         .facade
@@ -1246,7 +1246,7 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     state
         .facade
@@ -1333,7 +1333,7 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 3);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     new_funding_index = FundingIndex { value: FUNDING_SCALE };
     state
         .facade
@@ -1456,7 +1456,7 @@ fn test_status_change_by_deposit() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 5);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     state
         .facade
@@ -1613,7 +1613,7 @@ fn test_status_change_by_transfer() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 5);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     state
         .facade
@@ -1758,7 +1758,7 @@ fn test_status_change_by_trade() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 6);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 6);
-    advance_time(10000);
+    state.facade.advance_time(10000);
     let mut new_funding_index = FundingIndex { value: 2 * FUNDING_SCALE };
     state
         .facade
@@ -1980,8 +1980,7 @@ fn test_late_funding() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
-
-    advance_time(100000);
+    state.facade.advance_time(100000);
     let mut new_funding_index = FundingIndex { value: FUNDING_SCALE };
     state
         .facade
