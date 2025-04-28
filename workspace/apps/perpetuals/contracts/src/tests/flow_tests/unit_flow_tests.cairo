@@ -2091,3 +2091,93 @@ fn test_liquidate_change_sign() {
             liquidator_fee: 0,
         );
 }
+
+#[test]
+fn test_funding_index_rounding() {
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
+
+    let user_1 = state.new_user_with_position();
+    let user_2 = state.new_user_with_position();
+
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: user_1.account, position_id: user_1.position_id, quantized_amount: 1100,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    let deposit_info_user_2 = state
+        .facade
+        .deposit(depositor: user_2.account, position_id: user_2.position_id, quantized_amount: 900);
+    state.facade.process_deposit(deposit_info: deposit_info_user_2);
+
+    let order_1 = state
+        .facade
+        .create_order(
+            user: user_1,
+            base_amount: 1,
+            base_asset_id: asset_id,
+            quote_amount: -100,
+            fee_amount: 0,
+        );
+
+    let order_2 = state
+        .facade
+        .create_order(
+            user: user_2,
+            base_amount: -1,
+            base_asset_id: asset_id,
+            quote_amount: 100,
+            fee_amount: 0,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: order_1, order_info_b: order_2, base: 1, quote: -100, fee_a: 0, fee_b: 0,
+        );
+
+    // Collateral balance before is 1000 each.
+    state.facade.validate_collateral_balance(user_1.position_id, 1000_i64.into());
+    state.facade.validate_collateral_balance(user_2.position_id, 1000_i64.into());
+
+    // funding tick of half
+    advance_time(10000);
+    let mut new_funding_index = FundingIndex { value: FUNDING_SCALE / 2 };
+    state
+        .facade
+        .funding_tick(
+            funding_ticks: array![FundingTick { asset_id, funding_index: new_funding_index }]
+                .span(),
+        );
+
+    /// Longer gets decremented by half, which rounds down to -1. Shorter gets incremented by half,
+    /// which rounds down to 0.
+    state.facade.validate_collateral_balance(user_1.position_id, 999_i64.into());
+    state.facade.validate_collateral_balance(user_2.position_id, 1000_i64.into());
+
+    // funding tick of minus half
+    advance_time(10000);
+    let mut new_funding_index = FundingIndex { value: -FUNDING_SCALE / 2 };
+    state
+        .facade
+        .funding_tick(
+            funding_ticks: array![FundingTick { asset_id, funding_index: new_funding_index }]
+                .span(),
+        );
+
+    /// Longer gets incremented by half, which rounds down to 0. Shorter gets decremented by half,
+    /// which rounds down to -1.
+    state.facade.validate_collateral_balance(user_1.position_id, 1000_i64.into());
+    state.facade.validate_collateral_balance(user_2.position_id, 999_i64.into());
+}
