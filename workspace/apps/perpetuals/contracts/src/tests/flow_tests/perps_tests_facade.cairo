@@ -1124,6 +1124,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_synthetic_timely_data(synthetic_id: synthetic_id)
             .price
     }
+
+    fn is_deleveragable(self: @PerpsTestsFacade, position_id: PositionId) -> bool {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .is_deleveragable(position_id)
+    }
+
+    fn is_healthy(self: @PerpsTestsFacade, position_id: PositionId) -> bool {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }.is_healthy(position_id)
+    }
+
+    fn is_liquidatable(self: @PerpsTestsFacade, position_id: PositionId) -> bool {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .is_liquidatable(position_id)
+    }
     /// TODO: add all the necessary functions to interact with the contract.
 }
 

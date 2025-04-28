@@ -132,6 +132,11 @@ fn test_deleverage_after_funding_tick() {
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
 
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'user is not deleveragable',
+    );
+
     state
         .facade
         .deleverage(
@@ -258,6 +263,11 @@ fn test_deleverage_after_price_tick() {
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'user is not deleveragable',
+    );
 
     state
         .facade
@@ -392,6 +402,11 @@ fn test_deleverage_by_recieving_asset() {
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 2);
 
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'user is not deleveragable',
+    );
+
     state
         .facade
         .deleverage(
@@ -411,6 +426,11 @@ fn test_deleverage_by_recieving_asset() {
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 1);
+
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'user is not deleveragable',
+    );
 
     state
         .facade
@@ -561,6 +581,11 @@ fn test_liquidate_after_funding_tick() {
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 3);
 
+    assert(
+        state.facade.is_liquidatable(position_id: liquidated_user.position_id),
+        'user is not liquidatable',
+    );
+
     order_liquidator_user_1 = state
         .facade
         .create_order(
@@ -590,6 +615,11 @@ fn test_liquidate_after_funding_tick() {
     state
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: liquidated_user.position_id),
+        'user is not liquidatable',
+    );
 
     order_liquidator_user_2 = state
         .facade
@@ -741,6 +771,11 @@ fn test_liquidate_after_price_tick() {
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 6);
 
+    assert(
+        state.facade.is_liquidatable(position_id: liquidated_user.position_id),
+        'user is not liquidatable',
+    );
+
     order_liquidator_user_1 = state
         .facade
         .create_order(
@@ -770,6 +805,11 @@ fn test_liquidate_after_price_tick() {
     state
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: liquidated_user.position_id),
+        'user is not liquidatable',
+    );
 
     order_liquidator_user_2 = state
         .facade
@@ -1133,6 +1173,10 @@ fn test_reduce_synthetic() {
     state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: 2);
     state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
 
+    assert(
+        state.facade.is_liquidatable(position_id: user_1.position_id), 'user is not liquidatable',
+    );
+
     state.facade.deactivate_synthetic(synthetic_id: asset_id);
     state
         .facade
@@ -1246,6 +1290,11 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
+    assert(
+        state.facade.is_liquidatable(position_id: primary_user.position_id),
+        'user is not liquidatable',
+    );
+
     advance_time(10000);
     new_funding_index = FundingIndex { value: 4 * FUNDING_SCALE };
     state
@@ -1265,6 +1314,11 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
+
     state.facade.price_tick(synthetic_info: @synthetic_info, price: 102);
     //                            TV                                  TR                 TV / TR
     //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
@@ -1273,6 +1327,11 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: primary_user.position_id),
+        'user is not liquidatable',
+    );
 
     state.facade.price_tick(synthetic_info: @synthetic_info, price: 103);
     //                            TV                                  TR                 TV / TR
@@ -1332,6 +1391,11 @@ fn test_status_change_healthy_liquidatable_deleveragable() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 3);
+
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
 
     advance_time(10000);
     new_funding_index = FundingIndex { value: FUNDING_SCALE };
@@ -1475,6 +1539,11 @@ fn test_status_change_by_deposit() {
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
 
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
+
     deposit_info_user = state
         .facade
         .deposit(
@@ -1492,6 +1561,11 @@ fn test_status_change_by_deposit() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: primary_user.position_id),
+        'user is not liquidatable',
+    );
 
     deposit_info_user = state
         .facade
@@ -1630,6 +1704,12 @@ fn test_status_change_by_transfer() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -3);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
+
     let mut transfer_info = state
         .facade
         .transfer_request(sender: support_user, recipient: primary_user, amount: 4);
@@ -1641,6 +1721,11 @@ fn test_status_change_by_transfer() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: primary_user.position_id),
+        'user is not liquidatable',
+    );
 
     transfer_info = state
         .facade
@@ -1775,6 +1860,12 @@ fn test_status_change_by_trade() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -6);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 6);
+
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
+
     // Create orders.
     let mut order_primary_user = state
         .facade
@@ -1812,6 +1903,12 @@ fn test_status_change_by_trade() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: -2);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 5);
+
+    assert(
+        state.facade.is_deleveragable(position_id: primary_user.position_id),
+        'user is not deleveragable',
+    );
+
     // Create orders.
     let mut order_primary_user = state
         .facade
@@ -1923,6 +2020,11 @@ fn test_status_change_by_trade() {
         .facade
         .validate_total_value(position_id: primary_user.position_id, expected_total_value: 1);
     state.facade.validate_total_risk(position_id: primary_user.position_id, expected_total_risk: 2);
+
+    assert(
+        state.facade.is_liquidatable(position_id: primary_user.position_id),
+        'user is not liquidatable',
+    );
 
     // Create orders.
     let mut order_primary_user = state
