@@ -49,6 +49,7 @@ use starkware_utils::types::{PublicKey, Signature};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::types::price::PRICE_SCALE;
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
@@ -1185,7 +1186,7 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_value, .. } = dispatcher.get_position_tv_tr(position_id);
-        assert_eq!(total_value, expected_total_value);
+        assert_eq!(total_value / PRICE_SCALE.into(), expected_total_value);
     }
 
     fn validate_total_risk(
@@ -1193,7 +1194,7 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
-        assert_eq!(total_risk, expected_total_risk);
+        assert_eq!(total_risk / PRICE_SCALE.into(), expected_total_risk);
     }
 }
 

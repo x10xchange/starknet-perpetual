@@ -110,7 +110,9 @@ pub fn validate_funding_rate(
     synthetic_price: Price,
 ) {
     assert_with_byte_array(
-        condition: index_diff.into() <= synthetic_price.mul(rhs: max_funding_rate)
+        condition: index_diff
+            .into() <= synthetic_price
+            .mul_and_div_price_scale(rhs: max_funding_rate)
             * time_diff.into(),
         err: invalid_funding_rate_err(:synthetic_id),
     );

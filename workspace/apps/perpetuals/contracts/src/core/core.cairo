@@ -921,7 +921,7 @@ pub mod Core {
                 * self
                     .assets
                     .get_synthetic_price(synthetic_id: base_asset_id)
-                    .mul(rhs: base_balance)
+                    .mul_and_div_price_scale(rhs: base_balance)
                     .try_into()
                     .expect('QUOTE_AMOUNT_OVERFLOW');
             self

@@ -1,6 +1,5 @@
 use core::num::traits::{One, Pow, Zero};
 use perpetuals::core::types::balance::Balance;
-use starkware_utils::math::utils::mul_wide_and_div;
 use starkware_utils::types::{PublicKey, Signature};
 
 // 2^28
@@ -13,7 +12,7 @@ const MAX_PRICE: u64 = 2_u64.pow(56);
 const ORACLE_SCALE: u128 = 10_u128.pow(18);
 
 // StarkNet Perps scale is with 6 decimal places.
-// The value here is 10^6 and it must corresepond to the quantum of the collateral so the minimal
+// The value here is 10^6 and it must correspond to the quantum of the collateral so the minimal
 // collateral unit is 10^-6 USD.
 const SN_PERPS_SCALE: u128 = 10_u128.pow(6);
 
@@ -51,25 +50,29 @@ pub trait PriceMulTrait<T> {
     /// The result type of the multiplication.
     type Target;
     fn mul(self: @Price, rhs: T) -> Self::Target;
+    fn mul_and_div_price_scale(self: @Price, rhs: T) -> Self::Target;
 }
 
 
 impl PriceMulU32 of PriceMulTrait<u32> {
     type Target = u128;
+    fn mul_and_div_price_scale(self: @Price, rhs: u32) -> Self::Target {
+        (*self.value).into() * rhs.into() / PRICE_SCALE.into()
+    }
+
     fn mul(self: @Price, rhs: u32) -> Self::Target {
-        mul_wide_and_div(*self.value, rhs.into(), PRICE_SCALE.try_into().unwrap())
-            .expect('Price mul overflow')
-            .into()
+        (*self.value).into() * rhs.into()
     }
 }
 
 impl PriceMulBalance of PriceMulTrait<Balance> {
     type Target = i128;
+    fn mul_and_div_price_scale(self: @Price, rhs: Balance) -> Self::Target {
+        (*self.value).into() * rhs.into() / PRICE_SCALE.into()
+    }
+
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
-        let value: i64 = (*self.value).try_into().unwrap();
-        mul_wide_and_div(value, rhs.into(), PRICE_SCALE.try_into().unwrap())
-            .expect('Price mul overflow')
-            .into()
+        (*self.value).into() * rhs.into()
     }
 }
 
@@ -145,16 +148,21 @@ mod tests {
     #[test]
     fn test_price_mul_u32() {
         let price = PriceTrait::new(value: 100);
-        let result = price.mul(2_u32);
+        let result = price.mul_and_div_price_scale(2_u32);
         assert!(result == 200_u128);
+        let result = price.mul(2_u32);
+        assert!(result == 200_u128 * PRICE_SCALE.into());
     }
 
     #[test]
     fn test_price_mul_balance() {
         let price = PriceTrait::new(value: 100);
         let balance = BalanceTrait::new(value: 2);
-        let result = price.mul(balance);
+        let result = price.mul_and_div_price_scale(balance);
         assert!(result == 200);
+
+        let result = price.mul(balance);
+        assert!(result == 200 * PRICE_SCALE.into());
     }
 
     #[test]

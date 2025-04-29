@@ -2140,7 +2140,7 @@ fn test_liquidate_change_sign() {
             user: user_2,
             base_amount: -3,
             base_asset_id: asset_id,
-            quote_amount: 306,
+            quote_amount: 305,
             fee_amount: 0,
         );
 
@@ -2151,15 +2151,15 @@ fn test_liquidate_change_sign() {
             order_info_a: order_user_1,
             order_info_b: order_user_2,
             base: 3,
-            quote: -306,
+            quote: -305,
             fee_a: 0,
             fee_b: 0,
         );
 
     //                            TV                                  TR                 TV / TR
     //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
-    // User 1:             -306 + 3 * 103 = 3                  3 * 105 * 0.01 = 3           1
-    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: 3);
+    // User 1:             -305 + 3 * 103 = 3                  3 * 103 * 0.01 = 3.09        1.29
+    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: 4);
     state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
 
     // Price tick.
@@ -2167,9 +2167,9 @@ fn test_liquidate_change_sign() {
 
     //                            TV                                  TR                 TV / TR
     //                COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
-    // User 1:             -306 + 3 * 100 = -6                 3 * 100 * 0.01 = 3          -2
+    // User 1:             -305 + 3 * 100 = -5                 3 * 100 * 0.01 = 3          -1.66
 
-    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: -6);
+    state.facade.validate_total_value(position_id: user_1.position_id, expected_total_value: -5);
     state.facade.validate_total_risk(position_id: user_1.position_id, expected_total_risk: 3);
 
     // Liquidate.
