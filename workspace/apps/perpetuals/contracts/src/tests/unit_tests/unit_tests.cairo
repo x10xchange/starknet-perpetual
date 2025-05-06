@@ -4,7 +4,8 @@ use perpetuals::core::components::assets::interface::{
 };
 use perpetuals::core::components::deposit::Deposit::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
-    DepositStatus, IDeposit, IDepositSafeDispatcher, IDepositSafeDispatcherTrait,
+    DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait, IDepositSafeDispatcher,
+    IDepositSafeDispatcherTrait,
 };
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::{
@@ -12,9 +13,11 @@ use perpetuals::core::components::positions::Positions::{
 };
 use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
 use perpetuals::core::components::positions::interface::{
-    IPositions, IPositionsSafeDispatcher, IPositionsSafeDispatcherTrait,
+    IPositions, IPositionsDispatcher, IPositionsDispatcherTrait, IPositionsSafeDispatcher,
+    IPositionsSafeDispatcherTrait,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::errors::WITHDRAW_EXPIRED;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
@@ -290,6 +293,124 @@ fn test_caller_failures() {
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 }
 
+#[test]
+#[feature("safe_dispatcher")]
+fn test_expiration_validation() {
+    // Setup:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let user: User = Default::default();
+    let position_id = user.position_id;
+
+    let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
+    let dispatcher = ICoreSafeDispatcher { contract_address };
+    let position_dispatcher = IPositionsDispatcher { contract_address };
+    let deposit_dispatcher = IDepositDispatcher { contract_address };
+
+    // Create a position.
+    cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    position_dispatcher
+        .new_position(
+            operator_nonce: 0,
+            :position_id,
+            owner_public_key: user.get_public_key(),
+            owner_account: Zero::zero(),
+        );
+
+    // Deposit money for user.
+    let amount = 1000_u64;
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state
+        .approve(
+            owner: user.address,
+            spender: contract_address,
+            amount: amount.into() * cfg.collateral_cfg.quantum.into(),
+        );
+
+    cheat_caller_address_once(:contract_address, caller_address: user.address);
+    deposit_dispatcher.deposit(:position_id, quantized_amount: amount, salt: user.salt_counter);
+
+    cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    deposit_dispatcher
+        .process_deposit(
+            operator_nonce: 1,
+            depositor: user.address,
+            position_id: user.position_id,
+            quantized_amount: amount,
+            salt: user.salt_counter,
+        );
+
+    // Test:
+
+    let mut withdraw_args = WithdrawArgs {
+        position_id,
+        salt: user.salt_counter,
+        expiration: Time::now(),
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        amount,
+        recipient: user.address,
+    };
+
+    // Healthy scenario.
+    let hash = withdraw_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(hash);
+
+    cheat_caller_address_once(:contract_address, caller_address: user.address);
+    dispatcher
+        .withdraw_request(
+            :signature,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
+        )
+        .unwrap();
+
+    cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    dispatcher
+        .withdraw(
+            operator_nonce: 2,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
+        )
+        .unwrap();
+
+    // Invalid expiration.
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::seconds(1)).into(),
+    );
+
+    withdraw_args.salt = user.salt_counter + 1;
+    let hash = withdraw_args.get_message_hash(user.get_public_key());
+    let signature = user.sign_message(hash);
+
+    cheat_caller_address_once(:contract_address, caller_address: user.address);
+    dispatcher
+        .withdraw_request(
+            :signature,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
+        )
+        .unwrap();
+    cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    let result = dispatcher
+        .withdraw(
+            operator_nonce: 3,
+            recipient: withdraw_args.recipient,
+            position_id: withdraw_args.position_id,
+            amount: withdraw_args.amount,
+            expiration: withdraw_args.expiration,
+            salt: withdraw_args.salt,
+        );
+    assert_panic_with_felt_error(:result, expected_error: WITHDRAW_EXPIRED);
+}
 
 // New position tests.
 
