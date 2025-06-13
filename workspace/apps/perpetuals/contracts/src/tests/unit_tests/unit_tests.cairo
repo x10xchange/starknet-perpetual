@@ -1160,6 +1160,83 @@ fn test_successful_cancel_deposit() {
 }
 
 #[test]
+fn test_successful_reject_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: token_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+    let mut spy = snforge_std::spy_events();
+
+    // Check before cancel deposit:
+    validate_balance(
+        token_state, user.address, (USER_INIT_BALANCE - user_deposit_amount).try_into().unwrap(),
+    );
+    validate_balance(
+        token_state,
+        test_address(),
+        (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
+    );
+
+    // Test:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .reject_deposit(
+            operator_nonce: state.get_operator_nonce(),
+            depositor: user.address,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_canceled_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit cancellation:
+    validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
+    validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
+}
+
+#[test]
 #[should_panic(expected: 'DEPOSIT_NOT_REGISTERED')]
 fn test_cancel_non_registered_deposit() {
     // Setup state, token and user:
