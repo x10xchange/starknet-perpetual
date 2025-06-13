@@ -175,7 +175,7 @@ pub(crate) mod Deposit {
                 );
         }
 
-        /// Cancel deposit is called by the user to cancel a deposit request which did not take
+        /// Reject deposit is called by the operator to cancel a deposit request which did not take
         /// place yet.
         ///
         /// Validations:
