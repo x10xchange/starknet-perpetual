@@ -134,25 +134,12 @@ pub(crate) mod Deposit {
             quantized_amount: u64,
             salt: felt252,
         ) {
-            let caller_address = get_caller_address();
-            let assets = get_dep_component!(@self, Assets);
-            let token_contract = assets.get_collateral_token_contract();
-            let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                depositor: caller_address,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-
-
             self._cancel_deposit(
-                depositor: caller_address,
+                depositor: get_caller_address(),
                 position_id: position_id,
                 quantized_amount: quantized_amount,
                 salt: salt
             )
-
         }
 
 
