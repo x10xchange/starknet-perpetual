@@ -175,6 +175,73 @@ pub(crate) mod Deposit {
                 );
         }
 
+        /// Cancel deposit is called by the user to cancel a deposit request which did not take
+        /// place yet.
+        ///
+        /// Validations:
+        /// - The deposit requested to cancel exists, is not canceled and is not processed.
+        /// - The cancellation delay has passed.
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        ///
+        /// Execution:
+        /// - Transfers the quantized amount back to the user.
+        /// - Updates the deposit status to canceled.
+        /// - Emits a DepositCanceled event.
+        fn reject_deposit(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            depositor: ContractAddress,
+            position_id: PositionId,
+            quantized_amount: u64,
+            salt: felt252,
+        ) {
+             /// Validations:
+             get_dep_component!(@self, Pausable).assert_not_paused();
+             let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
+             nonce.use_checked_nonce(:operator_nonce);
+
+             let assets = get_dep_component!(@self, Assets);
+             let token_contract = assets.get_collateral_token_contract();
+             let deposit_hash = deposit_hash(
+                 token_address: token_contract.contract_address,
+                 :depositor,
+                 :position_id,
+                 :quantized_amount,
+                 :salt,
+             );
+
+            // Validations
+            match self.get_deposit_status(:deposit_hash) {
+                DepositStatus::PENDING(deposit_timestamp) => assert(
+                    Time::now() > deposit_timestamp.add(self.cancel_delay.read()),
+                    errors::DEPOSIT_NOT_CANCELABLE,
+                ),
+                DepositStatus::NOT_REGISTERED => panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED),
+                DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
+                DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
+            }
+
+            self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED);
+
+            let quantum = assets.get_collateral_quantum();
+            let unquantized_amount = quantized_amount * quantum.into();
+            token_contract.transfer(recipient: depositor, amount: unquantized_amount.into());
+            self
+                .emit(
+                    events::DepositCanceled {
+                        position_id,
+                        depositing_address: depositor,
+                        collateral_id: assets.get_collateral_id(),
+                        quantized_amount,
+                        unquantized_amount,
+                        deposit_request_hash: deposit_hash,
+                        salt,
+                    },
+                );
+        }
+
         /// Process deposit a collateral amount from the 'depositing_address' to a given position.
         ///
         /// Validations:
