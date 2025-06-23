@@ -134,11 +134,33 @@ pub(crate) mod Deposit {
             quantized_amount: u64,
             salt: felt252,
         ) {
+            let assets = get_dep_component!(@self, Assets);
+            let token_contract = assets.get_collateral_token_contract();
+            let depositor = get_caller_address();
+
+            let deposit_hash = deposit_hash(
+                token_address: token_contract.contract_address,
+                :depositor,
+                :position_id,
+                :quantized_amount,
+                :salt,
+            );
+
+            match self.get_deposit_status(:deposit_hash) {
+                DepositStatus::PENDING(deposit_timestamp) => assert(
+                    Time::now() > deposit_timestamp.add(self.cancel_delay.read()),
+                    errors::DEPOSIT_NOT_CANCELABLE,
+                ),
+                DepositStatus::NOT_REGISTERED => panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED),
+                DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
+                DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
+            }
             self._cancel_deposit(
-                depositor: get_caller_address(),
+                depositor: depositor,
                 position_id: position_id,
                 quantized_amount: quantized_amount,
-                salt: salt
+                salt: salt,
+                deposit_hash: deposit_hash
             )
         }
 
@@ -169,12 +191,29 @@ pub(crate) mod Deposit {
             get_dep_component!(@self, Pausable).assert_not_paused();
             let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
             nonce.use_checked_nonce(:operator_nonce);
+            let assets = get_dep_component!(@self, Assets);
+            let token_contract = assets.get_collateral_token_contract();
+
+            let deposit_hash = deposit_hash(
+                token_address: token_contract.contract_address,
+                :depositor,
+                :position_id,
+                :quantized_amount,
+                :salt,
+            );
+            match self.get_deposit_status(:deposit_hash) {
+                DepositStatus::PENDING(_) => {},
+                DepositStatus::NOT_REGISTERED => panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED),
+                DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
+                DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
+            }
 
             self._cancel_deposit(
                             depositor: depositor,
                             position_id: position_id,
                             quantized_amount: quantized_amount,
-                            salt: salt
+                            salt: salt,
+                            deposit_hash: deposit_hash
             )
         }
 
@@ -290,26 +329,12 @@ pub(crate) mod Deposit {
             position_id: PositionId,
             quantized_amount: u64,
             salt: felt252,
+            deposit_hash: HashType,
         ) {
             let assets = get_dep_component!(@self, Assets);
             let token_contract = assets.get_collateral_token_contract();
 
-            let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            match self.get_deposit_status(:deposit_hash) {
-                DepositStatus::PENDING(deposit_timestamp) => assert(
-                    Time::now() > deposit_timestamp.add(self.cancel_delay.read()),
-                    errors::DEPOSIT_NOT_CANCELABLE,
-                ),
-                DepositStatus::NOT_REGISTERED => panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED),
-                DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
-                DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
-            }
+
             self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED);
             let quantum = assets.get_collateral_quantum();
             let unquantized_amount = quantized_amount * quantum.into();
