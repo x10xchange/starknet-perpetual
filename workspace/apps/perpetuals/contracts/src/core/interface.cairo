@@ -49,7 +49,7 @@ pub trait ICore<TContractState> {
         salt: felt252,
         collateral_id: AssetId,
     );
-    
+
     fn transfer_request(
         ref self: TContractState,
         signature: Signature,
@@ -59,6 +59,18 @@ pub trait ICore<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+
+    fn transfer_request_v2(
+        ref self: TContractState,
+        signature: Signature,
+        recipient: PositionId,
+        position_id: PositionId,
+        amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+        collateral_id: AssetId,
+    );
+
     fn transfer(
         ref self: TContractState,
         operator_nonce: u64,
@@ -68,6 +80,18 @@ pub trait ICore<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+
+    fn transfer_v2(
+        ref self: TContractState,
+        operator_nonce: u64,
+        recipient: PositionId,
+        position_id: PositionId,
+        amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+        collateral_id: AssetId,
+    );
+    
     fn trade(
         ref self: TContractState,
         operator_nonce: u64,

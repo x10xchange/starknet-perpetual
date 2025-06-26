@@ -370,7 +370,7 @@ pub mod Core {
             self.assets.validate_assets_integrity();
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
             self.assets.get_collateral(collateral_id).expect(COLLATERAL_NOT_REGISTERED);
-            
+
             let position = self.positions.get_position_snapshot(:position_id);
             let hash = self
                 .request_approvals
@@ -429,11 +429,43 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.transfer_request_v2(
+                signature,
+                recipient,
+                position_id,
+                amount,
+                expiration,
+                salt,
+                self.assets.get_collateral_id()
+            );
+        }
+        
+        /// Executes a transfer request.
+        ///
+        /// Validations:
+        /// - Validates the position exists.
+        /// - Validates the request does not exist.
+        /// - If the position has an owner account, validate that the caller is the position owner
+        /// account.
+        /// - Validates the signature.
+        ///
+        /// Execution:
+        /// - Registers the transfer request.
+        /// - Emits a `TransferRequest` event.
+        fn transfer_request_v2(
+            ref self: ContractState,
+            signature: Signature,
+            recipient: PositionId,
+            position_id: PositionId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+            collateral_id: AssetId,
+        ) {
             // check recipient position exists
             self.positions.get_position_snapshot(position_id: recipient);
-
             let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
+            self.assets.get_collateral(collateral_id).expect(COLLATERAL_NOT_REGISTERED);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
@@ -445,8 +477,7 @@ pub mod Core {
                         position_id, recipient, salt, expiration, collateral_id, amount,
                     },
                 );
-            self
-                .emit(
+            self.emit(
                     events::TransferRequest {
                         position_id,
                         recipient,
@@ -483,13 +514,49 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.transfer_v2(
+                operator_nonce,
+                recipient,
+                position_id,
+                amount,
+                expiration,
+                salt,
+                self.assets.get_collateral_id()
+            );
+        }
+
+        /// Executes a transfer.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
+        /// - Validates both the sender and recipient positions exist.
+        /// - Ensures the amount is positive.
+        /// - Validates the expiration time.
+        /// - Validates request approval.
+        ///
+        /// Execution:
+        /// - Adjust collateral balances.
+        /// - Validates the sender position is healthy or healthier after the execution.
+        fn transfer_v2(
+            ref self: ContractState,
+            operator_nonce: u64,
+            recipient: PositionId,
+            position_id: PositionId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+            collateral_id: AssetId,
+        ) {
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
             let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
+            self.assets.get_collateral(collateral_id).expect(COLLATERAL_NOT_REGISTERED);
             let hash = self
                 .request_approvals
                 .consume_approved_request(
