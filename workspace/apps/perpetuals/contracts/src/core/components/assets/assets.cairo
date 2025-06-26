@@ -2,6 +2,7 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
+    use core::iter::{IntoIterator, Iterator};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -9,7 +10,7 @@ pub mod AssetsComponent {
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
-        COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
+        FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
         INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
         INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
         INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
@@ -25,6 +26,7 @@ pub mod AssetsComponent {
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
+    use perpetuals::core::types::asset::collateral::CollateralConfig;
     use perpetuals::core::types::asset::synthetic::{
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
@@ -45,7 +47,8 @@ pub mod AssetsComponent {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
     use starkware_utils::iterable_map::{
-        IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+        IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapTrait,
+        IterableMapWriteAccessImpl,
     };
     use starkware_utils::math::abs::Abs;
     use starkware_utils::types::PublicKey;
@@ -71,6 +74,7 @@ pub mod AssetsComponent {
         asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
         max_oracle_price_validity: TimeDelta,
         collateral_id: Option<AssetId>,
+        collaterals: IterableMap<AssetId, CollateralConfig>,
     }
 
     #[event]
@@ -385,9 +389,27 @@ pub mod AssetsComponent {
         fn get_num_of_active_synthetic_assets(self: @ComponentState<TContractState>) -> usize {
             self.num_of_active_synthetic_assets.read()
         }
+        // deprecated
         fn get_collateral_id(self: @ComponentState<TContractState>) -> AssetId {
-            self.collateral_id.read().expect(COLLATERAL_NOT_REGISTERED)
+            let collateral = self.get_collaterals()[0];
+            return *collateral.id;
         }
+
+        fn get_collateral(self: @ComponentState<TContractState>, id: AssetId) -> Option<CollateralConfig> {
+            return self.collaterals.read(id);
+        }
+
+        fn get_collaterals(self: @ComponentState<TContractState>) -> Array<CollateralConfig> {
+            return self
+                .collaterals
+                .into_iter()
+                .map(|pair| {
+                    let (_, collateral) = pair;
+                    collateral
+                })
+                .collect();
+        }
+
         fn get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
@@ -486,6 +508,7 @@ pub mod AssetsComponent {
         ) {
             // Checks that the component has not been initialized yet.
             assert(self.collateral_id.read().is_none(), ALREADY_INITIALIZED);
+            assert(self.collaterals.len().is_zero(), ALREADY_INITIALIZED);
             assert(collateral_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
             assert(collateral_token_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
             assert(collateral_quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
@@ -494,6 +517,18 @@ pub mod AssetsComponent {
             assert(max_funding_rate.is_non_zero(), ZERO_MAX_FUNDING_RATE);
             assert(max_oracle_price_validity.is_non_zero(), ZERO_MAX_ORACLE_PRICE);
             self.collateral_id.write(Option::Some(collateral_id));
+            self
+                .collaterals
+                .write(
+                    collateral_id,
+                    CollateralConfig {
+                        id: collateral_id,
+                        token_contract: IERC20Dispatcher {
+                            contract_address: collateral_token_address,
+                        },
+                        quantum: collateral_quantum,
+                    },
+                );
             self
                 .collateral_token_contract
                 .write(IERC20Dispatcher { contract_address: collateral_token_address });

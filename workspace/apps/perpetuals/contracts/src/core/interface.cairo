@@ -17,6 +17,18 @@ pub trait ICore<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+
+    fn withdraw_request_v2(
+        ref self: TContractState,
+        signature: Signature,
+        recipient: ContractAddress,
+        position_id: PositionId,
+        amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+        collateral_id: AssetId,
+    );
+
     fn withdraw(
         ref self: TContractState,
         operator_nonce: u64,
@@ -26,6 +38,18 @@ pub trait ICore<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+
+    fn withdraw_v2(
+        ref self: TContractState,
+        operator_nonce: u64,
+        recipient: ContractAddress,
+        position_id: PositionId,
+        amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+        collateral_id: AssetId,
+    );
+    
     fn transfer_request(
         ref self: TContractState,
         signature: Signature,

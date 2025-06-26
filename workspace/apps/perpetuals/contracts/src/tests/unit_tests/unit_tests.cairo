@@ -858,23 +858,25 @@ fn test_successful_withdraw() {
     let mut spy = snforge_std::spy_events();
     // Test:
     state
-        .withdraw_request(
+        .withdraw_request_v2(
             :signature,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
+            collateral_id: cfg.collateral_cfg.collateral_id
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
-        .withdraw(
+        .withdraw_v2(
             :operator_nonce,
             recipient: withdraw_args.recipient,
             position_id: withdraw_args.position_id,
             amount: withdraw_args.amount,
             expiration: withdraw_args.expiration,
             salt: withdraw_args.salt,
+            collateral_id: cfg.collateral_cfg.collateral_id
         );
 
     // Catch the event.

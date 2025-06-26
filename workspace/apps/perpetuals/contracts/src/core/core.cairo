@@ -18,7 +18,7 @@ pub mod Core {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        ASSET_ID_NOT_COLLATERAL, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
+        COLLATERAL_NOT_REGISTERED, ASSET_ID_NOT_COLLATERAL, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
         DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
         INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_QUOTE_AMOUNT_SIGN,
         INVALID_QUOTE_FEE_AMOUNT, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, SYNTHETIC_IS_ACTIVE,
@@ -237,8 +237,40 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.withdraw_request_v2(
+              signature,
+              recipient,
+              position_id,
+              amount,
+              expiration,
+              salt,
+              self.assets.get_collateral_id()
+            );
+        }
+        
+        /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
+        ///
+        /// Validations:
+        /// - Validates the signature.
+        /// - Validates the position exists.
+        /// - Validates the request does not exist.
+        /// - Validates the owner account is the caller.
+        ///
+        /// Execution:
+        /// - Registers the withdraw request.
+        /// - Emits a `WithdrawRequest` event.
+        fn withdraw_request_v2(
+            ref self: ContractState,
+            signature: Signature,
+            recipient: ContractAddress,
+            position_id: PositionId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+            collateral_id: AssetId,
+        ) {
             let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
+            self.assets.get_collateral(collateral_id).expect(COLLATERAL_NOT_REGISTERED);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let hash = self
                 .request_approvals
@@ -263,6 +295,7 @@ pub mod Core {
                     },
                 );
         }
+
 
         /// Withdraw collateral `amount` from the a position to `recipient`.
         ///
@@ -292,11 +325,52 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.withdraw_v2(
+                operator_nonce,
+                recipient,
+                position_id,
+                amount,
+                expiration,
+                salt,
+                self.assets.get_collateral_id()
+            );
+        }
+
+        /// Withdraw collateral `amount` from the a position to `recipient`.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The `expiration` time has not passed.
+        /// - The collateral asset exists in the system.
+        /// - The collateral asset is active.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
+        /// - The withdrawal message has not been fulfilled.
+        /// - A fact was registered for the withdraw message.
+        /// - Validate the position is healthy after the withdraw.
+        ///
+        /// Execution:
+        /// - Transfer the collateral `amount` to the `recipient`.
+        /// - Update the position's collateral balance.
+        /// - Mark the withdrawal message as fulfilled.
+        fn withdraw_v2(
+            ref self: ContractState,
+            operator_nonce: u64,
+            recipient: ContractAddress,
+            position_id: PositionId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+            collateral_id: AssetId,
+        ) {
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            let collateral_id = self.assets.get_collateral_id();
+            self.assets.get_collateral(collateral_id).expect(COLLATERAL_NOT_REGISTERED);
+            
             let position = self.positions.get_position_snapshot(:position_id);
             let hash = self
                 .request_approvals

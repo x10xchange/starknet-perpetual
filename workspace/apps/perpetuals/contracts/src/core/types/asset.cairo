@@ -1,6 +1,7 @@
 use core::num::traits::zero::Zero;
 
 pub mod synthetic;
+pub mod collateral;
 
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct AssetId {
