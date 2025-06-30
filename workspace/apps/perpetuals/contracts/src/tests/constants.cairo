@@ -5,7 +5,7 @@ use perpetuals::core::types::position::PositionId;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 use starknet::ContractAddress;
 use starkware_utils::constants::{DAY, MINUTE, WEEK};
-use starkware_utils::types::time::time::TimeDelta;
+use starkware_utils::time::time::TimeDelta;
 
 
 pub fn OPERATOR_PUBLIC_KEY() -> felt252 {

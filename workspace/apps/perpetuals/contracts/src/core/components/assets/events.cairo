@@ -1,7 +1,7 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::price::Price;
-use starkware_utils::types::PublicKey;
+use starkware_utils::signature::stark::PublicKey;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct OracleAdded {

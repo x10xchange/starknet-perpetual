@@ -28,9 +28,9 @@ use starkware_utils::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
 use starkware_utils::constants::{MAX_U128, TWO_POW_32, TWO_POW_40};
-use starkware_utils::iterable_map::*;
-use starkware_utils::types::Signature;
-use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
+use starkware_utils::signature::stark::Signature;
+use starkware_utils::storage::iterable_map::*;
+use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
@@ -475,3 +475,4 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
     set_roles_by_dispatcher(:contract_address, :cfg);
     contract_address
 }
+

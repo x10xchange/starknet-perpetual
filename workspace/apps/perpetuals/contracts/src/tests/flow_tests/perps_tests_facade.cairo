@@ -43,9 +43,9 @@ use starkware_utils::components::request_approvals::interface::{
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::{DAY, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
-use starkware_utils::message_hash::OffchainMessageHash;
-use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
-use starkware_utils::types::{PublicKey, Signature};
+use starkware_utils::hash::message_hash::OffchainMessageHash;
+use starkware_utils::signature::stark::{PublicKey, Signature};
+use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };

@@ -44,13 +44,13 @@ pub mod AssetsComponent {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
-    use starkware_utils::iterable_map::{
+    use starkware_utils::math::abs::Abs;
+    use starkware_utils::signature::stark::{PublicKey, validate_stark_signature};
+    use starkware_utils::storage::iterable_map::{
         IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::math::abs::Abs;
-    use starkware_utils::types::PublicKey;
-    use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
-    use starkware_utils::utils::{AddToStorage, SubFromStorage, validate_stark_signature};
+    use starkware_utils::storage::utils::{AddToStorage, SubFromStorage};
+    use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 
     #[storage]
     pub struct Storage {

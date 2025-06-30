@@ -1,6 +1,6 @@
 use core::num::traits::{One, Pow, Zero};
 use perpetuals::core::types::balance::Balance;
-use starkware_utils::types::{PublicKey, Signature};
+use starkware_utils::signature::stark::{PublicKey, Signature};
 
 // 2^28
 pub const PRICE_SCALE: u64 = 2_u64.pow(28);

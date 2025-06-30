@@ -55,15 +55,16 @@ pub mod Core {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::errors::assert_with_byte_array;
-    use starkware_utils::iterable_map::{
-        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
-    };
+    use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::have_same_sign;
-    use starkware_utils::message_hash::OffchainMessageHash;
-    use starkware_utils::types::time::time::{Time, TimeDelta, Timestamp};
-    use starkware_utils::types::{HashType, PublicKey, Signature};
-    use starkware_utils::utils::{validate_expiration, validate_stark_signature};
+    use starkware_utils::signature::stark::{
+        HashType, PublicKey, Signature, validate_stark_signature,
+    };
+    use starkware_utils::storage::iterable_map::{
+        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+    };
+    use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);

@@ -4,8 +4,8 @@ use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
-use starkware_utils::types::HashType;
-use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::signature::stark::HashType;
+use starkware_utils::time::time::Timestamp;
 
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct WithdrawArgs {

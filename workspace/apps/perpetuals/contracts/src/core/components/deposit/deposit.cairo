@@ -25,8 +25,8 @@ pub(crate) mod Deposit {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::types::HashType;
-    use starkware_utils::types::time::time::{Time, TimeDelta};
+    use starkware_utils::signature::stark::HashType;
+    use starkware_utils::time::time::{Time, TimeDelta};
 
     #[storage]
     pub struct Storage {
