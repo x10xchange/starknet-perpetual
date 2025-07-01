@@ -10,6 +10,8 @@ jobs:
   autoupdate:
     name: autoupdate
     runs-on: ubuntu-22.04
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         env:
