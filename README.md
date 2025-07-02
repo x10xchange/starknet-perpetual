@@ -22,40 +22,56 @@
 - [Disclaimer](#disclaimer)
 - [Dependencies](#dependencies)
 - [Installation](#installation)
+- [Build and Test](#build-and-test)
 - [Implementation specification](#implementation-specification)
+- [Audit](#audit)
 - [Security](#security)
 
-
 ## About
+
 This repo holds the implementation of Staknet Perpetual Trading contracts.  
 
 ## Disclaimer
+
 Perpetual is a work in progress.
 
 ## Dependencies
+
 - Cairo dependencies such as [Scarb](https://docs.swmansion.com/scarb/) and [Starknet foundry](https://foundry-rs.github.io/starknet-foundry/index.html) - install using [starkup](https://github.com/software-mansion/starkup).
 
 ## Installation
+
 Clone the repo and from within the projects root folder run:
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.dev | sh
 ```
 
 ## Build and Test
+
 Build the contracts from the repo root:
+
 ```bash
 scarb build
+
 ```
+
 To run the tests, execute:
+
 ```bash
 scarb test
 ```
 
 ## Implementation specification
+
 Specs document found [here](docs/spec.md)
 
+## Audit
+
+Find the latest audit report in [docs/audit](docs/audit).
+
 ## Security
+
 Starknet Perpetual follows good practices of security, but 100% security cannot be assured. Starknet Perpetual is provided "as is" without any warranty. Use at your own risk.
 
 For more information and to report security issues, please refer to our [security documentation](https://github.com/starkware-libs/starknet-perpetual/blob/main/docs/SECURITY.md).
-
