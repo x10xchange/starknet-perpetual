@@ -240,10 +240,15 @@ pub mod Core {
             let position = self.positions.get_position_snapshot(:position_id);
             let collateral_id = self.assets.get_collateral_id();
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            let owner_account = if (position.owner_protection_enabled.read()) {
+                position.get_owner_account()
+            }else{
+                Option::None
+            };
             let hash = self
                 .request_approvals
                 .register_approval(
-                    owner_account: position.get_owner_account(),
+                    owner_account: owner_account,
                     public_key: position.get_owner_public_key(),
                     :signature,
                     args: WithdrawArgs {
@@ -361,10 +366,15 @@ pub mod Core {
             let position = self.positions.get_position_snapshot(:position_id);
             let collateral_id = self.assets.get_collateral_id();
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            let owner_account = if (position.owner_protection_enabled.read()) {
+                position.get_owner_account()
+            }else{
+                Option::None
+            };
             let hash = self
                 .request_approvals
                 .register_approval(
-                    owner_account: position.get_owner_account(),
+                    owner_account: owner_account,
                     public_key: position.get_owner_public_key(),
                     :signature,
                     args: TransferArgs {

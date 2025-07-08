@@ -233,7 +233,7 @@ pub struct SyntheticInfo {
 
 #[derive(Drop, Copy)]
 pub struct RiskFactorTiers {
-    pub tiers: Span<u8>,
+    pub tiers: Span<u16>,
     pub first_tier_boundary: u128,
     pub tier_size: u128,
 }
@@ -376,7 +376,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IPositionsDispatcher { contract_address: self.perpetuals_contract }
-            .new_position(:operator_nonce, :position_id, :owner_public_key, :owner_account);
+            .new_position(
+                :operator_nonce,
+                :position_id,
+                :owner_public_key,
+                :owner_account,
+                owner_protection_enabled: true,
+            );
     }
 
     fn price_tick(ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, price: u128) {
