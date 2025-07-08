@@ -7,8 +7,8 @@ use perpetuals::core::types::position::PositionId;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
-use starkware_utils::types::HashType;
-use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::signature::stark::HashType;
+use starkware_utils::time::time::Timestamp;
 
 pub const VERSION: u8 = 0;
 

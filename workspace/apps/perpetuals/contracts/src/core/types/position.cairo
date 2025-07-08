@@ -4,10 +4,10 @@ use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::funding::FundingIndex;
 use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
-use starkware_utils::iterable_map::{
+use starkware_utils::signature::stark::PublicKey;
+use starkware_utils::storage::iterable_map::{
     IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
 };
-use starkware_utils::types::PublicKey;
 
 pub const POSITION_VERSION: u8 = 1;
 

@@ -1,7 +1,7 @@
 use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
-use starkware_utils::types::HashType;
-use starkware_utils::types::time::time::{TimeDelta, Timestamp};
+use starkware_utils::signature::stark::HashType;
+use starkware_utils::time::time::{TimeDelta, Timestamp};
 
 #[starknet::interface]
 pub trait IDeposit<TContractState> {

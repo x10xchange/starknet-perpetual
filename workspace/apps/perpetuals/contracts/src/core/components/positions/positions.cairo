@@ -40,12 +40,12 @@ pub(crate) mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::iterable_map::{
+    use starkware_utils::signature::stark::{PublicKey, Signature};
+    use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::types::time::time::Timestamp;
-    use starkware_utils::types::{PublicKey, Signature};
-    use starkware_utils::utils::{AddToStorage, validate_expiration};
+    use starkware_utils::storage::utils::AddToStorage;
+    use starkware_utils::time::time::{Timestamp, validate_expiration};
 
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
