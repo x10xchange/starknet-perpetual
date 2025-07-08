@@ -261,6 +261,7 @@ fn test_caller_failures() {
             position_id: POSITION_ID_1,
             owner_public_key: Zero::zero(),
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
@@ -315,6 +316,7 @@ fn test_expiration_validation() {
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     // Deposit money for user.
@@ -435,6 +437,7 @@ fn test_new_position() {
             :position_id,
             :owner_public_key,
             :owner_account,
+            owner_protection_enabled: true,
         );
 
     // Catch the event.

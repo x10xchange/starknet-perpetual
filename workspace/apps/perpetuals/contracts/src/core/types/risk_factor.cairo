@@ -5,15 +5,15 @@ use core::num::traits::zero::Zero;
 // Example: 0.75 is represented as 75.
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct RiskFactor {
-    value: u8 // Stores number * 100
+    value: u16 // Stores number * 1000
 }
 
-const DENOMINATOR: u8 = 100_u8;
+const DENOMINATOR: u16 = 1000_u16;
 
 #[generate_trait]
 pub impl RiskFactorImpl of RiskFactorTrait {
-    fn new(value: u8) -> RiskFactor {
-        assert(value <= DENOMINATOR, 'Value must be <= 100');
+    fn new(value: u16) -> RiskFactor {
+        assert(value <= DENOMINATOR, 'Value must be <= 1000');
         RiskFactor { value }
     }
 
@@ -53,9 +53,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: 'Value must be <= 100')]
+    #[should_panic(expected: 'Value must be <= 1000')]
     fn test_new_invalid_max() {
-        RiskFactorTrait::new(101);
+        RiskFactorTrait::new(1001);
     }
 
     #[test]
@@ -78,8 +78,9 @@ mod tests {
 
     #[test]
     fn test_mul() {
-        assert_eq!(RiskFactorTrait::new(75).mul(300_u128), 225);
-        assert_eq!(RiskFactorTrait::new(75).mul(301_u128), 225);
-        assert_eq!(RiskFactorTrait::new(75).mul(299_u128), 224);
+        assert_eq!(RiskFactorTrait::new(750).mul(300_u128), 225);
+        assert_eq!(RiskFactorTrait::new(750).mul(301_u128), 225);
+        assert_eq!(RiskFactorTrait::new(750).mul(299_u128), 224);
+        assert_eq!(RiskFactorTrait::new(710).mul(299_u128), 212); // 7.1%
     }
 }

@@ -322,6 +322,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
+            owner_protection_enabled: false
         );
     let position_diff = PositionDiff {
         collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), synthetic_diff: Option::None,
@@ -336,6 +337,7 @@ pub fn init_position_with_owner(
     init_position(cfg, ref :state, :user);
     let position = state.positions.get_position_mut(position_id: user.position_id);
     position.owner_account.write(Option::Some(user.address));
+    position.owner_protection_enabled.write(true);
 }
 
 pub fn add_synthetic_to_position(
@@ -374,7 +376,7 @@ pub fn check_synthetic_config(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     status: AssetStatus,
-    risk_factor_tiers: Span<u8>,
+    risk_factor_tiers: Span<u16>,
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
     quorum: u8,
@@ -423,7 +425,7 @@ pub fn check_synthetic_asset(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     status: AssetStatus,
-    risk_factor_tiers: Span<u8>,
+    risk_factor_tiers: Span<u16>,
     risk_factor_first_tier_boundary: u128,
     risk_factor_tier_size: u128,
     quorum: u8,

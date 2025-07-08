@@ -151,6 +151,7 @@ pub(crate) mod Positions {
             position_id: PositionId,
             owner_public_key: PublicKey,
             owner_account: ContractAddress,
+            owner_protection_enabled: bool,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
@@ -160,6 +161,7 @@ pub(crate) mod Positions {
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
+            position.owner_protection_enabled.write(owner_protection_enabled);
             if owner_account.is_non_zero() {
                 position.owner_account.write(Option::Some(owner_account));
             }
@@ -345,6 +347,14 @@ pub(crate) mod Positions {
                         set_public_key_request_hash: hash,
                     },
                 );
+        }
+        fn enable_owner_protection(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            position_id: PositionId,
+            signature: Signature,
+        ) {
+            panic_with_felt252('TODO')
         }
     }
 

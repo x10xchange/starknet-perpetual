@@ -251,19 +251,19 @@ mod tests {
 
     /// Risk factors
     fn RISK_FACTOR_1() -> RiskFactor {
-        RiskFactorTrait::new(50)
+        RiskFactorTrait::new(500)
     }
     fn RISK_FACTOR_2() -> RiskFactor {
-        RiskFactorTrait::new(50)
+        RiskFactorTrait::new(500)
     }
     fn RISK_FACTOR_3() -> RiskFactor {
-        RiskFactorTrait::new(50)
+        RiskFactorTrait::new(500)
     }
     fn RISK_FACTOR_4() -> RiskFactor {
-        RiskFactorTrait::new(50)
+        RiskFactorTrait::new(500)
     }
     fn RISK_FACTOR_5() -> RiskFactor {
-        RiskFactorTrait::new(50)
+        RiskFactorTrait::new(500)
     }
 
     /// Assets IDs
