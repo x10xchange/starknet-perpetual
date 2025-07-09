@@ -1,6 +1,9 @@
+use starkware_utils::math::abs::Abs;
 use core::num::traits::{One, Pow, Zero};
 use perpetuals::core::types::balance::Balance;
+use starkware_utils::math::utils::mul_wide_and_div;
 use starkware_utils::types::{PublicKey, Signature};
+
 
 // 2^28
 pub const PRICE_SCALE: u64 = 2_u64.pow(28);
@@ -30,6 +33,54 @@ pub struct Price {
     value: u64,
 }
 
+#[derive(Copy, Debug, Drop)]
+pub struct AssetValue {
+    value: i128,
+}
+
+#[generate_trait]
+pub impl AssetValueImpl of AssetValueTrait {
+    fn new(value: i128) -> AssetValue {
+        AssetValue { value }
+    }
+}
+
+impl AssetValueIntoU128 of Into<AssetValue, u128> {
+    fn into(self: AssetValue) -> u128 {
+        self.value.abs().try_into().unwrap()
+    }
+}
+
+impl AssetValueIntoI128 of Into<AssetValue, i128> {
+    fn into(self: AssetValue) -> i128 {
+        self.value
+    }
+}
+
+impl AssetValueIntoI64 of Into<AssetValue, i64> {
+    fn into(self: AssetValue) -> i64 {
+        self.value.try_into().unwrap()
+    }
+}
+
+pub impl AssetValueAddAssign of core::ops::AddAssign<AssetValue, AssetValue> {
+    fn add_assign(ref self: AssetValue, rhs: AssetValue) {
+        self.value += rhs.value;
+    }
+}
+
+pub impl AssetValueSubAssign of core::ops::SubAssign<AssetValue, AssetValue> {
+    fn sub_assign(ref self: AssetValue, rhs: AssetValue) {
+        self.value -= rhs.value;
+    }
+}
+
+impl AssetValueDefault of Default<AssetValue> {
+    #[inline]
+    fn default() -> AssetValue {
+        AssetValue { value: 0 }
+    }
+}
 
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct SignedPrice {
@@ -50,29 +101,34 @@ pub trait PriceMulTrait<T> {
     /// The result type of the multiplication.
     type Target;
     fn mul(self: @Price, rhs: T) -> Self::Target;
-    fn mul_and_div_price_scale(self: @Price, rhs: T) -> Self::Target;
+    // fn mul_and_div_price_scale(self: @Price, rhs: T) -> Self::Target;
 }
 
 
 impl PriceMulU32 of PriceMulTrait<u32> {
     type Target = u128;
-    fn mul_and_div_price_scale(self: @Price, rhs: u32) -> Self::Target {
-        (*self.value).into() * rhs.into() / PRICE_SCALE.into()
-    }
+    // fn mul_and_div_price_scale(self: @Price, rhs: u32) -> Self::Target {
+    //     (*self.value).into() * rhs.into() / PRICE_SCALE.into()
+    // }
 
     fn mul(self: @Price, rhs: u32) -> Self::Target {
-        (*self.value).into() * rhs.into()
+        mul_wide_and_div(*self.value, rhs.into(), PRICE_SCALE.try_into().unwrap())
+            .expect('Price mul overflow')
+            .into()
     }
 }
 
 impl PriceMulBalance of PriceMulTrait<Balance> {
-    type Target = i128;
-    fn mul_and_div_price_scale(self: @Price, rhs: Balance) -> Self::Target {
-        (*self.value).into() * rhs.into() / PRICE_SCALE.into()
-    }
+    type Target = AssetValue;
+    // fn mul_and_div_price_scale(self: @Price, rhs: Balance) -> Self::Target {
+    //     (*self.value).into() * rhs.into() / PRICE_SCALE.into()
+    // }
 
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
-        (*self.value).into() * rhs.into()
+        let value: i128 = (*self.value).try_into().unwrap();
+        let balance: i128 = rhs.into();
+        let intermediate: i128 = value * balance;
+        return AssetValue { value: intermediate / PRICE_SCALE.into() };
     }
 }
 
@@ -148,21 +204,16 @@ mod tests {
     #[test]
     fn test_price_mul_u32() {
         let price = PriceTrait::new(value: 100);
-        let result = price.mul_and_div_price_scale(2_u32);
-        assert!(result == 200_u128);
         let result = price.mul(2_u32);
-        assert!(result == 200_u128 * PRICE_SCALE.into());
+        assert!(result == 200_u128);
     }
 
     #[test]
     fn test_price_mul_balance() {
         let price = PriceTrait::new(value: 100);
         let balance = BalanceTrait::new(value: 2);
-        let result = price.mul_and_div_price_scale(balance);
-        assert!(result == 200);
-
-        let result = price.mul(balance);
-        assert!(result == 200 * PRICE_SCALE.into());
+        let result = price.mul(balance).value;
+        assert!(result == 200 );
     }
 
     #[test]
@@ -181,5 +232,13 @@ mod tests {
     fn test_price_is_non_zero() {
         let price = PriceTrait::new(value: 100);
         assert!(price.is_non_zero());
+    }
+
+    #[test]
+    fn test_price_balance_mul_handles_max_values_balance_and_price() {
+        let price = Price { value: MAX_PRICE };
+        let balance = BalanceTrait::new(value: 9223372036854775807); // Maximum i64 value
+        let result = price.mul(balance).value;
+        assert!(result.is_non_zero());
     }
 }
