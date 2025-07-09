@@ -523,6 +523,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_1,
             owner_public_key: KEY_PAIR_1().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -532,6 +533,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_2,
             owner_public_key: KEY_PAIR_2().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     // Deposit money for users.

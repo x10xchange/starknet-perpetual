@@ -101,16 +101,11 @@ pub trait PriceMulTrait<T> {
     /// The result type of the multiplication.
     type Target;
     fn mul(self: @Price, rhs: T) -> Self::Target;
-    // fn mul_and_div_price_scale(self: @Price, rhs: T) -> Self::Target;
 }
 
 
 impl PriceMulU32 of PriceMulTrait<u32> {
     type Target = u128;
-    // fn mul_and_div_price_scale(self: @Price, rhs: u32) -> Self::Target {
-    //     (*self.value).into() * rhs.into() / PRICE_SCALE.into()
-    // }
-
     fn mul(self: @Price, rhs: u32) -> Self::Target {
         mul_wide_and_div(*self.value, rhs.into(), PRICE_SCALE.try_into().unwrap())
             .expect('Price mul overflow')
@@ -120,14 +115,10 @@ impl PriceMulU32 of PriceMulTrait<u32> {
 
 impl PriceMulBalance of PriceMulTrait<Balance> {
     type Target = AssetValue;
-    // fn mul_and_div_price_scale(self: @Price, rhs: Balance) -> Self::Target {
-    //     (*self.value).into() * rhs.into() / PRICE_SCALE.into()
-    // }
-
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
-        let value: i128 = (*self.value).try_into().unwrap();
+        let price: i128 = (*self.value).try_into().unwrap();
         let balance: i128 = rhs.into();
-        let intermediate: i128 = value * balance;
+        let intermediate: i128 = price * balance;
         return AssetValue { value: intermediate / PRICE_SCALE.into() };
     }
 }

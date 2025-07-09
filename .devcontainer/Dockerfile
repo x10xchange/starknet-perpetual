@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     vim \
     bash \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -31,7 +32,7 @@ RUN mkdir -p ${HOME}/.local/bin
 RUN corepack prepare yarn@stable --activate
 
 # Install oh-my-zsh
-RUN curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh -s
+RUN curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh -s 
 
 # Install Starkli
 RUN curl --proto '=https' --tlsv1.2 -sSf https://get.starkli.sh | sh -s
@@ -43,7 +44,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://docs.swmansion.com/scarb/instal
 
 # Install Starknet Foundry
 RUN curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/foundry-rs/starknet-foundry/master/scripts/install.sh | sh -s
-RUN snfoundryup -v 0.40.0
+RUN snfoundryup -v 0.45.0
 
 # Download starknet-devnet binary based on host architecture
 ENV DEVNET_VERSION=0.3.0
