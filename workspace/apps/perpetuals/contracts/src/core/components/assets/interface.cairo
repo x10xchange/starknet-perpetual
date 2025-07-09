@@ -4,8 +4,8 @@ use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimely
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
-use starkware_utils::types::PublicKey;
-use starkware_utils::types::time::time::{TimeDelta, Timestamp};
+use starkware_utils::signature::stark::PublicKey;
+use starkware_utils::time::time::{TimeDelta, Timestamp};
 
 
 #[starknet::interface]

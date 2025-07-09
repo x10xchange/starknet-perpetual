@@ -2,8 +2,8 @@ use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
-use starkware_utils::types::Signature;
-use starkware_utils::types::time::time::Timestamp;
+use starkware_utils::signature::stark::Signature;
+use starkware_utils::time::time::Timestamp;
 
 
 #[starknet::interface]
