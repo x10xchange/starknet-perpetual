@@ -34,6 +34,7 @@ pub struct SyntheticAsset {
     pub balance: Balance,
     pub price: Price,
     pub risk_factor: RiskFactor,
+    pub cached_funding_index: FundingIndex,
 }
 
 #[derive(Copy, Debug, Default, Drop, Serde)]

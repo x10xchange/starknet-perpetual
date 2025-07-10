@@ -29,7 +29,7 @@ pub trait IAssets<TContractState> {
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(
-        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>, timestamp: Timestamp,
     );
     fn price_tick(
         ref self: TContractState,
