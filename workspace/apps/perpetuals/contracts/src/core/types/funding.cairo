@@ -228,14 +228,27 @@ mod tests {
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, 0);
 
-        // extended contributed test
+        // positive funding, positive balance
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(225000000);
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, 2024999);
 
+        // positive funding, negative balance
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(-225000000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, -2025000);
+
+        // negative funding, negative balance
+        let index = FundingIndex { value: -38654705 };
+        let balance = BalanceTrait::new(-225000000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 2024999);
+
+        // negative funding, positive balance
+        let index = FundingIndex { value: -38654705 };
+        let balance = BalanceTrait::new(225000000);
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, -2025000);
     }

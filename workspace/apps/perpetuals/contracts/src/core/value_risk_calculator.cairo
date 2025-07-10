@@ -227,11 +227,12 @@ pub fn calculate_position_tvtr_change(
 
 #[cfg(test)]
 mod tests {
-    use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticDiffEnriched};
+use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticDiffEnriched};
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::price::{Price, PriceTrait};
     use perpetuals::core::types::risk_factor::RiskFactor;
+    use perpetuals::core::types::funding::FundingIndex;
     use super::*;
 
 
@@ -294,6 +295,7 @@ mod tests {
             balance: BalanceTrait::new(value: 60),
             price: PRICE_1(),
             risk_factor: RISK_FACTOR_1(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let position_data = array![].span();
         let asset_diff = SyntheticDiffEnriched {
@@ -345,6 +347,7 @@ mod tests {
             balance: BalanceTrait::new(value: -60),
             price: PRICE_1(),
             risk_factor: RISK_FACTOR_1(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let position_data = array![].span();
         let asset_diff = SyntheticDiffEnriched {
@@ -395,30 +398,35 @@ mod tests {
             balance: BalanceTrait::new(value: 60),
             price: PRICE_1(),
             risk_factor: RISK_FACTOR_1(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let asset_2 = SyntheticAsset {
             id: SYNTHETIC_ASSET_ID_2(),
             balance: BalanceTrait::new(value: 40),
             price: PRICE_2(),
             risk_factor: RISK_FACTOR_2(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let asset_3 = SyntheticAsset {
             id: SYNTHETIC_ASSET_ID_3(),
             balance: BalanceTrait::new(value: 20),
             price: PRICE_3(),
             risk_factor: RISK_FACTOR_3(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let asset_4 = SyntheticAsset {
             id: SYNTHETIC_ASSET_ID_4(),
             balance: BalanceTrait::new(value: 10),
             price: PRICE_4(),
             risk_factor: RISK_FACTOR_4(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let asset_5 = SyntheticAsset {
             id: SYNTHETIC_ASSET_ID_5(),
             balance: BalanceTrait::new(value: 5),
             price: PRICE_5(),
             risk_factor: RISK_FACTOR_5(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let position_data = array![asset_2, asset_3, asset_4, asset_5].span();
 
@@ -482,6 +490,7 @@ mod tests {
             balance: BalanceTrait::new(value: 60),
             price: PRICE_1(),
             risk_factor: RISK_FACTOR_1(),
+            cached_funding_index: FundingIndex { value: 38654705 },
         };
         let position_data = array![asset].span();
 
