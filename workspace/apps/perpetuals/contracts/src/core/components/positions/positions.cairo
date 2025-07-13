@@ -19,7 +19,7 @@ pub(crate) mod Positions {
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-    use perpetuals::core::types::balance::Balance;
+    use perpetuals::core::types::balance::{Balance, BalanceTrait};
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
         POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
@@ -402,7 +402,13 @@ pub(crate) mod Positions {
         ) {
             let position_mut = self.get_position_mut(:position_id);
             position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
-
+            for (synthetic_id, _synthetic) in position_mut.synthetic_balance {
+                let synthetic_diff = BalanceTrait::new(0_i64);
+                self
+                    ._update_synthetic_balance_and_funding(
+                        position: position_mut, :synthetic_id, :synthetic_diff,
+                    );
+            }
             if let Option::Some((synthetic_id, synthetic_diff)) = position_diff.synthetic_diff {
                 self
                     ._update_synthetic_balance_and_funding(
@@ -484,7 +490,15 @@ pub(crate) mod Positions {
                 let price = assets.get_synthetic_price(synthetic_id);
                 let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
                 unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
+                    .append(
+                        SyntheticAsset {
+                            id: synthetic_id,
+                            balance,
+                            price,
+                            risk_factor,
+                            cached_funding_index: synthetic.funding_index,
+                        },
+                    );
             }
             unchanged_synthetics.span()
         }
