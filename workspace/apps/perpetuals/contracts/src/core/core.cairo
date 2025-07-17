@@ -243,7 +243,7 @@ pub mod Core {
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let owner_account = if (position.owner_protection_enabled.read()) {
                 position.get_owner_account()
-            }else{
+            } else {
                 Option::None
             };
             let hash = self
@@ -313,13 +313,20 @@ pub mod Core {
                     public_key: position.get_owner_public_key(),
                 );
 
+            // accrue funding before transfer
+            self
+                .positions
+                .apply_diff(
+                    :position_id,
+                    position_diff: PositionDiff {
+                        collateral_diff: 0_i64.into(), synthetic_diff: Option::None,
+                    },
+                );                
             /// Validations - Fundamentals:
             let position_diff = PositionDiff {
                 collateral_diff: -amount.into(), synthetic_diff: Option::None,
             };
-
             self._validate_healthy_or_healthier_position(:position_id, :position, :position_diff);
-
             self.positions.apply_diff(:position_id, :position_diff);
             let quantum = self.assets.get_collateral_quantum();
             let withdraw_unquantized_amount = quantum * amount;
@@ -369,7 +376,7 @@ pub mod Core {
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let owner_account = if (position.owner_protection_enabled.read()) {
                 position.get_owner_account()
-            }else{
+            } else {
                 Option::None
             };
             let hash = self
@@ -932,7 +939,7 @@ pub mod Core {
                 * self
                     .assets
                     .get_synthetic_price(synthetic_id: base_asset_id)
-                    .mul_and_div_price_scale(rhs: base_balance)
+                    .mul(rhs: base_balance)
                     .try_into()
                     .expect('QUOTE_AMOUNT_OVERFLOW');
             self
@@ -995,6 +1002,15 @@ pub mod Core {
 
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
+            // accrue funding before transfer
+            self
+                .positions
+                .apply_diff(
+                    :position_id,
+                    position_diff: PositionDiff {
+                        collateral_diff: 0_i64.into(), synthetic_diff: Option::None,
+                    },
+                );
             self
                 ._validate_healthy_or_healthier_position(
                     :position_id, :position, position_diff: position_diff_sender,
@@ -1002,7 +1018,6 @@ pub mod Core {
 
             // Execute transfer
             self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
-
             self
                 .positions
                 .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
