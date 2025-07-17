@@ -39,6 +39,13 @@ impl FundingIndexMul of FundingIndexMulTrait {
     }
 }
 
+impl FundingIndexDefault of Default<FundingIndex> {
+    #[inline]
+    fn default() -> FundingIndex {
+        FundingIndex { value: 0 }
+    }
+}
+
 /// Calculate the funding payment for a position with the given balance.
 ///
 /// The funding payment is calculated as:

@@ -20,7 +20,7 @@ pub(crate) mod Positions {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::SyntheticAsset;
     use perpetuals::core::types::balance::{Balance, BalanceTrait};
-    use perpetuals::core::types::funding::calculate_funding;
+    use perpetuals::core::types::funding::{calculate_funding};
     use perpetuals::core::types::position::{
         POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
         PositionTrait, SyntheticBalance,
@@ -549,7 +549,8 @@ pub(crate) mod Positions {
             let global_funding_index = assets.get_funding_index(:synthetic_id);
 
             // Adjusts the main collateral balance accordingly:
-            let (collateral_funding, current_synthetic_balance) = if let Option::Some(synthetic) =
+            let (collateral_funding, current_synthetic_balance, funding_diff) =
+                if let Option::Some(synthetic) =
                 position
                 .synthetic_balance
                 .read(synthetic_id) {
@@ -561,19 +562,34 @@ pub(crate) mod Positions {
                         balance: current_synthetic_balance,
                     ),
                     current_synthetic_balance,
+                    synthetic.funding_index - global_funding_index,
                 )
             } else {
-                (0_i64.into(), 0_i64.into())
+                (0_i64.into(), 0_i64.into(), Default::default())
             };
-            position.collateral_balance.add_and_write(collateral_funding);
+            if (collateral_funding.is_non_zero()) {
+                position.collateral_balance.add_and_write(collateral_funding);
+            }
 
-            // Updates the synthetic balance and funding index:
-            let synthetic_asset = SyntheticBalance {
-                version: POSITION_VERSION,
-                balance: current_synthetic_balance + synthetic_diff,
-                funding_index: global_funding_index,
-            };
-            position.synthetic_balance.write(synthetic_id, synthetic_asset);
+            // we only want to update the synthetic position when one of the following is true:
+            // 1. synthetic_diff is non-zero
+            // 2. funding_diff is non-zero
+
+            // if current balance is zero and synthetic_diff is zero, we can skip the update
+            if (current_synthetic_balance.is_zero() && synthetic_diff.is_zero()) {
+                return;
+            }
+
+            // if synthetic_diff is non-zero, we update the synthetic balance
+            // if funding_diff is non-zero, we update the funding index
+            if (synthetic_diff.is_non_zero() || funding_diff.is_non_zero()) {
+                let synthetic_asset = SyntheticBalance {
+                    version: POSITION_VERSION,
+                    balance: current_synthetic_balance + synthetic_diff,
+                    funding_index: global_funding_index,
+                };
+                position.synthetic_balance.write(synthetic_id, synthetic_asset);
+            }
         }
 
         fn _get_position_state(
