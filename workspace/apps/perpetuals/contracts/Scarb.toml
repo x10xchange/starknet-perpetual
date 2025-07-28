@@ -31,6 +31,9 @@ unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
 inlining-strategy = "avoid"
 
+[profile.release.cairo]
+inlining-strategy = "avoid"
+
 [[test]]
 name = "perpetuals_unittest"
 build-external-contracts = [

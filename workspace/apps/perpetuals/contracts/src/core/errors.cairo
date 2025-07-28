@@ -54,6 +54,14 @@ pub fn position_not_healthy_nor_healthier(position_id: PositionId) -> ByteArray 
     format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?}", position_id)
 }
 
+pub fn position_tr_not_improved(position_id: PositionId) -> ByteArray {
+    format!("POSITION_TR_NOT_IMPROVED position_id: {:?}", position_id)
+}
+
+pub fn position_ratio_not_improved(position_id: PositionId) -> ByteArray {
+    format!("POSITION_RATIO_NOT_IMPROVED position_id: {:?}", position_id)
+}
+
 pub fn position_not_liquidatable(position_id: PositionId) -> ByteArray {
     format!("POSITION_IS_NOT_LIQUIDATABLE position_id: {:?}", position_id)
 }

@@ -2,7 +2,8 @@ use perpetuals::core::types::price::AssetValue;
 use core::num::traits::{One, Zero};
 use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
-    position_not_deleveragable, position_not_fair_deleverage, position_not_healthy_nor_healthier,
+    position_not_deleveragable, position_not_fair_deleverage, position_not_healthy_nor_healthier, 
+    position_tr_not_improved, position_ratio_not_improved,
     position_not_liquidatable,
 };
 use perpetuals::core::types::asset::synthetic::SyntheticAsset;

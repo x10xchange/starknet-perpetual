@@ -18,5 +18,8 @@ unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
 inlining-strategy = "avoid"
 
+[profile.release.cairo]
+inlining-strategy = "avoid"
+
 [workspace.tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]

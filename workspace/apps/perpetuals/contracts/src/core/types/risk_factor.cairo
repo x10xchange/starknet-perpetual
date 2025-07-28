@@ -1,5 +1,5 @@
 use core::num::traits::zero::Zero;
-use perpetuals::core::types::price::{AssetValue, AssetValueTrait};
+use perpetuals::core::types::price::{AssetValue};
 
 // Fixed-point decimal with 2 decimal places.
 //
@@ -87,8 +87,9 @@ impl RiskFactorZero of core::num::traits::Zero<RiskFactor> {
 #[cfg(test)]
 mod tests {
     use core::num::traits::zero::Zero;
+    use perpetuals::core::types::price::{AssetValueTrait};
     use super::{
-        AssetRiskTrait, AssetValueTrait, RiskFactor, RiskFactorMulAssetValue, RiskFactorMulTrait,
+        AssetRiskTrait, RiskFactor, RiskFactorMulAssetValue, RiskFactorMulTrait,
         RiskFactorTrait,
     };
 
