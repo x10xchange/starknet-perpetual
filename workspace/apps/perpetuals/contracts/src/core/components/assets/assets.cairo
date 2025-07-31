@@ -2,7 +2,7 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
-    use core::num::traits::Zero;
+    use core::num::traits::{Zero, Pow};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
@@ -11,7 +11,7 @@ pub mod AssetsComponent {
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
         INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
+        INVALID_TIMESTAMP, INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
         INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
         INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
         INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
@@ -51,6 +51,8 @@ pub mod AssetsComponent {
     };
     use starkware_utils::storage::utils::{AddToStorage, SubFromStorage};
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+
+    const MAX_TIME: u64 = 2_u64.pow(56);
 
     #[storage]
     pub struct Storage {
@@ -290,10 +292,16 @@ pub mod AssetsComponent {
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
             funding_ticks: Span<FundingTick>,
+            timestamp: Timestamp,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
             operator_nonce_component.use_checked_nonce(:operator_nonce);
+
+            assert(
+                timestamp.into() < MAX_TIME,
+                INVALID_TIMESTAMP
+            );
 
             assert(
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
@@ -532,7 +540,7 @@ pub mod AssetsComponent {
         ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
-                let synthetic_value: u128 = price.mul_and_div_price_scale(rhs: balance).abs();
+                let synthetic_value: u128 = price.mul(rhs: balance).into();
                 let index = if synthetic_value < synthetic_config.risk_factor_first_tier_boundary {
                     0_u128
                 } else {

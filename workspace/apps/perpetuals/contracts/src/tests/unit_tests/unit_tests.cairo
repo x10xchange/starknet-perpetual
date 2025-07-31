@@ -242,7 +242,7 @@ fn test_caller_failures() {
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
 
     let result = dispatcher
-        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span());
+        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span(), timestamp: Time::now());
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
     let result = dispatcher
@@ -523,6 +523,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_1,
             owner_public_key: KEY_PAIR_1().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -532,6 +533,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_2,
             owner_public_key: KEY_PAIR_2().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     // Deposit money for users.
@@ -2753,6 +2755,7 @@ fn test_validate_synthetic_prices_expired() {
                 },
             ]
                 .span(),
+            timestamp: Time::now(),
         );
     // Setup parameters:
     let expiration = Time::now().add(Time::days(1));
@@ -2812,7 +2815,7 @@ fn test_validate_synthetic_prices_pending_asset() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .assets
-        .funding_tick(operator_nonce: state.get_operator_nonce(), funding_ticks: array![].span());
+        .funding_tick(operator_nonce: state.get_operator_nonce(), funding_ticks: array![].span(),  timestamp: Time::now());
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
@@ -2866,6 +2869,7 @@ fn test_validate_prices() {
                 },
             ]
                 .span(),
+                 timestamp: Time::now(),
         );
 
     // Setup parameters:
@@ -2993,7 +2997,7 @@ fn test_funding_tick_basic() {
     // 3 <= 3.
     let mut spy = snforge_std::spy_events();
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks,  timestamp: Time::now(),);
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
@@ -3035,7 +3039,7 @@ fn test_invalid_funding_rate() {
     // synthetic_price * max_funding_rate * time_diff = 100 * 3% per hour * 1 hour = 3.
     // 3 > 4.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks,  timestamp: Time::now(),);
 }
 
 #[test]
@@ -3058,7 +3062,7 @@ fn test_invalid_funding_len() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks,  timestamp: Time::now(),);
 }
 
 // `price_tick` tests.
