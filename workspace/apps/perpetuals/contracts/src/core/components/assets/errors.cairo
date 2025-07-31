@@ -1,3 +1,6 @@
+use perpetuals::core::types::asset::AssetId;
+use starkware_utils::signature::stark::{PublicKey};
+
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
 pub const ASSET_ALREADY_EXISTS: felt252 = 'ASSET_ALREADY_EXISTS';
 pub const ASSET_NAME_TOO_LONG: felt252 = 'ASSET_NAME_TOO_LONG';
@@ -43,3 +46,9 @@ pub const ZERO_MAX_PRICE_INTERVAL: felt252 = 'ZERO_MAX_PRICE_INTERVAL';
 pub const ZERO_MAX_FUNDING_INTERVAL: felt252 = 'ZERO_MAX_FUNDING_INTERVAL';
 pub const ZERO_MAX_FUNDING_RATE: felt252 = 'ZERO_MAX_FUNDING_RATE';
 pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
+
+pub fn oracle_public_key_not_registered(asset_id: AssetId, public_key: PublicKey) -> ByteArray {
+    format!(
+        "ORACLE_PUBLIC_KEY_NOT_REGISTERED, asset_id: {:?}, public_key: {:?}", asset_id, public_key,
+    )
+}

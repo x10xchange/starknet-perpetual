@@ -43,8 +43,9 @@ pub fn order_expired_err(position_id: PositionId) -> ByteArray {
     format!("ORDER_EXPIRED position_id: {:?}", position_id)
 }
 
-pub fn position_not_deleveragable(position_id: PositionId,  tvtr: TVTRChange) -> ByteArray {
-    format!("POSITION_IS_NOT_DELEVERAGABLE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}", 
+pub fn position_not_deleveragable(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
+    format!(
+        "POSITION_IS_NOT_DELEVERAGABLE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
         position_id,
         tvtr.before.total_value,
         tvtr.before.total_risk,
@@ -54,7 +55,8 @@ pub fn position_not_deleveragable(position_id: PositionId,  tvtr: TVTRChange) ->
 }
 
 pub fn position_not_fair_deleverage(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
-    format!("POSITION_IS_NOT_FAIR_DELEVERAGE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}", 
+    format!(
+        "POSITION_IS_NOT_FAIR_DELEVERAGE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
         position_id,
         tvtr.before.total_value,
         tvtr.before.total_risk,
@@ -64,22 +66,23 @@ pub fn position_not_fair_deleverage(position_id: PositionId, tvtr: TVTRChange) -
 }
 
 pub fn position_not_healthy_nor_healthier(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
-    format!("POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
-     position_id,
-     tvtr.before.total_value,
-     tvtr.before.total_risk,
-     tvtr.after.total_value,
-     tvtr.after.total_risk,
+    format!(
+        "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
+        position_id,
+        tvtr.before.total_value,
+        tvtr.before.total_risk,
+        tvtr.after.total_value,
+        tvtr.after.total_risk,
     )
 }
 
-
 pub fn position_not_liquidatable(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
-    format!("POSITION_IS_NOT_LIQUIDATABLE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
-     position_id,
-     tvtr.before.total_value,
-     tvtr.before.total_risk,
-     tvtr.after.total_value,
-     tvtr.after.total_risk,
+    format!(
+        "POSITION_IS_NOT_LIQUIDATABLE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
+        position_id,
+        tvtr.before.total_value,
+        tvtr.before.total_risk,
+        tvtr.after.total_value,
+        tvtr.after.total_risk,
     )
 }
