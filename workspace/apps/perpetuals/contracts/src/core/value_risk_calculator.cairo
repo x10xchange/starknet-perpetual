@@ -112,12 +112,20 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     let after_ratio = FractionTrait::new(
         tvtr.after.total_value,
         // allow negative 1bps change
-        (tvtr.after.total_risk * 1000) / 1001
+        max((tvtr.after.total_risk * 1000) / 1001, 1)
      );
 
     assert_with_byte_array(
         after_ratio >=  before_ratio, position_not_healthy_nor_healthier(:position_id, :tvtr),
     );
+}
+
+fn max(a: u128, b: u128) -> u128 {
+    if a >= b {
+        return a;
+    } else {
+        return b;
+    }
 }
 
 pub fn liquidated_position_validations(
