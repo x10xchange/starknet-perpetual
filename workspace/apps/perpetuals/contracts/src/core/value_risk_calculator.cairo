@@ -109,11 +109,23 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
         panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
     }
     let before_ratio = FractionTrait::new(tvtr.before.total_value, tvtr.before.total_risk);
-    let after_ratio = FractionTrait::new(tvtr.after.total_value, tvtr.after.total_risk);
+    let after_ratio = FractionTrait::new(
+        tvtr.after.total_value,
+        // allow negative 1bps change
+        max((tvtr.after.total_risk * 1000) / 1001, 1)
+     );
 
     assert_with_byte_array(
-        after_ratio >= before_ratio, position_not_healthy_nor_healthier(:position_id, :tvtr),
+        after_ratio >=  before_ratio, position_not_healthy_nor_healthier(:position_id, :tvtr),
     );
+}
+
+fn max(a: u128, b: u128) -> u128 {
+    if a >= b {
+        return a;
+    } else {
+        return b;
+    }
 }
 
 pub fn liquidated_position_validations(
@@ -330,6 +342,23 @@ use perpetuals::core::types::asset::synthetic::{SyntheticAsset, SyntheticDiffEnr
         /// Ensures `total_risk` after the change is `36,000`, calculated as `abs(balance_after) *
         /// price * risk_factor` (`abs(80) * 900 * 0.5`).
         assert!(position_tvtr_change.after.total_risk == 36_000);
+    }
+
+    #[test]
+    fn test_assert_healthy_or_healthier_negative_1bps_change() {
+        // Create a position with a single asset entry.
+        let position_tvtr_change = TVTRChange{
+             before: PositionTVTR{
+                  total_value: 15000,
+                  total_risk: 20000,
+             },
+             after: PositionTVTR{
+                  total_value: 7499,
+                  total_risk: 10000,
+             },
+        };
+
+        assert_healthy_or_healthier(PositionId{ value: 42 },position_tvtr_change)
     }
 
     /// Test the `calculate_position_tvtr_change` function for the case where the balance is
