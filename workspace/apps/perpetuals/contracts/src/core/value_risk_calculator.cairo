@@ -116,16 +116,16 @@ pub fn assert_healthy_or_healthier(
 
      //if tv <0 we want to increase tr so that tv/tr is a smaller negative number in absolute value
     let (nominator, denominator) = if (tvtr.after.total_value < 0) {
-        (10000_u256 + allowed_bps_slippage.into(), 10000_u256)
+        (10000_u128 + allowed_bps_slippage.into(), 10000_u128)
     } else {
-        (10000_u256, 10000_u256 + allowed_bps_slippage.into())
+        (10000_u128, 10000_u128 + allowed_bps_slippage.into())
     };
 
-    let scaled_tr: u256 = (tvtr.after.total_risk.into() * nominator) / denominator;
+    let scaled_tr: u128 = (tvtr.after.total_risk.into() * nominator) / denominator;
 
     let after_ratio = FractionTrait::new(
         tvtr.after.total_value, // allow negative 1bps change
-        max(scaled_tr.low, 1_u128),
+        max(scaled_tr, 1_u128),
     );
 
     assert_with_byte_array(
