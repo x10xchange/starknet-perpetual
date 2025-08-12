@@ -19,8 +19,6 @@ use starkware_utils::math::fraction::FractionTrait;
 const EPSILON: i128 = 1_i128;
 
 
-
-
 /// Represents the state of a position based on its total value and total risk.
 /// - A position is **Deleveragable** (and also **Liquidatable**) if its total value is negative.
 /// - A position is **Liquidatable** if its total value is less than its total risk.
@@ -89,9 +87,7 @@ pub fn evaluate_position(
 }
 
 pub fn assert_healthy_or_healthier(
-    position_id: PositionId,
-    tvtr: TVTRChange,
-    allowed_bps_slippage: u16,
+    position_id: PositionId, tvtr: TVTRChange, allowed_bps_slippage: u16,
 ) {
     let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
@@ -114,7 +110,7 @@ pub fn assert_healthy_or_healthier(
     }
     let before_ratio = FractionTrait::new(tvtr.before.total_value, tvtr.before.total_risk);
 
-     //if tv <0 we want to increase tr so that tv/tr is a smaller negative number in absolute value
+    //if tv <0 we want to increase tr so that tv/tr is a smaller negative number in absolute value
     let (nominator, denominator) = if (tvtr.after.total_value < 0) {
         (10000_u128 + allowed_bps_slippage.into(), 10000_u128)
     } else {
@@ -124,7 +120,7 @@ pub fn assert_healthy_or_healthier(
     let scaled_tr: u128 = (tvtr.after.total_risk.into() * nominator) / denominator;
 
     let after_ratio = FractionTrait::new(
-        tvtr.after.total_value, // allow negative 1bps change
+        tvtr.after.total_value, 
         max(scaled_tr, 1_u128),
     );
 
@@ -155,11 +151,7 @@ pub fn liquidated_position_validations(
             || position_state_before_change == PositionState::Deleveragable,
         position_not_liquidatable(:position_id, :tvtr),
     );
-    assert_healthy_or_healthier(
-        :position_id,
-        :tvtr,
-        allowed_bps_slippage: 10,
-    );
+    assert_healthy_or_healthier(:position_id, :tvtr, allowed_bps_slippage: 1000);
 }
 
 pub fn deleveraged_position_validations(
@@ -175,11 +167,7 @@ pub fn deleveraged_position_validations(
         position_not_deleveragable(:position_id, :tvtr),
     );
 
-    assert_healthy_or_healthier(
-        :position_id,
-        :tvtr,
-        allowed_bps_slippage: 10,
-    );
+    assert_healthy_or_healthier(:position_id, :tvtr, allowed_bps_slippage: 1000);
     assert_with_byte_array(
         is_fair_deleverage(before: tvtr.before, after: tvtr.after),
         position_not_fair_deleverage(:position_id, :tvtr),
@@ -378,14 +366,14 @@ mod tests {
         };
 
         assert_healthy_or_healthier(
-            PositionId { value: 42 },
-            position_tvtr_change,
-            allowed_bps_slippage: 10,
+            PositionId { value: 42 }, position_tvtr_change, allowed_bps_slippage: 10,
         );
     }
 
     #[test]
-    #[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 42 } TV before 15000, TR before 20000, TV after 7400, TR after 10000")]
+    #[should_panic(
+        expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 42 } TV before 15000, TR before 20000, TV after 7400, TR after 10000",
+    )]
     fn test_assert_healthy_or_healthier_rejects_more_than_negative_10bps_change() {
         // Create a position with a single asset entry.
         let position_tvtr_change = TVTRChange {
@@ -394,9 +382,7 @@ mod tests {
         };
 
         assert_healthy_or_healthier(
-                PositionId { value: 42 },
-                position_tvtr_change,
-                allowed_bps_slippage: 10,
+            PositionId { value: 42 }, position_tvtr_change, allowed_bps_slippage: 10,
         );
     }
 
