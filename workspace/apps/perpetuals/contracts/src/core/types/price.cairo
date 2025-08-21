@@ -33,55 +33,6 @@ pub struct Price {
     value: u64,
 }
 
-#[derive(Copy, Debug, Drop)]
-pub struct AssetValue {
-    value: i128,
-}
-
-#[generate_trait]
-pub impl AssetValueImpl of AssetValueTrait {
-    fn new(value: i128) -> AssetValue {
-        AssetValue { value }
-    }
-}
-
-impl AssetValueIntoU128 of Into<AssetValue, u128> {
-    fn into(self: AssetValue) -> u128 {
-        self.value.abs().try_into().unwrap()
-    }
-}
-
-impl AssetValueIntoI128 of Into<AssetValue, i128> {
-    fn into(self: AssetValue) -> i128 {
-        self.value
-    }
-}
-
-impl AssetValueIntoI64 of Into<AssetValue, i64> {
-    fn into(self: AssetValue) -> i64 {
-        self.value.try_into().unwrap()
-    }
-}
-
-pub impl AssetValueAddAssign of core::ops::AddAssign<AssetValue, AssetValue> {
-    fn add_assign(ref self: AssetValue, rhs: AssetValue) {
-        self.value += rhs.value;
-    }
-}
-
-pub impl AssetValueSubAssign of core::ops::SubAssign<AssetValue, AssetValue> {
-    fn sub_assign(ref self: AssetValue, rhs: AssetValue) {
-        self.value -= rhs.value;
-    }
-}
-
-impl AssetValueDefault of Default<AssetValue> {
-    #[inline]
-    fn default() -> AssetValue {
-        AssetValue { value: 0 }
-    }
-}
-
 #[derive(Copy, Debug, Drop, Serde)]
 pub struct SignedPrice {
     pub signature: Signature,
@@ -114,12 +65,12 @@ impl PriceMulU32 of PriceMulTrait<u32> {
 }
 
 impl PriceMulBalance of PriceMulTrait<Balance> {
-    type Target = AssetValue;
+    type Target = i128;
     fn mul(self: @Price, rhs: Balance) -> Self::Target {
         let price: i128 = (*self.value).try_into().unwrap();
         let balance: i128 = rhs.into();
         let intermediate: i128 = price * balance;
-        return AssetValue { value: intermediate / PRICE_SCALE.into() };
+        return intermediate / PRICE_SCALE.into();
     }
 }
 
@@ -203,7 +154,7 @@ mod tests {
     fn test_price_mul_balance() {
         let price = PriceTrait::new(value: 100);
         let balance = BalanceTrait::new(value: 2);
-        let result = price.mul(balance).value;
+        let result = price.mul(balance);
         assert!(result == 200 );
     }
 
@@ -229,7 +180,7 @@ mod tests {
     fn test_price_balance_mul_handles_max_values_balance_and_price() {
         let price = Price { value: MAX_PRICE };
         let balance = BalanceTrait::new(value: 9223372036854775807); // Maximum i64 value
-        let result = price.mul(balance).value;
+        let result = price.mul(balance);
         assert!(result.is_non_zero());
     }
 }

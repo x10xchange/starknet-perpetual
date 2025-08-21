@@ -19,7 +19,7 @@ pub(crate) mod Positions {
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::SyntheticAsset;
-    use perpetuals::core::types::balance::{Balance, BalanceTrait};
+    use perpetuals::core::types::balance::{Balance};
     use perpetuals::core::types::funding::{calculate_funding};
     use perpetuals::core::types::position::{
         POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
