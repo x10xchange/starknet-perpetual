@@ -1,4 +1,3 @@
-use crate::core::types::funding::FundingIndex;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::nullable::{FromNullableResult, match_nullable};
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -52,6 +51,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::types::funding::FundingIndex;
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
@@ -912,6 +912,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                             balance: new_balance,
                             price: *synthetic.price,
                             risk_factor: *synthetic.risk_factor,
+                            cached_funding_index: FundingIndex { value: 0 },
                         },
                     );
             } else {
