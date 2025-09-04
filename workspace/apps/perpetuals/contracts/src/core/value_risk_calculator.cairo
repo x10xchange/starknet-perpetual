@@ -679,7 +679,6 @@ mod tests {
         let balance_2 = 100;
         let balance_3 = 150;
         let collateral_balance_before = 50;
-
         let asset_1 = SyntheticAsset {
             id: SYNTHETIC_ASSET_ID_1(),
             balance: BalanceTrait::new(value: balance_1),
