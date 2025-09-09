@@ -148,6 +148,8 @@ pub mod Core {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: Positions::Storage,
+        // vault position id to vault ContractAddress and AssetId
+        pub vault_positions: Map<PositionId, (ContractAddress, AssetId)>,
     }
 
     #[event]

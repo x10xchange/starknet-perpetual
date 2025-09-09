@@ -9,6 +9,8 @@ use starkware_utils::time::time::Timestamp;
 const VERSION: u8 = 1;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
+// probably need to change name to AssetConfig or something similar as it will be used also for non
+// PnL collateral assets
 pub struct SyntheticConfig {
     version: u8,
     // Configurable
@@ -20,6 +22,15 @@ pub struct SyntheticConfig {
     pub resolution_factor: u64,
 }
 
+// this is for non PnL collateral assets (or maybe use the SyntheticTimelyData struct for all assets
+// but zero for funding_index for non PnL collateral assets)
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub struct CollateralTimelyData {
+    version: u8,
+    pub price: Price,
+    pub last_price_update: Timestamp,
+}
+
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct SyntheticTimelyData {
     version: u8,
@@ -28,8 +39,11 @@ pub struct SyntheticTimelyData {
     pub funding_index: FundingIndex,
 }
 
+// change name to Asset as it will be used for all assets
 #[derive(Copy, Debug, Drop, Serde, PartialEq)]
 pub struct SyntheticAsset {
+    // we need to have a mapping between AssetId and the corresponding ContractAddress of the
+    // underlying token in case of collateral assets (or just use the id as the ContractAddress)
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
