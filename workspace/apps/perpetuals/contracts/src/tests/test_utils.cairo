@@ -324,7 +324,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             owner_account: Zero::zero(),
         );
     let position_diff = PositionDiff {
-        collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), synthetic_diff: Option::None,
+        base_collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), synthetic_diff: Option::None, non_base_collateral_diff: Option::None,
     };
 
     state.positions.apply_diff(:position_id, :position_diff);
@@ -342,8 +342,9 @@ pub fn add_synthetic_to_position(
     ref state: Core::ContractState, synthetic_id: AssetId, position_id: PositionId, balance: i64,
 ) {
     let position_diff = PositionDiff {
-        collateral_diff: Default::default(),
+        base_collateral_diff: Default::default(),
         synthetic_diff: Option::Some((synthetic_id, balance.into())),
+        non_base_collateral_diff: Option::None,
     };
     state.positions.apply_diff(:position_id, :position_diff);
 }

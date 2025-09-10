@@ -420,7 +420,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(:position_id, :quantized_amount, :salt);
+            .deposit(asset_id: self.collateral_id, :position_id, :quantized_amount, :salt);
 
         validate_balance(
             token_state: self.token_state,
@@ -508,6 +508,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .process_deposit(
                 :operator_nonce,
+                asset_id: self.collateral_id,
                 depositor: depositor.address,
                 :position_id,
                 :quantized_amount,
@@ -584,7 +585,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             contract_address: self.perpetuals_contract,
         }
             .get_position_assets(:position_id)
-            .collateral_balance;
+            .base_collateral_balance;
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -678,10 +679,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         let sender_balance_before = dispatcher
             .get_position_assets(position_id: position_id)
-            .collateral_balance;
+            .base_collateral_balance;
         let recipient_balance_before = dispatcher
             .get_position_assets(position_id: recipient.position_id)
-            .collateral_balance;
+            .base_collateral_balance;
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -763,19 +764,19 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         let user_a_balance_before = dispatcher
             .get_position_assets(position_id: order_a.position_id);
-        let user_a_collateral_balance_before = user_a_balance_before.collateral_balance;
+        let user_a_collateral_balance_before = user_a_balance_before.base_collateral_balance;
         let user_a_synthetic_balance_before = get_synthetic_balance(
             assets: user_a_balance_before.synthetics, :asset_id,
         );
         let user_b_balance_before = dispatcher
             .get_position_assets(position_id: order_b.position_id);
-        let user_b_collateral_balance_before = user_b_balance_before.collateral_balance;
+        let user_b_collateral_balance_before = user_b_balance_before.base_collateral_balance;
         let user_b_synthetic_balance_before = get_synthetic_balance(
             assets: user_b_balance_before.synthetics, :asset_id,
         );
         let fee_position_balance_before = dispatcher
             .get_position_assets(position_id: FEE_POSITION)
-            .collateral_balance;
+            .base_collateral_balance;
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -913,16 +914,18 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         (
             PositionData {
-                collateral_balance: position_data_a.collateral_balance
+                base_collateral_balance: position_data_a.base_collateral_balance
                     + settlement.actual_amount_quote_a.into()
                     - settlement.actual_fee_a.into(),
                 synthetics: new_synthetics_a.span(),
+                other_collateral_balances: position_data_a.other_collateral_balances,
             },
             PositionData {
-                collateral_balance: position_data_b.collateral_balance
+                base_collateral_balance: position_data_b.base_collateral_balance
                     - settlement.actual_amount_quote_a.into()
                     - settlement.actual_fee_b.into(),
                 synthetics: new_synthetics_b.span(),
+                other_collateral_balances: position_data_b.other_collateral_balances,
             },
         )
     }
@@ -979,7 +982,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         let fee_position_balance_before = dispatcher
             .get_position_assets(position_id: FEE_POSITION)
-            .collateral_balance;
+            .base_collateral_balance;
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -998,7 +1001,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             };
             self
                 .validate_collateral_balance(
-                    :position_id, expected_balance: position_data.collateral_balance,
+                    :position_id, expected_balance: position_data.base_collateral_balance,
                 );
 
             for synthetic in position_data.synthetics {
@@ -1026,22 +1029,22 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         let liquidated_balance_before = dispatcher
             .get_position_assets(position_id: liquidated_user.position_id);
-        let liquidated_collateral_balance_before = liquidated_balance_before.collateral_balance;
+        let liquidated_collateral_balance_before = liquidated_balance_before.base_collateral_balance;
         let liquidated_synthetic_balance_before = get_synthetic_balance(
             assets: liquidated_balance_before.synthetics, :asset_id,
         );
         let liquidator_balance_before = dispatcher
             .get_position_assets(position_id: liquidator_order.position_id);
-        let liquidator_collateral_balance_before = liquidator_balance_before.collateral_balance;
+        let liquidator_collateral_balance_before = liquidator_balance_before.base_collateral_balance;
         let liquidator_synthetic_balance_before = get_synthetic_balance(
             assets: liquidator_balance_before.synthetics, :asset_id,
         );
         let fee_position_balance_before = dispatcher
             .get_position_assets(position_id: FEE_POSITION)
-            .collateral_balance;
+            .base_collateral_balance;
         let insurance_fee_position_balance_before = dispatcher
             .get_position_assets(position_id: INSURANCE_FUND_POSITION)
-            .collateral_balance;
+            .base_collateral_balance;
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -1129,13 +1132,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         let deleveraged_balance_before = dispatcher
             .get_position_assets(position_id: deleveraged_user.position_id);
-        let deleveraged_collateral_balance_before = deleveraged_balance_before.collateral_balance;
+        let deleveraged_collateral_balance_before = deleveraged_balance_before.base_collateral_balance;
         let deleveraged_synthetic_balance_before = get_synthetic_balance(
             assets: deleveraged_balance_before.synthetics, asset_id: base_asset_id,
         );
         let deleverager_balance_before = dispatcher
             .get_position_assets(position_id: deleverager_user.position_id);
-        let deleverager_collateral_balance_before = deleverager_balance_before.collateral_balance;
+        let deleverager_collateral_balance_before = deleverager_balance_before.base_collateral_balance;
         let deleverager_synthetic_balance_before = get_synthetic_balance(
             assets: deleverager_balance_before.synthetics, asset_id: base_asset_id,
         );
@@ -1281,7 +1284,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     ) -> Balance {
         IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_assets(position_id)
-            .collateral_balance
+            .base_collateral_balance
     }
 
     fn get_asset_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
