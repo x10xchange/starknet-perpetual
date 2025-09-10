@@ -359,7 +359,7 @@ pub mod AssetsComponent {
         fn get_synthetic_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticTimelyData {
-            self._get_synthetic_timely_data(:synthetic_id)
+            self._get_asset_timely_data(:synthetic_id)
         }
 
         fn get_risk_factor_tiers(
@@ -603,7 +603,7 @@ pub mod AssetsComponent {
             self.synthetic_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
 
-        fn _get_synthetic_timely_data(
+        fn _get_asset_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticTimelyData {
             self.synthetic_timely_data.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
@@ -616,7 +616,7 @@ pub mod AssetsComponent {
             new_funding_index: FundingIndex,
             synthetic_id: AssetId,
         ) {
-            let mut synthetic_timely_data = self._get_synthetic_timely_data(:synthetic_id);
+            let mut synthetic_timely_data = self._get_asset_timely_data(:synthetic_id);
             let last_funding_index = synthetic_timely_data.funding_index;
             let index_diff: i64 = (new_funding_index - last_funding_index).into();
             validate_funding_rate(
@@ -701,22 +701,22 @@ pub mod AssetsComponent {
         fn _set_price(
             ref self: ComponentState<TContractState>, asset_id: AssetId, oracle_price: u128,
         ) {
-            let mut synthetic_config = self._get_asset_config(synthetic_id: asset_id);
+            let mut asset_config = self._get_asset_config(synthetic_id: asset_id);
             let price = convert_oracle_to_perps_price(
-                :oracle_price, resolution_factor: synthetic_config.resolution_factor,
+                :oracle_price, resolution_factor: asset_config.resolution_factor,
             );
 
-            let mut synthetic_timely_data = self._get_synthetic_timely_data(synthetic_id: asset_id);
+            let mut synthetic_timely_data = self._get_asset_timely_data(synthetic_id: asset_id);
             synthetic_timely_data.price = price;
             synthetic_timely_data.last_price_update = Time::now();
             self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
 
             // If the asset is pending, it'll be activated.
-            if synthetic_config.status == AssetStatus::PENDING {
+            if asset_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
-                synthetic_config.status = AssetStatus::ACTIVE;
-                self.synthetic_config.write(asset_id, Option::Some(synthetic_config));
-                if (synthetic_config.asset_type == AssetType::SYNTHETIC) {
+                asset_config.status = AssetStatus::ACTIVE;
+                self.synthetic_config.write(asset_id, Option::Some(asset_config));
+                if (asset_config.asset_type == AssetType::SYNTHETIC) {
                     self.num_of_active_synthetic_assets.add_and_write(1);
                 }
                 self.emit(events::AssetActivated { asset_id });
