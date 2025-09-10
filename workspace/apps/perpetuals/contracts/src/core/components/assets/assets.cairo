@@ -715,8 +715,10 @@ pub mod AssetsComponent {
             if synthetic_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
                 synthetic_config.status = AssetStatus::ACTIVE;
-                self.num_of_active_synthetic_assets.add_and_write(1);
                 self.synthetic_config.write(asset_id, Option::Some(synthetic_config));
+                if (synthetic_config.asset_type == AssetType::SYNTHETIC) {
+                    self.num_of_active_synthetic_assets.add_and_write(1);
+                }
                 self.emit(events::AssetActivated { asset_id });
             }
             self.emit(events::PriceTick { asset_id, price });
