@@ -917,6 +917,54 @@ pub mod Core {
                     },
                 )
         }
+        fn deposit_into_vault(
+            ref self: perpetuals::core::core::Core::ContractState,
+            operator_nonce: core::integer::u64,
+            position_id: perpetuals::core::types::position::PositionId,
+            vault_position_id: perpetuals::core::types::position::PositionId,
+            collateral_id: perpetuals::core::types::asset::AssetId,
+            quantized_amount: core::integer::u64,
+            expiration: starkware_utils::time::time::Timestamp,
+            salt: core::felt252,
+            signature: core::array::Span<core::felt252>,
+        ) {}
+
+        fn withdraw_from_vault(
+            ref self: perpetuals::core::core::Core::ContractState,
+            operator_nonce: core::integer::u64,
+            position_id: perpetuals::core::types::position::PositionId,
+            vault_position_id: perpetuals::core::types::position::PositionId,
+            collateral_id: perpetuals::core::types::asset::AssetId,
+            number_of_shares: core::integer::u64,
+            minimum_quantized_amount: core::integer::u64,
+            vault_share_execution_price: perpetuals::core::types::price::Price,
+            expiration: starkware_utils::time::time::Timestamp,
+            salt: core::felt252,
+            user_signature: core::array::Span<core::felt252>,
+            vault_owner_signature: core::array::Span<core::felt252>,
+        ) {}
+
+        fn liquidate_vault_shares(
+            ref self: perpetuals::core::core::Core::ContractState,
+            operator_nonce: core::integer::u64,
+            position_id: perpetuals::core::types::position::PositionId,
+            vault_position_id: perpetuals::core::types::position::PositionId,
+            collateral_id: perpetuals::core::types::asset::AssetId,
+            number_of_shares: core::integer::u64,
+            vault_share_execution_price: perpetuals::core::types::price::Price,
+            expiration: starkware_utils::time::time::Timestamp,
+            salt: core::felt252,
+            vault_owner_signature: core::array::Span<core::felt252>,
+        ) {}
+
+        fn register_vault(
+            ref self: perpetuals::core::core::Core::ContractState,
+            operator_nonce: core::integer::u64,
+            vault_position_id: perpetuals::core::types::position::PositionId,
+            vault_contract_address: core::starknet::contract_address::ContractAddress,
+            vault_asset_id: perpetuals::core::types::asset::AssetId,
+            signature: core::array::Span<core::felt252>,
+        ) {}
     }
 
     #[generate_trait]
@@ -1068,11 +1116,15 @@ pub mod Core {
         ) {
             // Parameters
             let position_diff_sender = PositionDiff {
-                base_collateral_diff: -amount.into(), synthetic_diff: Option::None, non_base_collateral_diff: Option::None,
+                base_collateral_diff: -amount.into(),
+                synthetic_diff: Option::None,
+                non_base_collateral_diff: Option::None,
             };
 
             let position_diff_recipient = PositionDiff {
-                base_collateral_diff: amount.into(), synthetic_diff: Option::None, non_base_collateral_diff: Option::None,
+                base_collateral_diff: amount.into(),
+                synthetic_diff: Option::None,
+                non_base_collateral_diff: Option::None,
             };
 
             /// Validations - Fundamentals:
@@ -1282,7 +1334,7 @@ pub mod Core {
                 ._validate_synthetic_shrinks(
                     :position, asset_id: synthetic_diff_id, amount: synthetic_diff_balance.into(),
                 );
-            let (provisional_delta, unchanged_synthetics, unchanged_collaterals) =  self
+            let (provisional_delta, unchanged_synthetics, unchanged_collaterals) = self
                 .positions
                 .derive_funding_delta_and_unchanged_balances(:position, :position_diff);
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
