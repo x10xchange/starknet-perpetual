@@ -12,7 +12,6 @@ const VERSION: u8 = 1;
 pub enum AssetType {
     #[default]
     SYNTHETIC,
-    BASE_COLLATERAL,
     SPOT_COLLATERAL,
     VAULT_SHARE_COLLATERAL
 }
@@ -21,7 +20,7 @@ pub enum AssetType {
 // probably need to change name to AssetConfig or something similar as it will be used also for non
 // PnL collateral assets
 pub struct AssetConfig {
-    version: u8,
+    pub version: u8,
     // Configurable
     pub status: AssetStatus,
     pub risk_factor_first_tier_boundary: u128,

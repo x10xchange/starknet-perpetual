@@ -1,3 +1,4 @@
+use starknet::ContractAddress;
 use openzeppelin::token::erc20::interface::IERC20Dispatcher;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::asset::synthetic::{AssetConfig, SyntheticTimelyData};
@@ -26,6 +27,17 @@ pub trait IAssets<TContractState> {
         risk_factor_tier_size: u128,
         quorum: u8,
         resolution_factor: u64,
+    );
+    fn add_vault_share_asset(
+        ref self: TContractState,
+        asset_id: AssetId,
+        risk_factor_tiers: Span<u16>,
+        risk_factor_first_tier_boundary: u128,
+        risk_factor_tier_size: u128,
+        quorum: u8,
+        resolution_factor: u64,
+        quantum: u64,
+        erc20_address: ContractAddress,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(

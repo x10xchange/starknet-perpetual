@@ -213,7 +213,6 @@ The asset type
 pub enum AssetType {
     #[default]
     SYNTHETIC,
-    BASE_COLLATERAL,
     SPOT_COLLATERAL,
     VAULT_SHARE_COLLATERAL
 }
