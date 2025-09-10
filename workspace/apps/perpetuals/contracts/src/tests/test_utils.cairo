@@ -380,7 +380,7 @@ pub fn check_synthetic_config(
     quorum: u8,
     resolution_factor: u64,
 ) {
-    let synthetic_config = state.assets.get_synthetic_config(synthetic_id);
+    let synthetic_config = state.assets.get_asset_config(synthetic_id);
     assert!(synthetic_config.status == status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {

@@ -1217,7 +1217,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         assert_eq!(
-            dispatcher.get_synthetic_config(synthetic_id: *synthetic_info.asset_id).status,
+            dispatcher.get_asset_config(synthetic_id: *synthetic_info.asset_id).status,
             AssetStatus::PENDING,
         );
 
@@ -1243,7 +1243,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             asset_id: synthetic_id,
         );
-        assert_eq!(dispatcher.get_synthetic_config(:synthetic_id).status, AssetStatus::INACTIVE);
+        assert_eq!(dispatcher.get_asset_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
     fn reduce_inactive_asset_position(

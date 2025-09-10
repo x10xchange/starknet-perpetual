@@ -1230,7 +1230,7 @@ pub mod Core {
                 FromNullableResult::Null => {
                     let (provisional_delta, unchanged_synthetics) = self
                         .positions
-                        .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                        .derive_funding_delta_and_unchanged_balances(:position, :position_diff);
                     let position_diff_enriched = self
                         .enrich_collateral(
                             :position,
@@ -1268,7 +1268,7 @@ pub mod Core {
                 );
             let (provisional_delta, unchanged_synthetics) = self
                 .positions
-                .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                .derive_funding_delta_and_unchanged_balances(:position, :position_diff);
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
             let position_diff_enriched = self
                 .enrich_collateral(
@@ -1290,7 +1290,7 @@ pub mod Core {
         ) {
             let (provisional_delta, unchanged_synthetics) = self
                 .positions
-                .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                .derive_funding_delta_and_unchanged_balances(:position, :position_diff);
 
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
             let position_diff_enriched = self

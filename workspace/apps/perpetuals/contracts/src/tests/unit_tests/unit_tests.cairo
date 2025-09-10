@@ -3052,7 +3052,7 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(value: 100),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
@@ -3122,7 +3122,7 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
@@ -3180,7 +3180,7 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
     let data = state.assets.get_synthetic_timely_data(synthetic_id);
