@@ -83,7 +83,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
             let position = self.get_position_snapshot(:position_id);
-            let (provisional_delta, synthetics) = self
+            let (provisional_delta, synthetics, collaterals) = self
                 .derive_funding_delta_and_unchanged_balances(
                     :position, position_diff: Default::default(),
                 );
@@ -92,13 +92,11 @@ pub(crate) mod Positions {
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
 
-            let mut collaterals = array![];
-
-            for (asset_id, collateral) in position.collateral_balances {
-                collaterals.append((asset_id, collateral));
+            PositionData {
+                synthetics,
+                base_collateral_balance: collateral_balance,
+                other_collateral_balances: collaterals,
             }
-
-            PositionData { synthetics, base_collateral_balance: collateral_balance,  other_collateral_balances: collaterals.span() }
         }
 
         /// This function is primarily used as a view function—knowing the total value and/or
@@ -107,7 +105,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionTVTR {
             let position = self.get_position_snapshot(:position_id);
-            let (provisional_delta, unchanged_synthetics) = self
+            let (provisional_delta, unchanged_synthetics, collaterals) = self
                 .derive_funding_delta_and_unchanged_balances(
                     :position, position_diff: Default::default(),
                 );
@@ -527,28 +525,33 @@ pub(crate) mod Positions {
                     continue;
                 }
 
-                let price = assets.get_synthetic_price(synthetic_id);
-                let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
+                let price = assets.get_asset_price(synthetic_id);
+                let risk_factor = assets.get_asset_risk_factor(synthetic_id, balance, price);
                 unchanged_synthetics
                     .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor });
             }
 
-            for (collateral_id, collateral) in position.collateral_balances {
-                let balance = collateral.balance;
-                if balance.is_zero() {
+            for (collateral_id, collateral_balance) in position.collateral_balances {
+                if collateral_balance.is_zero() {
                     continue;
                 }
-                if synthetic_diff_id == synthetic_id {
+                if collateral_diff_id == collateral_id {
                     continue;
                 }
-
-                let price = assets.get_synthetic_price(synthetic_id);
-                let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
-                unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor });
+                let price = assets.get_asset_price(collateral_id);
+                let risk_factor = assets
+                    .get_asset_risk_factor(
+                        synthetic_id: collateral_id, balance: collateral_balance, price: price,
+                    );
+                unchanged_collaterals
+                    .append(
+                        SyntheticAsset {
+                            id: collateral_id, balance: collateral_balance, price, risk_factor,
+                        },
+                    );
             }
 
-            (provisional_delta, unchanged_synthetics.span())
+            (provisional_delta, unchanged_synthetics.span(), unchanged_collaterals.span())
         }
     }
 
@@ -628,7 +631,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> PositionState {
             let position_diff = Default::default();
-            let (provisional_delta, unchanged_synthetics) = self
+            let (provisional_delta, unchanged_synthetics, unchanged_collaterals) = self
                 .derive_funding_delta_and_unchanged_balances(:position, :position_diff);
             let collateral_balance = self
                 .get_collateral_provisional_balance(

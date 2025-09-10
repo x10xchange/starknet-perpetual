@@ -519,7 +519,7 @@ pub mod AssetsComponent {
             self.last_price_validation.write(Time::now());
         }
 
-        fn get_synthetic_price(
+        fn get_asset_price(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> Price {
             if let Option::Some(data) = self.synthetic_timely_data.read(synthetic_id) {
@@ -537,7 +537,7 @@ pub mod AssetsComponent {
         ///   - risk_factor = risk_factor_tiers[index]
         ///   - If the index is out of bounds, return the last risk factor.
         /// - If the asset is not synthetic, panic.
-        fn get_synthetic_risk_factor(
+        fn get_asset_risk_factor(
             self: @ComponentState<TContractState>,
             synthetic_id: AssetId,
             balance: Balance,
@@ -635,7 +635,7 @@ pub mod AssetsComponent {
                 index_diff: index_diff.abs(),
                 :max_funding_rate,
                 :time_diff,
-                synthetic_price: self.get_synthetic_price(:synthetic_id),
+                synthetic_price: self.get_asset_price(:synthetic_id),
             );
             synthetic_timely_data.funding_index = new_funding_index;
             self.synthetic_timely_data.write(synthetic_id, synthetic_timely_data);

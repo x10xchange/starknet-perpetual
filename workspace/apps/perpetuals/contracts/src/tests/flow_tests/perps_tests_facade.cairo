@@ -1284,7 +1284,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .collateral_balance
     }
 
-    fn get_synthetic_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
+    fn get_asset_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
         IAssetsDispatcher { contract_address: *self.perpetuals_contract }
             .get_synthetic_timely_data(synthetic_id: synthetic_id)
             .price
