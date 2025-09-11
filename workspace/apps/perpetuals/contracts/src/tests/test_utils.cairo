@@ -313,6 +313,26 @@ pub fn create_token_state() -> TokenState {
     Deployable::deploy(@token_config)
 }
 
+pub fn create_vault_share_1_token_state() -> TokenState {
+    let token_config = TokenConfig {
+        name: VAULT_SHARE_COLLATERAL_1_NAME(),
+        symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
+        initial_supply: INITIAL_SUPPLY,
+        owner: COLLATERAL_OWNER(),
+    };
+    Deployable::deploy(@token_config)
+}
+
+pub fn create_vault_share_2_token_state() -> TokenState {
+    let token_config = TokenConfig {
+        name: VAULT_SHARE_COLLATERAL_2_NAME(),
+        symbol: VAULT_SHARE_COLLATERAL_2_SYMBOL(),
+        initial_supply: INITIAL_SUPPLY,
+        owner: COLLATERAL_OWNER(),
+    };
+    Deployable::deploy(@token_config)
+}
+
 pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User) {
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
     let position_id = user.position_id;
