@@ -13,8 +13,7 @@ fn test_deposit_vault_share_1() {
         .facade
         .vault_share_1_token_state
         .fund(recipient: user.account.address, amount: 10000000000);
-    // 12 * 10^18
-    state.facade.add_and_activate_vault_share_1_collateral(price: 12000000000000000000);
+    state.facade.add_and_activate_vault_share_1_collateral(price: 12);
     let deposit_info = state.facade.deposit_vault_share_1(user.account, user.position_id, 1000);
     state.facade.process_deposit(deposit_info);
 }
