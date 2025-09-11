@@ -63,6 +63,9 @@ pub struct DepositInfo {
     position_id: PositionId,
     quantized_amount: u64,
     salt: felt252,
+    asset_id: AssetId,
+    contract_address: ContractAddress,
+    unquantized_amount: u64,
 }
 
 #[derive(Copy, Drop)]
@@ -362,13 +365,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
 
-         
         let vault_share_1_info = SyntheticInfoTrait::new(
             asset_name: 'VS_1',
             risk_factor_data: RiskFactorTiers {
-                tiers: array![10].span(),
-                first_tier_boundary: MAX_U128,
-                tier_size: 1,
+                tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
             },
             oracles_len: 1,
         );
@@ -376,9 +376,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let vault_share_2_info = SyntheticInfoTrait::new(
             asset_name: 'VS_2',
             risk_factor_data: RiskFactorTiers {
-                tiers: array![10].span(),
-                first_tier_boundary: MAX_U128,
-                tier_size: 1,
+                tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
             },
             oracles_len: 1,
         );
@@ -487,7 +485,15 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             deposit_request_hash: deposit_hash,
             :salt,
         );
-        DepositInfo { depositor, position_id, quantized_amount, salt }
+        DepositInfo {
+            depositor,
+            position_id,
+            quantized_amount,
+            salt,
+            asset_id: self.collateral_id,
+            contract_address: self.token_state.address,
+            unquantized_amount,
+        }
     }
 
     fn deposit_vault_share_1(
@@ -499,7 +505,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let unquantized_amount = quantized_amount * VAULT_SHARE_1_COLLATERAL_QUANTUM;
         let address = depositor.address;
         let user_balance_before = self.vault_share_1_token_state.balance_of(account: address);
-        let contract_balance_before = self.vault_share_1_token_state.balance_of(self.perpetuals_contract);
+        let contract_balance_before = self
+            .vault_share_1_token_state
+            .balance_of(self.perpetuals_contract);
         let now = Time::now();
 
         self
@@ -513,7 +521,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(asset_id: self.vault_share_1_info.asset_id, :position_id, :quantized_amount, :salt);
+            .deposit(
+                asset_id: self.vault_share_1_info.asset_id, :position_id, :quantized_amount, :salt,
+            );
 
         validate_balance(
             token_state: self.vault_share_1_token_state,
@@ -545,11 +555,27 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             deposit_request_hash: deposit_hash,
             :salt,
         );
-        DepositInfo { depositor, position_id, quantized_amount, salt }
+        DepositInfo {
+            depositor,
+            position_id,
+            quantized_amount,
+            salt,
+            asset_id: self.vault_share_1_info.asset_id,
+            contract_address: self.vault_share_1_token_state.address,
+            unquantized_amount,
+        }
     }
 
     fn cancel_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
-        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
+        let DepositInfo {
+            depositor,
+            position_id,
+            quantized_amount,
+            salt,
+            asset_id,
+            contract_address,
+            unquantized_amount,
+        } = deposit_info;
         let user_balance_before = self.token_state.balance_of(depositor.address);
         let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
 
@@ -557,14 +583,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .cancel_deposit(:position_id, :quantized_amount, :salt);
         let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
+            token_address: contract_address,
             depositor: depositor.address,
             :position_id,
             :quantized_amount,
             :salt,
         );
-
-        let unquantized_amount = quantized_amount * self.collateral_quantum;
 
         validate_balance(
             token_state: self.token_state,
@@ -583,7 +607,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
             depositing_address: depositor.address,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
@@ -592,27 +616,50 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn process_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
-        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
-        let collateral_balance_before = self.get_position_collateral_balance(position_id);
+        let DepositInfo {
+            depositor,
+            position_id,
+            quantized_amount,
+            salt,
+            asset_id,
+            contract_address,
+            unquantized_amount,
+        } = deposit_info;
+        let collateral_balance_before = if (asset_id == self.collateral_id) {
+            self.get_position_collateral_balance(position_id)
+        } else {
+            self.get_position_spot_collateral_balance(position_id, asset_id)
+        };
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .process_deposit(
                 :operator_nonce,
-                asset_id: self.collateral_id,
+                asset_id: asset_id,
                 depositor: depositor.address,
                 :position_id,
                 :quantized_amount,
                 :salt,
             );
-        self
-            .validate_collateral_balance(
-                :position_id, expected_balance: collateral_balance_before + quantized_amount.into(),
-            );
+
+        if (asset_id != self
+            .collateral_id) {
+                self.validate_spot_collateral_balance(
+                    :position_id,
+                    expected_balance: collateral_balance_before + quantized_amount.into(),
+                    asset_id: asset_id,
+                )
+            } else {
+                self
+                    .validate_collateral_balance(
+                        :position_id,
+                        expected_balance: collateral_balance_before + quantized_amount.into(),
+                    );
+            }
 
         let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
+            token_address: contract_address,
             depositor: depositor.address,
             :position_id,
             :quantized_amount,
@@ -625,9 +672,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
             depositing_address: depositor.address,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :quantized_amount,
-            unquantized_amount: quantized_amount * self.collateral_quantum,
+            :unquantized_amount,
             deposit_request_hash: deposit_hash,
             :salt,
         );
@@ -1288,20 +1335,23 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
     }
 
-    fn add_and_activate_vault_share_1_collateral(ref self: PerpsTestsFacade){
-
+    fn add_and_activate_vault_share_1_collateral(ref self: PerpsTestsFacade, price: u128) {
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
         self.set_app_governor_as_caller();
-        dispatcher.add_vault_share_asset(
-            asset_id: self.vault_share_1_info.asset_id,
-            risk_factor_tiers: self.vault_share_1_info.risk_factor_data.tiers,
-            risk_factor_first_tier_boundary: self.vault_share_1_info.risk_factor_data.first_tier_boundary,
-            risk_factor_tier_size: self.vault_share_1_info.risk_factor_data.tier_size,
-            quorum: self.vault_share_1_info.oracles.len().try_into().unwrap(),
-            resolution_factor: self.vault_share_1_info.resolution_factor,
-            quantum: VAULT_SHARE_1_COLLATERAL_QUANTUM,
-            erc20_address: self.vault_share_1_token_state.address,
-        );
+        dispatcher
+            .add_vault_share_asset(
+                asset_id: self.vault_share_1_info.asset_id,
+                risk_factor_tiers: self.vault_share_1_info.risk_factor_data.tiers,
+                risk_factor_first_tier_boundary: self
+                    .vault_share_1_info
+                    .risk_factor_data
+                    .first_tier_boundary,
+                risk_factor_tier_size: self.vault_share_1_info.risk_factor_data.tier_size,
+                quorum: self.vault_share_1_info.oracles.len().try_into().unwrap(),
+                resolution_factor: self.vault_share_1_info.resolution_factor,
+                quantum: VAULT_SHARE_1_COLLATERAL_QUANTUM,
+                erc20_address: self.vault_share_1_token_state.address,
+            );
 
         for oracle in self.vault_share_1_info.oracles {
             self.set_app_governor_as_caller();
@@ -1314,7 +1364,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 );
         }
         // Activate the synthetic asset.
-        self.price_tick(synthetic_info: @self.vault_share_1_info, price: 1_u128);
+        self.price_tick(synthetic_info: @self.vault_share_1_info, price: price);
     }
 
     fn add_active_synthetic(
@@ -1412,6 +1462,24 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .base_collateral_balance
     }
 
+    fn get_position_spot_collateral_balance(
+        self: @PerpsTestsFacade, position_id: PositionId, asset_id: AssetId,
+    ) -> Balance {
+        let position_assets: PositionData = IPositionsDispatcher {
+            contract_address: *self.perpetuals_contract,
+        }
+            .get_position_assets(:position_id);
+
+        for balance_holder in position_assets.other_collateral_balances {
+            if *balance_holder.id == asset_id {
+                let balance: i64 = (*balance_holder.balance).into();
+                return balance.into();
+            }
+        }
+
+        return 0_i64.into();
+    }    
+
     fn get_asset_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
         IAssetsDispatcher { contract_address: *self.perpetuals_contract }
             .get_synthetic_timely_data(synthetic_id: synthetic_id)
@@ -1457,6 +1525,18 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         self: @PerpsTestsFacade, position_id: PositionId, expected_balance: Balance,
     ) {
         assert_eq!(self.get_position_collateral_balance(position_id), expected_balance);
+    }
+
+    fn validate_spot_collateral_balance(
+        self: @PerpsTestsFacade,
+        position_id: PositionId,
+        expected_balance: Balance,
+        asset_id: AssetId,
+    ) {
+        assert_eq!(
+            self.get_position_spot_collateral_balance(:position_id, :asset_id),
+            expected_balance
+        );
     }
 
     fn validate_synthetic_balance(

@@ -6,12 +6,17 @@ use starkware_utils::constants::MAX_U128;
 use starkware_utils_testing::test_utils::TokenTrait;
 
 #[test]
-fn test_deposit_vault_share_1(){
-        let mut state: FlowTestBase = FlowTestBaseTrait::new();
-        let user = state.new_user_with_position();
-        state.facade.vault_share_1_token_state.fund(recipient: user.account.address, amount: 10000000000);
-        state.facade.add_and_activate_vault_share_1_collateral();
-        let _ = state.facade.deposit_vault_share_1(user.account, user.position_id, 1000);
+fn test_deposit_vault_share_1() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+    state
+        .facade
+        .vault_share_1_token_state
+        .fund(recipient: user.account.address, amount: 10000000000);
+    // 12 * 10^18
+    state.facade.add_and_activate_vault_share_1_collateral(price: 12000000000000000000);
+    let deposit_info = state.facade.deposit_vault_share_1(user.account, user.position_id, 1000);
+    state.facade.process_deposit(deposit_info);
 }
 
 #[test]

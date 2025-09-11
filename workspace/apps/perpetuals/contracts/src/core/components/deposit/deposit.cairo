@@ -261,7 +261,7 @@ pub(crate) mod Deposit {
                     events::DepositProcessed {
                         position_id,
                         depositing_address: depositor,
-                        collateral_id: assets.get_collateral_id(),
+                        collateral_id: asset_id,
                         quantized_amount,
                         unquantized_amount,
                         deposit_request_hash: deposit_hash,
