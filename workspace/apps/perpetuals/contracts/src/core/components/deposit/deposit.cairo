@@ -217,13 +217,18 @@ pub(crate) mod Deposit {
             let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
             nonce.use_checked_nonce(:operator_nonce);
             let assets = get_dep_component!(@self, Assets);
-            let (token_contract, quantum, position_diff)= if (asset_id == assets.get_collateral_id()) {
+            let (token_contract, quantum, position_diff) = if (asset_id == assets
+                .get_collateral_id()) {
                 let position_diff = PositionDiff {
                     base_collateral_diff: quantized_amount.into(),
                     synthetic_diff: Option::None,
                     non_base_collateral_diff: Option::None,
                 };
-                (assets.get_collateral_token_contract(), assets.get_collateral_quantum(), position_diff)
+                (
+                    assets.get_collateral_token_contract(),
+                    assets.get_collateral_quantum(),
+                    position_diff,
+                )
             } else {
                 let asset_config = assets.get_asset_config(asset_id);
                 let position_diff = PositionDiff {
