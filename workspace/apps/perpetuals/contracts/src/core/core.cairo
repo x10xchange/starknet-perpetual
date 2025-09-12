@@ -1306,7 +1306,11 @@ pub mod Core {
                             provisional_delta: Option::Some(provisional_delta),
                         );
 
-                    calculate_position_tvtr_before(:unchanged_synthetics, :position_diff_enriched)
+                    calculate_position_tvtr_before(
+                        :unchanged_synthetics,
+                        :unchanged_collaterals,
+                        :position_diff_enriched
+                    )
                 },
                 FromNullableResult::NotNull(value) => value.unbox(),
             };
@@ -1346,7 +1350,10 @@ pub mod Core {
                 );
 
             liquidated_position_validations(
-                :position_id, :unchanged_synthetics, :position_diff_enriched,
+                :position_id,
+                :unchanged_synthetics,
+                :unchanged_collaterals,
+                :position_diff_enriched,
             );
         }
 
@@ -1369,7 +1376,7 @@ pub mod Core {
                 );
 
             deleveraged_position_validations(
-                :position_id, :unchanged_synthetics, :position_diff_enriched,
+                :position_id, :unchanged_synthetics, :unchanged_collaterals, :position_diff_enriched,
             );
         }
 
@@ -1392,6 +1399,7 @@ pub mod Core {
             PositionDiffEnriched {
                 collateral_enriched: collateral_enriched,
                 synthetic_enriched: position_diff.synthetic_enriched,
+                spot_collaterals_enriched: Option::None,
             }
         }
 

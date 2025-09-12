@@ -1,3 +1,4 @@
+use core::num::traits::Pow;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::nullable::{FromNullableResult, match_nullable};
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -246,6 +247,25 @@ pub struct RiskFactorTiers {
 
 #[generate_trait]
 pub impl SyntheticInfoImpl of SyntheticInfoTrait {
+    fn spot(
+        asset_name: felt252,
+        risk_factor_data: RiskFactorTiers,
+        oracles_len: u8,
+        underlying_decimals: u32,
+        quantum: u64,
+    ) -> SyntheticInfo {
+
+        let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into()).try_into().unwrap();
+        let x = Self::new(asset_name, risk_factor_data, oracles_len);
+        return SyntheticInfo {
+            asset_name: x.asset_name,
+            asset_id: x.asset_id,
+            risk_factor_data: x.risk_factor_data,
+            oracles: x.oracles,
+            resolution_factor: resolution,
+        };
+    }
+
     fn new(
         asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8,
     ) -> SyntheticInfo {
@@ -365,12 +385,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
         let perpetuals_contract = Deployable::deploy(@perpetuals_config);
 
-        let vault_share_1_info = SyntheticInfoTrait::new(
+        let vault_share_1_info = SyntheticInfoTrait::spot(
             asset_name: 'VS_1',
             risk_factor_data: RiskFactorTiers {
                 tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
             },
             oracles_len: 1,
+            underlying_decimals: 18,
+            quantum: VAULT_SHARE_1_COLLATERAL_QUANTUM
         );
 
         let vault_share_2_info = SyntheticInfoTrait::new(
@@ -643,20 +665,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :salt,
             );
 
-        if (asset_id != self
-            .collateral_id) {
-                self.validate_spot_collateral_balance(
+        if (asset_id != self.collateral_id) {
+            self
+                .validate_spot_collateral_balance(
                     :position_id,
                     expected_balance: collateral_balance_before + quantized_amount.into(),
                     asset_id: asset_id,
                 )
-            } else {
-                self
-                    .validate_collateral_balance(
-                        :position_id,
-                        expected_balance: collateral_balance_before + quantized_amount.into(),
-                    );
-            }
+        } else {
+            self
+                .validate_collateral_balance(
+                    :position_id,
+                    expected_balance: collateral_balance_before + quantized_amount.into(),
+                );
+        }
 
         let deposit_hash = deposit_hash(
             token_address: contract_address,
@@ -1478,7 +1500,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         }
 
         return 0_i64.into();
-    }    
+    }
 
     fn get_asset_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
         IAssetsDispatcher { contract_address: *self.perpetuals_contract }
@@ -1534,8 +1556,7 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         asset_id: AssetId,
     ) {
         assert_eq!(
-            self.get_position_spot_collateral_balance(:position_id, :asset_id),
-            expected_balance
+            self.get_position_spot_collateral_balance(:position_id, :asset_id), expected_balance,
         );
     }
 

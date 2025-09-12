@@ -2,24 +2,27 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
-    use core::num::traits::Zero;
+    use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
+    use openzeppelin::token::erc20::interface::{
+        IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
+    };
     use perpetuals::core::components::assets::errors::{
-        ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL, ASSET_ALREADY_HAS_ERC20,
-        COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
-        INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
-        INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
-        INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        ALREADY_INITIALIZED, ASSET_ALREADY_HAS_ERC20, ASSET_NAME_TOO_LONG,
+        ASSET_REGISTERED_AS_COLLATERAL, COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED,
+        FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
+        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
+        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
+        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION_FACTOR,
+        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
+        ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS,
+        ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
+        ZERO_MAX_PRICE_INTERVAL,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -187,18 +190,18 @@ pub mod AssetsComponent {
         ) {
             /// Validations:
             get_dep_component!(@self, Roles).only_app_governor();
-            self.add_asset(
-                asset_id,
-                risk_factor_tiers,
-                risk_factor_first_tier_boundary,
-                risk_factor_tier_size,
-                quorum,
-                resolution_factor,
-                AssetType::SYNTHETIC,
-                0,
-                0_felt252.try_into().unwrap(),
-            );
-
+            self
+                .add_asset(
+                    asset_id,
+                    risk_factor_tiers,
+                    risk_factor_first_tier_boundary,
+                    risk_factor_tier_size,
+                    quorum,
+                    resolution_factor,
+                    AssetType::SYNTHETIC,
+                    0,
+                    0_felt252.try_into().unwrap(),
+                );
         }
 
         /// - Deactivate synthetic asset.
@@ -444,26 +447,33 @@ pub mod AssetsComponent {
 
         fn add_vault_share_asset(
             ref self: ComponentState<TContractState>,
-            asset_id: perpetuals::core::types::asset::AssetId,
-            risk_factor_tiers: core::array::Span<core::integer::u16>,
-            risk_factor_first_tier_boundary: core::integer::u128,
-            risk_factor_tier_size: core::integer::u128,
-            quorum: core::integer::u8,
-            resolution_factor: core::integer::u64,
-            quantum: core::integer::u64,
-            erc20_address: core::starknet::contract_address::ContractAddress,
+            asset_id: AssetId,
+            risk_factor_tiers: Span<u16>,
+            risk_factor_first_tier_boundary: u128,
+            risk_factor_tier_size: u128,
+            quorum: u8,
+            resolution_factor: u64,            
+            quantum: u64,
+            erc20_address: ContractAddress,
         ) {
-            self.add_asset(
-                asset_id,
-                risk_factor_tiers,
-                risk_factor_first_tier_boundary,
-                risk_factor_tier_size,
-                quorum,
-                resolution_factor,
-                AssetType::VAULT_SHARE_COLLATERAL,
-                quantum,
-                erc20_address,
-            );
+            let erc20Contract = IERC20MetadataDispatcher { contract_address: erc20_address };
+            let underlying_decimals = erc20Contract.decimals();
+            let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into())
+                .try_into()
+                .unwrap();
+            assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
+            self
+                .add_asset(
+                    asset_id,
+                    risk_factor_tiers,
+                    risk_factor_first_tier_boundary,
+                    risk_factor_tier_size,
+                    quorum,
+                    resolution,
+                    AssetType::VAULT_SHARE_COLLATERAL,
+                    quantum,
+                    erc20_address,
+                );
         }
     }
 
@@ -790,7 +800,6 @@ pub mod AssetsComponent {
             let asset_config_entry = self.synthetic_config.entry(asset_id);
             assert(asset_config_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
 
-
             if let Option::Some(collateral_id) = self.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
@@ -802,13 +811,10 @@ pub mod AssetsComponent {
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             assert(resolution_factor.is_non_zero(), INVALID_ZERO_RESOLUTION_FACTOR);
 
-            if (asset_type != AssetType::SYNTHETIC){
+            if (asset_type != AssetType::SYNTHETIC) {
                 assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
                 let asset_contract_address = self.asset_contract_addresses.entry(asset_id).read();
-                assert(
-                    asset_contract_address.contract_address.is_zero(),
-                    ASSET_ALREADY_HAS_ERC20,
-                );
+                assert(asset_contract_address.contract_address.is_zero(), ASSET_ALREADY_HAS_ERC20);
                 assert(erc20_address.is_non_zero(), INVALID_ZERO_TOKEN_ADDRESS);
                 self
                     .asset_contract_addresses

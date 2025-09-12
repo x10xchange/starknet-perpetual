@@ -114,7 +114,7 @@ pub(crate) mod Positions {
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
 
-            calculate_position_tvtr(:unchanged_synthetics, :collateral_balance)
+            calculate_position_tvtr(:unchanged_synthetics, :collateral_balance, unchanged_collaterals: collaterals)
         }
 
         /// This function is mostly used as view function - it's better to use the
@@ -637,7 +637,7 @@ pub(crate) mod Positions {
                 .get_collateral_provisional_balance(
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
-            evaluate_position(:unchanged_synthetics, :collateral_balance)
+            evaluate_position(:unchanged_synthetics, :unchanged_collaterals, :collateral_balance)
         }
     }
 }
