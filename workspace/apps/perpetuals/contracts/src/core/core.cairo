@@ -28,7 +28,7 @@ pub mod Core {
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
-    use perpetuals::core::types::asset::synthetic::SyntheticDiffEnriched;
+    use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticDiffEnriched};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::{Balance, BalanceDiff};
     use perpetuals::core::types::order::{Order, OrderTrait};
@@ -367,34 +367,17 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            // check recipient position exists
-            self.positions.get_position_snapshot(position_id: recipient);
-
-            let position = self.positions.get_position_snapshot(:position_id);
             let collateral_id = self.assets.get_collateral_id();
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            let hash = self
-                .request_approvals
-                .register_approval(
-                    owner_account: position.get_owner_account(),
-                    public_key: position.get_owner_public_key(),
-                    :signature,
-                    args: TransferArgs {
-                        position_id, recipient, salt, expiration, collateral_id, amount,
-                    },
-                );
             self
-                .emit(
-                    events::TransferRequest {
-                        position_id,
-                        recipient,
-                        collateral_id,
-                        amount,
-                        expiration,
-                        transfer_request_hash: hash,
-                        salt,
-                    },
-                );
+                ._transfer_request(
+                    :signature,
+                    :recipient,
+                    :position_id,
+                    asset_id: collateral_id,
+                    :amount,
+                    :expiration,
+                    :salt,
+                )
         }
 
         /// Executes a transfer.
@@ -421,37 +404,19 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
-            assert(recipient != position_id, INVALID_SAME_POSITIONS);
-            let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
-            let hash = self
-                .request_approvals
-                .consume_approved_request(
-                    args: TransferArgs {
-                        recipient, position_id, collateral_id, amount, expiration, salt,
-                    },
-                    public_key: position.get_owner_public_key(),
-                );
-
-            self._execute_transfer(:recipient, :position_id, :collateral_id, :amount);
-
+            let asset_id = self.assets.get_collateral_id();
             self
-                .emit(
-                    events::Transfer {
-                        recipient,
-                        position_id,
-                        collateral_id,
-                        amount,
-                        expiration,
-                        transfer_request_hash: hash,
-                        salt,
-                    },
+                ._transfer(
+                    :operator_nonce,
+                    :recipient,
+                    :position_id,
+                    :asset_id,
+                    :amount,
+                    :expiration,
+                    :salt,
                 );
         }
+
         fn multi_trade(ref self: ContractState, operator_nonce: u64, trades: Span<Settlement>) {
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
@@ -961,14 +926,137 @@ pub mod Core {
             ref self: perpetuals::core::core::Core::ContractState,
             operator_nonce: core::integer::u64,
             vault_position_id: perpetuals::core::types::position::PositionId,
-            vault_contract_address: core::starknet::contract_address::ContractAddress,
+            vault_contract_address: starknet::contract_address::ContractAddress,
             vault_asset_id: perpetuals::core::types::asset::AssetId,
             signature: core::array::Span<core::felt252>,
         ) {}
+
+        fn transfer_spot(
+            ref self: ContractState,
+            operator_nonce: core::integer::u64,
+            recipient: perpetuals::core::types::position::PositionId,
+            asset_id: perpetuals::core::types::asset::AssetId,
+            position_id: perpetuals::core::types::position::PositionId,
+            amount: core::integer::u64,
+            expiration: starkware_utils::time::time::Timestamp,
+            salt: core::felt252,
+        ) {
+            self
+                ._transfer(
+                    :operator_nonce,
+                    :recipient,
+                    :position_id,
+                    :asset_id,
+                    :amount,
+                    :expiration,
+                    :salt,
+                );
+        }
+
+        fn transfer_spot_request(
+            ref self: perpetuals::core::core::Core::ContractState,
+            signature: core::array::Span<core::felt252>,
+            recipient: perpetuals::core::types::position::PositionId,
+            asset_id: perpetuals::core::types::asset::AssetId,
+            position_id: perpetuals::core::types::position::PositionId,
+            amount: core::integer::u64,
+            expiration: starkware_utils::time::time::Timestamp,
+            salt: core::felt252,
+        ) {
+            self
+                ._transfer_request(
+                    :signature, :recipient, :position_id, :asset_id, :amount, :expiration, :salt,
+                );
+        }
     }
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
+        fn _transfer_request(
+            ref self: ContractState,
+            signature: Signature,
+            recipient: PositionId,
+            position_id: PositionId,
+            asset_id: AssetId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+        ) {
+            // check recipient position exists
+            self.positions.get_position_snapshot(position_id: recipient);
+
+            if (asset_id != self.assets.get_collateral_id()) {
+                // collateral transfer request
+                let collateral_config = self.assets.get_asset_config(asset_id);
+                assert(collateral_config.status == AssetStatus::ACTIVE, 'ASSET_INACTIVE');
+                assert(collateral_config.asset_type != AssetType::SYNTHETIC, 'NOT_COLLATERAL');
+            }
+
+            let position = self.positions.get_position_snapshot(:position_id);
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            let hash = self
+                .request_approvals
+                .register_approval(
+                    owner_account: position.get_owner_account(),
+                    public_key: position.get_owner_public_key(),
+                    :signature,
+                    args: TransferArgs {
+                        position_id, recipient, salt, expiration, collateral_id: asset_id, amount,
+                    },
+                );
+            self
+                .emit(
+                    events::TransferRequest {
+                        position_id,
+                        recipient,
+                        collateral_id: asset_id,
+                        amount,
+                        expiration,
+                        transfer_request_hash: hash,
+                        salt,
+                    },
+                );
+        }
+
+        fn _transfer(
+            ref self: ContractState,
+            operator_nonce: u64,
+            recipient: PositionId,
+            position_id: PositionId,
+            asset_id: AssetId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+            assert(recipient != position_id, INVALID_SAME_POSITIONS);
+            let position = self.positions.get_position_snapshot(:position_id);
+            let hash = self
+                .request_approvals
+                .consume_approved_request(
+                    args: TransferArgs {
+                        recipient, position_id, collateral_id: asset_id, amount, expiration, salt,
+                    },
+                    public_key: position.get_owner_public_key(),
+                );
+            self._execute_transfer(:recipient, :position_id, collateral_id: asset_id, :amount);
+            self
+                .emit(
+                    events::Transfer {
+                        recipient,
+                        position_id,
+                        collateral_id: asset_id,
+                        amount,
+                        expiration,
+                        transfer_request_hash: hash,
+                        salt,
+                    },
+                );
+        }
+
         fn _execute_trade(
             ref self: ContractState,
             signature_a: Signature,
@@ -1114,17 +1202,36 @@ pub mod Core {
             collateral_id: AssetId,
             amount: u64,
         ) {
-            // Parameters
-            let position_diff_sender = PositionDiff {
-                base_collateral_diff: -amount.into(),
-                synthetic_diff: Option::None,
-                non_base_collateral_diff: Option::None,
-            };
+            let is_base_collateral = collateral_id == self.assets.get_collateral_id();
 
-            let position_diff_recipient = PositionDiff {
-                base_collateral_diff: amount.into(),
-                synthetic_diff: Option::None,
-                non_base_collateral_diff: Option::None,
+            let (position_diff_sender, position_diff_recipient) = if (is_base_collateral) {
+                let position_diff_sender = PositionDiff {
+                    base_collateral_diff: -amount.into(),
+                    synthetic_diff: Option::None,
+                    non_base_collateral_diff: Option::None,
+                };
+
+                let position_diff_recipient = PositionDiff {
+                    base_collateral_diff: amount.into(),
+                    synthetic_diff: Option::None,
+                    non_base_collateral_diff: Option::None,
+                };
+
+                (position_diff_sender, position_diff_recipient)
+            } else {
+                let position_diff_sender = PositionDiff {
+                    base_collateral_diff: 0_i64.into(),
+                    synthetic_diff: Option::None,
+                    non_base_collateral_diff: Option::Some((collateral_id, -amount.into())),
+                };
+
+                let position_diff_recipient = PositionDiff {
+                    base_collateral_diff: 0_i64.into(),
+                    synthetic_diff: Option::None,
+                    non_base_collateral_diff: Option::Some((collateral_id, amount.into())),
+                };
+
+                (position_diff_sender, position_diff_recipient)
             };
 
             /// Validations - Fundamentals:
@@ -1307,9 +1414,7 @@ pub mod Core {
                         );
 
                     calculate_position_tvtr_before(
-                        :unchanged_synthetics,
-                        :unchanged_collaterals,
-                        :position_diff_enriched
+                        :unchanged_synthetics, :unchanged_collaterals, :position_diff_enriched,
                     )
                 },
                 FromNullableResult::NotNull(value) => value.unbox(),
@@ -1376,7 +1481,10 @@ pub mod Core {
                 );
 
             deleveraged_position_validations(
-                :position_id, :unchanged_synthetics, :unchanged_collaterals, :position_diff_enriched,
+                :position_id,
+                :unchanged_synthetics,
+                :unchanged_collaterals,
+                :position_diff_enriched,
             );
         }
 

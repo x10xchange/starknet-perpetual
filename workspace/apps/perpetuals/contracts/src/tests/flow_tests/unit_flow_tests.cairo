@@ -1,10 +1,10 @@
+use core::num::traits::Pow;
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use starkware_utils::constants::MAX_U128;
 use starkware_utils_testing::test_utils::TokenTrait;
-use core::num::traits::Pow;
 
 #[test]
 fn test_deposit_vault_share_1() {
@@ -19,11 +19,61 @@ fn test_deposit_vault_share_1() {
     // depositing 1 vault share means 10^18 onchain
     // and 10^6 quantized amount
     state.facade.add_and_activate_vault_share_1_collateral(price: 12);
-    let deposit_info = state.facade.deposit_vault_share_1(user.account, user.position_id, 10_u64.pow(6));
+    let deposit_info = state
+        .facade
+        .deposit_vault_share_1(user.account, user.position_id, 10_u64.pow(6));
     state.facade.process_deposit(deposit_info);
     //price is 12, USDC has 10^6 resolution
     //expected TV is 12 * 10^6
-    state.facade.validate_total_value(position_id: user.position_id, expected_total_value: 12_i128 * 10_i128.pow(6));
+    state
+        .facade
+        .validate_total_value(
+            position_id: user.position_id, expected_total_value: 12_i128 * 10_i128.pow(6),
+        );
+}
+
+
+#[test]
+fn test_transfer_vault_share_1() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user_sender = state.new_user_with_position();
+    let user_recipient = state.new_user_with_position();
+    state
+        .facade
+        .vault_share_1_token_state
+        .fund(recipient: user_sender.account.address, amount: 10_u128.pow(18));
+
+    state.facade.add_and_activate_vault_share_1_collateral(price: 12);
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_vault_share_1(user_sender.account, user_sender.position_id, 10_u64.pow(6)),
+        );
+
+    let transfer_info = state
+        .facade
+        .transfer_spot_request(
+            sender: user_sender,
+            recipient: user_recipient,
+            amount: 10_u64.pow(5),
+            asset_id: state.facade.vault_share_1_info.asset_id,
+        );
+
+    state.facade.transfer(transfer_info);
+
+    state
+        .facade
+        .validate_total_value(
+            position_id: user_recipient.position_id, expected_total_value: 12_i128 * 10_i128.pow(5),
+        );
+
+    state
+        .facade
+        .validate_total_value(
+            position_id: user_sender.position_id, expected_total_value: 12_i128 * (10_i128.pow(6) - 10_i128.pow(5)),
+        );        
 }
 
 #[test]
