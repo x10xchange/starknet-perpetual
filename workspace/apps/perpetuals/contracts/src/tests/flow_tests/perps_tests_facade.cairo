@@ -1,6 +1,6 @@
-use core::num::traits::Pow;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::nullable::{FromNullableResult, match_nullable};
+use core::num::traits::Pow;
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -77,6 +77,7 @@ pub struct RequestInfo {
     expiration: Timestamp,
     salt: felt252,
     request_hash: felt252,
+    asset_id: AssetId,
 }
 
 #[derive(Copy, Drop)]
@@ -254,8 +255,9 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
         underlying_decimals: u32,
         quantum: u64,
     ) -> SyntheticInfo {
-
-        let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into()).try_into().unwrap();
+        let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into())
+            .try_into()
+            .unwrap();
         let x = Self::new(asset_name, risk_factor_data, oracles_len);
         return SyntheticInfo {
             asset_name: x.asset_name,
@@ -392,7 +394,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             },
             oracles_len: 1,
             underlying_decimals: 18,
-            quantum: VAULT_SHARE_1_COLLATERAL_QUANTUM
+            quantum: VAULT_SHARE_1_COLLATERAL_QUANTUM,
         );
 
         let vault_share_2_info = SyntheticInfoTrait::new(
@@ -732,12 +734,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :salt,
         );
 
-        RequestInfo { recipient: user, position_id, amount, expiration, salt, request_hash }
+        RequestInfo {
+            recipient: user,
+            position_id,
+            amount,
+            expiration,
+            salt,
+            request_hash,
+            asset_id: self.collateral_id,
+        }
     }
 
     fn withdraw(ref self: PerpsTestsFacade, withdraw_info: RequestInfo) {
         let RequestInfo {
-            recipient, position_id, amount, expiration, salt, request_hash,
+            recipient, position_id, amount, expiration, salt, request_hash, asset_id,
         } = withdraw_info;
         let address = recipient.account.address;
         let user_balance_before = self.token_state.balance_of(account: address);
@@ -829,55 +839,158 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         RequestInfo {
-            recipient, position_id: sender.position_id, amount, expiration, salt, request_hash,
+            recipient,
+            position_id: sender.position_id,
+            amount,
+            expiration,
+            salt,
+            request_hash,
+            asset_id: self.collateral_id,
+        }
+    }
+
+    fn transfer_spot_request(
+        ref self: PerpsTestsFacade, sender: User, recipient: User, amount: u64, asset_id: AssetId,
+    ) -> RequestInfo {
+        let expiration = Time::now().add(delta: Time::weeks(1));
+
+        let salt = self.generate_salt();
+        let transfer_args = TransferArgs {
+            position_id: sender.position_id,
+            salt,
+            expiration,
+            collateral_id: asset_id,
+            amount,
+            recipient: recipient.position_id,
+        };
+        let request_hash = transfer_args
+            .get_message_hash(public_key: sender.account.key_pair.public_key);
+        let signature = sender.account.sign_message(message: request_hash);
+
+        sender.account.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .transfer_spot_request(
+                signature,
+                recipient: recipient.position_id,
+                :asset_id,
+                position_id: sender.position_id,
+                :amount,
+                :expiration,
+                :salt,
+            );
+
+        self.validate_request_approval(:request_hash, expected_status: RequestStatus::PENDING);
+
+        assert_transfer_request_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            position_id: sender.position_id,
+            recipient: recipient.position_id,
+            collateral_id: asset_id,
+            :amount,
+            :expiration,
+            transfer_request_hash: request_hash,
+            :salt,
+        );
+
+        RequestInfo {
+            recipient,
+            position_id: sender.position_id,
+            amount,
+            expiration,
+            salt,
+            request_hash,
+            asset_id: asset_id,
         }
     }
 
     fn transfer(ref self: PerpsTestsFacade, transfer_info: RequestInfo) {
         let RequestInfo {
-            recipient, position_id, amount, expiration, salt, request_hash,
+            recipient, position_id, amount, expiration, salt, request_hash, asset_id,
         } = transfer_info;
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
-        let sender_balance_before = dispatcher
-            .get_position_assets(position_id: position_id)
-            .base_collateral_balance;
-        let recipient_balance_before = dispatcher
-            .get_position_assets(position_id: recipient.position_id)
-            .base_collateral_balance;
+
+        let is_base_collateral_transfer = asset_id == self.collateral_id;
+
+        let (sender_balance_before, recipient_balance_before) = if (is_base_collateral_transfer) {
+            let sender_balance_before = dispatcher
+                .get_position_assets(position_id: position_id)
+                .base_collateral_balance;
+            let recipient_balance_before = dispatcher
+                .get_position_assets(position_id: recipient.position_id)
+                .base_collateral_balance;
+            (sender_balance_before, recipient_balance_before)
+        } else {
+            let sender_balance_before = self
+                .get_position_spot_collateral_balance(:position_id, :asset_id);
+            let recipient_balance_before = self
+                .get_position_spot_collateral_balance(recipient.position_id, asset_id);
+            (sender_balance_before, recipient_balance_before)
+        };
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
-        ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .transfer(
-                :operator_nonce,
-                recipient: recipient.position_id,
-                position_id: position_id,
-                amount: amount,
-                expiration: expiration,
-                salt: salt,
-            );
+
+        if (!is_base_collateral_transfer) {
+            ICoreDispatcher { contract_address: self.perpetuals_contract }
+                .transfer_spot(
+                    :operator_nonce,
+                    recipient: recipient.position_id,
+                    asset_id: asset_id,
+                    position_id: position_id,
+                    amount: amount,
+                    expiration: expiration,
+                    salt: salt,
+                );
+        } else {
+            ICoreDispatcher { contract_address: self.perpetuals_contract }
+                .transfer(
+                    :operator_nonce,
+                    recipient: recipient.position_id,
+                    position_id: position_id,
+                    amount: amount,
+                    expiration: expiration,
+                    salt: salt,
+                );
+        }
 
         self
             .validate_request_approval(
                 request_hash: request_hash, expected_status: RequestStatus::PROCESSED,
             );
 
-        self
-            .validate_collateral_balance(
-                position_id: position_id, expected_balance: sender_balance_before - amount.into(),
-            );
+        if (!is_base_collateral_transfer) {
+            self
+                .validate_spot_collateral_balance(
+                    position_id: position_id,
+                    expected_balance: sender_balance_before - amount.into(),
+                    asset_id: asset_id,
+                );
 
-        self
-            .validate_collateral_balance(
-                position_id: recipient.position_id,
-                expected_balance: recipient_balance_before + amount.into(),
-            );
+            self
+                .validate_spot_collateral_balance(
+                    position_id: recipient.position_id,
+                    expected_balance: recipient_balance_before + amount.into(),
+                    asset_id: asset_id,
+                );
+        } else {
+            self
+                .validate_collateral_balance(
+                    position_id: position_id,
+                    expected_balance: sender_balance_before - amount.into(),
+                );
+
+            self
+                .validate_collateral_balance(
+                    position_id: recipient.position_id,
+                    expected_balance: recipient_balance_before + amount.into(),
+                );
+        }
 
         assert_transfer_event_with_expected(
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             position_id: position_id,
             recipient: recipient.position_id,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :amount,
             expiration: expiration,
             transfer_request_hash: request_hash,

@@ -15,7 +15,6 @@ pub(crate) mod Deposit {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternalTrait;
-    use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::position::{PositionDiff, PositionId};
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
