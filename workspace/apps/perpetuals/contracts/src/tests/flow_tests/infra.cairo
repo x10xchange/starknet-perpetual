@@ -1,16 +1,21 @@
 use core::cmp::min;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::num::traits::{Pow, Zero};
+use perpetuals::core::components::positions::interface::{
+    IPositionsDispatcher, IPositionsDispatcherTrait,
+};
 use perpetuals::core::interface::Settlement;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
-use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use starkware_utils::constants::HOUR;
 use starkware_utils::math::abs::Abs;
 use crate::core::types::funding::{FUNDING_SCALE, FundingIndex};
 use crate::core::types::price::PriceMulTrait;
-use crate::tests::test_utils::create_token_state;
+use crate::tests::test_utils::{
+    create_token_state, create_vault_share_1_token_state, create_vault_share_2_token_state,
+};
 
 
 #[derive(Drop)]
@@ -37,7 +42,11 @@ impl PrivateFlowTestBaseImpl of PrivateFlowTestBaseTrait {
 pub impl FlowTestBaseImpl of FlowTestBaseTrait {
     fn new() -> FlowTestBase {
         FlowTestBase {
-            facade: PerpsTestsFacadeTrait::new(create_token_state()),
+            facade: PerpsTestsFacadeTrait::new(
+                collateral_token_state: create_token_state(),
+                vault_share_1_token_state: create_vault_share_1_token_state(),
+                vault_share_2_token_state: create_vault_share_2_token_state(),
+            ),
             position_id_gen: 100,
             key_gen: 0,
         }
@@ -208,10 +217,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let synthetic_price = self
             .flow_test_base
             .facade
-            .get_synthetic_price(synthetic_id: synthetic_info.asset_id);
-        let quote: i64 = PriceMulTrait::<
-            Balance,
-        >::mul(@synthetic_price, -base.into())
+            .get_asset_price(synthetic_id: synthetic_info.asset_id);
+        let quote: i64 = PriceMulTrait::<Balance>::mul(@synthetic_price, -base.into())
             .try_into()
             .expect('Value should not overflow');
         let order_info = self
@@ -424,6 +431,13 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
                 base_asset_id: synthetic_info.asset_id,
                 :base_amount_a,
             );
+    }
+
+    fn get_position_data(self: @FlowTestExtended, user: User) -> @PositionData {
+        let dispatcher = IPositionsDispatcher {
+            contract_address: *self.flow_test_base.facade.perpetuals_contract,
+        };
+        @dispatcher.get_position_assets(position_id: user.position_id)
     }
 }
 
