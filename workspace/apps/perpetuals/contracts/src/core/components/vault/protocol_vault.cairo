@@ -69,7 +69,7 @@ pub mod ProtocolVault {
     fn redeem_with_price(
         ref self: ContractState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
     ) -> u256 {
-        self.erc4626.before_withdraw(
+        self.erc4626._withdraw(
             starknet::get_caller_address(),
             receiver,
             starknet::get_caller_address(),
@@ -77,9 +77,6 @@ pub mod ProtocolVault {
             shares,
             Option::None,
         );
-        let perps_contract = self.perps_contract.read();
-        self.erc20.burn(perps_contract, shares);
-        self.erc4626.transfer_assets_out(receiver, value_of_shares);
         value_of_shares
     }
 
