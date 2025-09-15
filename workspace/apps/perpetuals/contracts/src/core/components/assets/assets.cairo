@@ -6,9 +6,8 @@ pub mod AssetsComponent {
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::{
-        IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
-    };
+
+    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait};
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_ALREADY_HAS_ERC20, ASSET_NAME_TOO_LONG,
         ASSET_REGISTERED_AS_COLLATERAL, COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED,
