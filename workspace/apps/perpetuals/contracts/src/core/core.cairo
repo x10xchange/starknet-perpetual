@@ -5,8 +5,9 @@ pub mod Core {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
+    use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
+    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
@@ -19,6 +20,10 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::core::components::vault::protocol_vault::{
+        IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
+    };
+    use perpetuals::core::components::vault::vaults::Vaults;
     use perpetuals::core::errors::{
         ASSET_ID_NOT_COLLATERAL, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
         DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
@@ -69,6 +74,8 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
+    use crate::core::components::assets::interface::IAssets;
+    use crate::core::components::vault::vaults::IVaults;
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -82,6 +89,7 @@ pub mod Core {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
     component!(path: Positions, storage: positions, event: PositionsEvent);
+    component!(path: Vaults, storage: vaults, event: VaultsEvent);
 
     #[abi(embed_v0)]
     impl OperatorNonceImpl =
@@ -109,6 +117,9 @@ pub mod Core {
 
     #[abi(embed_v0)]
     impl PositionsImpl = Positions::PositionsImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl VaultsImpl = Vaults::VaultsImpl<ContractState>;
 
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
@@ -148,7 +159,8 @@ pub mod Core {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: Positions::Storage,
-        // vault position id to vault ContractAddress and AssetId
+        #[substorage(v0)]
+        pub vaults: Vaults::Storage,
         pub vault_positions: Map<PositionId, (ContractAddress, AssetId)>,
     }
 
@@ -183,6 +195,7 @@ pub mod Core {
         TransferRequest: events::TransferRequest,
         Withdraw: events::Withdraw,
         WithdrawRequest: events::WithdrawRequest,
+        VaultsEvent: Vaults::Event,
     }
 
     #[constructor]
@@ -929,7 +942,50 @@ pub mod Core {
             vault_contract_address: starknet::contract_address::ContractAddress,
             vault_asset_id: perpetuals::core::types::asset::AssetId,
             signature: core::array::Span<core::felt252>,
-        ) {}
+        ) {
+            let vault_config = self.assets.get_asset_config(vault_asset_id);
+            assert(vault_config.status == AssetStatus::ACTIVE, 'VAULT_ASSET_INACTIVE');
+            assert(vault_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL, 'NOT_VAULT_ASSET');
+            let registered_vault_contract = self.assets.get_asset_erc20_contract(vault_asset_id);
+            assert(
+                registered_vault_contract.contract_address == vault_contract_address,
+                'MISMATCHED_VAULT_CONTRACT',
+            );
+            let protocol_vault_dispatcher = IProtocolVaultDispatcher {
+                contract_address: vault_contract_address,
+            };
+            let erc4626_dispatcher = IERC4626Dispatcher {
+                contract_address: vault_contract_address,
+            };
+            assert(
+                protocol_vault_dispatcher.get_owning_position_id() == vault_position_id.value,
+                'MISMATCHED_VAULT_POSITION_ID',
+            );
+            assert(
+                erc4626_dispatcher
+                    .asset() == self
+                    .assets
+                    .get_collateral_token_contract()
+                    .contract_address,
+                'INVALID_VAULT_UNDERLYING',
+            );
+
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+
+            let position = self.positions.get_position_snapshot(vault_position_id);
+            for (asset_id, balance) in position.collateral_balances {
+                let asset_config = self.assets.get_asset_config(asset_id);
+                if (balance != 0_i64.into()) {
+                    assert(
+                        asset_config.asset_type != AssetType::VAULT_SHARE_COLLATERAL,
+                        'VAULT_CANNOT_HOLD_VAULT',
+                    );
+                }
+            }
+
+            self.vaults.activate_vault(vault_asset_id, vault_position_id, true);
+        }
 
         fn transfer_spot(
             ref self: ContractState,

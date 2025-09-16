@@ -1,3 +1,13 @@
+use starknet::ContractAddress;
+
+#[starknet::interface]
+pub trait IProtocolVault<TState> {
+    fn redeem_with_price(
+        ref self: TState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
+    ) -> u256;
+    fn get_owning_position_id(ref self: TState) -> u32;
+}
+
 #[starknet::contract]
 pub mod ProtocolVault {
     use ERC4626Component::Fee;
@@ -14,6 +24,7 @@ pub mod ProtocolVault {
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starkware_utils::math::abs::Abs;
+    use super::IProtocolVault;
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
@@ -66,19 +77,29 @@ pub mod ProtocolVault {
         self.erc4626.initializer(pnl_collateral_contract);
     }
 
-    fn redeem_with_price(
-        ref self: ContractState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
-    ) -> u256 {
-        self.erc4626._withdraw(
-            starknet::get_caller_address(),
-            receiver,
-            starknet::get_caller_address(),
-            value_of_shares,
-            shares,
-            Option::None,
-        );
-        value_of_shares
+    #[abi(embed_v0)]
+    pub impl Impl of IProtocolVault<ContractState> {
+        fn redeem_with_price(
+            ref self: ContractState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
+        ) -> u256 {
+            self
+                .erc4626
+                ._withdraw(
+                    starknet::get_caller_address(),
+                    receiver,
+                    starknet::get_caller_address(),
+                    value_of_shares,
+                    shares,
+                    Option::None,
+                );
+            value_of_shares
+        }
+
+        fn get_owning_position_id(ref self: ContractState) -> u32 {
+            self.owning_position_id.read()
+        }
     }
+
 
     impl ERC4626ExternalAssetsManagement of ERC4626Component::AssetsManagementTrait<ContractState> {
         fn transfer_assets_in(
