@@ -820,7 +820,6 @@ pub mod AssetsComponent {
                     )
                 },
                 AssetType::VAULT_SHARE_COLLATERAL => {
-                    assert(quantum.is_non_zero(), 'INVALID_ZERO_QUANTUM_FOR_VAULT');
                     SyntheticTrait::vault_share(
                         AssetStatus::PENDING,
                         risk_factor_first_tier_boundary,
