@@ -218,6 +218,7 @@ pub mod AssetsComponent {
             risk_factor_tier_size: u128,
             quorum: u8,
         ) {
+            assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
             let erc20Contract = IERC20MetadataDispatcher {
                 contract_address: erc20_contract_address,
             };
