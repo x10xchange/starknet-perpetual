@@ -134,6 +134,7 @@ pub struct PerpetualsInitConfig {
     pub insurance_fund_position_owner_public_key: felt252,
     pub collateral_cfg: CollateralCfg,
     pub synthetic_cfg: SyntheticCfg,
+    pub vault_share_cfg: CollateralCfg,
 }
 
 #[generate_trait]
@@ -189,6 +190,18 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 quorum: COLLATERAL_QUORUM,
             },
             synthetic_cfg: SyntheticCfg { synthetic_id: SYNTHETIC_ASSET_ID_1() },
+            vault_share_cfg: CollateralCfg {
+                token_cfg: TokenConfig {
+                    name: VAULT_SHARE_COLLATERAL_1_NAME(),
+                    symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
+                    initial_supply: INITIAL_SUPPLY,
+                    owner: COLLATERAL_OWNER(),
+                },
+                collateral_id: VAULT_SHARE_COLLATERAL_1_ID(),
+                quantum: COLLATERAL_QUANTUM,
+                risk_factor: RiskFactorTrait::new(500),
+                quorum: 1,
+            },
         }
     }
 }
@@ -307,6 +320,16 @@ pub fn create_token_state() -> TokenState {
     let token_config = TokenConfig {
         name: COLLATERAL_NAME(),
         symbol: COLLATERAL_SYMBOL(),
+        initial_supply: INITIAL_SUPPLY,
+        owner: COLLATERAL_OWNER(),
+    };
+    Deployable::deploy(@token_config)
+}
+
+pub fn create_vault_share_1_token_state() -> TokenState {
+    let token_config = TokenConfig {
+        name: VAULT_SHARE_COLLATERAL_1_NAME(),
+        symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
         initial_supply: INITIAL_SUPPLY,
         owner: COLLATERAL_OWNER(),
     };

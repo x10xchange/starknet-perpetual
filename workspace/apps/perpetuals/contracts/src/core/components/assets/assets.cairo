@@ -2,11 +2,13 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
-    use core::num::traits::Zero;
+    use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
+    use openzeppelin::token::erc20::interface::{
+        IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
+    };
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
@@ -27,7 +29,7 @@ pub mod AssetsComponent {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::types::asset::synthetic::{
-        SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
+        AssetType, SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
     use perpetuals::core::types::asset::vault::{VaultData, VaultStatus};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
@@ -186,61 +188,58 @@ pub mod AssetsComponent {
             quorum: u8,
             resolution_factor: u64,
         ) {
-            /// Validations:
-            get_dep_component!(@self, Roles).only_app_governor();
+            // resolution_factor: u64,
+            // asset_type: AssetType,
+            // quantum: u64,
+            // erc20_address: ContractAddress,
 
-            let synthetic_entry = self.synthetic_config.entry(asset_id);
-            assert(synthetic_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
-            if let Option::Some(collateral_id) = self.collateral_id.read() {
-                assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
-            }
-
-            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
-            assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
-            assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
-            assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
-            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
-            assert(resolution_factor.is_non_zero(), INVALID_ZERO_RESOLUTION_FACTOR);
-
-            let synthetic_config = SyntheticTrait::config(
-                // It'll be active in the next price tick.
-                status: AssetStatus::PENDING,
-                // It validates the range of the risk factor.
-                :risk_factor_first_tier_boundary,
-                :risk_factor_tier_size,
-                :quorum,
-                :resolution_factor,
-            );
-
-            synthetic_entry.write(Option::Some(synthetic_config));
-
-            let synthetic_timely_data = SyntheticTrait::timely_data(
-                // These fields will be updated in the next price tick.
-                price: Zero::zero(), last_price_update: Zero::zero(), funding_index: Zero::zero(),
-            );
-            self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
-
-            let mut prev_risk_factor = 0_u16;
-            for risk_factor in risk_factor_tiers {
-                assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
-                self
-                    .risk_factor_tiers
-                    .entry(asset_id) // New function checks that `risk_factor` is lower than 1000.
-                    .push(RiskFactorTrait::new(*risk_factor));
-                prev_risk_factor = *risk_factor;
-            }
             self
-                .emit(
-                    events::SyntheticAdded {
-                        asset_id,
-                        risk_factor_tiers,
-                        risk_factor_first_tier_boundary,
-                        risk_factor_tier_size,
-                        resolution_factor,
-                        quorum,
-                    },
+                ._add_asset(
+                    asset_id,
+                    risk_factor_tiers,
+                    risk_factor_first_tier_boundary,
+                    risk_factor_tier_size,
+                    quorum,
+                    resolution_factor,
+                    AssetType::SYNTHETIC,
+                    0,
+                    None,
+                )
+        }
+
+        fn add_vault_collateral_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            erc20_contract_address: ContractAddress,
+            quantum: u64,
+            resolution_factor: u64,
+            risk_factor_tiers: Span<u16>,
+            risk_factor_first_tier_boundary: u128,
+            risk_factor_tier_size: u128,
+            quorum: u8,
+        ) {
+            let erc20Contract = IERC20MetadataDispatcher {
+                contract_address: erc20_contract_address,
+            };
+            let underlying_decimals = erc20Contract.decimals();
+            let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into())
+                .try_into()
+                .unwrap();
+            assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
+            self
+                ._add_asset(
+                    asset_id,
+                    risk_factor_tiers,
+                    risk_factor_first_tier_boundary,
+                    risk_factor_tier_size,
+                    quorum,
+                    resolution,
+                    AssetType::VAULT_SHARE_COLLATERAL,
+                    quantum,
+                    Some(erc20_contract_address),
                 );
         }
+
 
         /// - Deactivate synthetic asset.
         ///
@@ -779,6 +778,89 @@ pub mod AssetsComponent {
                 self._validate_synthetic_prices(current_time, max_price_interval);
                 self.last_price_validation.write(current_time);
             }
+        }
+
+        fn _add_asset(
+            ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
+            risk_factor_tiers: Span<u16>,
+            risk_factor_first_tier_boundary: u128,
+            risk_factor_tier_size: u128,
+            quorum: u8,
+            resolution_factor: u64,
+            asset_type: AssetType,
+            quantum: u64,
+            erc20_address: Option<ContractAddress>,
+        ) {
+            /// Validations:
+            get_dep_component!(@self, Roles).only_app_governor();
+
+            let synthetic_entry = self.synthetic_config.entry(asset_id);
+            assert(synthetic_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
+            if let Option::Some(collateral_id) = self.collateral_id.read() {
+                assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
+            }
+
+            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
+            assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
+            assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
+            assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
+            assert(resolution_factor.is_non_zero(), INVALID_ZERO_RESOLUTION_FACTOR);
+
+            let synthetic_config = match asset_type {
+                AssetType::SYNTHETIC => {
+                    SyntheticTrait::synthetic(
+                        AssetStatus::PENDING,
+                        risk_factor_first_tier_boundary,
+                        risk_factor_tier_size,
+                        quorum,
+                        resolution_factor,
+                    )
+                },
+                AssetType::VAULT_SHARE_COLLATERAL => {
+                    assert(quantum.is_non_zero(), 'INVALID_ZERO_QUANTUM_FOR_VAULT');
+                    SyntheticTrait::vault_share(
+                        AssetStatus::PENDING,
+                        risk_factor_first_tier_boundary,
+                        risk_factor_tier_size,
+                        quorum,
+                        resolution_factor,
+                        quantum,
+                        erc20_address.expect('MISSING_ERC20_ADDRESS_FOR_VAULT'),
+                    )
+                },
+                _ => panic_with_felt252('CANNOT_REGISTER_THIS_ASSET_TYPE'),
+            };
+
+            synthetic_entry.write(Option::Some(synthetic_config));
+
+            let synthetic_timely_data = SyntheticTrait::timely_data(
+                // These fields will be updated in the next price tick.
+                price: Zero::zero(), last_price_update: Zero::zero(), funding_index: Zero::zero(),
+            );
+            self.synthetic_timely_data.write(asset_id, synthetic_timely_data);
+
+            let mut prev_risk_factor = 0_u16;
+            for risk_factor in risk_factor_tiers {
+                assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
+                self
+                    .risk_factor_tiers
+                    .entry(asset_id) // New function checks that `risk_factor` is lower than 1000.
+                    .push(RiskFactorTrait::new(*risk_factor));
+                prev_risk_factor = *risk_factor;
+            }
+            self
+                .emit(
+                    events::SyntheticAdded {
+                        asset_id,
+                        risk_factor_tiers,
+                        risk_factor_first_tier_boundary,
+                        risk_factor_tier_size,
+                        resolution_factor,
+                        quorum,
+                    },
+                );
         }
     }
 }

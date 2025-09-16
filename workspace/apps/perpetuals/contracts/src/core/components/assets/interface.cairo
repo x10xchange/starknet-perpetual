@@ -4,6 +4,7 @@ use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimely
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
+use starknet::ContractAddress;
 use starkware_utils::signature::stark::PublicKey;
 use starkware_utils::time::time::{TimeDelta, Timestamp};
 
@@ -26,6 +27,17 @@ pub trait IAssets<TContractState> {
         risk_factor_tier_size: u128,
         quorum: u8,
         resolution_factor: u64,
+    );
+    fn add_vault_collateral_asset(
+        ref self: TContractState,
+        asset_id: AssetId,
+        erc20_contract_address: ContractAddress,
+        quantum: u64,
+        resolution_factor: u64,
+        risk_factor_tiers: Span<u16>,
+        risk_factor_first_tier_boundary: u128,
+        risk_factor_tier_size: u128,
+        quorum: u8,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(
