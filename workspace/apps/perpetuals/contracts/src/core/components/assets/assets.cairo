@@ -122,7 +122,7 @@ pub mod AssetsComponent {
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
 
-            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
+            let asset_config = self._get_asset_config(synthetic_id: asset_id);
             assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
 
             // Validate the oracle does not exist.
@@ -227,6 +227,7 @@ pub mod AssetsComponent {
                 .try_into()
                 .unwrap();
             assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
+            assert(resolution.is_non_zero(), 'INVALID_ZERO_RESOLUTION');
             self
                 ._add_asset(
                     asset_id,
@@ -258,7 +259,7 @@ pub mod AssetsComponent {
         /// reactivated.
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
             get_dep_component!(@self, Roles).only_app_governor();
-            let mut config = self._get_synthetic_config(:synthetic_id);
+            let mut config = self._get_asset_config(:synthetic_id);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
 
             config.status = AssetStatus::INACTIVE;
@@ -313,7 +314,7 @@ pub mod AssetsComponent {
                 let synthetic_id = *funding_tick.asset_id;
                 assert(synthetic_id > prev_synthetic_id, FUNDING_TICKS_NOT_SORTED);
                 assert(
-                    self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVE,
+                    self._get_asset_config(:synthetic_id).status == AssetStatus::ACTIVE,
                     SYNTHETIC_NOT_ACTIVE,
                 );
                 self
@@ -395,7 +396,7 @@ pub mod AssetsComponent {
         fn get_synthetic_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
-            self._get_synthetic_config(:synthetic_id)
+            self._get_asset_config(:synthetic_id)
         }
         fn get_synthetic_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
@@ -451,7 +452,7 @@ pub mod AssetsComponent {
             ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
-            let mut synthetic_config = self._get_synthetic_config(:synthetic_id);
+            let mut synthetic_config = self._get_asset_config(:synthetic_id);
             assert(synthetic_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
             assert(quorum.is_non_zero(), INVALID_ZERO_QUORUM);
             let old_quorum = synthetic_config.quorum;
@@ -608,7 +609,7 @@ pub mod AssetsComponent {
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
     > of PrivateTrait<TContractState> {
-        fn _get_synthetic_config(
+        fn _get_asset_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> SyntheticConfig {
             self.synthetic_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
@@ -661,7 +662,7 @@ pub mod AssetsComponent {
             oracle_price: u128,
             signed_prices: Span<SignedPrice>,
         ) {
-            let asset_config = self._get_synthetic_config(synthetic_id: asset_id);
+            let asset_config = self._get_asset_config(synthetic_id: asset_id);
             assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
             let signed_prices_len = signed_prices.len();
             assert(signed_prices_len >= asset_config.quorum.into(), QUORUM_NOT_REACHED);
@@ -712,7 +713,7 @@ pub mod AssetsComponent {
         fn _set_price(
             ref self: ComponentState<TContractState>, asset_id: AssetId, oracle_price: u128,
         ) {
-            let mut synthetic_config = self._get_synthetic_config(synthetic_id: asset_id);
+            let mut synthetic_config = self._get_asset_config(synthetic_id: asset_id);
             let price = convert_oracle_to_perps_price(
                 :oracle_price, resolution_factor: synthetic_config.resolution_factor,
             );
@@ -759,7 +760,7 @@ pub mod AssetsComponent {
         ) {
             for (synthetic_id, synthetic_timely_data) in self.synthetic_timely_data {
                 // Validate only active asset
-                if self._get_synthetic_config(:synthetic_id).status == AssetStatus::ACTIVE {
+                if self._get_asset_config(:synthetic_id).status == AssetStatus::ACTIVE {
                     assert(
                         max_price_interval >= current_time
                             .sub(synthetic_timely_data.last_price_update),
