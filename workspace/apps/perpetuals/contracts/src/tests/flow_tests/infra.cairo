@@ -195,7 +195,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let synthetic_price = self
             .flow_test_base
             .facade
-            .get_synthetic_price(synthetic_id: synthetic_info.asset_id);
+            .get_asset_price(synthetic_id: synthetic_info.asset_id);
         let quote: i64 = PriceMulTrait::<
             Balance,
         >::mul(@synthetic_price, -base.into())

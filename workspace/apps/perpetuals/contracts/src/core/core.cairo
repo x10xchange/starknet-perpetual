@@ -775,7 +775,7 @@ pub mod Core {
                 .positions
                 .get_position_snapshot(position_id: deleverager_position_id);
 
-            self.assets.validate_synthetic_active(synthetic_id: base_asset_id);
+            self.assets.validate_asset_active(synthetic_id: base_asset_id);
             self
                 ._validate_imposed_reduction_trade(
                     position_id_a: deleveraged_position_id,
@@ -882,7 +882,7 @@ pub mod Core {
             let quote_amount_a: i64 = -1
                 * self
                     .assets
-                    .get_synthetic_price(synthetic_id: base_asset_id)
+                    .get_asset_price(synthetic_id: base_asset_id)
                     .mul(rhs: base_balance)
                     .try_into()
                     .expect('QUOTE_AMOUNT_OVERFLOW');
@@ -1224,7 +1224,7 @@ pub mod Core {
         ) {
             // Base asset check.
             assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
-            self.assets.validate_synthetic_active(synthetic_id: order_a.base_asset_id);
+            self.assets.validate_asset_active(synthetic_id: order_a.base_asset_id);
 
             assert(order_a.position_id != order_b.position_id, INVALID_SAME_POSITIONS);
 
@@ -1434,13 +1434,13 @@ pub mod Core {
                 .synthetic_diff {
                 let balance_before = self.positions.get_synthetic_balance(:position, :synthetic_id);
                 let balance_after = balance_before + diff;
-                let price = self.assets.get_synthetic_price(synthetic_id);
+                let price = self.assets.get_asset_price(synthetic_id);
                 let risk_factor_before = self
                     .assets
-                    .get_synthetic_risk_factor(synthetic_id, balance_before, price);
+                    .get_asset_risk_factor(synthetic_id, balance_before, price);
                 let risk_factor_after = self
                     .assets
-                    .get_synthetic_risk_factor(synthetic_id, balance_after, price);
+                    .get_asset_risk_factor(synthetic_id, balance_after, price);
 
                 let asset_diff_enriched = AssetBalanceDiffEnriched {
                     asset_id: synthetic_id,

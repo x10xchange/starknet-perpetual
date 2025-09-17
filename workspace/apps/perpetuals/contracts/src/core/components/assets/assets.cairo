@@ -408,7 +408,7 @@ pub mod AssetsComponent {
         fn get_synthetic_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> TimelyData {
-            self._get_synthetic_timely_data(:synthetic_id)
+            self._get_timely_data(:synthetic_id)
         }
 
         fn get_risk_factor_tiers(
@@ -518,7 +518,7 @@ pub mod AssetsComponent {
             self.last_price_validation.write(Time::now());
         }
 
-        fn get_synthetic_price(
+        fn get_asset_price(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> Price {
             if let Option::Some(data) = self.timely_data.read(synthetic_id) {
@@ -536,7 +536,7 @@ pub mod AssetsComponent {
         ///   - risk_factor = risk_factor_tiers[index]
         ///   - If the index is out of bounds, return the last risk factor.
         /// - If the asset is not synthetic, panic.
-        fn get_synthetic_risk_factor(
+        fn get_asset_risk_factor(
             self: @ComponentState<TContractState>,
             synthetic_id: AssetId,
             balance: Balance,
@@ -574,7 +574,7 @@ pub mod AssetsComponent {
             }
         }
 
-        fn validate_synthetic_active(self: @ComponentState<TContractState>, synthetic_id: AssetId) {
+        fn validate_asset_active(self: @ComponentState<TContractState>, synthetic_id: AssetId) {
             if let Option::Some(config) = self.asset_config.read(synthetic_id) {
                 assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
             } else {
@@ -613,7 +613,7 @@ pub mod AssetsComponent {
             self.asset_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
         }
 
-        fn _get_synthetic_timely_data(
+        fn _get_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> TimelyData {
             self.timely_data.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS)
@@ -626,7 +626,7 @@ pub mod AssetsComponent {
             new_funding_index: FundingIndex,
             synthetic_id: AssetId,
         ) {
-            let mut timely_data = self._get_synthetic_timely_data(:synthetic_id);
+            let mut timely_data = self._get_timely_data(:synthetic_id);
             let last_funding_index = timely_data.funding_index;
             let index_diff: i64 = (new_funding_index - last_funding_index).into();
             validate_funding_rate(
@@ -634,7 +634,7 @@ pub mod AssetsComponent {
                 index_diff: index_diff.abs(),
                 :max_funding_rate,
                 :time_diff,
-                synthetic_price: self.get_synthetic_price(:synthetic_id),
+                synthetic_price: self.get_asset_price(:synthetic_id),
             );
             timely_data.funding_index = new_funding_index;
             self.timely_data.write(synthetic_id, timely_data);
@@ -716,7 +716,7 @@ pub mod AssetsComponent {
                 :oracle_price, resolution_factor: asset_config.resolution_factor,
             );
 
-            let mut timely_data = self._get_synthetic_timely_data(synthetic_id: asset_id);
+            let mut timely_data = self._get_timely_data(synthetic_id: asset_id);
             timely_data.price = price;
             timely_data.last_price_update = Time::now();
             self.timely_data.write(asset_id, timely_data);
