@@ -18,7 +18,7 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+    use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
@@ -486,7 +486,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>,
             position: StoragePath<Position>,
             position_diff: PositionDiff,
-        ) -> (Balance, Span<SyntheticAsset>) {
+        ) -> (Balance, Span<AssetBalanceInfo>) {
             let assets = get_dep_component!(self, Assets);
             let mut unchanged_synthetics = array![];
 
@@ -515,7 +515,7 @@ pub(crate) mod Positions {
                 let price = assets.get_synthetic_price(synthetic_id);
                 let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
                 unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
+                    .append(AssetBalanceInfo { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
             }
 
             (provisional_delta, unchanged_synthetics.span())

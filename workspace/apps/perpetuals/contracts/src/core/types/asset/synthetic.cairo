@@ -18,7 +18,7 @@ pub enum AssetType {
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct SyntheticConfig {
+pub struct AssetConfig {
     version: u8,
     // Configurable
     pub status: AssetStatus,
@@ -33,7 +33,7 @@ pub struct SyntheticConfig {
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct SyntheticTimelyData {
+pub struct TimelyData {
     version: u8,
     pub price: Price,
     pub last_price_update: Timestamp,
@@ -41,7 +41,7 @@ pub struct SyntheticTimelyData {
 }
 
 #[derive(Copy, Debug, Drop, Serde, PartialEq)]
-pub struct SyntheticAsset {
+pub struct AssetBalanceInfo {
     pub id: AssetId,
     pub balance: Balance,
     pub price: Price,
@@ -50,7 +50,7 @@ pub struct SyntheticAsset {
 }
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
-pub struct SyntheticDiffEnriched {
+pub struct AssetBalanceDiffEnriched {
     pub asset_id: AssetId,
     pub balance_before: Balance,
     pub balance_after: Balance,
@@ -67,8 +67,8 @@ pub impl SyntheticImpl of SyntheticTrait {
         risk_factor_tier_size: u128,
         quorum: u8,
         resolution_factor: u64,
-    ) -> SyntheticConfig {
-        SyntheticConfig {
+    ) -> AssetConfig {
+        AssetConfig {
             version: VERSION,
             status,
             risk_factor_first_tier_boundary,
@@ -89,8 +89,8 @@ pub impl SyntheticImpl of SyntheticTrait {
         resolution_factor: u64,
         quantum: u64,
         token_contract: ContractAddress,
-    ) -> SyntheticConfig {
-        SyntheticConfig {
+    ) -> AssetConfig {
+        AssetConfig {
             version: VERSION,
             status,
             risk_factor_first_tier_boundary,
@@ -111,8 +111,8 @@ pub impl SyntheticImpl of SyntheticTrait {
         resolution_factor: u64,
         quantum: u64,
         token_contract: ContractAddress,
-    ) -> SyntheticConfig {
-        SyntheticConfig {
+    ) -> AssetConfig {
+        AssetConfig {
             version: VERSION,
             status,
             risk_factor_first_tier_boundary,
@@ -127,7 +127,7 @@ pub impl SyntheticImpl of SyntheticTrait {
 
     fn timely_data(
         price: Price, last_price_update: Timestamp, funding_index: FundingIndex,
-    ) -> SyntheticTimelyData {
-        SyntheticTimelyData { version: VERSION, price, last_price_update, funding_index }
+    ) -> TimelyData {
+        TimelyData { version: VERSION, price, last_price_update, funding_index }
     }
 }

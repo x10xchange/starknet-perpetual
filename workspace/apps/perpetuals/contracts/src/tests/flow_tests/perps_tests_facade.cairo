@@ -16,7 +16,7 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
-use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
@@ -888,7 +888,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 let new_balance = *synthetic.balance + settlement.actual_amount_base_a.into();
                 new_synthetics_a
                     .append(
-                        SyntheticAsset {
+                        AssetBalanceInfo {
                             id: *synthetic.id,
                             balance: new_balance,
                             price: *synthetic.price,
@@ -907,7 +907,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 let new_balance = *synthetic.balance - settlement.actual_amount_base_a.into();
                 new_synthetics_b
                     .append(
-                        SyntheticAsset {
+                        AssetBalanceInfo {
                             id: *synthetic.id,
                             balance: new_balance,
                             price: *synthetic.price,
@@ -1375,7 +1375,7 @@ pub fn advance_time(seconds: u64) {
     start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
 }
 
-fn get_synthetic_balance(assets: Span<SyntheticAsset>, asset_id: AssetId) -> Balance {
+fn get_synthetic_balance(assets: Span<AssetBalanceInfo>, asset_id: AssetId) -> Balance {
     for asset in assets {
         if asset.id == @asset_id {
             return asset.balance.clone();

@@ -1,6 +1,6 @@
 use openzeppelin::token::erc20::interface::IERC20Dispatcher;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::asset::synthetic::{AssetConfig, TimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
@@ -66,9 +66,9 @@ pub trait IAssets<TContractState> {
     fn get_max_oracle_price_validity(self: @TContractState) -> TimeDelta;
     fn get_num_of_active_synthetic_assets(self: @TContractState) -> usize;
     fn get_collateral_id(self: @TContractState) -> AssetId;
-    fn get_synthetic_config(self: @TContractState, synthetic_id: AssetId) -> SyntheticConfig;
+    fn get_synthetic_config(self: @TContractState, synthetic_id: AssetId) -> AssetConfig;
     fn get_synthetic_timely_data(
         self: @TContractState, synthetic_id: AssetId,
-    ) -> SyntheticTimelyData;
+    ) -> TimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
 }

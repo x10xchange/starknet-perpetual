@@ -61,8 +61,8 @@ classDiagram
         collateral_token_contract: IERC20Dispatcher,
         collateral_quantum: u64,
         num_of_active_synthetic_assets: usize,
-        pub synthetic_config: Map< AssetId, Option [AssetConfig]>,
-        pub synthetic_timely_data: IterableMap< AssetId, AssetTimelyData>,
+        pub asset_config: Map< AssetId, Option [AssetConfig]>,
+        pub timely_data: IterableMap< AssetId, AssetTimelyData>,
         pub risk_factor_tiers: Map<AssetId, Vec [FixedTwoDecimal] >,
         asset_oracle: Map< AssetId, Map [PublicKey, felt252 ]>,
         max_oracle_price_validity: TimeDelta,
@@ -1359,8 +1359,8 @@ pub struct Storage {
     collateral_token_contract: IERC20Dispatcher,
     collateral_quantum: u64,
     num_of_active_synthetic_assets: usize,
-    pub synthetic_config: Map<AssetId, Option<AssetConfig>>,
-    pub synthetic_timely_data: IterableMap<AssetId, AssetTimelyData>,
+    pub asset_config: Map<AssetId, Option<AssetConfig>>,
+    pub timely_data: IterableMap<AssetId, AssetTimelyData>,
     pub collateral_timely_data: IterableMap<AssetId, AssetTimelyData>,
     pub risk_factor_tiers: Map<AssetId, Vec<FixedTwoDecimal>>,
     asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
@@ -1609,7 +1609,7 @@ Only the Operator can execute.
 1. [Pausable check](#pausable)
 2. [Operator Nonce check](#operator-nonce)
 3. Timestamps are at most `max_oracle_price_validity`
-4. `signed_prices` length >= synthetic_config[asset_id].quorum
+4. `signed_prices` length >= asset_config[asset_id].quorum
 5. `signed_prices` is sorted according to the signers public key
 6. Validate that the `oracle_price` is actually the median price (odd: the middle; even: between middles)
 
@@ -1623,7 +1623,7 @@ Only the Operator can execute.
       `)`
 2. calculate median price using the formula:
 $median\\_price = \frac{price*2^{28}}{asset\\_id.resolution\\_factor *10^{12} }$
-3. `self.synthetic_timely_data[asset_id].price = median_price`
+3. `self.timely_data[asset_id].price = median_price`
 
    Explanation: Oracles sign prices in the same format as StarkEx \- they sign process of major unit with 18 decimals precision. So to ge the asset price of 1 Starknet unit of synthetic asset:
 

@@ -1081,7 +1081,7 @@ fn test_successful_deactivate_synthetic_asset() {
     assert!(
         state
             .assets
-            .synthetic_config
+            .asset_config
             .entry(synthetic_id)
             .read()
             .unwrap()
@@ -1102,7 +1102,7 @@ fn test_successful_deactivate_synthetic_asset() {
     assert!(
         state
             .assets
-            .synthetic_config
+            .asset_config
             .entry(synthetic_id)
             .read()
             .unwrap()
