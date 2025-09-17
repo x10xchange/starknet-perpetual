@@ -3026,7 +3026,7 @@ fn test_funding_tick_basic() {
 
     // Check:
     assert!(
-        state.assets.get_synthetic_timely_data(synthetic_id).funding_index == new_funding_index,
+        state.assets.get_timely_data(synthetic_id).funding_index == new_funding_index,
     );
 }
 
@@ -3136,10 +3136,10 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(value: 100),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3206,9 +3206,9 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3264,10 +3264,10 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3457,7 +3457,7 @@ fn test_price_tick_golden() {
             :oracle_price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == Time::now());
     assert!(data.price.value() == 6430);
 }
@@ -3750,7 +3750,7 @@ fn test_successful_add_vault_share_asset() {
         quorum: 1_u8,
     );
 
-    let asset_config = state.assets.get_synthetic_config(VAULT_SHARE_COLLATERAL_1_ID());
+    let asset_config = state.assets.get_asset_config(VAULT_SHARE_COLLATERAL_1_ID());
 
     assert!(asset_config.resolution_factor == 1000000);
     assert!(asset_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);

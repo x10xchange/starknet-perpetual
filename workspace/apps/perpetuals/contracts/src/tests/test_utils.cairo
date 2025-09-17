@@ -348,7 +348,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             owner_protection_enabled: false
         );
     let position_diff = PositionDiff {
-        collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), synthetic_diff: Option::None,
+        collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), asset_diff: Option::None,
     };
 
     state.positions.apply_diff(:position_id, :position_diff);
@@ -368,7 +368,7 @@ pub fn add_synthetic_to_position(
 ) {
     let position_diff = PositionDiff {
         collateral_diff: Default::default(),
-        synthetic_diff: Option::Some((synthetic_id, balance.into())),
+        asset_diff: Option::Some((synthetic_id, balance.into())),
     };
     state.positions.apply_diff(:position_id, :position_diff);
 }
@@ -405,7 +405,7 @@ pub fn check_synthetic_config(
     quorum: u8,
     resolution_factor: u64,
 ) {
-    let asset_config = state.assets.get_synthetic_config(synthetic_id);
+    let asset_config = state.assets.get_asset_config(synthetic_id);
     assert!(asset_config.status == status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {
@@ -424,7 +424,7 @@ pub fn check_synthetic_timely_data(
     last_price_update: Timestamp,
     funding_index: FundingIndex,
 ) {
-    let timely_data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let timely_data = state.assets.get_timely_data(synthetic_id);
     assert!(timely_data.price == price);
     assert!(timely_data.last_price_update == last_price_update);
     assert!(timely_data.funding_index == funding_index);

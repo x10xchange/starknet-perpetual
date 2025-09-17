@@ -400,12 +400,12 @@ pub mod AssetsComponent {
         fn get_collateral_id(self: @ComponentState<TContractState>) -> AssetId {
             self.collateral_id.read().expect(COLLATERAL_NOT_REGISTERED)
         }
-        fn get_synthetic_config(
+        fn get_asset_config(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> AssetConfig {
             self._get_asset_config(:synthetic_id)
         }
-        fn get_synthetic_timely_data(
+        fn get_timely_data(
             self: @ComponentState<TContractState>, synthetic_id: AssetId,
         ) -> TimelyData {
             self._get_timely_data(:synthetic_id)

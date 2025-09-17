@@ -1,5 +1,5 @@
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetBalanceDiffEnriched};
+use perpetuals::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetBalanceInfo};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::funding::FundingIndex;
 use starknet::ContractAddress;
@@ -17,7 +17,8 @@ pub struct Position {
     pub owner_account: Option<ContractAddress>,
     pub owner_public_key: PublicKey,
     pub collateral_balance: Balance,
-    pub synthetic_balance: IterableMap<AssetId, SyntheticBalance>,
+    #[rename("synthetic_balance")]
+    pub asset_balances: IterableMap<AssetId, AssetBalance>,
     pub owner_protection_enabled: bool,
 }
 
@@ -25,7 +26,7 @@ pub struct Position {
 /// - balance: The amount of the synthetic asset held in the position.
 /// - funding_index: The funding index at the time of the last update.
 #[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct SyntheticBalance {
+pub struct AssetBalance {
     pub version: u8,
     pub balance: Balance,
     pub funding_index: FundingIndex,
@@ -40,30 +41,30 @@ pub struct PositionId {
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiff {
     pub collateral_diff: Balance,
-    pub synthetic_diff: Option<(AssetId, Balance)>,
+    pub asset_diff: Option<(AssetId, Balance)>,
 }
 
 /// Diff where synthetic is enriched but collateral is still raw.
 #[derive(Copy, Debug, Drop, Serde, Default)]
-pub struct SyntheticEnrichedPositionDiff {
+pub struct AssetEnrichedPositionDiff {
     pub collateral_diff: Balance,
-    pub synthetic_enriched: Option<AssetBalanceDiffEnriched>,
+    pub asset_diff_enriched: Option<AssetBalanceDiffEnriched>,
 }
 
 /// Diff where both collateral and synthetic are enriched.
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct PositionDiffEnriched {
     pub collateral_enriched: BalanceDiff,
-    pub synthetic_enriched: Option<AssetBalanceDiffEnriched>,
+    pub asset_diff_enriched: Option<AssetBalanceDiffEnriched>,
 }
 
 pub impl PositionDiffEnrichedIntoSyntheticEnrichedPositionDiff of Into<
-    PositionDiffEnriched, SyntheticEnrichedPositionDiff,
+    PositionDiffEnriched, AssetEnrichedPositionDiff,
 > {
-    fn into(self: PositionDiffEnriched) -> SyntheticEnrichedPositionDiff {
-        SyntheticEnrichedPositionDiff {
+    fn into(self: PositionDiffEnriched) -> AssetEnrichedPositionDiff {
+        AssetEnrichedPositionDiff {
             collateral_diff: self.collateral_enriched.after - self.collateral_enriched.before,
-            synthetic_enriched: self.synthetic_enriched,
+            asset_diff_enriched: self.asset_diff_enriched,
         }
     }
 }
