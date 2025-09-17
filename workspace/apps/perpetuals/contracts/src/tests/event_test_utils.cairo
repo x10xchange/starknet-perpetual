@@ -76,7 +76,7 @@ pub fn assert_deposit_canceled_event_with_expected(
         depositing_address,
         collateral_id,
         quantized_amount,
-        unquantized_amount,
+        unquantized_amount: unquantized_amount.into(),
         deposit_request_hash,
         salt,
     };
@@ -103,7 +103,7 @@ pub fn assert_deposit_processed_event_with_expected(
         depositing_address,
         collateral_id,
         quantized_amount,
-        unquantized_amount,
+        unquantized_amount: unquantized_amount.into(),
         deposit_request_hash,
         salt,
     };

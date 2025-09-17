@@ -584,7 +584,6 @@ pub(crate) mod Positions {
                 (0_i64.into(), 0_i64.into())
             };
             position.collateral_balance.add_and_write(collateral_funding);
-
             // Updates the synthetic balance and funding index:
             let synthetic_asset = AssetBalance {
                 version: POSITION_VERSION,
