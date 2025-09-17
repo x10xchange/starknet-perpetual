@@ -995,24 +995,6 @@ pub mod Core {
             signature: Signature,
             order: ConvertPositionToVault,
         ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            // Vault position should not hold any vault assets.
-            let vault = self.positions.get_position_snapshot(order.position_to_convert);
-            assert(vault.vault_balance.len() == 0, 'TODO');
-
-            // TODO : validate the vault doesnt already exist
-
-            // validate position_receiving_shares exists
-            let recipient = self.positions.get_position_snapshot(order.position_receiving_shares);
-
-            assert(order.initial_shares.is_non_zero(), 'TODO');
-            validate_expiration(order.expiration, err: 'TODO');
-
-            self._validate_signature(public_key: vault.get_owner_public_key(), :order, :signature);
-            // TODO: create vault position, and update initial shares.
-        // TODO : emit event.
         }
     }
 
