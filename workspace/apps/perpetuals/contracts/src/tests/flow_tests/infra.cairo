@@ -1,10 +1,13 @@
 use core::cmp::min;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::num::traits::{Pow, Zero};
+use perpetuals::core::components::positions::interface::{
+    IPositionsDispatcher, IPositionsDispatcherTrait,
+};
 use perpetuals::core::interface::Settlement;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
-use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use starkware_utils::constants::HOUR;
 use starkware_utils::math::abs::Abs;
@@ -101,16 +104,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
 
         let mut initial_price = 2_u128.pow(10);
         for asset_name in array![
-            BTC_ASSET,
-            ETH_ASSET,
-            STRK_ASSET,
-            SOL_ASSET,
-            DOGE_ASSET,
-            PEPE_ASSET,
-            ETC_ASSET,
-            TAO_ASSET,
-            XRP_ASSET,
-            ADA_ASSET,
+            BTC_ASSET, ETH_ASSET, STRK_ASSET, SOL_ASSET, DOGE_ASSET, PEPE_ASSET, ETC_ASSET,
+            TAO_ASSET, XRP_ASSET, ADA_ASSET,
         ] {
             let synthetic_info = SyntheticInfoTrait::new(
                 :asset_name, risk_factor_data: risk_factor_tiers, oracles_len: 1,
@@ -169,16 +164,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let mut funding_ticks = array![];
 
         for asset in array![
-            ADA_ASSET,
-            BTC_ASSET,
-            ETC_ASSET,
-            ETH_ASSET,
-            SOL_ASSET,
-            TAO_ASSET,
-            XRP_ASSET,
-            DOGE_ASSET,
-            PEPE_ASSET,
-            STRK_ASSET,
+            ADA_ASSET, BTC_ASSET, ETC_ASSET, ETH_ASSET, SOL_ASSET, TAO_ASSET, XRP_ASSET, DOGE_ASSET,
+            PEPE_ASSET, STRK_ASSET,
         ] {
             let asset_id = self.synthetics.get(asset).asset_id;
             let index_ptr = funding_indexes_dict.get(asset);
@@ -424,6 +411,13 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
                 base_asset_id: synthetic_info.asset_id,
                 :base_amount_a,
             );
+    }
+
+    fn get_position_data(self: @FlowTestExtended, user: User) -> @PositionData {
+        let dispatcher = IPositionsDispatcher {
+            contract_address: *self.flow_test_base.facade.perpetuals_contract,
+        };
+        @dispatcher.get_position_assets(position_id: user.position_id)
     }
 }
 
