@@ -3805,3 +3805,153 @@ fn test_successful_add_vault_share_asset() {
     assert!(asset_config.quorum == 1_u8);
     assert!(asset_config.status == AssetStatus::PENDING);
 }
+
+#[test]
+fn test_successful_vault_token_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // VS has 10^18
+    // quantum 10^12
+    // resolution 10^(18-12) = 10^6
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: vault_share_state.address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: 1000000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let starting_user_balance = user_deposit_amount * 3;
+
+    // Fund user.
+    vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
+    vault_share_state
+        .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Check before deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance);
+    validate_balance(vault_share_state, test_address(), 0);
+    let mut spy = snforge_std::spy_events();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: vault_share_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.vault_share_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance - user_deposit_amount);
+    validate_balance(vault_share_state, test_address(), user_deposit_amount.try_into().unwrap());
+    let status = state.deposits.get_deposit_status(:deposit_hash);
+    if let DepositStatus::PENDING(timestamp) = status {
+        assert!(timestamp == expected_time);
+    } else {
+        panic!("Deposit not found");
+    }
+}
+
+
+#[test]
+#[should_panic(expected: 'SYNTHETIC_NOT_EXISTS')]
+fn test_unsuccessful_vault_token_deposit_unregistered_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: 1,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'NOT_SPOT_ASSET')]
+fn test_unsuccessful_vault_token_deposit_synthetic_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            position_id: user.position_id,
+            quantized_amount: 1,
+            salt: user.salt_counter,
+        );
+}
