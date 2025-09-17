@@ -1,5 +1,6 @@
 #[starknet::component]
 pub(crate) mod Deposit {
+    use perpetuals::core::types::asset::AssetId;
     use core::hash::{HashStateExTrait, HashStateTrait};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
@@ -70,6 +71,7 @@ pub(crate) mod Deposit {
         /// - Emits a Deposit event.
         fn deposit(
             ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
             position_id: PositionId,
             quantized_amount: u64,
             salt: felt252,
@@ -130,6 +132,7 @@ pub(crate) mod Deposit {
         /// - Emits a DepositCanceled event.
         fn cancel_deposit(
             ref self: ComponentState<TContractState>,
+            asset_id: AssetId,
             position_id: PositionId,
             quantized_amount: u64,
             salt: felt252,
@@ -183,6 +186,7 @@ pub(crate) mod Deposit {
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
             depositor: ContractAddress,
+            asset_id: AssetId,
             position_id: PositionId,
             quantized_amount: u64,
             salt: felt252,
@@ -241,6 +245,7 @@ pub(crate) mod Deposit {
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
             depositor: ContractAddress,
+            asset_id: AssetId,
             position_id: PositionId,
             quantized_amount: u64,
             salt: felt252,
