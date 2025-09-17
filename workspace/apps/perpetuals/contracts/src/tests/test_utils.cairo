@@ -1,5 +1,5 @@
 use core::hash::{HashStateExTrait, HashStateTrait};
-use core::num::traits::Zero;
+use core::num::traits::{Pow, Zero};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::presets::interfaces::{
     AccountUpgradeableABIDispatcher, AccountUpgradeableABIDispatcherTrait,
@@ -194,11 +194,11 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 token_cfg: TokenConfig {
                     name: VAULT_SHARE_COLLATERAL_1_NAME(),
                     symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
-                    initial_supply: INITIAL_SUPPLY,
+                    initial_supply: 10_u256.pow(24),
                     owner: COLLATERAL_OWNER(),
                 },
                 collateral_id: VAULT_SHARE_COLLATERAL_1_ID(),
-                quantum: COLLATERAL_QUANTUM,
+                quantum: 1000000000000,
                 risk_factor: RiskFactorTrait::new(500),
                 quorum: 1,
             },
@@ -345,7 +345,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
-            owner_protection_enabled: false
+            owner_protection_enabled: false,
         );
     let position_diff = PositionDiff {
         collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), asset_diff: Option::None,
