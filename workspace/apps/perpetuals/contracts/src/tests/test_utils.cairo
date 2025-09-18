@@ -333,6 +333,37 @@ pub fn setup_state_with_pending_asset(
     state
 }
 
+pub fn setup_state_with_pending_vault_share(
+    cfg: @PerpetualsInitConfig, token_state: @TokenState,
+) -> Core::ContractState {
+    let mut state = init_state(:cfg, :token_state);
+    // Synthetic asset configs.
+    state
+        .assets
+        .add_synthetic_asset(
+            asset_id: *cfg.synthetic_cfg.synthetic_id,
+            risk_factor_tiers: array![RISK_FACTOR].span(),
+            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_tier_size: MAX_U128,
+            quorum: SYNTHETIC_QUORUM,
+            resolution_factor: SYNTHETIC_RESOLUTION_FACTOR,
+        );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: *cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: *cfg.vault_share_cfg.contract_address,
+            quantum: *cfg.vault_share_cfg.quantum,
+            resolution_factor: *cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: *cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: *cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: *cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );        
+    state
+}
+
 pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
     start_cheat_block_timestamp_global(
         block_timestamp: Time::now().add(delta: Time::weeks(count: 1)).into(),

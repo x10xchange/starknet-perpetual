@@ -1,4 +1,4 @@
-use core::num::traits::Zero;
+use core::num::traits::{Pow, Zero};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsDispatcher, IAssetsDispatcherTrait, IAssetsSafeDispatcher,
     IAssetsSafeDispatcherTrait,
@@ -24,7 +24,10 @@ use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
-use perpetuals::core::types::price::{PRICE_SCALE, PriceTrait, SignedPrice};
+use perpetuals::core::types::price::{
+    ORACLE_SCALE, PRICE_SCALE, PriceTrait, SN_PERPS_SCALE, SignedPrice,
+    convert_oracle_to_perps_price,
+};
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
@@ -48,7 +51,7 @@ use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
     initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
-    validate_asset_balance, validate_balance,
+    setup_state_with_pending_vault_share, validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -3796,7 +3799,12 @@ fn test_successful_add_vault_share_asset() {
     let asset_config = state.assets.get_asset_config(cfg.vault_share_cfg.collateral_id);
 
     assert!(asset_config.resolution_factor == 1000000);
-    assert!(asset_config.risk_factor_first_tier_boundary == cfg.vault_share_cfg.risk_factor_first_tier_boundary);
+    assert!(
+        asset_config
+            .risk_factor_first_tier_boundary == cfg
+            .vault_share_cfg
+            .risk_factor_first_tier_boundary,
+    );
     assert!(asset_config.risk_factor_tier_size == cfg.vault_share_cfg.risk_factor_tier_size);
     assert!(asset_config.quorum == 1_u8);
     assert!(asset_config.status == AssetStatus::PENDING);
@@ -3960,7 +3968,7 @@ fn test_successful_vault_token_cancel_deposit() {
         .add_vault_collateral_asset(
             asset_id: cfg.vault_share_cfg.collateral_id,
             erc20_contract_address: cfg.vault_share_cfg.contract_address,
-            quantum:  cfg.vault_share_cfg.quantum,
+            quantum: cfg.vault_share_cfg.quantum,
             resolution_factor: cfg.vault_share_cfg.resolution_factor,
             risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
             risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
@@ -4140,4 +4148,67 @@ fn test_successful_vault_share_process_deposit() {
         asset_id: cfg.vault_share_cfg.collateral_id,
         expected_balance: DEPOSIT_AMOUNT.into(),
     );
+}
+
+#[test]
+fn test_price_tick_vault_share_asset() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_pending_vault_share(cfg: @cfg, token_state: @token_state);
+
+    let mut spy = snforge_std::spy_events();
+    let asset_name = 'VAULT_SHARE';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let vault_share_id = cfg.vault_share_cfg.collateral_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: vault_share_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    //one unit of vault share is priced at $12
+    let oracle_price: u128 = 12 * 10_u128.pow(18);
+    let operator_nonce = state.get_operator_nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: vault_share_id,
+            :oracle_price,
+            signed_prices: [
+                oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_oracle_event_with_expected(
+        spied_event: events[0],
+        asset_id: vault_share_id,
+        :asset_name,
+        oracle_public_key: oracle1.key_pair.public_key,
+        oracle_name: oracle1_name,
+    );
+
+    let expected_price = convert_oracle_to_perps_price(
+        oracle_price: oracle_price, resolution_factor: cfg.vault_share_cfg.resolution_factor,
+    );
+    assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: vault_share_id);
+    assert_price_tick_event_with_expected(
+        spied_event: events[2], asset_id: vault_share_id, price: expected_price,
+    );
+    assert!(state.assets.get_asset_config(vault_share_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+
+    let data = state.assets.get_timely_data(vault_share_id);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == expected_price.value());
 }
