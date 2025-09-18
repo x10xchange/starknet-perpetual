@@ -73,10 +73,6 @@ pub mod Core {
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
     use crate::core::components::assets::interface::IAssets;
-    use crate::core::components::deposit::interface::IDeposit;
-    use crate::core::components::positions;
-    use crate::core::components::vault::vaults::Vaults;
-    use crate::core::components::vault::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::types::asset::synthetic::AssetType;
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
