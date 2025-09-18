@@ -35,6 +35,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::types::vault;
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.
@@ -135,7 +136,7 @@ pub struct PerpetualsInitConfig {
     pub insurance_fund_position_owner_public_key: felt252,
     pub collateral_cfg: CollateralCfg,
     pub synthetic_cfg: SyntheticCfg,
-    pub vault_share_cfg: CollateralCfg,
+    pub vault_share_cfg: VaultCollateralCfg,
 }
 
 #[generate_trait]
@@ -163,6 +164,19 @@ pub impl CoreImpl of CoreTrait {
 
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
     fn default() -> PerpetualsInitConfig {
+        let vault_share_cfg = TokenConfig {
+            name: VAULT_SHARE_COLLATERAL_1_NAME(),
+            symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
+            initial_supply: 10_u256.pow(24),
+            owner: COLLATERAL_OWNER(),
+        };
+
+        let vault_share_state = vault_share_cfg.deploy();
+
+        let vault_share_risk_factor_first_tier_boundary = MAX_U128;
+        let vault_share_risk_factor_tier_size = 1;
+        let vault_share_risk_factor_1 = array![10].span();
+
         PerpetualsInitConfig {
             governance_admin: GOVERNANCE_ADMIN(),
             upgrade_delay: UPGRADE_DELAY,
@@ -191,17 +205,17 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 quorum: COLLATERAL_QUORUM,
             },
             synthetic_cfg: SyntheticCfg { synthetic_id: SYNTHETIC_ASSET_ID_1() },
-            vault_share_cfg: CollateralCfg {
-                token_cfg: TokenConfig {
-                    name: VAULT_SHARE_COLLATERAL_1_NAME(),
-                    symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
-                    initial_supply: 10_u256.pow(24),
-                    owner: COLLATERAL_OWNER(),
-                },
+            vault_share_cfg: VaultCollateralCfg {
+                token_cfg: vault_share_cfg,
+                token_state: vault_share_state,
                 collateral_id: VAULT_SHARE_COLLATERAL_1_ID(),
                 quantum: 1000000000000,
-                risk_factor: RiskFactorTrait::new(500),
+                risk_factor_tiers: vault_share_risk_factor_1,
+                risk_factor_first_tier_boundary: vault_share_risk_factor_first_tier_boundary,
+                risk_factor_tier_size: vault_share_risk_factor_tier_size,
                 quorum: 1,
+                contract_address: vault_share_state.address,
+                resolution_factor: 1000000,
             },
         }
     }
@@ -215,6 +229,22 @@ pub struct CollateralCfg {
     pub quantum: u64,
     pub risk_factor: RiskFactor,
     pub quorum: u8,
+}
+
+/// The 'VaultCollateralCfg' struct represents a deployed vault share collateral with an associated
+/// asset id.
+#[derive(Drop)]
+pub struct VaultCollateralCfg {
+    pub token_cfg: TokenConfig,
+    pub token_state: TokenState,
+    pub collateral_id: AssetId,
+    pub quantum: u64,
+    pub risk_factor_tiers: Span<u16>,
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
+    pub quorum: u8,
+    pub contract_address: ContractAddress,
+    pub resolution_factor: u64,
 }
 
 /// The 'SyntheticCfg' struct represents a synthetic asset config with an associated asset id.

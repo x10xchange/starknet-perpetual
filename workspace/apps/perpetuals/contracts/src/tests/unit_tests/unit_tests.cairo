@@ -3684,7 +3684,7 @@ fn test_unsuccessful_add_vault_share_asset_mismatched_resolution() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
-            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            asset_id: cfg.vault_share_cfg.collateral_id,
             erc20_contract_address: vault_share_state.address,
             quantum: 10_000_000,
             resolution_factor: 1_000_000_000,
@@ -3713,7 +3713,7 @@ fn test_unsuccessful_add_vault_share_asset_zero_quantum() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
-            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            asset_id: cfg.vault_share_cfg.collateral_id,
             erc20_contract_address: vault_share_state.address,
             quantum: 0,
             resolution_factor: 1_000_000_000,
@@ -3743,7 +3743,7 @@ fn test_unsuccessful_add_vault_share_asset_not_erc20() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
-            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            asset_id: cfg.vault_share_cfg.collateral_id,
             erc20_contract_address: test_address(),
             quantum: 10_000_000,
             resolution_factor: 1_000_000_000,
@@ -3760,13 +3760,7 @@ fn test_successful_add_vault_share_asset() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
     let mut spy = snforge_std::spy_events();
-
-    // Setup test parameters:
-    let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = 1;
-    let risk_factor_1 = array![10].span();
 
     // VS has 10^18
     // quantum 10^12
@@ -3776,13 +3770,13 @@ fn test_successful_add_vault_share_asset() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
-            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
-            erc20_contract_address: vault_share_state.address,
-            quantum: 1000000000000,
-            resolution_factor: 1000000,
-            risk_factor_tiers: risk_factor_1,
-            :risk_factor_first_tier_boundary,
-            :risk_factor_tier_size,
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
             quorum: 1_u8,
         );
 
@@ -3790,20 +3784,20 @@ fn test_successful_add_vault_share_asset() {
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_add_spot_event_with_expected(
         spied_event: events[0],
-        asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
-        risk_factor_tiers: risk_factor_1,
-        :risk_factor_first_tier_boundary,
-        :risk_factor_tier_size,
-        resolution_factor: 1000000,
+        asset_id: cfg.vault_share_cfg.collateral_id,
+        risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+        risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+        risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+        resolution_factor: cfg.vault_share_cfg.resolution_factor,
         quorum: 1_u8,
-        contract_address: vault_share_state.address,
+        contract_address: cfg.vault_share_cfg.contract_address,
     );
 
-    let asset_config = state.assets.get_asset_config(VAULT_SHARE_COLLATERAL_1_ID());
+    let asset_config = state.assets.get_asset_config(cfg.vault_share_cfg.collateral_id);
 
     assert!(asset_config.resolution_factor == 1000000);
-    assert!(asset_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
-    assert!(asset_config.risk_factor_tier_size == risk_factor_tier_size);
+    assert!(asset_config.risk_factor_first_tier_boundary == cfg.vault_share_cfg.risk_factor_first_tier_boundary);
+    assert!(asset_config.risk_factor_tier_size == cfg.vault_share_cfg.risk_factor_tier_size);
     assert!(asset_config.quorum == 1_u8);
     assert!(asset_config.status == AssetStatus::PENDING);
 }
@@ -3816,26 +3810,19 @@ fn test_successful_vault_token_deposit() {
         cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
     );
     let user = Default::default();
-    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
-    let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = 1;
-    let risk_factor_1 = array![10].span();
-
-    // VS has 10^18
-    // quantum 10^12
-    // resolution 10^(18-12) = 10^6
+    let vault_share_state = cfg.vault_share_cfg.token_state;
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
             asset_id: cfg.vault_share_cfg.collateral_id,
-            erc20_contract_address: vault_share_state.address,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
             quantum: cfg.vault_share_cfg.quantum,
-            resolution_factor: 1000000,
-            risk_factor_tiers: risk_factor_1,
-            :risk_factor_first_tier_boundary,
-            :risk_factor_tier_size,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
             quorum: 1_u8,
         );
 
@@ -3965,26 +3952,19 @@ fn test_successful_vault_token_cancel_deposit() {
         cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
     );
     let user = Default::default();
-    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
-    let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = 1;
-    let risk_factor_1 = array![10].span();
-
-    // VS has 10^18
-    // quantum 10^12
-    // resolution 10^(18-12) = 10^6
+    let vault_share_state = cfg.vault_share_cfg.token_state;
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state
         .add_vault_collateral_asset(
             asset_id: cfg.vault_share_cfg.collateral_id,
-            erc20_contract_address: vault_share_state.address,
-            quantum: cfg.vault_share_cfg.quantum,
-            resolution_factor: 1000000,
-            risk_factor_tiers: risk_factor_1,
-            :risk_factor_first_tier_boundary,
-            :risk_factor_tier_size,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum:  cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
             quorum: 1_u8,
         );
 
@@ -4079,13 +4059,25 @@ fn test_successful_vault_share_process_deposit() {
         cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
     );
     let user = Default::default();
-    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
-    let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = 1;
-    let risk_factor_1 = array![10].span();
+    let vault_share_state = cfg.vault_share_cfg.token_state;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );
 
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
+
     let starting_user_balance = user_deposit_amount * 3;
 
     // Fund user.
@@ -4093,23 +4085,9 @@ fn test_successful_vault_share_process_deposit() {
     vault_share_state
         .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
 
-    // Test:
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state
-        .add_vault_collateral_asset(
-            asset_id: cfg.vault_share_cfg.collateral_id,
-            erc20_contract_address: vault_share_state.address,
-            quantum: cfg.vault_share_cfg.quantum,
-            resolution_factor: 1000000,
-            risk_factor_tiers: risk_factor_1,
-            :risk_factor_first_tier_boundary,
-            :risk_factor_tier_size,
-            quorum: 1_u8,
-        );
-
-    // Setup parameters:
     let expected_time = Time::now().add(delta: Time::days(1));
     start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
     let mut spy = snforge_std::spy_events();
 
     // Test:
