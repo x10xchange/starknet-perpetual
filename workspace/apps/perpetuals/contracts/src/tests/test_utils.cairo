@@ -374,9 +374,7 @@ pub fn setup_state_with_pending_vault_share(
     state
 }
 
-pub fn send_price_tick_for_vault_share(
-    ref state: Core::ContractState, cfg: @PerpetualsInitConfig, price: u64,
-) {
+pub fn send_price_tick_for_vault_share(ref state: Core::ContractState, cfg: @PerpetualsInitConfig, price: u64) {
     let mut spy = snforge_std::spy_events();
     let asset_name = 'VAULT_SHARE';
     let oracle1_name = 'ORCL1';
