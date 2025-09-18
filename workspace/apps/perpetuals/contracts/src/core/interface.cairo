@@ -41,6 +41,7 @@ pub trait ICore<TContractState> {
     fn transfer_request(
         ref self: TContractState,
         signature: Signature,
+        asset_id: AssetId,
         recipient: PositionId,
         position_id: PositionId,
         amount: u64,
@@ -50,6 +51,7 @@ pub trait ICore<TContractState> {
     fn transfer(
         ref self: TContractState,
         operator_nonce: u64,
+        asset_id: AssetId,
         recipient: PositionId,
         position_id: PositionId,
         amount: u64,

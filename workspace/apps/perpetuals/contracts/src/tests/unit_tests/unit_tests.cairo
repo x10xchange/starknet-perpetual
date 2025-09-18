@@ -25,7 +25,7 @@ use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick}
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
 use perpetuals::core::types::price::{
-    ORACLE_SCALE, PRICE_SCALE, PriceTrait, SN_PERPS_SCALE, SignedPrice,
+    PRICE_SCALE, PriceTrait, SignedPrice,
     convert_oracle_to_perps_price,
 };
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
@@ -151,6 +151,7 @@ fn test_caller_failures() {
     let result = dispatcher
         .transfer_request(
             signature: array![].span(),
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
             amount: TRANSFER_AMOUNT.into(),
@@ -163,6 +164,7 @@ fn test_caller_failures() {
     let result = dispatcher
         .transfer(
             operator_nonce: Zero::zero(),
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
             amount: TRANSFER_AMOUNT.into(),
@@ -2591,6 +2593,7 @@ fn test_successful_transfer_request_using_public_key() {
     state
         .transfer_request(
             :signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2635,6 +2638,7 @@ fn test_successful_transfer_request_with_owner() {
     state
         .transfer_request(
             :signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2682,6 +2686,7 @@ fn test_successful_transfer() {
     state
         .transfer_request(
             signature: sender_signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2692,6 +2697,7 @@ fn test_successful_transfer() {
     state
         .transfer(
             :operator_nonce,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2777,6 +2783,7 @@ fn test_invalid_transfer_request_amount_is_zero() {
     state
         .transfer_request(
             signature: sender_signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -4092,9 +4099,6 @@ fn test_successful_vault_share_process_deposit() {
     vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
     vault_share_state
         .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
-
-    let expected_time = Time::now().add(delta: Time::days(1));
-    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
 
     let mut spy = snforge_std::spy_events();
 
