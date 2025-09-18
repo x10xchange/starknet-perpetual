@@ -757,7 +757,7 @@ pub mod AssetsComponent {
             );
         }
 
-        fn _validate_synthetic_prices(
+        fn _validate_asset_prices(
             self: @ComponentState<TContractState>,
             current_time: Timestamp,
             max_price_interval: TimeDelta,
@@ -780,7 +780,7 @@ pub mod AssetsComponent {
             /// synthetic prices and update `last_price_validation` to current time.
             let max_price_interval = self.max_price_interval.read();
             if current_time.sub(self.last_price_validation.read()) > max_price_interval {
-                self._validate_synthetic_prices(current_time, max_price_interval);
+                self._validate_asset_prices(current_time, max_price_interval);
                 self.last_price_validation.write(current_time);
             }
         }
