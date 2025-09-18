@@ -13,6 +13,7 @@ use perpetuals::core::components::positions::interface::IPositions;
 use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::{InternalCoreFunctions, SNIP12MetadataImpl};
 use perpetuals::core::types::asset::{AssetId, AssetStatus};
+use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::{PositionDiff, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
@@ -23,7 +24,7 @@ use snforge_std::{
     ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global, test_address,
 };
 use starknet::ContractAddress;
-use starknet::storage::StoragePointerWriteAccess;
+use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
 use starkware_utils::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
@@ -373,6 +374,17 @@ pub fn add_synthetic_to_position(
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
+pub fn validate_asset_balance(
+    ref state: Core::ContractState,
+    position_id: PositionId,
+    asset_id: AssetId,
+    expected_balance: Balance,
+) {
+    let snapshot = state.positions.get_position_snapshot(:position_id);
+    let balance = snapshot.asset_balances.read(asset_id).expect('NO_SUCH_ASSET_IN_POSITION');
+    assert!(balance.balance == expected_balance);
+}
+
 pub fn initialized_contract_state(
     cfg: @PerpetualsInitConfig, token_state: @TokenState,
 ) -> Core::ContractState {
@@ -482,6 +494,7 @@ pub fn validate_balance(token_state: TokenState, address: ContractAddress, expec
     let balance_to_check = token_state.balance_of(address);
     assert_eq!(balance_to_check, expected_balance);
 }
+
 
 // Utils for dispatcher usage.
 
