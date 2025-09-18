@@ -2789,7 +2789,7 @@ fn test_invalid_transfer_request_amount_is_zero() {
 
 #[test]
 #[should_panic(expected: 'SYNTHETIC_EXPIRED_PRICE')]
-fn test_validate_synthetic_prices_expired() {
+fn test_validate_asset_prices_expired() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -2849,7 +2849,7 @@ fn test_validate_synthetic_prices_expired() {
 }
 
 #[test]
-fn test_validate_synthetic_prices_pending_asset() {
+fn test_validate_asset_prices_pending_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -4206,6 +4206,7 @@ fn test_price_tick_vault_share_asset() {
         spied_event: events[2], asset_id: vault_share_id, price: expected_price,
     );
     assert!(state.assets.get_asset_config(vault_share_id).status == AssetStatus::ACTIVE);
+    //check synthetic count is not incremented 
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
 
     let data = state.assets.get_timely_data(vault_share_id);
