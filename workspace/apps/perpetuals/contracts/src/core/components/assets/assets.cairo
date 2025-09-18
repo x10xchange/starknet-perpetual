@@ -7,9 +7,10 @@ pub mod AssetsComponent {
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::{
+    use openzeppelin::interfaces::erc20::{
         IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
     };
+
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
