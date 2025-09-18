@@ -30,7 +30,7 @@ pub mod AssetsComponent {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::types::asset::synthetic::{
-        AssetType, AssetConfig, TimelyData, SyntheticTrait,
+        AssetConfig, AssetType, SyntheticTrait, TimelyData,
     };
     use perpetuals::core::types::asset::vault::{VaultData, VaultStatus};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
@@ -88,6 +88,7 @@ pub mod AssetsComponent {
     pub enum Event {
         OracleAdded: events::OracleAdded,
         SyntheticAdded: events::SyntheticAdded,
+        SpotAssetAdded: events::SpotAssetAdded,
         AssetActivated: events::AssetActivated,
         SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         FundingTick: events::FundingTick,
@@ -518,9 +519,7 @@ pub mod AssetsComponent {
             self.last_price_validation.write(Time::now());
         }
 
-        fn get_asset_price(
-            self: @ComponentState<TContractState>, synthetic_id: AssetId,
-        ) -> Price {
+        fn get_asset_price(self: @ComponentState<TContractState>, synthetic_id: AssetId) -> Price {
             if let Option::Some(data) = self.timely_data.read(synthetic_id) {
                 data.price
             } else {
@@ -725,7 +724,9 @@ pub mod AssetsComponent {
             if asset_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
                 asset_config.status = AssetStatus::ACTIVE;
-                self.num_of_active_synthetic_assets.add_and_write(1);
+                if (asset_config.asset_type == AssetType::SYNTHETIC) {
+                    self.num_of_active_synthetic_assets.add_and_write(1);
+                }
                 self.asset_config.write(asset_id, Option::Some(asset_config));
                 self.emit(events::AssetActivated { asset_id });
             }
@@ -745,8 +746,6 @@ pub mod AssetsComponent {
                     @oracle_public_key_not_registered(asset_id, signed_price.signer_public_key),
                 );
             }
-
-            assert(packed_asset_oracle.is_non_zero(), ORACLE_PUBLIC_KEY_NOT_REGISTERED);
             let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
                 * TWO_POW_32.into()
                 + signed_price.timestamp.into();
@@ -767,8 +766,7 @@ pub mod AssetsComponent {
                 // Validate only active asset
                 if self._get_asset_config(:synthetic_id).status == AssetStatus::ACTIVE {
                     assert(
-                        max_price_interval >= current_time
-                            .sub(timely_data.last_price_update),
+                        max_price_interval >= current_time.sub(timely_data.last_price_update),
                         SYNTHETIC_EXPIRED_PRICE,
                     );
                 }
@@ -802,8 +800,8 @@ pub mod AssetsComponent {
             /// Validations:
             get_dep_component!(@self, Roles).only_app_governor();
 
-            let synthetic_entry = self.asset_config.entry(asset_id);
-            assert(synthetic_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
+            let asset_entry = self.asset_config.entry(asset_id);
+            assert(asset_entry.read().is_none(), SYNTHETIC_ALREADY_EXISTS);
             if let Option::Some(collateral_id) = self.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
@@ -836,10 +834,20 @@ pub mod AssetsComponent {
                         erc20_address.expect('MISSING_ERC20_ADDRESS_FOR_VAULT'),
                     )
                 },
-                _ => panic_with_felt252('CANNOT_REGISTER_THIS_ASSET_TYPE'),
+                AssetType::SPOT_COLLATERAL => {
+                    SyntheticTrait::spot(
+                        AssetStatus::PENDING,
+                        risk_factor_first_tier_boundary,
+                        risk_factor_tier_size,
+                        quorum,
+                        resolution_factor,
+                        quantum,
+                        erc20_address.expect('MISSING_ERC20_ADDRESS_FOR_SPOT'),
+                    )
+                },
             };
 
-            synthetic_entry.write(Option::Some(asset_config));
+            asset_entry.write(Option::Some(asset_config));
 
             let timely_data = SyntheticTrait::timely_data(
                 // These fields will be updated in the next price tick.
@@ -856,17 +864,37 @@ pub mod AssetsComponent {
                     .push(RiskFactorTrait::new(*risk_factor));
                 prev_risk_factor = *risk_factor;
             }
-            self
-                .emit(
-                    events::SyntheticAdded {
-                        asset_id,
-                        risk_factor_tiers,
-                        risk_factor_first_tier_boundary,
-                        risk_factor_tier_size,
-                        resolution_factor,
-                        quorum,
-                    },
-                );
+
+            match asset_type {
+                AssetType::SYNTHETIC => {
+                    self
+                        .emit(
+                            events::SyntheticAdded {
+                                asset_id,
+                                risk_factor_tiers,
+                                risk_factor_first_tier_boundary,
+                                risk_factor_tier_size,
+                                resolution_factor,
+                                quorum,
+                            },
+                        )
+                },
+                AssetType::VAULT_SHARE_COLLATERAL |
+                AssetType::SPOT_COLLATERAL => {
+                    self
+                        .emit(
+                            events::SpotAssetAdded {
+                                asset_id,
+                                risk_factor_tiers,
+                                risk_factor_first_tier_boundary,
+                                risk_factor_tier_size,
+                                resolution_factor,
+                                quorum,
+                                contract_address: erc20_address.expect('MISSING_ERC20_ADDRESS'),
+                            },
+                        );
+                },
+            }
         }
     }
 }

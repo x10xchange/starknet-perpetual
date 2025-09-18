@@ -48,7 +48,7 @@ use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
     initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
-    validate_balance, validate_asset_balance
+    validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -65,6 +65,7 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
     cheat_caller_address_once,
 };
+use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
 
 
 #[test]
@@ -3787,7 +3788,7 @@ fn test_successful_add_vault_share_asset() {
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
-    assert_add_synthetic_event_with_expected(
+    assert_add_spot_event_with_expected(
         spied_event: events[0],
         asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
         risk_factor_tiers: risk_factor_1,
@@ -3795,6 +3796,7 @@ fn test_successful_add_vault_share_asset() {
         :risk_factor_tier_size,
         resolution_factor: 1000000,
         quorum: 1_u8,
+        contract_address: vault_share_state.address,
     );
 
     let asset_config = state.assets.get_asset_config(VAULT_SHARE_COLLATERAL_1_ID());
@@ -4039,7 +4041,6 @@ fn test_successful_vault_token_cancel_deposit() {
     validate_balance(vault_share_state, user.address, starting_user_balance - user_deposit_amount);
     validate_balance(vault_share_state, test_address(), user_deposit_amount.try_into().unwrap());
 
-
     // Test:
     start_cheat_block_timestamp_global(
         block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
@@ -4085,7 +4086,7 @@ fn test_successful_vault_share_process_deposit() {
 
     let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
     init_position(cfg: @cfg, ref :state, :user);
-    let starting_user_balance = user_deposit_amount * 3;    
+    let starting_user_balance = user_deposit_amount * 3;
 
     // Fund user.
     vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
