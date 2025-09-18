@@ -33,8 +33,8 @@ pub mod Core {
     use perpetuals::core::types::balance::{Balance, BalanceDiff};
     use perpetuals::core::types::order::{Order, OrderTrait};
     use perpetuals::core::types::position::{
-        Position, PositionDiff, PositionDiffEnriched, PositionId, PositionTrait,
-        AssetEnrichedPositionDiff,
+        AssetEnrichedPositionDiff, Position, PositionDiff, PositionDiffEnriched, PositionId,
+        PositionTrait,
     };
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::transfer::TransferArgs;
@@ -71,6 +71,8 @@ pub mod Core {
         IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
+    use crate::core::components::assets::interface::IAssets;
+    use crate::core::types::asset::synthetic::AssetType;
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -373,17 +375,24 @@ pub mod Core {
         fn transfer_request(
             ref self: ContractState,
             signature: Signature,
+            asset_id: AssetId,
             recipient: PositionId,
             position_id: PositionId,
             amount: u64,
             expiration: Timestamp,
             salt: felt252,
         ) {
-            // check recipient position exists
-            self.positions.get_position_snapshot(position_id: recipient);
+            if (asset_id != self.assets.get_collateral_id()) {
+                let asset_config = self.assets.get_asset_config(asset_id);
+                assert(
+                    asset_config.asset_type == AssetType::SPOT_COLLATERAL
+                        || asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL,
+                    'NOT_TRANSFERABLE_ASSET',
+                );
+            }
 
+            self.positions.get_position_snapshot(position_id: recipient);
             let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
             let owner_account = if (position.owner_protection_enabled.read()) {
                 position.get_owner_account()
@@ -397,7 +406,7 @@ pub mod Core {
                     public_key: position.get_owner_public_key(),
                     :signature,
                     args: TransferArgs {
-                        position_id, recipient, salt, expiration, collateral_id, amount,
+                        position_id, recipient, salt, expiration, collateral_id: asset_id, amount,
                     },
                 );
             self
@@ -405,7 +414,7 @@ pub mod Core {
                     events::TransferRequest {
                         position_id,
                         recipient,
-                        collateral_id,
+                        collateral_id: asset_id,
                         amount,
                         expiration,
                         transfer_request_hash: hash,
@@ -432,6 +441,7 @@ pub mod Core {
         fn transfer(
             ref self: ContractState,
             operator_nonce: u64,
+            asset_id: AssetId,
             recipient: PositionId,
             position_id: PositionId,
             amount: u64,
@@ -444,24 +454,23 @@ pub mod Core {
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
             let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
             let hash = self
                 .request_approvals
                 .consume_approved_request(
                     args: TransferArgs {
-                        recipient, position_id, collateral_id, amount, expiration, salt,
+                        recipient, position_id, collateral_id: asset_id, amount, expiration, salt,
                     },
                     public_key: position.get_owner_public_key(),
                 );
 
-            self._execute_transfer(:recipient, :position_id, :collateral_id, :amount);
+            self._execute_transfer(:recipient, :position_id, collateral_id: asset_id, :amount);
 
             self
                 .emit(
                     events::Transfer {
                         recipient,
                         position_id,
-                        collateral_id,
+                        collateral_id: asset_id,
                         amount,
                         expiration,
                         transfer_request_hash: hash,
@@ -469,6 +478,7 @@ pub mod Core {
                     },
                 );
         }
+
         fn multi_trade(ref self: ContractState, operator_nonce: u64, trades: Span<Settlement>) {
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
@@ -994,8 +1004,7 @@ pub mod Core {
             operator_nonce: u64,
             signature: Signature,
             order: ConvertPositionToVault,
-        ) {
-        }
+        ) {}
     }
 
     #[generate_trait]
@@ -1142,25 +1151,33 @@ pub mod Core {
             amount: u64,
         ) {
             // Parameters
-            let position_diff_sender = PositionDiff {
-                collateral_diff: -amount.into(), asset_diff: Option::None,
-            };
 
-            let position_diff_recipient = PositionDiff {
-                collateral_diff: amount.into(), asset_diff: Option::None,
+            let (position_diff_sender, position_diff_recipient) = if (collateral_id == self
+                .assets
+                .get_collateral_id()) {
+                let position_diff_sender = PositionDiff {
+                    collateral_diff: -amount.into(), asset_diff: Option::None,
+                };
+
+                let position_diff_recipient = PositionDiff {
+                    collateral_diff: amount.into(), asset_diff: Option::None,
+                };
+                (position_diff_sender, position_diff_recipient)
+            } else {
+                let position_diff_sender = PositionDiff {
+                    collateral_diff: 0_i64.into(),
+                    asset_diff: Option::Some((collateral_id, -amount.into())),
+                };
+
+                let position_diff_recipient = PositionDiff {
+                    collateral_diff: 0_i64.into(),
+                    asset_diff: Option::Some((collateral_id, amount.into())),
+                };
+                (position_diff_sender, position_diff_recipient)
             };
 
             /// Validations - Fundamentals:
             let position = self.positions.get_position_snapshot(:position_id);
-            // accrue funding before transfer
-            self
-                .positions
-                .apply_diff(
-                    :position_id,
-                    position_diff: PositionDiff {
-                        collateral_diff: 0_i64.into(), asset_diff: Option::None,
-                    },
-                );
             self
                 ._validate_healthy_or_healthier_position(
                     :position_id,
