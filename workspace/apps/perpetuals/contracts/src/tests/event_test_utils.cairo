@@ -429,6 +429,33 @@ pub fn assert_add_synthetic_event_with_expected(
     );
 }
 
+pub fn assert_add_spot_event_with_expected(
+    spied_event: @(ContractAddress, Event),
+    asset_id: AssetId,
+    risk_factor_tiers: Span<u16>,
+    risk_factor_first_tier_boundary: u128,
+    risk_factor_tier_size: u128,
+    resolution_factor: u64,
+    quorum: u8,
+    contract_address: ContractAddress,
+) {
+    let expected_event = assets_events::SpotAssetAdded {
+        asset_id,
+        risk_factor_tiers,
+        risk_factor_first_tier_boundary,
+        risk_factor_tier_size,
+        resolution_factor,
+        quorum,
+        contract_address
+    };
+    assert_expected_event_emitted(
+        :spied_event,
+        :expected_event,
+        expected_event_selector: @selector!("SpotAssetAdded"),
+        expected_event_name: "SpotAssetAdded",
+    );
+}
+
 pub fn assert_deactivate_synthetic_asset_event_with_expected(
     spied_event: @(ContractAddress, Event), asset_id: AssetId,
 ) {
