@@ -48,7 +48,7 @@ use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
     initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
-    validate_balance,
+    validate_balance, validate_asset_balance
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -4155,5 +4155,10 @@ fn test_successful_vault_share_process_deposit() {
     let status = state.deposits.get_deposit_status(:deposit_hash);
     assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
 
-    let position_assets = state.positions.get_position_assets(user.position_id);
+    validate_asset_balance(
+        ref :state,
+        position_id: user.position_id,
+        asset_id: cfg.vault_share_cfg.collateral_id,
+        expected_balance: DEPOSIT_AMOUNT.into(),
+    );
 }
