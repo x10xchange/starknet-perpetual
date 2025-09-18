@@ -7,10 +7,10 @@ use perpetuals::core::errors::{
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::position::{
-    PositionDiffEnriched, PositionId, AssetEnrichedPositionDiff,
+    AssetEnrichedPositionDiff, PositionDiffEnriched, PositionId,
 };
 use perpetuals::core::types::price::{Price, PriceMulTrait};
-use perpetuals::core::types::risk_factor::{RiskFactorMulTrait};
+use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
@@ -119,10 +119,7 @@ pub fn assert_healthy_or_healthier(
 
     let scaled_tr: u128 = (tvtr.after.total_risk.into() * nominator) / denominator;
 
-    let after_ratio = FractionTrait::new(
-        tvtr.after.total_value, 
-        max(scaled_tr, 1_u128),
-    );
+    let after_ratio = FractionTrait::new(tvtr.after.total_value, max(scaled_tr, 1_u128));
 
     assert_with_byte_array(
         after_ratio >= before_ratio, position_not_healthy_nor_healthier(:position_id, :tvtr),
@@ -269,13 +266,12 @@ pub fn calculate_position_tvtr_before(
 
 #[cfg(test)]
 mod tests {
-    use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetBalanceDiffEnriched};
+    use perpetuals::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetBalanceInfo};
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::funding::FundingIndex;
     use perpetuals::core::types::price::{Price, PriceTrait};
-    use perpetuals::core::types::risk_factor::RiskFactor;
-    use perpetuals::core::types::risk_factor::{RiskFactorTrait};
+    use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use super::*;
 
 
@@ -378,7 +374,7 @@ mod tests {
         assert!(position_tvtr_change.after.total_risk == 36_000);
     }
 
-        #[test]
+    #[test]
     fn test_assert_healthy_or_healthier_accepts_less_than_negative_10bps_change() {
         // Create a position with a single asset entry.
         let position_tvtr_change = TVTRChange {
@@ -518,7 +514,8 @@ mod tests {
         };
 
         let position_diff_enriched = PositionDiffEnriched {
-            collateral_enriched: Default::default(), asset_diff_enriched: Option::Some(asset_diff_1),
+            collateral_enriched: Default::default(),
+            asset_diff_enriched: Option::Some(asset_diff_1),
         };
 
         let tvtr_before = calculate_position_tvtr_before(

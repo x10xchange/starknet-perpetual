@@ -654,6 +654,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer_request(
                 signature,
+                asset_id: self.collateral_id,
                 recipient: recipient.position_id,
                 position_id: sender.position_id,
                 :amount,
@@ -696,6 +697,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer(
                 :operator_nonce,
+                asset_id: self.collateral_id,
                 recipient: recipient.position_id,
                 position_id: position_id,
                 amount: amount,
