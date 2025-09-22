@@ -100,7 +100,7 @@ pub mod ProtocolVault {
         }
     }
 
-    
+
     impl ERC4626ExternalAssetsManagement of ERC4626Component::AssetsManagementTrait<ContractState> {
         fn transfer_assets_in(
             ref self: ERC4626Component::ComponentState<ContractState>,
@@ -145,7 +145,10 @@ pub mod ProtocolVault {
             assets: u256,
             shares: u256,
             fee: Option<Fee>,
-        ) {}
+        ) {
+            assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
+            assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');
+        }
 
         /// Hooks into `InternalImpl::_deposit`.
         /// Executes logic after transferring assets and minting shares.
@@ -183,6 +186,8 @@ pub mod ProtocolVault {
             fee: Option<Fee>,
         ) {
             // before withdraw we need to pull the underlying asset from the perps contract
+            assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
+            assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');            
             let this = starknet::get_contract_address();
             let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
             assert(
