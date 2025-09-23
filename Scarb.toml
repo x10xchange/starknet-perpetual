@@ -4,11 +4,12 @@ members = ["workspace/apps/perpetuals/contracts"]
 [workspace.dependencies]
 starknet = "2.12.1"
 assert_macros = "2.12.1"
-openzeppelin = "2.0.0"
+openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts", commit = "fc942069996633e13f11de0710c586b7d2ed8df7" }
 openzeppelin_testing = "4.6.0"
 snforge_std = "0.48.1"
-starkware_utils = { git = "https://github.com/starkware-libs/starkware-starknet-utils", branch = "main" }
-starkware_utils_testing = { git = "https://github.com/starkware-libs/starkware-starknet-utils", branch = "main" }
+starkware_utils = { git = "https://github.com/ex10ded/starkware-starknet-utils", branch = "main" }
+starkware_utils_testing = { git = "https://github.com/ex10ded/starkware-starknet-utils", branch = "main" }
+
 
 [scripts]
 test = "snforge test"
