@@ -1,33 +1,16 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::vault::{ConvertPositionToVault, InvestInVault, RedeemFromVault};
 use starkware_utils::time::time::Timestamp;
 
 const STORAGE_VERSION: u8 = 1;
 
-#[derive(Copy, Drop, Hash, Serde)]
-/// An order to convert a position into a vault.
-pub struct ConvertPositionToVault {
-    pub position_to_convert: PositionId,
-    pub vault_asset_id: AssetId,
-    pub is_protocol_vault: bool,
-    pub expiration: Timestamp,
-}
-
-#[derive(Copy, Drop, Hash, Serde)]
-pub struct InvestInVault {
-    pub from_position_id: PositionId,
-    pub vault_id: PositionId,
-    pub amount: u64,
-    pub expiration: Timestamp,
-    pub salt: felt252,
-}
-
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct VaultConfig {
     version: u8,
-    is_protocol_vault: bool,
-    asset_id: AssetId,
-    position_id: u32,
+    pub is_protocol_vault: bool,
+    pub asset_id: AssetId,
+    pub position_id: u32,
 }
 
 #[starknet::interface]
@@ -56,6 +39,7 @@ pub(crate) mod Vaults {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::positions::positions::Positions::ComponentState as PositionsComponentState;
     use perpetuals::core::components::vault::events;
     use perpetuals::core::components::vault::protocol_vault::{
         IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
@@ -74,6 +58,9 @@ pub(crate) mod Vaults {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
+    use crate::core::components::positions;
+    use crate::core::types::position::{Position, PositionDiff};
+    use crate::core::value_risk_calculator::assert_healthy_or_healthier;
     use super::{ConvertPositionToVault, IVaults, InvestInVault, STORAGE_VERSION, VaultConfig};
 
     #[event]
@@ -226,49 +213,20 @@ pub(crate) mod Vaults {
     > of InternalTrait<TContractState> {
         fn initialize(ref self: ComponentState<TContractState>) {}
 
+        fn get_vault_config_for_position(
+            ref self: ComponentState<TContractState>, vault_position: PositionId,
+        ) -> VaultConfig {
+            let vault_config = self.registered_vaults_by_position.read(vault_position);
+            assert(vault_config.version != 0, 'UNKNOWN_VAULT');
+            vault_config
+        }
 
-        fn _invest_in_vault(ref self: ComponentState<TContractState>, order: InvestInVault) {
-            let from_position_id = order.from_position_id;
-            let vault_id = order.vault_id;
-            let amount = order.amount;
-            let expiration = order.expiration;
-            let salt = order.salt;
-
-            get_dep_component!(@self, Pausable).assert_not_paused();
-            assert(self.is_vault(vault_id), 'NOT_A_VAULT');
-            let positions = get_dep_component!(@self, Positions);
-            let from_position_info = positions.get_position_snapshot(from_position_id);
-            let vault_position_info = positions.get_position_snapshot(vault_id);
-            let assets = get_dep_component!(@self, Assets);
-
-            let vault_asset = self.registered_vaults_by_position.read(vault_id);
-            assert(vault_asset.version != 0, 'UNKNOWN_VAULT');
-
-            let asset_config = assets.get_asset_config(vault_asset.asset_id);
-
-            let vault_dispatcher = IERC4626Dispatcher {
-                contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
-            };
-
-            let collateral_token_dispatcher = assets.get_collateral_token_contract();
-
-            let current_collateral_balance = collateral_token_dispatcher
-                .balance_of(starknet::get_contract_address());
-
-            let minted_shares = vault_dispatcher
-                .deposit(amount.into(), starknet::get_contract_address());
-
-            let deposits_dispatcher = IDepositDispatcher {
-                contract_address: starknet::get_contract_address(),
-            };
-
-            deposits_dispatcher
-                .deposit(
-                    asset_id: vault_asset.asset_id,
-                    position_id: from_position_id,
-                    quantized_amount: minted_shares.into(),
-                    salt: salt,
-                )
+        fn get_vault_config_for_asset(
+            ref self: ComponentState<TContractState>, vault_asset_id: AssetId,
+        ) -> VaultConfig {
+            let vault_config = self.registered_vaults_by_asset.read(vault_asset_id);
+            assert(vault_config.version != 0, 'UNKNOWN_VAULT');
+            vault_config
         }
     }
 }
