@@ -50,6 +50,7 @@ pub mod ProtocolVault {
         erc20: ERC20Component::Storage,
         perps_contract: ContractAddress,
         owning_position_id: u32,
+        initialized: bool,
     }
 
     #[event]
@@ -67,14 +68,17 @@ pub mod ProtocolVault {
         pnl_collateral_contract: ContractAddress,
         perps_contract: ContractAddress,
         owning_position_id: u32,
-        initial_supply: u256,
         recipient: ContractAddress,
-    ) {
+    ) -> u256 {
         self.perps_contract.write(perps_contract);
         self.owning_position_id.write(owning_position_id);
         self.erc20.initializer(name, symbol);
-        self.erc20.mint(recipient, initial_supply);
         self.erc4626.initializer(pnl_collateral_contract);
+        self.initialized.write(false);
+        let total_assets = self.erc4626.get_total_assets();
+        assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
+        self.erc20.mint(recipient, total_assets);
+        return total_assets;
     }
 
     #[abi(embed_v0)]
@@ -187,7 +191,7 @@ pub mod ProtocolVault {
         ) {
             // before withdraw we need to pull the underlying asset from the perps contract
             assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
-            assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');            
+            assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');
             let this = starknet::get_contract_address();
             let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
             assert(
