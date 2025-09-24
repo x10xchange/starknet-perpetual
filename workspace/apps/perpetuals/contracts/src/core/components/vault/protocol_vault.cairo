@@ -13,10 +13,10 @@ pub mod ProtocolVault {
     use ERC4626Component::Fee;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::token::erc20::extensions::erc4626::{
-        DefaultConfig, ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
+        ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
     };
     use openzeppelin::token::erc20::{
-        DefaultConfig as ERC20DefaultConfig, ERC20Component, ERC20HooksEmptyImpl,
+        ERC20Component, ERC20HooksEmptyImpl,
     };
     use perpetuals::core::components::positions::interface::{
         IPositionsDispatcher, IPositionsDispatcherTrait,
@@ -50,7 +50,6 @@ pub mod ProtocolVault {
         erc20: ERC20Component::Storage,
         perps_contract: ContractAddress,
         owning_position_id: u32,
-        initialized: bool,
     }
 
     #[event]
@@ -74,10 +73,10 @@ pub mod ProtocolVault {
         self.owning_position_id.write(owning_position_id);
         self.erc20.initializer(name, symbol);
         self.erc4626.initializer(pnl_collateral_contract);
-        self.initialized.write(false);
         let total_assets = self.erc4626.get_total_assets();
         assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
         self.erc20.mint(recipient, total_assets);
+        assert(recipient != perps_contract, 'RECIPIENT_CANNOT_BE_PERPS');
         return total_assets;
     }
 
@@ -102,6 +101,11 @@ pub mod ProtocolVault {
         fn get_owning_position_id(ref self: ContractState) -> u32 {
             self.owning_position_id.read()
         }
+    }
+
+    impl ERC4626ImmutableConfig of ERC4626Component::ImmutableConfig {
+        const UNDERLYING_DECIMALS: u8 = 6;
+        const DECIMALS_OFFSET: u8 = 0;
     }
 
 
@@ -190,7 +194,7 @@ pub mod ProtocolVault {
             fee: Option<Fee>,
         ) {
             // before withdraw we need to pull the underlying asset from the perps contract
-            assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
+            assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_WITHDRAW');
             assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');
             let this = starknet::get_contract_address();
             let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
