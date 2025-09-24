@@ -106,7 +106,7 @@ pub struct DeployedVault {
     pub protocol_vault: IProtocolVaultDispatcher,
 }
 
-fn deploy_protocol_vault_with_dispatcher(
+pub fn deploy_protocol_vault_with_dispatcher(
     perps_address: ContractAddress,
     vault_position_id: PositionId,
     usdc_token_state: TokenState,
@@ -149,104 +149,6 @@ fn test_protocol_vault_initialisation_logic() {
         position_id: PositionId { value: 21 }, key_pair: KEY_PAIR_1(),
     );
 
-    // let collateral_id = cfg.collateral_cfg.collateral_id;
-    // let synthetic_id_1 = SYNTHETIC_ASSET_ID_1();
-    // let synthetic_id_2 = SYNTHETIC_ASSET_ID_2();
-
-    // let risk_factor_first_tier_boundary = MAX_U128;
-    // let risk_factor_tier_size = 1;
-    // let risk_factor_tiers = array![10].span();
-    // let quorum = 1_u8;
-    // let resolution_factor = 2_000_000_000;
-
-    // let oracle_price: u128 = ORACLE_PRICE;
-    // let asset_name = 'ASSET_NAME';
-    // let oracle1_name = 'ORCL1';
-    // let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
-    // let old_time: u64 = Time::now().into();
-    // let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
-    // start_cheat_block_timestamp_global(block_timestamp: new_time.into());
-
-    // // Add synthetic assets.
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.app_governor,
-    // );
-    // asset_dispatcher
-    //     .add_synthetic_asset(
-    //         asset_id: synthetic_id_1,
-    //         :risk_factor_tiers,
-    //         :risk_factor_first_tier_boundary,
-    //         :risk_factor_tier_size,
-    //         :quorum,
-    //         :resolution_factor,
-    //     );
-
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.app_governor,
-    // );
-    // asset_dispatcher
-    //     .add_synthetic_asset(
-    //         asset_id: synthetic_id_2,
-    //         :risk_factor_tiers,
-    //         :risk_factor_first_tier_boundary,
-    //         :risk_factor_tier_size,
-    //         :quorum,
-    //         :resolution_factor,
-    //     );
-
-    // Add to oracle.
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.app_governor,
-    // );
-    // asset_dispatcher
-    //     .add_oracle_to_asset(
-    //         asset_id: synthetic_id_1,
-    //         oracle_public_key: oracle1.key_pair.public_key,
-    //         oracle_name: oracle1_name,
-    //         :asset_name,
-    //     );
-
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.app_governor,
-    // );
-    // asset_dispatcher
-    //     .add_oracle_to_asset(
-    //         asset_id: synthetic_id_2,
-    //         oracle_public_key: oracle1.key_pair.public_key,
-    //         oracle_name: oracle1_name,
-    //         :asset_name,
-    //     );
-
-    // Activate synthetic assets.
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.operator,
-    // );
-    // asset_dispatcher
-    //     .price_tick(
-    //         operator_nonce: 0,
-    //         asset_id: synthetic_id_1,
-    //         :oracle_price,
-    //         signed_prices: [
-    //             oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
-    //         ]
-    //             .span(),
-    //     );
-
-    // cheat_caller_address_once(
-    //     contract_address: perps_contract_address, caller_address: cfg.operator,
-    // );
-    // asset_dispatcher
-    //     .price_tick(
-    //         operator_nonce: 1,
-    //         asset_id: synthetic_id_2,
-    //         :oracle_price,
-    //         signed_prices: [
-    //             oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
-    //         ]
-    //             .span(),
-    //     );
-
-    // Add positions, so signatures can be checked.
     cheat_caller_address_once(
         contract_address: perps_contract_address, caller_address: cfg.operator,
     );
@@ -394,13 +296,44 @@ fn test_protocol_vault_initialisation_logic() {
 
 #[test]
 #[feature("safe_dispatcher")]
-#[should_panic(expected: "POSITION_DOESNT_EXIST")]
+#[should_panic(expected: 'Result::unwrap failed.')]
 fn test_protocol_vault_fails_when_position_does_not_exist() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
     let usdc_token_state = cfg.collateral_cfg.token_cfg.deploy();
     let perps_contract_address = init_by_dispatcher(cfg: @cfg, token_state: @usdc_token_state);
     let vault_user: User = Default::default();
+
+    deploy_protocol_vault_with_dispatcher(
+        perps_address: perps_contract_address,
+        vault_position_id: vault_user.position_id,
+        usdc_token_state: usdc_token_state,
+        initial_receiver: vault_user.address,
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+#[should_panic(expected: 'Result::unwrap failed.')]
+fn test_protocol_vault_fails_when_position_has_zero_tv() {
+    // Setup:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let usdc_token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let perps_contract_address = init_by_dispatcher(cfg: @cfg, token_state: @usdc_token_state);
+    let vault_user: User = Default::default();
+    let position_dispatcher = IPositionsDispatcher { contract_address: perps_contract_address };
+
+    cheat_caller_address_once(
+        contract_address: perps_contract_address, caller_address: cfg.operator,
+    );
+    position_dispatcher
+        .new_position(
+            operator_nonce: 0,
+            position_id: vault_user.position_id,
+            owner_public_key: vault_user.get_public_key(),
+            owner_account: Zero::zero(),
+            owner_protection_enabled: true,
+        );
 
     deploy_protocol_vault_with_dispatcher(
         perps_address: perps_contract_address,
