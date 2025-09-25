@@ -155,7 +155,7 @@ mod tests {
         let price = PriceTrait::new(value: 100);
         let balance = BalanceTrait::new(value: 2);
         let result = price.mul(balance);
-        assert!(result == 200 );
+        assert!(result == 200);
     }
 
     #[test]
