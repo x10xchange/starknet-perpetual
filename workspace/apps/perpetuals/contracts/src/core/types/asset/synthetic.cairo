@@ -9,7 +9,7 @@ use starkware_utils::time::time::Timestamp;
 
 const VERSION: u8 = 1;
 
-#[derive(Copy, Drop, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, starknet::Store, PartialEq)]
 pub enum AssetType {
     #[default]
     SYNTHETIC,
