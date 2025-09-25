@@ -1,43 +1,18 @@
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
-
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::tests::constants::*;
-// use perpetuals::tests::event_test_utils::{
-//     assert_add_oracle_event_with_expected, assert_add_synthetic_event_with_expected,
-//     assert_asset_activated_event_with_expected,
-//     assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
-//     assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-//     assert_deposit_processed_event_with_expected, assert_funding_tick_event_with_expected,
-//     assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
-//     assert_price_tick_event_with_expected, assert_remove_oracle_event_with_expected,
-//     assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
-//     assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
-//     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-//     assert_update_synthetic_quorum_event_with_expected, assert_withdraw_event_with_expected,
-//     assert_withdraw_request_event_with_expected,
-// };
 use perpetuals::tests::test_utils::{
-    PerpetualsInitConfig, User, UserTrait,
-    deposit_vault_share, init_position,
-    init_position_zero_collateral,
-    send_price_tick_for_vault_share,
+    PerpetualsInitConfig, User, UserTrait, deposit_vault_share, init_position,
+    init_position_zero_collateral, send_price_tick_for_vault_share,
     setup_state_with_pending_vault_share, validate_asset_balance,
 };
-use snforge_std::{test_address};
-use starkware_utils::components::replaceability::interface::IReplaceable;
-use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
-use starkware_utils::components::roles::interface::IRoles;
-use starkware_utils::constants::{HOUR, MAX_U128};
+use snforge_std::test_address;
 use starkware_utils::hash::message_hash::OffchainMessageHash;
-use starkware_utils::math::abs::Abs;
 use starkware_utils::storage::iterable_map::*;
-use starkware_utils::time::time::{Time, Timestamp};
-use starkware_utils_testing::test_utils::{
-    Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
-    cheat_caller_address_once,
-};
+use starkware_utils::time::time::Time;
+use starkware_utils_testing::test_utils::{Deployable, cheat_caller_address_once};
 use crate::core::types::position::PositionId;
 
 
