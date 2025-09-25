@@ -1270,7 +1270,7 @@ pub mod Core {
             let tvtr = calculate_position_tvtr_change(
                 :tvtr_before, :synthetic_enriched_position_diff,
             );
-            assert_healthy_or_healthier(:position_id, :tvtr, allowed_bps_slippage: 0);
+            assert_healthy_or_healthier(:position_id, :tvtr);
             tvtr.after
         }
 
