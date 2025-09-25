@@ -1,7 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::vault::{ConvertPositionToVault, InvestInVault, RedeemFromVault};
-use starkware_utils::time::time::Timestamp;
+use perpetuals::core::types::vault::{ConvertPositionToVault, InvestInVault};
 
 const STORAGE_VERSION: u8 = 1;
 
@@ -26,20 +25,15 @@ pub(crate) mod Vaults {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit as DepositComponent;
-    use perpetuals::core::components::deposit::interface::{
-        IDepositDispatcher, IDepositDispatcherTrait,
-    };
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::positions::positions::Positions::ComponentState as PositionsComponentState;
     use perpetuals::core::components::vault::events;
     use perpetuals::core::components::vault::protocol_vault::{
         IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
@@ -47,10 +41,7 @@ pub(crate) mod Vaults {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::position::PositionId;
-    use starknet::storage::{
-        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
-    };
+    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -59,9 +50,7 @@ pub(crate) mod Vaults {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use crate::core::components::positions;
-    use crate::core::types::position::{Position, PositionDiff};
-    use crate::core::value_risk_calculator::assert_healthy_or_healthier;
-    use super::{ConvertPositionToVault, IVaults, InvestInVault, STORAGE_VERSION, VaultConfig};
+    use super::{ConvertPositionToVault, IVaults, STORAGE_VERSION, VaultConfig};
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]

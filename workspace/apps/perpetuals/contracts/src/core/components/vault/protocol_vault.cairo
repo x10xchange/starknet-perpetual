@@ -75,8 +75,8 @@ pub mod ProtocolVault {
         self.erc4626.initializer(pnl_collateral_contract);
         let total_assets = self.erc4626.get_total_assets();
         assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
-        self.erc20.mint(recipient, total_assets);
         assert(recipient != perps_contract, 'RECIPIENT_CANNOT_BE_PERPS');
+        self.erc20.mint(recipient, total_assets);
         return total_assets;
     }
 
