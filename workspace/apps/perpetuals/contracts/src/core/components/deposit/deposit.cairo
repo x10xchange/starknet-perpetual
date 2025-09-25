@@ -5,8 +5,8 @@ pub(crate) mod Deposit {
     use core::panic_with_felt252;
     use core::pedersen::PedersenTrait;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::interface::{DepositStatus, IDeposit};
@@ -77,60 +77,17 @@ pub(crate) mod Deposit {
             quantized_amount: u64,
             salt: felt252,
         ) {
-            // check recipient position exists
-            get_dep_component_mut!(ref self, Positions).get_position_snapshot(:position_id);
-
             assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
             let caller_address = get_caller_address();
-            let assets = get_dep_component!(@self, Assets);
 
-            let (token_contract, quantum) = if (assets.get_collateral_id() == asset_id) {
-                let token_contract = assets.get_collateral_token_contract();
-                let quantum = assets.get_collateral_quantum();
-                (token_contract, quantum)
-            } else {
-                let asset_config = assets.get_asset_config(asset_id);
-                assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
-                let token_contract = IERC20Dispatcher {
-                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
-                };
-                (token_contract, asset_config.quantum)
-            };
-
-            let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                depositor: caller_address,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            assert(
-                self.get_deposit_status(:deposit_hash) == DepositStatus::NOT_REGISTERED,
-                errors::DEPOSIT_ALREADY_REGISTERED,
-            );
             self
-                .registered_deposits
-                .write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));
-
-            let unquantized_amount = quantized_amount * quantum.into();
-            token_contract
-                .transfer_from(
-                    sender: caller_address,
-                    recipient: get_contract_address(),
-                    amount: unquantized_amount.into(),
-                );
-            self
-                .emit(
-                    events::Deposit {
-                        position_id,
-                        depositing_address: caller_address,
-                        collateral_id: asset_id,
-                        quantized_amount,
-                        unquantized_amount,
-                        deposit_request_hash: deposit_hash,
-                        salt,
-                    },
-                );
+                ._deposit(
+                    caller_address: caller_address,
+                    asset_id: asset_id,
+                    position_id: position_id,
+                    quantized_amount: quantized_amount,
+                    salt: salt,
+                )
         }
 
         /// Cancel deposit is called by the user to cancel a deposit request which did not take
@@ -325,6 +282,74 @@ pub(crate) mod Deposit {
             assert(self.cancel_delay.read().is_zero(), errors::ALREADY_INITIALIZED);
             assert(cancel_delay.is_non_zero(), errors::INVALID_CANCEL_DELAY);
             self.cancel_delay.write(cancel_delay);
+        }
+
+        fn _deposit(
+            ref self: ComponentState<TContractState>,
+            caller_address: ContractAddress,
+            asset_id: AssetId,
+            position_id: PositionId,
+            quantized_amount: u64,
+            salt: felt252,
+        ) {
+            // check recipient position exists
+            get_dep_component_mut!(ref self, Positions).get_position_snapshot(:position_id);
+
+            assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
+            let assets = get_dep_component!(@self, Assets);
+
+            let (token_contract, quantum) = if (assets.get_collateral_id() == asset_id) {
+                let token_contract = assets.get_collateral_token_contract();
+                let quantum = assets.get_collateral_quantum();
+                (token_contract, quantum)
+            } else {
+                let asset_config = assets.get_asset_config(asset_id);
+                assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
+                let token_contract = IERC20Dispatcher {
+                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
+                };
+                (token_contract, asset_config.quantum)
+            };
+
+            let deposit_hash = deposit_hash(
+                token_address: token_contract.contract_address,
+                depositor: caller_address,
+                :position_id,
+                :quantized_amount,
+                :salt,
+            );
+            assert(
+                self.get_deposit_status(:deposit_hash) == DepositStatus::NOT_REGISTERED,
+                errors::DEPOSIT_ALREADY_REGISTERED,
+            );
+            self
+                .registered_deposits
+                .write(key: deposit_hash, value: DepositStatus::PENDING(Time::now()));
+
+            let unquantized_amount = quantized_amount * quantum.into();
+
+            println!("Depositing amount: {}", unquantized_amount);
+            println!("From address: {:?}", caller_address);
+            println!("To address: {:?}", get_contract_address());
+
+            token_contract
+                .transfer_from(
+                    sender: caller_address,
+                    recipient: get_contract_address(),
+                    amount: unquantized_amount.into(),
+                );
+            self
+                .emit(
+                    events::Deposit {
+                        position_id,
+                        depositing_address: caller_address,
+                        collateral_id: asset_id,
+                        quantized_amount,
+                        unquantized_amount,
+                        deposit_request_hash: deposit_hash,
+                        salt,
+                    },
+                );
         }
 
         fn _cancel_deposit(

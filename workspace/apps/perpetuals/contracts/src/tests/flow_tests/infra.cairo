@@ -310,7 +310,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let asset_balances: i64 = self
             .flow_test_base
             .facade
-            .get_position_synthetic_balance(position_id: liquidated_user.position_id, :synthetic_id)
+            .get_position_asset_balance(position_id: liquidated_user.position_id, :synthetic_id)
             .into();
 
         let base = min(asset_balances.abs(), liquidator_order.actual_base);
@@ -382,7 +382,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let balance_a: i64 = self
             .flow_test_base
             .facade
-            .get_position_synthetic_balance(
+            .get_position_asset_balance(
                 position_id: user_a.position_id, synthetic_id: synthetic_info.asset_id,
             )
             .into();
@@ -390,7 +390,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let balance_b: i64 = self
             .flow_test_base
             .facade
-            .get_position_synthetic_balance(
+            .get_position_asset_balance(
                 position_id: user_b.position_id, synthetic_id: synthetic_info.asset_id,
             )
             .into();
