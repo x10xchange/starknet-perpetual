@@ -50,7 +50,11 @@ pub fn deploy_protocol_vault_with_dispatcher(
     vault_position_id.value.serialize(ref calldata);
     initial_receiver.serialize(ref calldata);
     let contract = snforge_std::declare("ProtocolVault").unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@calldata).unwrap();
+    let output = contract.deploy(@calldata);
+    if output.is_err() {
+        panic(output.unwrap_err());
+    }
+    let (contract_address, _) = output.unwrap();
     let erc20 = IERC20Dispatcher { contract_address: contract_address };
     let erc4626 = IERC4626Dispatcher { contract_address: contract_address };
     let protocol_vault = IProtocolVaultDispatcher { contract_address: contract_address };
@@ -220,7 +224,7 @@ fn test_protocol_vault_initialisation_logic() {
 
 #[test]
 #[feature("safe_dispatcher")]
-#[should_panic(expected: 'Result::unwrap failed.')]
+#[should_panic(expected: 'POSITION_DOESNT_EXIST')]
 fn test_protocol_vault_fails_when_position_does_not_exist() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -238,7 +242,7 @@ fn test_protocol_vault_fails_when_position_does_not_exist() {
 
 #[test]
 #[feature("safe_dispatcher")]
-#[should_panic(expected: 'Result::unwrap failed.')]
+#[should_panic(expected: 'INITIAL_ASSETS_MUST_BE_POSITIVE')]
 fn test_protocol_vault_fails_when_position_has_zero_tv() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
