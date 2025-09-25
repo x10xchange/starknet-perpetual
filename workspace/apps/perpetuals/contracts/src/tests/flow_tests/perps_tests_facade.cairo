@@ -1,3 +1,4 @@
+use crate::core::types::vault::InvestInVault;
 use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::nullable::{FromNullableResult, match_nullable};
@@ -75,6 +76,10 @@ pub struct VaultState {
     pub asset_id: AssetId,
     pub deployed_vault: DeployedVault,
     pub asset_info: SyntheticInfo,
+}
+
+#[generate_trait]
+pub impl VaultStateImpl of VaultStateTrait {
 }
 
 #[derive(Drop)]
@@ -328,7 +333,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
     }
 
     fn new_with_resolution(
-        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8, resolution: u64
+        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8, resolution: u64,
     ) -> SyntheticInfo {
         let mut oracles = array![];
         for i in 1..oracles_len + 1 {
@@ -347,7 +352,7 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
             oracles: oracles.span(),
             resolution_factor: resolution,
         }
-    }    
+    }
 
     fn sign_price(self: @SyntheticInfo, oracle_price: u128) -> Span<SignedPrice> {
         let timestamp = Time::now().seconds.try_into().unwrap();
@@ -715,7 +720,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
     fn process_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
         let DepositInfo { depositor, position_id, quantized_amount, salt, asset_id } = deposit_info;
-        let collateral_balance_before = self.get_position_collateral_balance(position_id);
+        let collateral_balance_before = if (asset_id == self.collateral_id) {
+            self.get_position_collateral_balance(position_id)
+        } else {
+            self.get_position_asset_balance(position_id, asset_id)
+        };
+
         let token_state = self.find_contract_for_asset_id(:asset_id);
 
         let operator_nonce = self.get_nonce();
@@ -1533,6 +1543,23 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .is_liquidatable(position_id)
     }
     /// TODO: add all the necessary functions to interact with the contract.
+    fn deposit_into_vault(ref self: PerpsTestsFacade, vault: VaultState, amount: u64, depositing_user: User, receiving_user: User) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+
+        let order = InvestInVault{
+            from_position_id: depositing_user.position_id,
+            receiving_position_id: receiving_user.position_id,
+            vault_id: vault.position_id,
+            amount,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .invest_in_vault(:operator_nonce, signature: array![0, 0].span(), order: order);
+    }    /// 
 }
 
 
