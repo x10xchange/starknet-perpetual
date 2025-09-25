@@ -1051,15 +1051,16 @@ pub mod Core {
             };
 
             self
-                .positions
-                .apply_diff(position_id: from_position_id, position_diff: sending_position_diff);
-            self
                 ._validate_healthy_or_healthier_position(
                     position_id: from_position_id,
                     position: sending_position_snapshot,
                     position_diff: sending_position_diff,
                     tvtr_before: Default::default(),
                 );
+
+            self
+                .positions
+                .apply_diff(position_id: from_position_id, position_diff: sending_position_diff);
 
             let is_protocol_vault = vault_config.is_protocol_vault;
             if (is_protocol_vault) {
@@ -1082,6 +1083,9 @@ pub mod Core {
                     .apply_diff(position_id: vault_position_id, position_diff: vault_position_diff);
             }
 
+            println!("Minted shares: {}", minted_shares);
+            println!("Quantised minted shares: {}", quantised_minted_shares);
+
             let vault_token_erc20_dispatcher = IERC20Dispatcher {
                 contract_address: vault_share_config.token_contract.expect('NOT_ERC20'),
             };
@@ -1092,9 +1096,18 @@ pub mod Core {
                     amount: quantised_minted_shares.into(),
                 );
 
+            println!("Receiving position id: {}", receiving_position_id.value);
+
+            let balance_of_perps_contract = vault_token_erc20_dispatcher
+                .balance_of(starknet::get_contract_address());
+
+            println!("address of perps contract: {:?}", starknet::get_contract_address());
+            println!("Balance of perps contract: {}", balance_of_perps_contract);
+
             self
                 .deposits
-                .deposit(
+                ._deposit(
+                    caller_address: starknet::get_contract_address(),
                     asset_id: vault_config.asset_id,
                     position_id: receiving_position_id,
                     quantized_amount: quantised_minted_shares.into(),
