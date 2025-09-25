@@ -195,7 +195,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let synthetic_price = self
             .flow_test_base
             .facade
-            .get_synthetic_price(synthetic_id: synthetic_info.asset_id);
+            .get_asset_price(synthetic_id: synthetic_info.asset_id);
         let quote: i64 = PriceMulTrait::<
             Balance,
         >::mul(@synthetic_price, -base.into())
@@ -307,13 +307,13 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         ref self: FlowTestExtended, liquidated_user: User, mut liquidator_order: OrderRequest,
     ) -> OrderRequest {
         let synthetic_id = liquidator_order.order_info.order.base_asset_id;
-        let synthetic_balance: i64 = self
+        let asset_balances: i64 = self
             .flow_test_base
             .facade
             .get_position_synthetic_balance(position_id: liquidated_user.position_id, :synthetic_id)
             .into();
 
-        let base = min(synthetic_balance.abs(), liquidator_order.actual_base);
+        let base = min(asset_balances.abs(), liquidator_order.actual_base);
 
         let quote = base
             * liquidator_order.order_info.order.quote_amount.abs()

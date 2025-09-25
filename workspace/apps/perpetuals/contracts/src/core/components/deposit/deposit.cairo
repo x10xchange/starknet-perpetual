@@ -275,7 +275,7 @@ pub(crate) mod Deposit {
             self.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
             let mut positions = get_dep_component_mut!(ref self, Positions);
             let position_diff = PositionDiff {
-                collateral_diff: quantized_amount.into(), synthetic_diff: Option::None,
+                collateral_diff: quantized_amount.into(), asset_diff: Option::None,
             };
             positions.apply_diff(:position_id, :position_diff);
             self
