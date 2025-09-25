@@ -18,7 +18,7 @@ starkware_utils_testing.workspace = true
 sierra = true
 
 [scripts]
-test = "SNFORGE_BACKTRACE=1 snforge test"
+test = "SNFORGE_BACKTRACE=1 snforge test --max-n-steps 4294967295"
 
 [tool.fmt]
 sort-module-level-items = true
@@ -38,5 +38,5 @@ inlining-strategy = "avoid"
 name = "perpetuals_unittest"
 build-external-contracts = [
     "starkware_utils::erc20::erc20_mocks::DualCaseERC20Mock",
-    "openzeppelin_presets::account::AccountUpgradeable"
+    "openzeppelin_presets::account::AccountUpgradeable",
 ]

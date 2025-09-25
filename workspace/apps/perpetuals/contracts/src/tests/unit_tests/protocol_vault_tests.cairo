@@ -1,101 +1,27 @@
-use core::byte_array::ByteArrayTrait;
-use core::hash::{HashStateExTrait, HashStateTrait};
-use core::num::traits::{Pow, Zero};
-use core::poseidon::PoseidonTrait;
-use openzeppelin::interfaces::erc20::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait};
-use openzeppelin::interfaces::erc4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
-use openzeppelin::presets::interfaces::{
-    AccountUpgradeableABIDispatcher, AccountUpgradeableABIDispatcherTrait,
-};
-use openzeppelin_testing::deployment::declare_and_deploy;
-use openzeppelin_testing::signing::StarkKeyPair;
-use perpetuals::core::components::assets::interface::{
-    IAssets, IAssetsDispatcher, IAssetsDispatcherTrait, IAssetsSafeDispatcher,
-    IAssetsSafeDispatcherTrait,
-};
-use perpetuals::core::components::deposit::Deposit::deposit_hash;
-use perpetuals::core::components::deposit::interface::{
-    DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait, IDepositSafeDispatcher,
-    IDepositSafeDispatcherTrait,
-};
-use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
-use perpetuals::core::components::positions::Positions::{
-    FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
-};
-use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
+use core::num::traits::Zero;
+use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
+use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
 use perpetuals::core::components::positions::interface::{
-    IPositions, IPositionsDispatcher, IPositionsDispatcherTrait, IPositionsSafeDispatcher,
-    IPositionsSafeDispatcherTrait,
+    IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::core::Core;
 use perpetuals::core::core::Core::{InternalCoreFunctions, SNIP12MetadataImpl};
-use perpetuals::core::errors::WITHDRAW_EXPIRED;
-use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
-use perpetuals::core::types::asset::{AssetId, AssetStatus};
-use perpetuals::core::types::balance::Balance;
-use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
-use perpetuals::core::types::order::Order;
-use perpetuals::core::types::position::{
-    POSITION_VERSION, PositionDiff, PositionId, PositionMutableTrait,
-};
-use perpetuals::core::types::price::{
-    PRICE_SCALE, Price, PriceTrait, SignedPrice, convert_oracle_to_perps_price,
-};
-use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
-use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
-use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
-use perpetuals::core::types::transfer::TransferArgs;
-use perpetuals::core::types::withdraw::WithdrawArgs;
+use perpetuals::core::types::position::PositionId;
 use perpetuals::tests::constants::*;
-use perpetuals::tests::event_test_utils::{
-    assert_add_oracle_event_with_expected, assert_add_synthetic_event_with_expected,
-    assert_asset_activated_event_with_expected,
-    assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
-    assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
-    assert_deposit_processed_event_with_expected, assert_funding_tick_event_with_expected,
-    assert_liquidate_event_with_expected, assert_new_position_event_with_expected,
-    assert_price_tick_event_with_expected, assert_remove_oracle_event_with_expected,
-    assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
-    assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_update_synthetic_quorum_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
-};
 use perpetuals::tests::test_utils::{
-    Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
-    check_synthetic_asset, deploy_account, init_by_dispatcher, init_position,
-    init_position_with_owner, initialized_contract_state, setup_state_with_active_asset,
-    setup_state_with_pending_asset, setup_state_with_pending_vault_share, validate_asset_balance,
-    validate_balance,
+    PerpetualsInitConfig, User, UserTrait, deploy_account, init_by_dispatcher,
 };
-use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
-use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global, test_address,
-};
+use snforge_std::{ContractClassTrait, DeclareResultTrait};
 use starknet::ContractAddress;
-use starknet::storage::{
-    StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
-};
-use starkware_utils::components::replaceability::interface::IReplaceable;
-use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
-use starkware_utils::components::roles::interface::{
-    IRoles, IRolesDispatcher, IRolesDispatcherTrait,
-};
-use starkware_utils::constants::{HOUR, MAX_U128, TWO_POW_32, TWO_POW_40};
-use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::math::abs::Abs;
-use starkware_utils::signature::stark::Signature;
 use starkware_utils::storage::iterable_map::*;
-use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
-    Deployable, TokenConfig, TokenState, TokenTrait, assert_panic_with_error,
-    assert_panic_with_felt_error, cheat_caller_address_once,
+    Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
 use crate::core::components::vault::protocol_vault::{
-    IProtocolVault, IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait, ProtocolVault,
+    IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
 };
-use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
 
 
 #[derive(Drop)]
@@ -139,8 +65,6 @@ fn test_protocol_vault_initialisation_logic() {
     let usdc_token_state = cfg.collateral_cfg.token_cfg.deploy();
     let perps_contract_address = init_by_dispatcher(cfg: @cfg, token_state: @usdc_token_state);
 
-    let dispatcher = ICoreSafeDispatcher { contract_address: perps_contract_address };
-    let asset_dispatcher = IAssetsDispatcher { contract_address: perps_contract_address };
     let deposit_dispatcher = IDepositDispatcher { contract_address: perps_contract_address };
     let position_dispatcher = IPositionsDispatcher { contract_address: perps_contract_address };
 
