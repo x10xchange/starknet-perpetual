@@ -8,25 +8,26 @@ pub mod AssetsComponent {
     use openzeppelin::interfaces::token::erc20::IERC20Dispatcher;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
-        ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
-        COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
-        INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
-        INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
-        INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_NOT_ACTIVE, ASSET_NOT_EXISTS,
+        ASSET_REGISTERED_AS_COLLATERAL, COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED,
+        FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
+        INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID,
+        INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY,
+        INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION_FACTOR,
+        INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG,
+        ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED, QUORUM_NOT_REACHED,
+        SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE,
+        SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS,
+        ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
+        ZERO_MAX_PRICE_INTERVAL,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::types::asset::{
-        AssetConfig, AssetId, AssetStatus, AssetTimelyData, AssetTrait,
+        AssetConfig, AssetId, AssetStatus, AssetTimelyData, AssetTrait, AssetType,
     };
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
@@ -208,6 +209,8 @@ pub mod AssetsComponent {
                 :risk_factor_tier_size,
                 :quorum,
                 :resolution_factor,
+                quantum: Zero::zero(),
+                asset_type: AssetType::SYNTHETIC,
             );
 
             synthetic_entry.write(Option::Some(asset_config));
@@ -257,12 +260,12 @@ pub mod AssetsComponent {
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
             get_dep_component!(@self, Roles).only_app_governor();
             let mut config = self._get_asset_config(asset_id: synthetic_id);
+            assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
 
             config.status = AssetStatus::INACTIVE;
             self.asset_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
-
             self.emit(events::SyntheticAssetDeactivated { asset_id: synthetic_id });
         }
 
@@ -506,7 +509,7 @@ pub mod AssetsComponent {
         fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
             let entry = self.asset_timely_data.pointer(asset_id);
             match AssetTrait::get_price(entry) {
-                Option::None => panic_with_felt252(NOT_SYNTHETIC),
+                Option::None => panic_with_felt252(ASSET_NOT_EXISTS),
                 Option::Some(price) => price,
             }
         }
@@ -543,7 +546,7 @@ pub mod AssetsComponent {
                     .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
                     .read()
             } else {
-                panic_with_felt252(NOT_SYNTHETIC)
+                panic_with_felt252(ASSET_NOT_EXISTS)
             }
         }
 
@@ -552,16 +555,16 @@ pub mod AssetsComponent {
         ) -> FundingIndex {
             let entry = self.asset_timely_data.pointer(synthetic_id);
             match AssetTrait::get_funding_index(entry) {
-                Option::None => panic_with_felt252(NOT_SYNTHETIC),
+                Option::None => panic_with_felt252(ASSET_NOT_EXISTS),
                 Option::Some(funding_index) => funding_index,
             }
         }
 
         fn validate_active_asset(self: @ComponentState<TContractState>, asset_id: AssetId) {
             if let Option::Some(config) = self.asset_config.read(asset_id) {
-                assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
+                assert(config.status == AssetStatus::ACTIVE, ASSET_NOT_ACTIVE);
             } else {
-                panic_with_felt252(NOT_SYNTHETIC);
+                panic_with_felt252(ASSET_NOT_EXISTS);
             }
         }
 
@@ -708,7 +711,9 @@ pub mod AssetsComponent {
             if asset_config.status == AssetStatus::PENDING {
                 // Activates the synthetic asset.
                 asset_config.status = AssetStatus::ACTIVE;
-                self.num_of_active_synthetic_assets.add_and_write(1);
+                if asset_config.asset_type == AssetType::SYNTHETIC {
+                    self.num_of_active_synthetic_assets.add_and_write(1);
+                }
                 self.asset_config.write(asset_id, Option::Some(asset_config));
                 self.emit(events::AssetActivated { asset_id });
             }
