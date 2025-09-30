@@ -401,6 +401,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
     }
 
+    fn bond_position(ref self: PerpsTestsFacade, position_id: PositionId) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.bond_position(:position_id);
+    }
+
     fn deposit(
         ref self: PerpsTestsFacade,
         depositor: Account,

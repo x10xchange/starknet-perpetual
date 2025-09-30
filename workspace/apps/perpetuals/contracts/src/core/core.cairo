@@ -25,7 +25,7 @@ pub mod Core {
         TRANSFER_EXPIRED, WITHDRAW_EXPIRED, fulfillment_exceeded_err, order_expired_err,
     };
     use perpetuals::core::events;
-    use perpetuals::core::interface::ICore;
+    use perpetuals::core::interface::{BondedPositionInfo, ICore};
     use perpetuals::core::types::asset::synthetic::SyntheticDiffEnriched;
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::{Balance, BalanceDiff};
@@ -43,7 +43,7 @@ pub mod Core {
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        Map, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
@@ -119,17 +119,6 @@ pub mod Core {
         }
     }
 
-    #[derive(Copy, Drop, Serde, starknet::Store)]
-    pub struct BondedPositionInfo {
-        pub last_block_checked: u64,
-    }
-
-    #[generate_trait]
-    pub impl BondedPositionInfoMutableImpl of BondedPositionInfoMutableTrait {
-        fn get_last_block_checked(self: StoragePath<Mutable<BondedPositionInfo>>) -> u64 {
-            self.last_block_checked.read()
-        }
-    }
 
     #[storage]
     struct Storage {
@@ -1007,6 +996,10 @@ pub mod Core {
                 .entry(position_id)
                 .last_block_checked
                 .write(starknet::get_block_number());
+        }
+
+        fn bond_info(ref self: ContractState, position_id: PositionId) -> BondedPositionInfo {
+            self.bonded_positions.entry(position_id).read()
         }
     }
 

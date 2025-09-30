@@ -1,3 +1,6 @@
+use starknet::storage::StoragePointerReadAccess;
+use starknet::storage::Mutable;
+use starknet::storage::StoragePath;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::PositionId;
@@ -5,6 +8,17 @@ use starknet::ContractAddress;
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
 
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub struct BondedPositionInfo {
+    pub last_block_checked: u64,
+}
+
+#[generate_trait]
+pub impl BondedPositionInfoMutableImpl of BondedPositionInfoMutableTrait {
+    fn get_last_block_checked(self: StoragePath<Mutable<BondedPositionInfo>>) -> u64 {
+        self.last_block_checked.read()
+    }
+}
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -86,4 +100,5 @@ pub trait ICore<TContractState> {
     );
 
     fn bond_position(ref self: TContractState, position_id: PositionId);
+    fn bond_info(ref self: TContractState, position_id: PositionId) -> BondedPositionInfo;
 }

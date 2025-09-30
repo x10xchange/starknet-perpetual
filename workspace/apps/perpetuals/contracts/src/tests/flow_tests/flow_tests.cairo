@@ -1,4 +1,29 @@
 use perpetuals::tests::flow_tests::infra::*;
+use snforge_std::start_cheat_block_number_global;
+
+#[test]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 101 } TV before -51, TR before 512, TV after -61, TR after 614",
+)]
+fn test_bonded_position_logic() {
+    let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
+    let user_a = test.new_user();
+    let user_b = test.new_user();
+
+    // test.process_deposit(test.deposit(user_a, 10_000));
+    test.process_deposit(test.deposit(user_b, 10_000));
+
+    let sell_eth_a = test.create_order_request(user: user_a, asset: ETH_ASSET, base: -10);
+    let buy_eth_b = test.create_order_request(user: user_b, asset: ETH_ASSET, base: 2000);
+
+    start_cheat_block_number_global(10001);
+    test.bond_position(user_a);
+    let (_, _) = test.trade(buy_eth_b, sell_eth_a);
+    let buy_btc_a = test.create_order_request(user: user_a, asset: BTC_ASSET, base: 1);
+    let sell_btc_b = test.create_order_request(user: user_b, asset: BTC_ASSET, base: -2);
+    start_cheat_block_number_global(10002);
+    let (_, _) = test.trade(buy_btc_a, sell_btc_b);
+}
 
 #[test]
 fn test_two_users_two_synthetics() {

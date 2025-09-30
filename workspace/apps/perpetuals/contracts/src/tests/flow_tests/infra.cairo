@@ -10,6 +10,7 @@ use starkware_utils::math::abs::Abs;
 use crate::core::types::funding::{FUNDING_SCALE, FundingIndex};
 use crate::core::types::price::PriceMulTrait;
 use crate::tests::test_utils::create_token_state;
+use super::perps_tests_facade::PerpsTestsFacadeTrait;
 
 
 #[derive(Drop)]
@@ -99,16 +100,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
 
         let mut initial_price = 2_u128.pow(10);
         for asset_name in array![
-            BTC_ASSET,
-            ETH_ASSET,
-            STRK_ASSET,
-            SOL_ASSET,
-            DOGE_ASSET,
-            PEPE_ASSET,
-            ETC_ASSET,
-            TAO_ASSET,
-            XRP_ASSET,
-            ADA_ASSET,
+            BTC_ASSET, ETH_ASSET, STRK_ASSET, SOL_ASSET, DOGE_ASSET, PEPE_ASSET, ETC_ASSET,
+            TAO_ASSET, XRP_ASSET, ADA_ASSET,
         ] {
             let synthetic_info = SyntheticInfoTrait::new(
                 :asset_name, risk_factor_data: risk_factor_tiers, oracles_len: 1,
@@ -133,6 +126,11 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
                 depositor: user.account, position_id: user.position_id, quantized_amount: amount,
             )
     }
+
+    fn bond_position(ref self: FlowTestExtended, user: User) {
+        self.flow_test_base.facade.bond_position(position_id: user.position_id)
+    }
+
     fn process_deposit(ref self: FlowTestExtended, deposit_info: DepositInfo) {
         self.flow_test_base.facade.process_deposit(:deposit_info)
     }
@@ -167,16 +165,8 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
         let mut funding_ticks = array![];
 
         for asset in array![
-            ADA_ASSET,
-            BTC_ASSET,
-            ETC_ASSET,
-            ETH_ASSET,
-            SOL_ASSET,
-            TAO_ASSET,
-            XRP_ASSET,
-            DOGE_ASSET,
-            PEPE_ASSET,
-            STRK_ASSET,
+            ADA_ASSET, BTC_ASSET, ETC_ASSET, ETH_ASSET, SOL_ASSET, TAO_ASSET, XRP_ASSET, DOGE_ASSET,
+            PEPE_ASSET, STRK_ASSET,
         ] {
             let asset_id = self.synthetics.get(asset).asset_id;
             let index_ptr = funding_indexes_dict.get(asset);
@@ -207,9 +197,7 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
             .flow_test_base
             .facade
             .get_synthetic_price(synthetic_id: synthetic_info.asset_id);
-        let quote: i64 = PriceMulTrait::<
-            Balance,
-        >::mul(@synthetic_price, -base.into())
+        let quote: i64 = PriceMulTrait::<Balance>::mul(@synthetic_price, -base.into())
             .try_into()
             .expect('Value should not overflow');
         let order_info = self
