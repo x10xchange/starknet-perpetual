@@ -43,7 +43,7 @@ pub mod Core {
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        Map, Mutable, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
@@ -119,10 +119,23 @@ pub mod Core {
         }
     }
 
+    #[derive(Copy, Drop, Serde, starknet::Store)]
+    pub struct BondedPositionInfo {
+        pub last_block_checked: u64,
+    }
+
+    #[generate_trait]
+    pub impl BondedPositionInfoMutableImpl of BondedPositionInfoMutableTrait {
+        fn get_last_block_checked(self: StoragePath<Mutable<BondedPositionInfo>>) -> u64 {
+            self.last_block_checked.read()
+        }
+    }
+
     #[storage]
     struct Storage {
         // Order hash to fulfilled absolute base amount.
         fulfillment: Map<HashType, u64>,
+        bonded_positions: Map<PositionId, BondedPositionInfo>,
         // --- Components ---
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
@@ -565,18 +578,24 @@ pub mod Core {
             };
 
             /// Validations - Fundamentals:
-            self
-                ._validate_healthy_or_healthier_position(
-                    position_id: order_a.position_id,
-                    position: position_a,
-                    position_diff: position_diff_a,
-                );
-            self
-                ._validate_healthy_or_healthier_position(
-                    position_id: order_b.position_id,
-                    position: position_b,
-                    position_diff: position_diff_b,
-                );
+
+            if (self._should_calculate_tv_tr(order_a.position_id)) {
+                self
+                    ._validate_healthy_or_healthier_position(
+                        position_id: order_a.position_id,
+                        position: position_a,
+                        position_diff: position_diff_a,
+                    );
+            }
+
+            if (self._should_calculate_tv_tr(order_b.position_id)) {
+                self
+                    ._validate_healthy_or_healthier_position(
+                        position_id: order_b.position_id,
+                        position: position_b,
+                        position_diff: position_diff_b,
+                    );
+            }
 
             // Apply Diffs.
             self
@@ -980,6 +999,15 @@ pub mod Core {
                     },
                 )
         }
+
+        fn bond_position(ref self: ContractState, position_id: PositionId) {
+            self.roles.only_app_governor();
+            self
+                .bonded_positions
+                .entry(position_id)
+                .last_block_checked
+                .write(starknet::get_block_number());
+        }
     }
 
     #[generate_trait]
@@ -1207,6 +1235,22 @@ pub mod Core {
             liquidated_position_validations(
                 :position_id, :unchanged_synthetics, :position_diff_enriched,
             );
+        }
+
+        fn _should_calculate_tv_tr(ref self: ContractState, position_id: PositionId) -> bool {
+            let mut bonded_position_info = self.bonded_positions.entry(position_id);
+            let last_block_checked = bonded_position_info.last_block_checked.read();
+            if (last_block_checked.is_zero()) {
+                return true;
+            } else {
+                let current_block = starknet::get_block_number();
+                if (last_block_checked != current_block) {
+                    bonded_position_info.last_block_checked.write(current_block);
+                    return true;
+                } else {
+                    return false;
+                }
+            }
         }
 
         fn _validate_deleveraged_position(
