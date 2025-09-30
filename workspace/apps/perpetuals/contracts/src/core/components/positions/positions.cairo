@@ -402,13 +402,6 @@ pub(crate) mod Positions {
         ) {
             let position_mut = self.get_position_mut(:position_id);
             position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
-            for (synthetic_id, _synthetic) in position_mut.synthetic_balance {
-                let synthetic_diff = BalanceTrait::new(0_i64);
-                self
-                    ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, :synthetic_diff,
-                    );
-            }
             if let Option::Some((synthetic_id, synthetic_diff)) = position_diff.synthetic_diff {
                 self
                     ._update_synthetic_balance_and_funding(

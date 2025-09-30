@@ -2,8 +2,9 @@
 pub mod AssetsComponent {
     use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
-    use core::num::traits::{Zero, Pow};
+    use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
+    use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
@@ -19,7 +20,7 @@ pub mod AssetsComponent {
         QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
         SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
         UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL, oracle_public_key_not_registered,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -298,10 +299,7 @@ pub mod AssetsComponent {
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
             operator_nonce_component.use_checked_nonce(:operator_nonce);
 
-            assert(
-                timestamp.into() < MAX_TIME,
-                INVALID_TIMESTAMP
-            );
+            assert(timestamp.into() < MAX_TIME, INVALID_TIMESTAMP);
 
             assert(
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
@@ -735,6 +733,13 @@ pub mod AssetsComponent {
                 .asset_oracle
                 .entry(asset_id)
                 .read(signed_price.signer_public_key);
+
+            if packed_asset_oracle.is_zero() {
+                panic_with_byte_array(
+                    @oracle_public_key_not_registered(asset_id, signed_price.signer_public_key),
+                );
+            }
+
             assert(packed_asset_oracle.is_non_zero(), ORACLE_PUBLIC_KEY_NOT_REGISTERED);
             let packed_price_timestamp: felt252 = signed_price.oracle_price.into()
                 * TWO_POW_32.into()
