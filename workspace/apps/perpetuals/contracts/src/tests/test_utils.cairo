@@ -371,7 +371,7 @@ pub fn initialized_contract_state(
     state
 }
 
-pub fn check_synthetic_config(
+pub fn check_asset_config(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     status: AssetStatus,
@@ -381,37 +381,37 @@ pub fn check_synthetic_config(
     quorum: u8,
     resolution_factor: u64,
 ) {
-    let synthetic_config = state.assets.get_synthetic_config(synthetic_id);
-    assert!(synthetic_config.status == status);
+    let asset_config = state.assets.get_asset_config(synthetic_id);
+    assert!(asset_config.status == status);
     let tiers = state.assets.get_risk_factor_tiers(asset_id: synthetic_id);
     for i in 0..risk_factor_tiers.len() {
         assert!(*tiers[i] == RiskFactorTrait::new(*risk_factor_tiers[i]));
     }
-    assert!(synthetic_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
-    assert!(synthetic_config.risk_factor_tier_size == risk_factor_tier_size);
-    assert!(synthetic_config.quorum == quorum);
-    assert!(synthetic_config.resolution_factor == resolution_factor);
+    assert!(asset_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
+    assert!(asset_config.risk_factor_tier_size == risk_factor_tier_size);
+    assert!(asset_config.quorum == quorum);
+    assert!(asset_config.resolution_factor == resolution_factor);
 }
 
-pub fn check_synthetic_timely_data(
+pub fn check_asset_timely_data(
     state: @Core::ContractState,
     synthetic_id: AssetId,
     price: Price,
     last_price_update: Timestamp,
     funding_index: FundingIndex,
 ) {
-    let synthetic_timely_data = state.assets.get_synthetic_timely_data(synthetic_id);
-    assert!(synthetic_timely_data.price == price);
-    assert!(synthetic_timely_data.last_price_update == last_price_update);
-    assert!(synthetic_timely_data.funding_index == funding_index);
+    let asset_timely_data = state.assets.get_asset_timely_data(synthetic_id);
+    assert!(asset_timely_data.price == price);
+    assert!(asset_timely_data.last_price_update == last_price_update);
+    assert!(asset_timely_data.funding_index == funding_index);
 }
 
-pub fn is_asset_in_synthetic_timely_data_list(
+pub fn is_asset_in_asset_timely_data_list(
     state: @Core::ContractState, synthetic_id: AssetId,
 ) -> bool {
     let mut flag = false;
 
-    for (asset_id, _) in state.assets.synthetic_timely_data {
+    for (asset_id, _) in state.assets.asset_timely_data {
         if asset_id == synthetic_id {
             flag = true;
             break;
@@ -433,7 +433,7 @@ pub fn check_synthetic_asset(
     last_price_update: Timestamp,
     funding_index: FundingIndex,
 ) {
-    check_synthetic_config(
+    check_asset_config(
         :state,
         :synthetic_id,
         status: status,
@@ -443,15 +443,15 @@ pub fn check_synthetic_asset(
         :quorum,
         :resolution_factor,
     );
-    check_synthetic_timely_data(
+    check_asset_timely_data(
         :state,
         :synthetic_id,
         price: Zero::zero(),
         last_price_update: Zero::zero(),
         funding_index: Zero::zero(),
     );
-    // Check the synthetic_timely_data list.
-    assert!(is_asset_in_synthetic_timely_data_list(:state, :synthetic_id));
+    // Check the asset_timely_data list.
+    assert!(is_asset_in_asset_timely_data_list(:state, :synthetic_id));
 }
 
 pub fn validate_balance(token_state: TokenState, address: ContractAddress, expected_balance: u128) {
