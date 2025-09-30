@@ -34,11 +34,21 @@ pub struct RedeemFromVault {
     pub vault_id: PositionId,
     // user position (target)
     pub to_position_id: PositionId,
-    // The amount of the collateral asset to be redeem.
-    pub amount: u64,
-    // The expiration time of the order.
+    pub asset_to_receive: AssetId,
+    // The amount of the share asset to be redeem.
+    pub shares_to_burn: u64,
+    // Mininum output the user is willing to accept.
+    pub min_to_receive: u64,
     pub expiration: Timestamp,
-    // A random value to make each order unique.
+    pub salt: felt252,
+}
+
+#[derive(Copy, Drop, Hash, Serde)]
+/// An order to approve a vault withdrawal from vault operator
+pub struct VaultOperatorApproveRedeem {
+    pub hash: HashType,
+    pub value_of_burn: u64,
+    pub expiration: Timestamp,
     pub salt: felt252,
 }
 
@@ -123,7 +133,8 @@ impl ConvertPositionToVaultStructHashImpl of StructHash<ConvertPositionToVault> 
 mod tests {
     // use openzeppelin_testing::common::IntoBase16String;
     // use super::{
-    //     CONVERT_POSITION_TO_VAULT_TYPE_HASH, INVEST_IN_VAULT_TYPE_HASH, REDEEM_FROM_VAULT_TYPE_HASH,
+    //     CONVERT_POSITION_TO_VAULT_TYPE_HASH, INVEST_IN_VAULT_TYPE_HASH,
+    //     REDEEM_FROM_VAULT_TYPE_HASH,
     // };
 
     // #[test]
@@ -131,7 +142,8 @@ mod tests {
     //     let expected = selector!(
     //         "\"InvestInVault\"(\"from_position_id\":\"PositionId\",\"vault_id\":\"PositionId\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
     //     );
-    //     assert_eq!(INVEST_IN_VAULT_TYPE_HASH.into_base_16_string(), expected.into_base_16_string());
+    //     assert_eq!(INVEST_IN_VAULT_TYPE_HASH.into_base_16_string(),
+    //     expected.into_base_16_string());
     // }
 
     // #[test]

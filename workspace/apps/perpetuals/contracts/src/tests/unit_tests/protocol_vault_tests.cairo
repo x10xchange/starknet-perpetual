@@ -207,7 +207,6 @@ fn test_protocol_vault_initialisation_logic() {
 
     // as there is TV = VAULT_DEPOSIT_AMOUNT and share count = VAULT_DEPOSIT_AMOUNT
     // depositing 500 assets should mint 500 shares
-    println!("Shares minted on deposit: {}", shares_minted);
     assert_eq!(shares_minted, 500_u256);
 
     let balance_of_perps_contract_after = usdc_token_state

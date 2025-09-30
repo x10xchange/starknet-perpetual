@@ -328,10 +328,6 @@ pub(crate) mod Deposit {
 
             let unquantized_amount = quantized_amount * quantum.into();
 
-            println!("Depositing amount: {}", unquantized_amount);
-            println!("From address: {:?}", caller_address);
-            println!("To address: {:?}", get_contract_address());
-
             token_contract
                 .transfer_from(
                     sender: caller_address,
