@@ -39,7 +39,9 @@ pub mod Core {
     };
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::transfer::TransferArgs;
-    use perpetuals::core::types::vault::{ConvertPositionToVault, InvestInVault, RedeemFromVault};
+    use perpetuals::core::types::vault::{
+        ConvertPositionToVault, InvestInVault, RedeemFromVault, VaultOperatorApproveRedeem,
+    };
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::value_risk_calculator::{
         PositionTVTR, assert_healthy_or_healthier, calculate_position_tvtr_before,
@@ -68,12 +70,17 @@ pub mod Core {
         HashType, PublicKey, Signature, validate_stark_signature,
     };
     use starkware_utils::storage::iterable_map::{
-        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapTrait,
-        IterableMapWriteAccessImpl,
+        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
     use crate::core::components::assets::interface::IAssets;
+    use crate::core::components::vault::protocol_vault::{
+        IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
+    };
+    use crate::core::components::vault::vaults::Vaults;
+    use crate::core::components::vault::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::types::asset::synthetic::AssetType;
+    use crate::core::types::price::PRICE_SCALE;
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -194,6 +201,7 @@ pub mod Core {
         TransferRequest: events::TransferRequest,
         Withdraw: events::Withdraw,
         WithdrawRequest: events::WithdrawRequest,
+        InvestInVaultEvent: events::InvestInVault,
         #[flat]
         VaultsEvent: Vaults::Event,
     }
@@ -1101,8 +1109,18 @@ pub mod Core {
                     amount: quantised_minted_shares.into(),
                 );
 
-            let balance_of_perps_contract = vault_token_erc20_dispatcher
-                .balance_of(starknet::get_contract_address());
+            self
+                .emit(
+                    events::InvestInVault {
+                        vault_position_id: vault_position_id,
+                        investing_position_id: from_position_id,
+                        receiving_position_id: receiving_position_id,
+                        shares_received: quantised_minted_shares.into(),
+                        user_investment: amount.into(),
+                        vault_asset_id: vault_config.asset_id,
+                        invested_asset_id: self.assets.get_collateral_id(),
+                    },
+                );
 
             self
                 .deposits
@@ -1121,7 +1139,141 @@ pub mod Core {
             operator_nonce: u64,
             signature: Signature,
             order: RedeemFromVault,
-        ) {}
+            vault_approval: VaultOperatorApproveRedeem,
+        ) {
+            //     /// Validations - System State:
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+
+            //assert user receives expected value at least
+
+            let vault_position_id = order.vault_id;
+            let redeeming_position_id = order.to_position_id;
+
+            let order_ratio = order.min_to_receive.wide_mul(PRICE_SCALE)
+                / order.shares_to_burn.into();
+            let actual_ratio = vault_approval.shares_to_burn.wide_mul(PRICE_SCALE)
+                / vault_approval.value_of_burn.into();
+
+            assert_with_byte_array(
+                order_ratio <= actual_ratio,
+                format!(
+                    "UNFAIR_REDEEM: requested_value_ratio {}, actual_value_ratio {}",
+                    order_ratio,
+                    actual_ratio,
+                ),
+            );
+
+            // assert amount to burn less than or equal to amount requested
+            assert_with_byte_array(
+                vault_approval.shares_to_burn <= order.shares_to_burn,
+                format!(
+                    "UNFAIR_REDEEM: requested_qty {}, < actual_qty {}",
+                    order.shares_to_burn,
+                    vault_approval.shares_to_burn,
+                ),
+            );
+
+            let vault_position = self.positions.get_position_snapshot(vault_position_id);
+            let user_position = self.positions.get_position_snapshot(redeeming_position_id);
+
+            let amount_to_burn = vault_approval.shares_to_burn;
+            let value_to_receive = vault_approval.value_of_burn;
+
+            self
+                ._update_fulfillment(
+                    position_id: redeeming_position_id,
+                    hash: order.get_message_hash(user_position.get_owner_public_key()),
+                    order_base_amount: order.shares_to_burn.try_into().unwrap(),
+                    actual_base_amount: vault_approval.shares_to_burn.try_into().unwrap(),
+                );
+
+            let vault_config = self
+                .vaults
+                .get_vault_config_for_position(vault_position: vault_position_id);
+            let vault_asset = self.assets.get_asset_config(vault_config.asset_id);
+
+            let vault_dispatcher = IProtocolVaultDispatcher {
+                contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
+            };
+
+            let vault_erc20Dispatcher = IERC20Dispatcher {
+                contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
+            };
+
+            let pnl_collateral_dispatcher = self.assets.get_collateral_token_contract();
+
+            let unquantized_amount_to_burn = amount_to_burn.wide_mul(vault_asset.quantum);
+
+            //approve the vault contract to transfer pnl collateral to itself to "send back" to
+            //perps
+            pnl_collateral_dispatcher
+                .approve(
+                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
+                    amount: value_to_receive.into(),
+                );
+
+            //approve the vault contract transferring vault shares to itself for burning
+            vault_erc20Dispatcher
+                .approve(
+                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
+                    amount: unquantized_amount_to_burn.into(),
+                );
+
+            let burn_result = vault_dispatcher
+                .redeem_with_price(
+                    shares: unquantized_amount_to_burn.into(),
+                    value_of_shares: value_to_receive.into(),
+                );
+
+            assert_with_byte_array(
+                burn_result == value_to_receive.into(),
+                format!("UNFAIR_REDEEM: expected {:?}, got {:?}", value_to_receive, burn_result),
+            );
+
+            let vault_position_diff = PositionDiff {
+                collateral_diff: -value_to_receive.into(), asset_diff: None,
+            };
+
+            let user_position_diff = PositionDiff {
+                collateral_diff: value_to_receive.into(),
+                asset_diff: Some((vault_config.asset_id, -amount_to_burn.into())),
+            };
+
+            // vault health checks
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: vault_position_id,
+                    position: vault_position,
+                    position_diff: vault_position_diff,
+                    tvtr_before: Default::default(),
+                );
+
+            self
+                .positions
+                .apply_diff(position_id: vault_position_id, position_diff: vault_position_diff);
+
+            // prevent withdrawal of more collateral than is contained with the vault
+            // protection against malicious operator
+            self
+                ._validate_asset_balance_is_not_negative(
+                    position: vault_position, asset_id: self.assets.get_collateral_id(),
+                );
+            // user health checks
+
+            self
+                ._validate_healthy_or_healthier_position(
+                    position_id: redeeming_position_id,
+                    position: user_position,
+                    position_diff: user_position_diff,
+                    tvtr_before: Default::default(),
+                );
+
+            self
+                .positions
+                .apply_diff(position_id: redeeming_position_id, position_diff: user_position_diff);
+        }
 
         /// Converts a position to a vault position.
         // TODO : add doc, add to the spec
