@@ -1078,26 +1078,20 @@ pub mod Core {
                 .positions
                 .apply_diff(position_id: from_position_id, position_diff: sending_position_diff);
 
-            let is_protocol_vault = vault_config.is_protocol_vault;
-            if (is_protocol_vault) {
-                // if it's a protocol vault
-                // 1. check that the collateral balance of the perps contract is returned to the
-                // same amount as before deposit into vault
-                // 2. apply diff to the vault position
-                let new_collateral_balance = collateral_token_dispatcher
-                    .balance_of(starknet::get_contract_address());
-                assert(
-                    new_collateral_balance == current_collateral_balance, 'COLLATERAL_NOT_RETURNED',
-                );
+            // 1. check that the collateral balance of the perps contract is returned to the
+            // same amount as before deposit into vault
+            // 2. apply diff to the vault position
+            let new_collateral_balance = collateral_token_dispatcher
+                .balance_of(starknet::get_contract_address());
+            assert(new_collateral_balance == current_collateral_balance, 'COLLATERAL_NOT_RETURNED');
 
-                let vault_position_diff = PositionDiff {
-                    collateral_diff: amount.into(), asset_diff: Option::None,
-                };
+            let vault_position_diff = PositionDiff {
+                collateral_diff: amount.into(), asset_diff: Option::None,
+            };
 
-                self
-                    .positions
-                    .apply_diff(position_id: vault_position_id, position_diff: vault_position_diff);
-            }
+            self
+                .positions
+                .apply_diff(position_id: vault_position_id, position_diff: vault_position_diff);
 
             let vault_token_erc20_dispatcher = IERC20Dispatcher {
                 contract_address: vault_share_config.token_contract.expect('NOT_ERC20'),

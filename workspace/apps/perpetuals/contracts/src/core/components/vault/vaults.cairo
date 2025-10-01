@@ -7,7 +7,6 @@ const STORAGE_VERSION: u8 = 1;
 #[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct VaultConfig {
     version: u8,
-    pub is_protocol_vault: bool,
     pub asset_id: AssetId,
     pub position_id: u32,
 }
@@ -15,7 +14,6 @@ pub struct VaultConfig {
 #[starknet::interface]
 pub trait IVaults<TContractState> {
     fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
-    fn vault_is_protocol_vault(ref self: TContractState, vault_asset_id: AssetId) -> bool;
 
     fn is_vault(ref self: TContractState, vault_position: PositionId) -> bool;
 }
@@ -86,7 +84,6 @@ pub(crate) mod Vaults {
         ) {
             let vault_asset_id = order.vault_asset_id;
             let vault_position = order.position_to_convert;
-            let is_protocol_vault = order.is_protocol_vault;
             let expiration = order.expiration;
 
             /// Validations:
@@ -110,15 +107,13 @@ pub(crate) mod Vaults {
                 contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
             };
 
-            if (is_protocol_vault) {
-                let vault_dispatcher = IProtocolVaultDispatcher {
-                    contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
-                };
-                assert(
-                    vault_dispatcher.get_owning_position_id() == vault_position.value,
-                    'VAULT_OWNERSHIP_MISMATCH',
-                );
-            }
+            let vault_dispatcher = IProtocolVaultDispatcher {
+                contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
+            };
+            assert(
+                vault_dispatcher.get_owning_position_id() == vault_position.value,
+                'VAULT_OWNERSHIP_MISMATCH',
+            );
 
             assert(
                 erc4626_dispatcher
@@ -144,7 +139,6 @@ pub(crate) mod Vaults {
                 .write(
                     vault_asset_id,
                     VaultConfig {
-                        is_protocol_vault,
                         version: STORAGE_VERSION,
                         asset_id: vault_asset_id,
                         position_id: vault_position.value,
@@ -156,7 +150,6 @@ pub(crate) mod Vaults {
                 .write(
                     vault_position,
                     VaultConfig {
-                        is_protocol_vault,
                         version: STORAGE_VERSION,
                         asset_id: vault_asset_id,
                         position_id: vault_position.value,
@@ -172,13 +165,7 @@ pub(crate) mod Vaults {
                     ),
                 )
         }
-        fn vault_is_protocol_vault(
-            ref self: ComponentState<TContractState>, vault_asset_id: AssetId,
-        ) -> bool {
-            let existing_entry = self.registered_vaults_by_asset.read(vault_asset_id);
-            assert(existing_entry.version != 0, 'UNKNOWN_VAULT');
-            existing_entry.is_protocol_vault
-        }
+
         fn is_vault(ref self: ComponentState<TContractState>, vault_position: PositionId) -> bool {
             let vault_config = self.registered_vaults_by_position.read(vault_position);
             vault_config.version != 0

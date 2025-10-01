@@ -12,7 +12,6 @@ use starkware_utils::time::time::Timestamp;
 pub struct ConvertPositionToVault {
     pub position_to_convert: PositionId,
     pub vault_asset_id: AssetId,
-    pub is_protocol_vault: bool,
     pub expiration: Timestamp,
 }
 
