@@ -32,6 +32,8 @@ pub struct InvestInVault {
 pub struct RedeemFromVault {
     // vault position (source).
     pub vault_id: PositionId,
+    // user position (source)
+    pub from_position_id: PositionId,
     // user position (target)
     pub to_position_id: PositionId,
     pub asset_to_receive: AssetId,
@@ -47,6 +49,7 @@ pub struct RedeemFromVault {
 /// An order to approve a vault withdrawal from vault operator
 pub struct VaultOperatorApproveRedeem {
     pub hash: HashType,
+    pub shares_to_burn: u64,
     pub value_of_burn: u64,
     pub expiration: Timestamp,
     pub salt: felt252,
@@ -106,6 +109,8 @@ const REDEEM_FROM_VAULT_TYPE_HASH: HashType =
 const CONVERT_POSITION_TO_VAULT_TYPE_HASH: HashType =
     0x01d9423fdc501a97387f677c15ee120dac505554e85b445253d63f5d150faccd;
 
+const VAULT_OPERATOR_APPROVE_REDEEM_TYPE_HASH: HashType =
+    0x01d9423fdc501a97387f677c15ee120dac505554e85b445253d63f5d150faccd;
 
 impl InvestInVaultStructHashImpl of StructHash<InvestInVault> {
     fn hash_struct(self: @InvestInVault) -> HashType {
@@ -125,6 +130,16 @@ impl ConvertPositionToVaultStructHashImpl of StructHash<ConvertPositionToVault> 
     fn hash_struct(self: @ConvertPositionToVault) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(CONVERT_POSITION_TO_VAULT_TYPE_HASH).update_with(*self).finalize()
+    }
+}
+
+impl VaultOperatorApproveRedeemStructHashImpl of StructHash<VaultOperatorApproveRedeem> {
+    fn hash_struct(self: @VaultOperatorApproveRedeem) -> HashType {
+        let hash_state = PoseidonTrait::new();
+        hash_state
+            .update_with(VAULT_OPERATOR_APPROVE_REDEEM_TYPE_HASH)
+            .update_with(*self)
+            .finalize()
     }
 }
 

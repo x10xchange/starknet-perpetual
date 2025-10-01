@@ -2,9 +2,7 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IProtocolVault<TState> {
-    fn redeem_with_price(
-        ref self: TState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
-    ) -> u256;
+    fn redeem_with_price(ref self: TState, shares: u256, value_of_shares: u256) -> u256;
     fn get_owning_position_id(ref self: TState) -> u32;
 }
 
@@ -15,9 +13,7 @@ pub mod ProtocolVault {
     use openzeppelin::token::erc20::extensions::erc4626::{
         ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
     };
-    use openzeppelin::token::erc20::{
-        ERC20Component, ERC20HooksEmptyImpl,
-    };
+    use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use perpetuals::core::components::positions::interface::{
         IPositionsDispatcher, IPositionsDispatcherTrait,
     };
@@ -82,19 +78,9 @@ pub mod ProtocolVault {
 
     #[abi(embed_v0)]
     pub impl Impl of IProtocolVault<ContractState> {
-        fn redeem_with_price(
-            ref self: ContractState, shares: u256, value_of_shares: u256, receiver: ContractAddress,
-        ) -> u256 {
-            self
-                .erc4626
-                ._withdraw(
-                    starknet::get_caller_address(),
-                    receiver,
-                    starknet::get_caller_address(),
-                    value_of_shares,
-                    shares,
-                    Option::None,
-                );
+        fn redeem_with_price(ref self: ContractState, shares: u256, value_of_shares: u256) -> u256 {
+            let perps = self.perps_contract.read();
+            self.erc4626._withdraw(perps, perps, perps, value_of_shares, shares, Option::None);
             value_of_shares
         }
 
@@ -197,9 +183,11 @@ pub mod ProtocolVault {
             assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_WITHDRAW');
             assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');
             let this = starknet::get_contract_address();
-            let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
+            let underlying_asset_dispatcher = IERC20Dispatcher {
+                contract_address: self.ERC4626_asset.read(),
+            };
             assert(
-                asset_dispatcher.transfer_from(caller, this, assets),
+                underlying_asset_dispatcher.transfer_from(caller, this, assets),
                 ERC4626Component::Errors::TOKEN_TRANSFER_FAILED,
             );
         }

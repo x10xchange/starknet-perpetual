@@ -50,6 +50,7 @@ pub mod AssetsComponent {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
+    use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::signature::stark::{PublicKey, validate_stark_signature};
     use starkware_utils::storage::iterable_map::{
@@ -230,23 +231,22 @@ pub mod AssetsComponent {
                 contract_address: erc20_contract_address,
             };
             let underlying_decimals = erc20Contract.decimals();
-            let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into())
+            let calculated_resolution: u64 = (10_u256.pow(underlying_decimals.into())
+                / quantum.into())
                 .try_into()
                 .unwrap();
-            // assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
 
-            if (resolution != resolution_factor) {
-                panic_with_byte_array(
-                    @format!(
-                        "MISMATCHED_RESOLUTION: expected {}, got {}, underlying_decimals {}",
-                        resolution_factor,
-                        resolution,
-                        underlying_decimals,
-                    ),
-                );
-            }
+            assert_with_byte_array(
+                calculated_resolution == resolution_factor,
+                format!(
+                    "MISMATCHED_RESOLUTION: calculated {}, received {}, underlying_decimals {}",
+                    calculated_resolution,
+                    resolution_factor,
+                    underlying_decimals,
+                ),
+            );
 
-            assert(resolution.is_non_zero(), 'INVALID_ZERO_RESOLUTION');
+            assert(calculated_resolution.is_non_zero(), 'INVALID_ZERO_RESOLUTION');
             self
                 ._add_asset(
                     asset_id,
@@ -254,7 +254,7 @@ pub mod AssetsComponent {
                     risk_factor_first_tier_boundary,
                     risk_factor_tier_size,
                     quorum,
-                    resolution,
+                    calculated_resolution,
                     AssetType::VAULT_SHARE_COLLATERAL,
                     quantum,
                     Some(erc20_contract_address),
