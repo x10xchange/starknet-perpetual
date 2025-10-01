@@ -558,7 +558,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 order: ConvertPositionToVault {
                     position_to_convert: position_vault,
                     vault_asset_id: asset_id,
-                    is_protocol_vault: true,
                     expiration: Time::now(),
                 },
             );
