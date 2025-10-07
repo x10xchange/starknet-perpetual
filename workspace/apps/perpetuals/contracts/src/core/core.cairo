@@ -32,7 +32,7 @@ pub mod Core {
     use perpetuals::core::types::asset::synthetic::AssetBalanceDiffEnriched;
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::{Balance, BalanceDiff};
-    use perpetuals::core::types::order::{Order, OrderTrait};
+    use perpetuals::core::types::order::{LimitOrder, LimitOrderTrait, Order, OrderTrait};
     use perpetuals::core::types::position::{
         AssetEnrichedPositionDiff, Position, PositionDiff, PositionDiffEnriched, PositionId,
         PositionTrait,
@@ -1132,55 +1132,65 @@ pub mod Core {
             ref self: ContractState,
             operator_nonce: u64,
             signature: Signature,
-            order: RedeemFromVault,
-            vault_approval: VaultOperatorApproveRedeem,
+            order: LimitOrder,
+            vault_approval: LimitOrder,
+            actual_shares_user: i64,
+            actual_collateral_user: i64,
         ) {
             //     /// Validations - System State:
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
 
-            //assert user receives expected value at least
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
 
-            let vault_position_id = order.vault_id;
-            let redeeming_position_id = order.to_position_id;
-
-            let order_ratio = order.min_to_receive.wide_mul(PRICE_SCALE)
-                / order.shares_to_burn.into();
-            let actual_ratio = vault_approval.shares_to_burn.wide_mul(PRICE_SCALE)
-                / vault_approval.value_of_burn.into();
+            let vault_position_id: PositionId = vault_config.position_id.into();
+            let redeeming_position_id = order.source_position;
+            let receiving_position_id = order.receive_position;
 
             assert_with_byte_array(
-                order_ratio <= actual_ratio,
-                format!(
-                    "UNFAIR_REDEEM: requested_value_ratio {}, actual_value_ratio {}",
-                    order_ratio,
-                    actual_ratio,
-                ),
+                actual_shares_user < 0,
+                format!("INVALID_ACTUAL_SHARES_AMOUNT: {}", actual_shares_user),
+            );
+            assert_with_byte_array(
+                actual_collateral_user >= 0,
+                format!("INVALID_ACTUAL_COLLATERAL_AMOUNT: {}", actual_collateral_user),
             );
 
-            // assert amount to burn less than or equal to amount requested
-            assert_with_byte_array(
-                vault_approval.shares_to_burn <= order.shares_to_burn,
-                format!(
-                    "UNFAIR_REDEEM: requested_qty {}, < actual_qty {}",
-                    order.shares_to_burn,
-                    vault_approval.shares_to_burn,
-                ),
-            );
+            order
+                .validate_against_actual_amounts(
+                    actual_amount_base: actual_shares_user,
+                    actual_amount_quote: actual_collateral_user,
+                    actual_fee: 0_u64,
+                );
+
+            vault_approval
+                .validate_against_actual_amounts(
+                    actual_amount_base: -actual_shares_user,
+                    actual_amount_quote: -actual_collateral_user,
+                    actual_fee: 0_u64,
+                );
 
             let vault_position = self.positions.get_position_snapshot(vault_position_id);
-            let user_position = self.positions.get_position_snapshot(redeeming_position_id);
+            let redeeming_position = self.positions.get_position_snapshot(redeeming_position_id);
 
-            let amount_to_burn = vault_approval.shares_to_burn;
-            let value_to_receive = vault_approval.value_of_burn;
+            let amount_to_burn = actual_shares_user;
+            let value_to_receive = actual_collateral_user;
 
             self
                 ._update_fulfillment(
                     position_id: redeeming_position_id,
-                    hash: order.get_message_hash(user_position.get_owner_public_key()),
-                    order_base_amount: order.shares_to_burn.try_into().unwrap(),
-                    actual_base_amount: vault_approval.shares_to_burn.try_into().unwrap(),
+                    hash: order.get_message_hash(redeeming_position.get_owner_public_key()),
+                    order_base_amount: order.base_amount.try_into().unwrap(),
+                    actual_base_amount: actual_shares_user.try_into().unwrap(),
+                );
+
+            self
+                ._update_fulfillment(
+                    position_id: vault_position_id,
+                    hash: order.get_message_hash(vault_position.get_owner_public_key()),
+                    order_base_amount: vault_approval.base_amount.try_into().unwrap(),
+                    actual_base_amount: -actual_shares_user.try_into().unwrap(),
                 );
 
             let vault_config = self
@@ -1198,14 +1208,14 @@ pub mod Core {
 
             let pnl_collateral_dispatcher = self.assets.get_collateral_token_contract();
 
-            let unquantized_amount_to_burn = amount_to_burn.wide_mul(vault_asset.quantum);
+            let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
 
             //approve the vault contract to transfer pnl collateral to itself to "send back" to
             //perps
             pnl_collateral_dispatcher
                 .approve(
                     spender: vault_asset.token_contract.expect('NOT_ERC20'),
-                    amount: value_to_receive.into(),
+                    amount: value_to_receive.abs().into(),
                 );
 
             //approve the vault contract transferring vault shares to itself for burning
@@ -1218,11 +1228,11 @@ pub mod Core {
             let burn_result = vault_dispatcher
                 .redeem_with_price(
                     shares: unquantized_amount_to_burn.into(),
-                    value_of_shares: value_to_receive.into(),
+                    value_of_shares: value_to_receive.abs().into(),
                 );
 
             assert_with_byte_array(
-                burn_result == value_to_receive.into(),
+                burn_result == value_to_receive.abs().into(),
                 format!("UNFAIR_REDEEM: expected {:?}, got {:?}", value_to_receive, burn_result),
             );
 
@@ -1230,9 +1240,25 @@ pub mod Core {
                 collateral_diff: -value_to_receive.into(), asset_diff: None,
             };
 
-            let user_position_diff = PositionDiff {
-                collateral_diff: value_to_receive.into(),
-                asset_diff: Some((vault_config.asset_id, -amount_to_burn.into())),
+            let (redeeming_position_diff, receiving_position_diff) =
+                if (receiving_position_id == redeeming_position_id) {
+                (
+                    PositionDiff {
+                        collateral_diff: value_to_receive.into(),
+                        asset_diff: Some((vault_config.asset_id, amount_to_burn.into())),
+                    },
+                    None,
+                )
+            } else {
+                (
+                    PositionDiff {
+                        asset_diff: Some((vault_config.asset_id, amount_to_burn.into())),
+                        collateral_diff: 0_i64.into(),
+                    },
+                    Some(
+                        PositionDiff { collateral_diff: value_to_receive.into(), asset_diff: None },
+                    ),
+                )
             };
 
             // vault health checks
@@ -1259,14 +1285,23 @@ pub mod Core {
             self
                 ._validate_healthy_or_healthier_position(
                     position_id: redeeming_position_id,
-                    position: user_position,
-                    position_diff: user_position_diff,
+                    position: redeeming_position,
+                    position_diff: redeeming_position_diff,
                     tvtr_before: Default::default(),
                 );
 
             self
                 .positions
-                .apply_diff(position_id: redeeming_position_id, position_diff: user_position_diff);
+                .apply_diff(
+                    position_id: redeeming_position_id, position_diff: redeeming_position_diff,
+                );
+
+            // no need to validate health as can only receive collateral
+            if let Option::Some(position_diff) = receiving_position_diff {
+                self
+                    .positions
+                    .apply_diff(position_id: receiving_position_id, position_diff: position_diff);
+            };
         }
 
         /// Converts a position to a vault position.

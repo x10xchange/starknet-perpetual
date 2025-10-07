@@ -24,7 +24,7 @@ use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
-use perpetuals::core::types::order::Order;
+use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
@@ -1553,6 +1553,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .is_liquidatable(position_id)
     }
 
+    fn tv_tr_of_position(self: @PerpsTestsFacade, position_id: PositionId) -> PositionTVTR {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_tv_tr(position_id)
+    }    
+
     fn preview_vault_deposit(ref self: PerpsTestsFacade, vault: VaultState, amount: u64) -> u64 {
         let preview_result = vault
             .deployed_vault
@@ -1565,32 +1570,40 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn redeem_from_vault(
         ref self: PerpsTestsFacade,
         vault: VaultState,
-        amount: u64,
         withdrawing_user: User,
         receiving_user: User,
         shares_to_burn_user: u64,
         value_of_shares_user: u64,
         shares_to_burn_vault: u64,
         value_of_shares_vault: u64,
+        actual_shares_user: u64,
+        actual_collateral_user: u64,
     ) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
 
-        let user_order = RedeemFromVault {
-            vault_id: vault.position_id,
-            from_position_id: withdrawing_user.position_id,
-            to_position_id: receiving_user.position_id,
-            asset_to_receive: vault.asset_id,
-            shares_to_burn: shares_to_burn_user,
-            min_to_receive: value_of_shares_user,
+        let user_order = LimitOrder {
+            source_position: withdrawing_user.position_id,
+            receive_position: receiving_user.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: -shares_to_burn_user.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: value_of_shares_user.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
             expiration: Time::now().add(Time::weeks(1)),
             salt: self.generate_salt(),
         };
 
-        let vault_op_order = VaultOperatorApproveRedeem {
-            hash: user_order.get_message_hash(withdrawing_user.account.key_pair.public_key),
-            shares_to_burn: shares_to_burn_vault,
-            value_of_burn: value_of_shares_vault,
+        let vault_order = LimitOrder {
+            source_position: vault.position_id,
+            receive_position: vault.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: shares_to_burn_vault.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -value_of_shares_vault.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
             expiration: Time::now().add(Time::weeks(1)),
             salt: self.generate_salt(),
         };
@@ -1600,7 +1613,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :operator_nonce,
                 signature: array![0, 0].span(),
                 order: user_order,
-                vault_approval: vault_op_order,
+                vault_approval: vault_order,
+                actual_shares_user: -actual_shares_user.try_into().unwrap(),
+                actual_collateral_user: actual_collateral_user.try_into().unwrap(),
             );
     }
 
