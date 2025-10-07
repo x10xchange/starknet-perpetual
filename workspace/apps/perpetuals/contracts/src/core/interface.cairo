@@ -110,6 +110,17 @@ pub trait ICore<TContractState> {
         signature: Signature,
         order: LimitOrder,
         vault_approval: LimitOrder,
+        vault_signature: Signature,
+        actual_shares_user: i64,
+        actual_collateral_user: i64,
+    );
+
+    fn liquidate_vault_shares(
+        ref self: TContractState,
+        operator_nonce: u64,
+        liquidated_position_id: PositionId,
+        vault_approval: LimitOrder,
+        vault_signature: Signature,
         actual_shares_user: i64,
         actual_collateral_user: i64,
     );

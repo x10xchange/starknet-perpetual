@@ -1132,6 +1132,7 @@ pub mod Core {
             signature: Signature,
             order: LimitOrder,
             vault_approval: LimitOrder,
+            vault_signature: Signature,
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
@@ -1310,6 +1311,23 @@ pub mod Core {
             signature: Signature,
             order: ConvertPositionToVault,
         ) {}
+
+        fn liquidate_vault_shares(
+            ref self: ContractState,
+            operator_nonce: u64,
+            liquidated_position_id: PositionId,
+            vault_approval: LimitOrder,
+            vault_signature: Span<felt252>,
+            actual_shares_user: i64,
+            actual_collateral_user: i64,
+        ) {
+            //     /// Validations - System State:
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+
+            
+        }
     }
 
     #[generate_trait]
