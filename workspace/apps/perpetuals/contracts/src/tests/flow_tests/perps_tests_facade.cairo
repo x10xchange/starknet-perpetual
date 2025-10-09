@@ -1,8 +1,9 @@
 use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::nullable::{FromNullableResult, match_nullable};
-use openzeppelin::interfaces::erc20::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait};
-use openzeppelin::interfaces::erc4626::{IERC4626, IERC4626Dispatcher, IERC4626DispatcherTrait};
+use core::num::traits::WideMul;
+use openzeppelin::interfaces::erc20::IERC20Dispatcher;
+use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -23,7 +24,7 @@ use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
-use perpetuals::core::types::order::Order;
+use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
@@ -49,7 +50,7 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, HOUR, MAX_U128, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{DAY, MAX_U128, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
 use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
@@ -57,11 +58,9 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
 use crate::core::components::vault::protocol_vault::IProtocolVaultDispatcher;
-use crate::core::components::vault::vaults::{
-    IVaultsDispatcher, IVaultsDispatcherTrait,
-};
+use crate::core::components::vault::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use crate::core::types::funding::FundingIndex;
-use crate::core::types::vault::InvestInVault;
+use crate::core::types::vault::{InvestInVault, RedeemFromVault, VaultOperatorApproveRedeem};
 use crate::tests::constants::KEY_PAIR_1;
 
 pub const TIME_STEP: u64 = MINUTE;
@@ -389,6 +388,21 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
         let events = self.event_info.get_events().emitted_by(contract_address).events;
         events[events.len() - 1]
     }
+
+    fn get_last_events(
+        ref self: PerpsTestsFacade, contract_address: ContractAddress, count: u32,
+    ) -> Span<@Event> {
+        let events = self.event_info.get_events().emitted_by(contract_address).events;
+        let mut a: Array<@Event> = ArrayTrait::new();
+        for i in 0..count {
+            let x = count - i;
+            let offset = events.len() - x;
+            let (_, event) = events.at(offset);
+            a.append(event);
+        }
+        a.span()
+    }
+
     fn generate_salt(ref self: PerpsTestsFacade) -> felt252 {
         self.salt_gen += 1;
         self.salt_gen
@@ -504,8 +518,8 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .add_vault_collateral_asset(
                 asset_id,
                 erc20_contract_address: vault.contract_address,
-                quantum: self.collateral_quantum,
-                resolution_factor: 1000000,
+                quantum: 1,
+                resolution_factor: asset_info.resolution_factor,
                 risk_factor_tiers: risk_factor_1,
                 :risk_factor_first_tier_boundary,
                 :risk_factor_tier_size,
@@ -544,7 +558,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 order: ConvertPositionToVault {
                     position_to_convert: position_vault,
                     vault_asset_id: asset_id,
-                    is_protocol_vault: true,
                     expiration: Time::now(),
                 },
             );
@@ -1539,6 +1552,73 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .is_liquidatable(position_id)
     }
+
+    fn tv_tr_of_position(self: @PerpsTestsFacade, position_id: PositionId) -> PositionTVTR {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_tv_tr(position_id)
+    }    
+
+    fn preview_vault_deposit(ref self: PerpsTestsFacade, vault: VaultState, amount: u64) -> u64 {
+        let preview_result = vault
+            .deployed_vault
+            .erc4626
+            .preview_deposit(assets: amount.wide_mul(self.collateral_quantum).into());
+
+        return (preview_result / self.collateral_quantum.into()).try_into().unwrap();
+    }
+
+    fn redeem_from_vault(
+        ref self: PerpsTestsFacade,
+        vault: VaultState,
+        withdrawing_user: User,
+        receiving_user: User,
+        shares_to_burn_user: u64,
+        value_of_shares_user: u64,
+        shares_to_burn_vault: u64,
+        value_of_shares_vault: u64,
+        actual_shares_user: u64,
+        actual_collateral_user: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        let user_order = LimitOrder {
+            source_position: withdrawing_user.position_id,
+            receive_position: receiving_user.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: -shares_to_burn_user.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: value_of_shares_user.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        let vault_order = LimitOrder {
+            source_position: vault.position_id,
+            receive_position: vault.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: shares_to_burn_vault.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -value_of_shares_vault.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .redeem_from_vault(
+                :operator_nonce,
+                signature: array![0, 0].span(),
+                order: user_order,
+                vault_approval: vault_order,
+                actual_shares_user: -actual_shares_user.try_into().unwrap(),
+                actual_collateral_user: actual_collateral_user.try_into().unwrap(),
+            );
+    }
+
     /// TODO: add all the necessary functions to interact with the contract.
     fn deposit_into_vault(
         ref self: PerpsTestsFacade,

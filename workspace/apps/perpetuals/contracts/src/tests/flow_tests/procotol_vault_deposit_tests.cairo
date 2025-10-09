@@ -1,13 +1,8 @@
-use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use perpetuals::tests::test_utils::assert_with_error;
-use snforge_std::start_cheat_block_timestamp_global;
-use starkware_utils::time::time::Time;
-use starkware_utils_testing::test_utils::{
-    Deployable, TokenState, TokenTrait, cheat_caller_address_once,
-};
+use starkware_utils_testing::test_utils::TokenTrait;
 
 
 #[test]
@@ -43,6 +38,8 @@ fn test_deposit_into_protocol_vault_recieve_to_same_position() {
     let vault_usdc_balance_before_vault_interaction = state
         .facade
         .get_position_collateral_balance(vault_config.position_id);
+
+    let expected_shares = state.facade.preview_vault_deposit(vault_config, 1000);
 
     let pending_vault_deposit = state
         .facade
@@ -89,7 +86,8 @@ fn test_deposit_into_protocol_vault_recieve_to_same_position() {
 
     // 3. depositing user vault share balance must increase by deposited amount
     assert_with_error(
-        depositing_user_vault_share_balance_after_vault_interaction > depositing_user_vault_share_balance_before_vault_interaction,
+        depositing_user_vault_share_balance_after_vault_interaction == depositing_user_vault_share_balance_before_vault_interaction
+            + expected_shares.into(),
         format!(
             "depositing user vault share balance did not increase, before: {:?}, after: {:?}",
             depositing_user_vault_share_balance_before_vault_interaction,

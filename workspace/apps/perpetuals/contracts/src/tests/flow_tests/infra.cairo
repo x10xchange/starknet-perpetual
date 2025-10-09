@@ -61,6 +61,21 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
             );
         user
     }
+    fn new_user_with_position_id(ref self: FlowTestBase, position_id: PositionId) -> User {
+        let user = UserTrait::new(
+            self.facade.token_state,
+            secret_key: self.generate_key(),
+            :position_id,
+        );
+        self
+            .facade
+            .new_position(
+                position_id: user.position_id,
+                owner_public_key: user.account.key_pair.public_key,
+                owner_account: user.account.address,
+            );
+        user
+    }    
 }
 
 #[derive(Copy, Drop)]

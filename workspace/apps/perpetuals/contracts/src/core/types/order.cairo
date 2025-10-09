@@ -12,6 +12,96 @@ use starkware_utils::time::time::Timestamp;
 
 pub const VERSION: u8 = 0;
 
+fn validate_against_actual_amounts(
+    base_amount: i64,
+    quote_amount: i64,
+    fee_amount: u64,
+    actual_amount_base: i64,
+    actual_amount_quote: i64,
+    actual_fee: u64,
+    position: PositionId,
+) {
+    let order_base_to_quote_ratio = FractionTrait::new(
+        numerator: (base_amount).into(), denominator: (quote_amount).abs().into(),
+    );
+    let actual_base_to_quote_ratio = FractionTrait::new(
+        numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
+    );
+    assert_with_byte_array(
+        order_base_to_quote_ratio <= actual_base_to_quote_ratio,
+        illegal_base_to_quote_ratio_err(position),
+    );
+
+    // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
+    // operator's fee.
+    let actual_fee_to_quote_ratio = FractionTrait::new(
+        numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
+    );
+    let order_fee_to_quote_ratio = FractionTrait::new(
+        numerator: (fee_amount).into(), denominator: (quote_amount).abs().into(),
+    );
+    assert_with_byte_array(
+        actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
+        illegal_fee_to_quote_ratio_err(position),
+    );
+}
+
+
+#[derive(Copy, Drop, Hash, Serde)]
+// An order to buy or sell a synthetic asset for a collateral asset.
+// The base amount and quote amount have opposite signs.
+pub struct LimitOrder {
+    pub source_position: PositionId,
+    pub receive_position: PositionId,
+    // The synthetic asset to be bought or sold.
+    pub base_asset_id: AssetId,
+    // The amount of the synthetic asset to be bought or sold.
+    pub base_amount: i64,
+    // The collateral asset.
+    pub quote_asset_id: AssetId,
+    // The amount of the collateral asset to be paid or received.
+    pub quote_amount: i64,
+    // The collateral asset.
+    pub fee_asset_id: AssetId,
+    // The amount of the collateral asset to be paid.
+    pub fee_amount: u64,
+    // The expiration time of the order.
+    pub expiration: Timestamp,
+    // A random value to make each order unique.
+    pub salt: felt252,
+}
+
+#[generate_trait]
+pub impl LimitOrderImpl of LimitOrderTrait {
+    /// Validates order variables against actual amounts:
+    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
+    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
+    fn validate_against_actual_amounts(
+        self: @LimitOrder, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
+    ) {
+        validate_against_actual_amounts(
+            base_amount: *self.base_amount,
+            quote_amount: *self.quote_amount,
+            fee_amount: *self.fee_amount,
+            :actual_amount_base,
+            :actual_amount_quote,
+            :actual_fee,
+            position: *self.source_position,
+        )
+    }
+}
+
+const LIMIT_ORDER_TYPE_HASH: HashType =
+    0x36da8d51815527cabfaa9c982f564c80fa7429616739306036f1f9b608dd112;
+
+
+impl LimitOrderStructHashImpl of StructHash<LimitOrder> {
+    fn hash_struct(self: @LimitOrder) -> HashType {
+        let hash_state = PoseidonTrait::new();
+        hash_state.update_with(LIMIT_ORDER_TYPE_HASH).update_with(*self).finalize()
+    }
+}
+
 #[derive(Copy, Drop, Hash, Serde)]
 // An order to buy or sell a synthetic asset for a collateral asset.
 // The base amount and quote amount have opposite signs.
@@ -34,6 +124,7 @@ pub struct Order {
     // A random value to make each order unique.
     pub salt: felt252,
 }
+
 
 /// selector!(
 ///   "\"Order\"(
@@ -60,6 +151,7 @@ pub struct Order {
 
 const ORDER_TYPE_HASH: HashType = 0x36da8d51815527cabfaa9c982f564c80fa7429616739306036f1f9b608dd112;
 
+
 impl StructHashImpl of StructHash<Order> {
     fn hash_struct(self: @Order) -> HashType {
         let hash_state = PoseidonTrait::new();
@@ -75,29 +167,15 @@ pub impl OrderImpl of OrderTrait {
     fn validate_against_actual_amounts(
         self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
     ) {
-        let order_base_to_quote_ratio = FractionTrait::new(
-            numerator: (*self.base_amount).into(), denominator: (*self.quote_amount).abs().into(),
-        );
-        let actual_base_to_quote_ratio = FractionTrait::new(
-            numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
-        );
-        assert_with_byte_array(
-            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
-            illegal_base_to_quote_ratio_err(*self.position_id),
-        );
-
-        // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
-        // operator's fee.
-        let actual_fee_to_quote_ratio = FractionTrait::new(
-            numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
-        );
-        let order_fee_to_quote_ratio = FractionTrait::new(
-            numerator: (*self.fee_amount).into(), denominator: (*self.quote_amount).abs().into(),
-        );
-        assert_with_byte_array(
-            actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
-            illegal_fee_to_quote_ratio_err(*self.position_id),
-        );
+        validate_against_actual_amounts(
+            base_amount: *self.base_amount,
+            quote_amount: *self.quote_amount,
+            fee_amount: *self.fee_amount,
+            :actual_amount_base,
+            :actual_amount_quote,
+            :actual_fee,
+            position: *self.position_id,
+        )
     }
 }
 
