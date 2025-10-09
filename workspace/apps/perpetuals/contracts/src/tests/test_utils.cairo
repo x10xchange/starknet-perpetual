@@ -263,7 +263,7 @@ fn CONTRACT_STATE() -> Core::ContractState {
     Core::contract_state_for_testing()
 }
 
-fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
+pub fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
     let calldata = array![key_pair.public_key];
     let account_address = declare_and_deploy("AccountUpgradeable", calldata);
 
