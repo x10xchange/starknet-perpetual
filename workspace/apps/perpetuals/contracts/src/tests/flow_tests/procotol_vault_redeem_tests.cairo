@@ -38,7 +38,8 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -156,7 +157,8 @@ fn test_redeem_from_protocol_vault_unfair__user_redeem() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -204,7 +206,8 @@ fn test_redeem_from_protocol_vault_unfair__vault_redeem() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -253,7 +256,8 @@ fn test_redeem_from_protocol_vault_over_fulfilled_user() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -303,7 +307,8 @@ fn test_redeem_from_protocol_vault_over_fulfilled_vault() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -361,7 +366,8 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
@@ -488,7 +494,8 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),

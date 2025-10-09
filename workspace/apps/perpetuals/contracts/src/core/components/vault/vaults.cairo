@@ -1,6 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::vault::{ConvertPositionToVault, InvestInVault};
+use perpetuals::core::types::vault::{ConvertPositionToVault};
 
 const STORAGE_VERSION: u8 = 1;
 

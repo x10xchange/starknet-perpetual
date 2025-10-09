@@ -1,6 +1,3 @@
-use core::hash::{HashStateExTrait, HashStateTrait};
-use core::poseidon::PoseidonTrait;
-use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starkware_utils::signature::stark::HashType;
@@ -13,45 +10,6 @@ pub struct ConvertPositionToVault {
     pub position_to_convert: PositionId,
     pub vault_asset_id: AssetId,
     pub expiration: Timestamp,
-}
-
-#[derive(Copy, Drop, Hash, Serde)]
-pub struct InvestInVault {
-    pub from_position_id: PositionId,
-    pub receiving_position_id: PositionId,
-    pub vault_id: PositionId,
-    pub amount: u64,
-    pub expiration: Timestamp,
-    pub salt: felt252,
-}
-
-
-#[derive(Copy, Drop, Hash, Serde)]
-/// An order to move collateral back from a vault to a user position (redeem).
-pub struct RedeemFromVault {
-    // vault position (source).
-    pub vault_id: PositionId,
-    // user position (source)
-    pub from_position_id: PositionId,
-    // user position (target)
-    pub to_position_id: PositionId,
-    pub asset_to_receive: AssetId,
-    // The amount of the share asset to be redeem.
-    pub shares_to_burn: u64,
-    // Mininum output the user is willing to accept.
-    pub min_to_receive: u64,
-    pub expiration: Timestamp,
-    pub salt: felt252,
-}
-
-#[derive(Copy, Drop, Hash, Serde)]
-/// An order to approve a vault withdrawal from vault operator
-pub struct VaultOperatorApproveRedeem {
-    pub hash: HashType,
-    pub shares_to_burn: u64,
-    pub value_of_burn: u64,
-    pub expiration: Timestamp,
-    pub salt: felt252,
 }
 
 
@@ -105,43 +63,6 @@ const REDEEM_FROM_VAULT_TYPE_HASH: HashType =
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const CONVERT_POSITION_TO_VAULT_TYPE_HASH: HashType =
-    0x01d9423fdc501a97387f677c15ee120dac505554e85b445253d63f5d150faccd;
-
-const VAULT_OPERATOR_APPROVE_REDEEM_TYPE_HASH: HashType =
-    0x01d9423fdc501a97387f677c15ee120dac505554e85b445253d63f5d150faccd;
-
-impl InvestInVaultStructHashImpl of StructHash<InvestInVault> {
-    fn hash_struct(self: @InvestInVault) -> HashType {
-        let hash_state = PoseidonTrait::new();
-        hash_state.update_with(INVEST_IN_VAULT_TYPE_HASH).update_with(*self).finalize()
-    }
-}
-
-impl RedeemFromVaultStructHashImpl of StructHash<RedeemFromVault> {
-    fn hash_struct(self: @RedeemFromVault) -> HashType {
-        let hash_state = PoseidonTrait::new();
-        hash_state.update_with(REDEEM_FROM_VAULT_TYPE_HASH).update_with(*self).finalize()
-    }
-}
-
-impl ConvertPositionToVaultStructHashImpl of StructHash<ConvertPositionToVault> {
-    fn hash_struct(self: @ConvertPositionToVault) -> HashType {
-        let hash_state = PoseidonTrait::new();
-        hash_state.update_with(CONVERT_POSITION_TO_VAULT_TYPE_HASH).update_with(*self).finalize()
-    }
-}
-
-impl VaultOperatorApproveRedeemStructHashImpl of StructHash<VaultOperatorApproveRedeem> {
-    fn hash_struct(self: @VaultOperatorApproveRedeem) -> HashType {
-        let hash_state = PoseidonTrait::new();
-        hash_state
-            .update_with(VAULT_OPERATOR_APPROVE_REDEEM_TYPE_HASH)
-            .update_with(*self)
-            .finalize()
-    }
-}
-
 
 #[cfg(test)]
 mod tests {

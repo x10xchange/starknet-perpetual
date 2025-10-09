@@ -39,9 +39,7 @@ pub mod Core {
     };
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::transfer::TransferArgs;
-    use perpetuals::core::types::vault::{
-        ConvertPositionToVault, InvestInVault, RedeemFromVault, VaultOperatorApproveRedeem,
-    };
+    use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::types::withdraw::WithdrawArgs;
     use perpetuals::core::value_risk_calculator::{
         PositionTVTR, assert_healthy_or_healthier, calculate_position_tvtr_before,
@@ -74,6 +72,7 @@ pub mod Core {
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
     use crate::core::components::assets::interface::IAssets;
+    use crate::core::components::vault;
     use crate::core::components::vault::protocol_vault::{
         IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
     };
@@ -984,34 +983,26 @@ pub mod Core {
         /// - Transfer shares to from_position_id.
         /// - Validates the from_position is healthy or healthier after the transfer.
         fn invest_in_vault(
-            ref self: ContractState,
-            operator_nonce: u64,
-            signature: Signature,
-            order: InvestInVault,
+            ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
         ) {
             //     /// Validations - System State:
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
 
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
+            let from_position_id = order.source_position;
+            let vault_position_id = vault_config.position_id.into();
+
             /// Validations - Order Parameters:
-            assert(order.amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(order.base_amount > 0, 'INVALID_NEGATIVE_BASE_AMOUNT');
+            assert(order.quote_amount < 0, 'INVALID_POSITIVE_QUOTE_AMOUNT');
             // Expiration check.
             let now = Time::now();
-            assert_with_byte_array(
-                now <= order.expiration, order_expired_err(order.from_position_id),
-            );
+            assert_with_byte_array(now <= order.expiration, order_expired_err(from_position_id));
+            assert(order.quote_asset_id == self.assets.get_collateral_id(), 'INVALID_QUOTE_ASSET');
 
-            //     // Position Existence:
-            //     let from_position = self.positions.get_position_snapshot(order.from_position_id);
-            //     let vault_position = self.positions.get_position_snapshot(order.vault_id);
-            //     // TODO(Mohammad): validate vault_id is a vault position.
-            //     // TODO(Mohammad): validate from_position_id is a non-vault position.
-
-            let from_position_id = order.from_position_id;
-            let vault_position_id = order.vault_id;
-            let amount = order.amount;
-            let receiving_position_id = order.receiving_position_id;
+            let receiving_position_id = order.receive_position;
             let salt = order.salt;
 
             let sending_position_snapshot = self
@@ -1022,8 +1013,8 @@ pub mod Core {
                 ._update_fulfillment(
                     position_id: from_position_id,
                     hash: order.get_message_hash(sending_position_snapshot.get_owner_public_key()),
-                    order_base_amount: order.amount.try_into().unwrap(),
-                    actual_base_amount: order.amount.try_into().unwrap(),
+                    order_base_amount: order.quote_amount,
+                    actual_base_amount: order.quote_amount,
                 );
 
             // self
@@ -1033,10 +1024,7 @@ pub mod Core {
             //         :signature,
             //     );
 
-            assert(self.is_vault(vault_position_id), 'NOT_A_VAULT_POSITION');
             assert(!self.is_vault(from_position_id), 'FROM_POSITION_IS_VAULT');
-
-            let vault_config = self.vaults.get_vault_config_for_position(vault_position_id);
             let vault_share_config = self.get_asset_config(vault_config.asset_id);
 
             let vault_dispatcher = IERC4626Dispatcher {
@@ -1046,7 +1034,10 @@ pub mod Core {
             let current_collateral_balance = collateral_token_dispatcher
                 .balance_of(starknet::get_contract_address());
 
-            let on_chain_amount: u128 = amount.wide_mul(self.assets.get_collateral_quantum());
+            let on_chain_amount: u128 = order
+                .quote_amount
+                .abs()
+                .wide_mul(self.assets.get_collateral_quantum());
 
             collateral_token_dispatcher
                 .approve(
@@ -1062,8 +1053,15 @@ pub mod Core {
                 .try_into()
                 .unwrap();
 
+            order
+                .validate_against_actual_amounts(
+                    actual_amount_base: quantised_minted_shares.try_into().unwrap(),
+                    actual_amount_quote: order.quote_amount,
+                    actual_fee: 0_u64,
+                );
+
             let sending_position_diff = PositionDiff {
-                collateral_diff: -amount.into(), asset_diff: Option::None,
+                collateral_diff: order.quote_amount.into(), asset_diff: Option::None,
             };
 
             self
@@ -1086,7 +1084,7 @@ pub mod Core {
             assert(new_collateral_balance == current_collateral_balance, 'COLLATERAL_NOT_RETURNED');
 
             let vault_position_diff = PositionDiff {
-                collateral_diff: amount.into(), asset_diff: Option::None,
+                collateral_diff: order.quote_amount.abs().into(), asset_diff: Option::None,
             };
 
             self
@@ -1109,8 +1107,8 @@ pub mod Core {
                         vault_position_id: vault_position_id,
                         investing_position_id: from_position_id,
                         receiving_position_id: receiving_position_id,
-                        shares_received: quantised_minted_shares.into(),
-                        user_investment: amount.into(),
+                        shares_received: quantised_minted_shares,
+                        user_investment: order.quote_amount.abs(),
                         vault_asset_id: vault_config.asset_id,
                         invested_asset_id: self.assets.get_collateral_id(),
                     },
@@ -1122,7 +1120,7 @@ pub mod Core {
                     caller_address: starknet::get_contract_address(),
                     asset_id: vault_config.asset_id,
                     position_id: receiving_position_id,
-                    quantized_amount: quantised_minted_shares.into(),
+                    quantized_amount: quantised_minted_shares,
                     salt: salt,
                 );
         }
