@@ -427,7 +427,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(:position_id, :quantized_amount, :salt);
+            .deposit(asset_id: self.collateral_id, :position_id, :quantized_amount, :salt);
 
         validate_balance(
             token_state: self.token_state,
@@ -470,7 +470,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .cancel_deposit(:position_id, :quantized_amount, :salt);
+            .cancel_deposit(asset_id: self.collateral_id, :position_id, :quantized_amount, :salt);
         let deposit_hash = deposit_hash(
             token_address: self.token_state.address,
             depositor: depositor.address,
@@ -516,6 +516,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .process_deposit(
                 :operator_nonce,
                 depositor: depositor.address,
+                asset_id: self.collateral_id,
                 :position_id,
                 :quantized_amount,
                 :salt,
