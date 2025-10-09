@@ -7,10 +7,10 @@ use perpetuals::core::errors::{
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::position::{
-    PositionDiffEnriched, PositionId, AssetEnrichedPositionDiff,
+    AssetEnrichedPositionDiff, PositionDiffEnriched, PositionId,
 };
 use perpetuals::core::types::price::{Price, PriceMulTrait};
-use perpetuals::core::types::risk_factor::{RiskFactorMulTrait};
+use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
@@ -256,13 +256,12 @@ pub fn calculate_position_tvtr_before(
 
 #[cfg(test)]
 mod tests {
-    use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetBalanceDiffEnriched};
+    use perpetuals::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetBalanceInfo};
     use perpetuals::core::types::asset::{AssetId, AssetIdTrait};
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::funding::FundingIndex;
     use perpetuals::core::types::price::{Price, PriceTrait};
-    use perpetuals::core::types::risk_factor::RiskFactor;
-    use perpetuals::core::types::risk_factor::{RiskFactorTrait};
+    use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use super::*;
 
 
@@ -476,7 +475,8 @@ mod tests {
         };
 
         let position_diff_enriched = PositionDiffEnriched {
-            collateral_enriched: Default::default(), asset_diff_enriched: Option::Some(asset_diff_1),
+            collateral_enriched: Default::default(),
+            asset_diff_enriched: Option::Some(asset_diff_1),
         };
 
         let tvtr_before = calculate_position_tvtr_before(

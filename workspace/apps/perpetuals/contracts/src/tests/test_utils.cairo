@@ -16,12 +16,16 @@ use perpetuals::core::types::asset::{AssetId, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::{PositionDiff, PositionId};
-use perpetuals::core::types::price::{Price, SignedPrice};
+use perpetuals::core::types::price::{Price, PriceTrait, SignedPrice, convert_oracle_to_perps_price};
 use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
 use perpetuals::tests::constants::*;
+use perpetuals::tests::event_test_utils::{
+    assert_asset_activated_event_with_expected, assert_price_tick_event_with_expected,
+};
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global, test_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
+    start_cheat_block_timestamp_global, test_address,
 };
 use starknet::ContractAddress;
 use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
@@ -35,7 +39,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use crate::core::types::vault;
+use crate::core::components::deposit::interface::IDeposit;
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.
@@ -360,8 +364,94 @@ pub fn setup_state_with_pending_vault_share(
             risk_factor_first_tier_boundary: *cfg.vault_share_cfg.risk_factor_first_tier_boundary,
             risk_factor_tier_size: *cfg.vault_share_cfg.risk_factor_tier_size,
             quorum: 1_u8,
-        );        
+        );
     state
+}
+
+pub fn send_price_tick_for_vault_share(ref state: Core::ContractState, cfg: @PerpetualsInitConfig, price: u64) {
+    let mut spy = snforge_std::spy_events();
+    let asset_name = 'VAULT_SHARE';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let vault_share_id = *cfg.vault_share_cfg.collateral_id;
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: vault_share_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
+    //one unit of vault share is priced at $12
+    let oracle_price: u128 = price.into() * 10_u128.pow(18);
+    let operator_nonce = state.get_operator_nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: vault_share_id,
+            :oracle_price,
+            signed_prices: [
+                oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+
+    let expected_price = convert_oracle_to_perps_price(
+        oracle_price: oracle_price, resolution_factor: *cfg.vault_share_cfg.resolution_factor,
+    );
+    assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: vault_share_id);
+    assert_price_tick_event_with_expected(
+        spied_event: events[2], asset_id: vault_share_id, price: expected_price,
+    );
+    assert!(state.assets.get_asset_config(vault_share_id).status == AssetStatus::ACTIVE);
+    //check synthetic count is not incremented
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+
+    let data = state.assets.get_timely_data(vault_share_id);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == expected_price.value());
+}
+
+pub fn deposit_vault_share(
+    ref state: Core::ContractState, cfg: @PerpetualsInitConfig, user: User, number_of_shares: u64,
+) {
+    let on_chain_amount = (number_of_shares.into()) * 10_u128.pow(18);
+    let quantum = *(cfg.vault_share_cfg.quantum);
+    let quantized_amount: u64 = (on_chain_amount / (quantum.into())).try_into().unwrap();
+
+    let vault_share_state = cfg.vault_share_cfg.token_state;
+    vault_share_state.fund(recipient: user.address, amount: on_chain_amount);
+    vault_share_state
+        .approve(owner: user.address, spender: test_address(), amount: on_chain_amount);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: *cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: quantized_amount,
+            salt: user.salt_counter,
+        );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
+    state
+        .process_deposit(
+            operator_nonce: state.get_operator_nonce(),
+            depositor: user.address,
+            asset_id: *cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: quantized_amount,
+            salt: user.salt_counter,
+        );
 }
 
 pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core::ContractState {
@@ -416,6 +506,21 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
     state.positions.apply_diff(:position_id, :position_diff);
 }
 
+pub fn init_position_zero_collateral(
+    cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User,
+) {
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
+    let position_id = user.position_id;
+    state
+        .new_position(
+            operator_nonce: state.get_operator_nonce(),
+            :position_id,
+            owner_public_key: user.get_public_key(),
+            owner_account: Zero::zero(),
+            owner_protection_enabled: false,
+        );
+}
+
 pub fn init_position_with_owner(
     cfg: @PerpetualsInitConfig, ref state: Core::ContractState, user: User,
 ) {
@@ -442,8 +547,8 @@ pub fn validate_asset_balance(
     expected_balance: Balance,
 ) {
     let snapshot = state.positions.get_position_snapshot(:position_id);
-    let balance = snapshot.asset_balances.read(asset_id).expect('NO_SUCH_ASSET_IN_POSITION');
-    assert!(balance.balance == expected_balance);
+    let balance = snapshot.asset_balances.read(asset_id).map_or(0_i64.into(), |b| b.balance);
+    assert!(balance == expected_balance);
 }
 
 pub fn initialized_contract_state(
