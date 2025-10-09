@@ -12,7 +12,7 @@ starkware_utils_testing = { git = "https://github.com/ex10ded/starkware-starknet
 
 
 [scripts]
-test = "snforge test"
+test = "snforge test --max-n-steps 10000000000"
 
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true

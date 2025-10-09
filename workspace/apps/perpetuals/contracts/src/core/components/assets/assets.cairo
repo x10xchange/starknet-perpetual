@@ -6,11 +6,10 @@ pub mod AssetsComponent {
     use core::panic_with_felt252;
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::interfaces::erc20::{
         IERC20Dispatcher, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
     };
-
+    use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
@@ -224,6 +223,8 @@ pub mod AssetsComponent {
             risk_factor_tier_size: u128,
             quorum: u8,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+
             assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
             let erc20Contract = IERC20MetadataDispatcher {
                 contract_address: erc20_contract_address,
@@ -232,7 +233,19 @@ pub mod AssetsComponent {
             let resolution: u64 = (10_u256.pow(underlying_decimals.into()) / quantum.into())
                 .try_into()
                 .unwrap();
-            assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
+            // assert(resolution == resolution_factor, 'MISMATCHED_RESOLUTION');
+
+            if (resolution != resolution_factor) {
+                panic_with_byte_array(
+                    @format!(
+                        "MISMATCHED_RESOLUTION: expected {}, got {}, underlying_decimals {}",
+                        resolution_factor,
+                        resolution,
+                        underlying_decimals,
+                    ),
+                );
+            }
+
             assert(resolution.is_non_zero(), 'INVALID_ZERO_RESOLUTION');
             self
                 ._add_asset(

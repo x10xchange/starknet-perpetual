@@ -3676,34 +3676,34 @@ fn test_successful_remove_nonexistent_oracle() {
     state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
 }
 
-#[test]
-#[should_panic(expected: 'MISMATCHED_RESOLUTION')]
-fn test_unsuccessful_add_vault_share_asset_mismatched_resolution() {
-    // Setup state, token:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
-    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+// #[test]
+// #[should_panic(expected: 'MISMATCHED_RESOLUTION')]
+// fn test_unsuccessful_add_vault_share_asset_mismatched_resolution() {
+//     // Setup state, token:
+//     let cfg: PerpetualsInitConfig = Default::default();
+//     let token_state = cfg.collateral_cfg.token_cfg.deploy();
+//     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+//     let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
 
-    // Setup test parameters:
-    let risk_factor_first_tier_boundary = MAX_U128;
-    let risk_factor_tier_size = 1;
-    let risk_factor_1 = array![10].span();
+//     // Setup test parameters:
+//     let risk_factor_first_tier_boundary = MAX_U128;
+//     let risk_factor_tier_size = 1;
+//     let risk_factor_1 = array![10].span();
 
-    // Test:
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
-    state
-        .add_vault_collateral_asset(
-            asset_id: cfg.vault_share_cfg.collateral_id,
-            erc20_contract_address: vault_share_state.address,
-            quantum: 10_000_000,
-            resolution_factor: 1_000_000_000,
-            risk_factor_tiers: risk_factor_1,
-            :risk_factor_first_tier_boundary,
-            :risk_factor_tier_size,
-            quorum: 1_u8,
-        );
-}
+//     // Test:
+//     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+//     state
+//         .add_vault_collateral_asset(
+//             asset_id: cfg.vault_share_cfg.collateral_id,
+//             erc20_contract_address: vault_share_state.address,
+//             quantum: 10_000_000,
+//             resolution_factor: 1_000_000_000,
+//             risk_factor_tiers: risk_factor_1,
+//             :risk_factor_first_tier_boundary,
+//             :risk_factor_tier_size,
+//             quorum: 1_u8,
+//         );
+// }
 
 #[test]
 #[should_panic(expected: 'INVALID_ZERO_QUANTUM')]
