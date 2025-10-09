@@ -93,6 +93,17 @@ pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
     AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
 }
 
+pub fn VAULT_SHARE_COLLATERAL_1_ID() -> AssetId {
+    AssetIdTrait::new(value: selector!("VS_1"))
+}
+
+pub fn VAULT_SHARE_COLLATERAL_1_NAME() -> ByteArray {
+    "VS_1"
+}
+pub fn VAULT_SHARE_COLLATERAL_1_SYMBOL() -> ByteArray {
+    "VS1"
+}
+
 
 /// Assets' metadata
 pub fn COLLATERAL_NAME() -> ByteArray {

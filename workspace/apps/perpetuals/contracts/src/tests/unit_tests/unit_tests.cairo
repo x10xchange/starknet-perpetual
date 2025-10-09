@@ -1081,7 +1081,7 @@ fn test_successful_deactivate_synthetic_asset() {
     assert!(
         state
             .assets
-            .synthetic_config
+            .asset_config
             .entry(synthetic_id)
             .read()
             .unwrap()
@@ -1102,7 +1102,7 @@ fn test_successful_deactivate_synthetic_asset() {
     assert!(
         state
             .assets
-            .synthetic_config
+            .asset_config
             .entry(synthetic_id)
             .read()
             .unwrap()
@@ -3026,7 +3026,7 @@ fn test_funding_tick_basic() {
 
     // Check:
     assert!(
-        state.assets.get_synthetic_timely_data(synthetic_id).funding_index == new_funding_index,
+        state.assets.get_timely_data(synthetic_id).funding_index == new_funding_index,
     );
 }
 
@@ -3136,10 +3136,10 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(value: 100),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3206,9 +3206,9 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3264,10 +3264,10 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3457,7 +3457,7 @@ fn test_price_tick_golden() {
             :oracle_price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == Time::now());
     assert!(data.price.value() == 6430);
 }
@@ -3616,4 +3616,146 @@ fn test_successful_remove_nonexistent_oracle() {
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
+}
+
+#[test]
+#[should_panic(expected: 'MISMATCHED_RESOLUTION')]
+fn test_unsuccessful_add_vault_share_asset_mismatched_resolution() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            erc20_contract_address: vault_share_state.address,
+            quantum: 10_000_000,
+            resolution_factor: 1_000_000_000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_ZERO_QUANTUM')]
+fn test_unsuccessful_add_vault_share_asset_zero_quantum() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            erc20_contract_address: vault_share_state.address,
+            quantum: 0,
+            resolution_factor: 1_000_000_000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+}
+
+#[test]
+#[should_panic(
+    expected: "Entry point selector 0x4c4fb1ab068f6039d5780c68dd0fa2f8742cceb3426d19667778ca7f3518a9 not found in contract 0x1724987234973219347210837402",
+)]
+fn test_unsuccessful_add_vault_share_asset_not_erc20() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            erc20_contract_address: test_address(),
+            quantum: 10_000_000,
+            resolution_factor: 1_000_000_000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+}
+
+#[test]
+fn test_successful_add_vault_share_asset() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+    let mut spy = snforge_std::spy_events();
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // VS has 10^18
+    // quantum 10^12
+    // resolution 10^(18-12) = 10^6
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+            erc20_contract_address: vault_share_state.address,
+            quantum: 1000000000000,
+            resolution_factor: 1000000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_synthetic_event_with_expected(
+        spied_event: events[0],
+        asset_id: VAULT_SHARE_COLLATERAL_1_ID(),
+        risk_factor_tiers: risk_factor_1,
+        :risk_factor_first_tier_boundary,
+        :risk_factor_tier_size,
+        resolution_factor: 1000000,
+        quorum: 1_u8,
+    );
+
+    let asset_config = state.assets.get_asset_config(VAULT_SHARE_COLLATERAL_1_ID());
+
+    assert!(asset_config.resolution_factor == 1000000);
+    assert!(asset_config.risk_factor_first_tier_boundary == risk_factor_first_tier_boundary);
+    assert!(asset_config.risk_factor_tier_size == risk_factor_tier_size);
+    assert!(asset_config.quorum == 1_u8);
+    assert!(asset_config.status == AssetStatus::PENDING);
+
 }
