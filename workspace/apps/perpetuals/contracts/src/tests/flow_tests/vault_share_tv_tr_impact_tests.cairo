@@ -38,7 +38,8 @@ fn test_shares_should_contribute_zero_until_activated() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     :depositing_user,
                     receiving_user: depositing_user,
                 ),
@@ -77,7 +78,8 @@ fn test_shares_should_contribute_to_tv_tr_after_activation() {
                 .facade
                 .deposit_into_vault(
                     vault: vault_config,
-                    amount: 1000,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
                     :depositing_user,
                     receiving_user: depositing_user,
                 ),

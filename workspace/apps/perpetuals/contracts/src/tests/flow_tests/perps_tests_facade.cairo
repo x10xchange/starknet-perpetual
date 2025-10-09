@@ -1,5 +1,6 @@
 use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
+use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
 use core::num::traits::WideMul;
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
@@ -57,10 +58,11 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::components::deposit::events as deposit_events;
 use crate::core::components::vault::protocol_vault::IProtocolVaultDispatcher;
 use crate::core::components::vault::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
+use crate::core::core::Core::Event::DepositEvent;
 use crate::core::types::funding::FundingIndex;
-use crate::core::types::vault::{InvestInVault, RedeemFromVault, VaultOperatorApproveRedeem};
 use crate::tests::constants::KEY_PAIR_1;
 
 pub const TIME_STEP: u64 = MINUTE;
@@ -1556,7 +1558,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn tv_tr_of_position(self: @PerpsTestsFacade, position_id: PositionId) -> PositionTVTR {
         IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_tv_tr(position_id)
-    }    
+    }
 
     fn preview_vault_deposit(ref self: PerpsTestsFacade, vault: VaultState, amount: u64) -> u64 {
         let preview_result = vault
@@ -1619,59 +1621,47 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
     }
 
-    /// TODO: add all the necessary functions to interact with the contract.
     fn deposit_into_vault(
         ref self: PerpsTestsFacade,
         vault: VaultState,
-        amount: u64,
+        amount_to_invest: u64,
+        min_shares_to_receive: u64,
         depositing_user: User,
         receiving_user: User,
     ) -> DepositInfo {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
-        let now = Time::now();
-
         let salt = self.generate_salt();
 
-        let order = InvestInVault {
-            from_position_id: depositing_user.position_id,
-            receiving_position_id: receiving_user.position_id,
-            vault_id: vault.position_id,
-            amount,
+        let order = LimitOrder {
+            source_position: depositing_user.position_id,
+            receive_position: receiving_user.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: min_shares_to_receive.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -(amount_to_invest.try_into().unwrap()),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
             expiration: Time::now().add(Time::weeks(1)),
-            salt: salt,
+            salt,
         };
 
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .invest_in_vault(:operator_nonce, signature: array![0, 0].span(), order: order);
 
         let last_event = self.get_last_event(contract_address: self.perpetuals_contract);
-
-        let deposit_hash = deposit_hash(
-            token_address: vault.deployed_vault.contract_address,
-            depositor: self.perpetuals_contract,
-            position_id: receiving_user.position_id,
-            quantized_amount: amount,
-            salt: salt,
-        );
-
-        self.validate_deposit_status(deposit_hash, expected_status: DepositStatus::PENDING(now));
-
-        assert_deposit_event_with_expected(
+        let deposit_event: deposit_events::Deposit = event_as::<
+            deposit_events::Deposit,
+        >(
             spied_event: last_event,
-            position_id: receiving_user.position_id,
-            depositing_address: self.perpetuals_contract,
-            collateral_id: vault.asset_id,
-            quantized_amount: amount,
-            unquantized_amount: amount,
-            deposit_request_hash: deposit_hash,
-            :salt,
+            expected_event_selector: @selector!("Deposit"),
+            expected_event_name: "Deposit",
         );
 
         DepositInfo {
             depositor: Account { address: self.perpetuals_contract, key_pair: KEY_PAIR_1() },
             position_id: receiving_user.position_id,
-            quantized_amount: amount,
+            quantized_amount: deposit_event.quantized_amount,
             salt,
             asset_id: vault.asset_id,
         }
@@ -1754,4 +1744,24 @@ fn get_synthetic_balance(assets: Span<AssetBalanceInfo>, asset_id: AssetId) -> B
         }
     }
     0_i64.into()
+}
+
+pub fn event_as<T, +starknet::Event<T>, +Drop<T>, +Debug<T>, +PartialEq<T>>(
+    spied_event: @(ContractAddress, Event),
+    expected_event_selector: @felt252,
+    expected_event_name: ByteArray,
+) -> T {
+    let (_, raw_event) = spied_event;
+    let mut data = raw_event.data.span();
+    let mut keys = raw_event.keys.span();
+
+    if keys.pop_front() != Option::Some(expected_event_selector) {
+        panic!(
+            "The expected event type '{expected_event_name}' does not match the actual event type",
+        );
+    }
+
+    let actual_event = starknet::Event::<T>::deserialize(ref :keys, ref :data);
+
+    return actual_event.unwrap();
 }

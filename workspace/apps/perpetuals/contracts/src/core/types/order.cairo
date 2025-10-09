@@ -48,14 +48,14 @@ fn validate_against_actual_amounts(
 
 
 #[derive(Copy, Drop, Hash, Serde)]
-// An order to buy or sell a synthetic asset for a collateral asset.
+// An order to buy or sell an asset for a collateral asset.
 // The base amount and quote amount have opposite signs.
 pub struct LimitOrder {
     pub source_position: PositionId,
     pub receive_position: PositionId,
-    // The synthetic asset to be bought or sold.
+    // The asset to be bought or sold.
     pub base_asset_id: AssetId,
-    // The amount of the synthetic asset to be bought or sold.
+    // The amount of the asset to be bought or sold.
     pub base_amount: i64,
     // The collateral asset.
     pub quote_asset_id: AssetId,

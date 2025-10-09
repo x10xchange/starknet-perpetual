@@ -44,7 +44,7 @@ fn test_deposit_into_protocol_vault_recieve_to_same_position() {
     let pending_vault_deposit = state
         .facade
         .deposit_into_vault(
-            vault: vault_config, amount: 1000, :depositing_user, receiving_user: depositing_user,
+            vault: vault_config, amount_to_invest: 1000, min_shares_to_receive: 500, :depositing_user, receiving_user: depositing_user,
         );
 
     state.facade.process_deposit(pending_vault_deposit);
@@ -135,7 +135,7 @@ fn test_deposit_into_protocol_vault_recieve_to_different_position() {
             state
                 .facade
                 .deposit_into_vault(
-                    vault: vault_config, amount: 1000, :depositing_user, :receiving_user,
+                    vault: vault_config, amount_to_invest: 1000, min_shares_to_receive: 500, :depositing_user, :receiving_user,
                 ),
         );
 
