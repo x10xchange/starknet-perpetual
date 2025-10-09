@@ -1,7 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::PositionId;
-use perpetuals::core::types::vault::ConvertPositionToVault;
 use starknet::ContractAddress;
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
@@ -121,14 +120,8 @@ pub trait ICore<TContractState> {
         liquidated_position_id: PositionId,
         vault_approval: LimitOrder,
         vault_signature: Signature,
+        liquidated_asset_id: AssetId,
         actual_shares_user: i64,
         actual_collateral_user: i64,
-    );
-
-    fn convert_position_to_vault(
-        ref self: TContractState,
-        operator_nonce: u64,
-        signature: Signature,
-        order: ConvertPositionToVault,
     );
 }

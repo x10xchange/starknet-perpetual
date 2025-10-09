@@ -1141,8 +1141,84 @@ pub mod Core {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
 
-            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
+            //TODO signature validation
 
+            self
+                ._execute_redeem(
+                    :order,
+                    :vault_approval,
+                    :vault_signature,
+                    :actual_shares_user,
+                    :actual_collateral_user,
+                    validate_user_fulfillment: true,
+                );
+        }
+
+        /// Converts a position to a vault position.
+        // TODO : add doc, add to the spec
+        fn convert_position_to_vault(
+            ref self: ContractState,
+            operator_nonce: u64,
+            signature: Signature,
+            order: ConvertPositionToVault,
+        ) {}
+
+        fn liquidate_vault_shares(
+            ref self: ContractState,
+            operator_nonce: u64,
+            liquidated_position_id: PositionId,
+            vault_approval: LimitOrder,
+            vault_signature: Span<felt252>,
+            liquidated_asset_id: AssetId,
+            actual_shares_user: i64,
+            actual_collateral_user: i64,
+        ) {
+            //     /// Validations - System State:
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+
+            assert(
+                self.positions.is_liquidatable(liquidated_position_id), 'POSITION_NOT_LIQUIDATABLE',
+            );
+
+            let user_order = LimitOrder {
+                source_position: liquidated_position_id,
+                receive_position: liquidated_position_id,
+                base_asset_id: liquidated_asset_id,
+                base_amount: -actual_shares_user,
+                quote_asset_id: self.assets.get_collateral_id(),
+                quote_amount: actual_collateral_user,
+                fee_asset_id: self.assets.get_collateral_id(),
+                fee_amount: 0_u64,
+                salt: Zero::zero(),
+                expiration: Time::now(),
+            };
+
+            self
+                ._execute_redeem(
+                    order: user_order,
+                    :vault_approval,
+                    :vault_signature,
+                    :actual_shares_user,
+                    :actual_collateral_user,
+                    validate_user_fulfillment: false,
+                );
+        }
+    }
+
+    #[generate_trait]
+    pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
+        fn _execute_redeem(
+            ref self: ContractState,
+            order: LimitOrder,
+            vault_approval: LimitOrder,
+            vault_signature: Signature,
+            actual_shares_user: i64,
+            actual_collateral_user: i64,
+            validate_user_fulfillment: bool,
+        ) {
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let vault_position_id: PositionId = vault_config.position_id.into();
             let redeeming_position_id = order.source_position;
             let receiving_position_id = order.receive_position;
@@ -1176,14 +1252,15 @@ pub mod Core {
             let amount_to_burn = actual_shares_user;
             let value_to_receive = actual_collateral_user;
 
-            self
-                ._update_fulfillment(
-                    position_id: redeeming_position_id,
-                    hash: order.get_message_hash(redeeming_position.get_owner_public_key()),
-                    order_base_amount: order.base_amount.try_into().unwrap(),
-                    actual_base_amount: actual_shares_user.try_into().unwrap(),
-                );
-
+            if (validate_user_fulfillment) {
+                self
+                    ._update_fulfillment(
+                        position_id: redeeming_position_id,
+                        hash: order.get_message_hash(redeeming_position.get_owner_public_key()),
+                        order_base_amount: order.base_amount.try_into().unwrap(),
+                        actual_base_amount: actual_shares_user.try_into().unwrap(),
+                    );
+            }
             self
                 ._update_fulfillment(
                     position_id: vault_position_id,
@@ -1303,35 +1380,6 @@ pub mod Core {
             };
         }
 
-        /// Converts a position to a vault position.
-        // TODO : add doc, add to the spec
-        fn convert_position_to_vault(
-            ref self: ContractState,
-            operator_nonce: u64,
-            signature: Signature,
-            order: ConvertPositionToVault,
-        ) {}
-
-        fn liquidate_vault_shares(
-            ref self: ContractState,
-            operator_nonce: u64,
-            liquidated_position_id: PositionId,
-            vault_approval: LimitOrder,
-            vault_signature: Span<felt252>,
-            actual_shares_user: i64,
-            actual_collateral_user: i64,
-        ) {
-            //     /// Validations - System State:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
-            
-        }
-    }
-
-    #[generate_trait]
-    pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
         fn _execute_trade(
             ref self: ContractState,
             signature_a: Signature,

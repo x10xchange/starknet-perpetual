@@ -1616,6 +1616,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 signature: array![0, 0].span(),
                 order: user_order,
                 vault_approval: vault_order,
+                vault_signature: array![0, 0].span(),
                 actual_shares_user: -actual_shares_user.try_into().unwrap(),
                 actual_collateral_user: actual_collateral_user.try_into().unwrap(),
             );
