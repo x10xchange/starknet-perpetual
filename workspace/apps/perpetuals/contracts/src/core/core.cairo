@@ -259,6 +259,10 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            if (self.vaults.is_vault(vault_position: position_id)) {
+                panic_with_felt252('VAULT_CANNOT_INITIATE_WITHDRAW');
+            }
+
             let position = self.positions.get_position_snapshot(:position_id);
             let collateral_id = self.assets.get_collateral_id();
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
@@ -402,6 +406,10 @@ pub mod Core {
                         || asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL,
                     'NOT_TRANSFERABLE_ASSET',
                 );
+            }
+
+            if (self.vaults.is_vault(vault_position: position_id)) {
+                panic_with_felt252('VAULT_CANNOT_INITIATE_TRANSFER');
             }
 
             self.positions.get_position_snapshot(position_id: recipient);
@@ -1083,9 +1091,6 @@ pub mod Core {
                     .apply_diff(position_id: vault_position_id, position_diff: vault_position_diff);
             }
 
-            println!("Minted shares: {}", minted_shares);
-            println!("Quantised minted shares: {}", quantised_minted_shares);
-
             let vault_token_erc20_dispatcher = IERC20Dispatcher {
                 contract_address: vault_share_config.token_contract.expect('NOT_ERC20'),
             };
@@ -1096,13 +1101,8 @@ pub mod Core {
                     amount: quantised_minted_shares.into(),
                 );
 
-            println!("Receiving position id: {}", receiving_position_id.value);
-
             let balance_of_perps_contract = vault_token_erc20_dispatcher
                 .balance_of(starknet::get_contract_address());
-
-            println!("address of perps contract: {:?}", starknet::get_contract_address());
-            println!("Balance of perps contract: {}", balance_of_perps_contract);
 
             self
                 .deposits
@@ -1317,6 +1317,8 @@ pub mod Core {
             self
                 .positions
                 .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
+
+            self._validate_asset_balance_is_not_negative(:position, asset_id: collateral_id);
         }
 
         fn _update_fulfillment(
@@ -1332,6 +1334,18 @@ pub mod Core {
                 total_amount <= order_base_amount.abs(), fulfillment_exceeded_err(:position_id),
             );
             fulfillment_entry.write(total_amount);
+        }
+
+        fn _validate_asset_balance_is_not_negative(
+            ref self: ContractState, position: StoragePath<Position>, asset_id: AssetId,
+        ) {
+            let balance = if (asset_id == self.assets.get_collateral_id()) {
+                self.positions.get_collateral_provisional_balance(position, None)
+            } else {
+                self.positions.get_synthetic_balance(:position, synthetic_id: asset_id)
+            };
+
+            assert(balance >= 0_i64.into(), 'ASSET_BALANCE_NEGATIVE');
         }
 
         fn _validate_order(ref self: ContractState, order: Order) {
