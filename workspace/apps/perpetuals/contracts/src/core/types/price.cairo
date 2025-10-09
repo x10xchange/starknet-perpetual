@@ -12,12 +12,12 @@ pub const PRICE_SCALE: u64 = 2_u64.pow(28);
 const MAX_PRICE: u64 = 2_u64.pow(56);
 
 // Oracle always sign the price with 18 decimal places.
-const ORACLE_SCALE: u128 = 10_u128.pow(18);
+pub const ORACLE_SCALE: u128 = 10_u128.pow(18);
 
 // StarkNet Perps scale is with 6 decimal places.
 // The value here is 10^6 and it must correspond to the quantum of the collateral so the minimal
 // collateral unit is 10^-6 USD.
-const SN_PERPS_SCALE: u128 = 10_u128.pow(6);
+pub const SN_PERPS_SCALE: u128 = 10_u128.pow(6);
 
 // The ratio between the StarkNet Perps scale and the Oracle scale.
 const ORACLE_SCALE_SN_PERPS_RATIO: u128 = ORACLE_SCALE / SN_PERPS_SCALE;
