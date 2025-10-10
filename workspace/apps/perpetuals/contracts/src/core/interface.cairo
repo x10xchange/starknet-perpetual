@@ -1,5 +1,5 @@
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::order::Order;
+use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
 use starkware_utils::signature::stark::Signature;
@@ -40,6 +40,7 @@ pub trait ICore<TContractState> {
     fn transfer_request(
         ref self: TContractState,
         signature: Signature,
+        asset_id: AssetId,
         recipient: PositionId,
         position_id: PositionId,
         amount: u64,
@@ -49,6 +50,7 @@ pub trait ICore<TContractState> {
     fn transfer(
         ref self: TContractState,
         operator_nonce: u64,
+        asset_id: AssetId,
         recipient: PositionId,
         position_id: PositionId,
         amount: u64,
@@ -95,5 +97,31 @@ pub trait ICore<TContractState> {
         position_id_b: PositionId,
         base_asset_id: AssetId,
         base_amount_a: i64,
+    );
+
+    fn invest_in_vault(
+        ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
+    );
+
+    fn redeem_from_vault(
+        ref self: TContractState,
+        operator_nonce: u64,
+        signature: Signature,
+        order: LimitOrder,
+        vault_approval: LimitOrder,
+        vault_signature: Signature,
+        actual_shares_user: i64,
+        actual_collateral_user: i64,
+    );
+
+    fn liquidate_vault_shares(
+        ref self: TContractState,
+        operator_nonce: u64,
+        liquidated_position_id: PositionId,
+        vault_approval: LimitOrder,
+        vault_signature: Signature,
+        liquidated_asset_id: AssetId,
+        actual_shares_user: i64,
+        actual_collateral_user: i64,
     );
 }

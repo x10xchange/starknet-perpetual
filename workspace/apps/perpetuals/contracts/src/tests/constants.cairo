@@ -55,7 +55,7 @@ pub const MAX_ORACLE_PRICE_VALIDITY: TimeDelta = TimeDelta { seconds: 10 * MINUT
 pub const CANCEL_DELAY: TimeDelta = TimeDelta { seconds: WEEK };
 pub const MAX_FUNDING_RATE: u32 = 35792; // Which is ~3% in an hour.
 pub const COLLATERAL_QUORUM: u8 = 0;
-pub const COLLATERAL_QUANTUM: u64 = 1_000;
+pub const COLLATERAL_QUANTUM: u64 = 1;
 pub const SYNTHETIC_QUORUM: u8 = 1;
 pub const SYNTHETIC_RESOLUTION_FACTOR: u64 = 1_000_000_000;
 pub const INITIAL_SUPPLY: u256 = 10_000_000_000_000_000;
@@ -91,6 +91,17 @@ pub fn SYNTHETIC_ASSET_ID_2() -> AssetId {
 }
 pub fn SYNTHETIC_ASSET_ID_3() -> AssetId {
     AssetIdTrait::new(value: selector!("SYNTHETIC_ASSET_ID_3"))
+}
+
+pub fn VAULT_SHARE_COLLATERAL_1_ID() -> AssetId {
+    AssetIdTrait::new(value: selector!("VS_1"))
+}
+
+pub fn VAULT_SHARE_COLLATERAL_1_NAME() -> ByteArray {
+    "VS_1"
+}
+pub fn VAULT_SHARE_COLLATERAL_1_SYMBOL() -> ByteArray {
+    "VS1"
 }
 
 

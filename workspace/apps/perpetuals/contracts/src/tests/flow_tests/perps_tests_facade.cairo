@@ -1,5 +1,10 @@
+use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
+use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
+use core::num::traits::WideMul;
+use openzeppelin::interfaces::erc20::IERC20Dispatcher;
+use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
@@ -16,26 +21,28 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
-use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
-use perpetuals::core::types::order::Order;
+use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::core::types::price::{Price, SignedPrice};
 use perpetuals::core::types::transfer::TransferArgs;
+use perpetuals::core::types::vault::ConvertPositionToVault;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
-    assert_add_synthetic_event_with_expected, assert_deactivate_synthetic_asset_event_with_expected,
-    assert_deleverage_event_with_expected, assert_deposit_canceled_event_with_expected,
-    assert_deposit_event_with_expected, assert_deposit_processed_event_with_expected,
-    assert_liquidate_event_with_expected, assert_trade_event_with_expected,
-    assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
+    assert_add_spot_event_with_expected, assert_add_synthetic_event_with_expected,
+    assert_deactivate_synthetic_asset_event_with_expected, assert_deleverage_event_with_expected,
+    assert_deposit_canceled_event_with_expected, assert_deposit_event_with_expected,
+    assert_deposit_processed_event_with_expected, assert_liquidate_event_with_expected,
+    assert_trade_event_with_expected, assert_transfer_event_with_expected,
+    assert_transfer_request_event_with_expected, assert_withdraw_event_with_expected,
+    assert_withdraw_request_event_with_expected,
 };
-use perpetuals::tests::test_utils::validate_balance;
+use perpetuals::tests::test_utils::{deploy_account, validate_balance};
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
@@ -44,23 +51,83 @@ use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::{DAY, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
+use starkware_utils::constants::{DAY, MAX_U128, MINUTE, TEN_POW_12, TWO_POW_32, TWO_POW_40};
 use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::components::deposit::events as deposit_events;
+use crate::core::components::vault::protocol_vault::IProtocolVaultDispatcher;
+use crate::core::components::vault::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
+use crate::core::core::Core::Event::DepositEvent;
+use crate::core::types::funding::FundingIndex;
+use crate::tests::constants::KEY_PAIR_1;
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
 const ORACLE_SECRET_KEY_OFFSET: felt252 = 1000;
 
+#[derive(Drop, Copy)]
+pub struct VaultState {
+    pub position_id: PositionId,
+    pub asset_id: AssetId,
+    pub deployed_vault: DeployedVault,
+    pub asset_info: SyntheticInfo,
+}
+
+#[generate_trait]
+pub impl VaultStateImpl of VaultStateTrait {}
+
+#[derive(Drop, Copy)]
+pub struct DeployedVault {
+    pub contract_address: ContractAddress,
+    pub erc20: IERC20Dispatcher,
+    pub erc4626: IERC4626Dispatcher,
+    pub protocol_vault: IProtocolVaultDispatcher,
+    pub owning_account: Account,
+}
+
+#[generate_trait]
+pub impl DeployedVaultImp of DeployedVaultTrait {}
+
+pub fn deploy_protocol_vault_with_dispatcher(
+    perps_address: ContractAddress, vault_position_id: PositionId, usdc_token_state: TokenState,
+) -> DeployedVault {
+    let stark_key_pair = StarkCurveKeyPairImpl::generate();
+    let owning_account_address = deploy_account(stark_key_pair);
+    let owning_account = Account { address: owning_account_address, key_pair: stark_key_pair };
+    let mut calldata = ArrayTrait::new();
+    let name: ByteArray = "Perpetuals Protocol Vault";
+    let symbol: ByteArray = "PPV";
+    name.serialize(ref calldata);
+    symbol.serialize(ref calldata);
+    usdc_token_state.address.serialize(ref calldata);
+    perps_address.serialize(ref calldata);
+    vault_position_id.value.serialize(ref calldata);
+    owning_account_address.serialize(ref calldata);
+    let contract = snforge_std::declare("ProtocolVault").unwrap().contract_class();
+    let output = contract.deploy(@calldata);
+    if output.is_err() {
+        panic(output.unwrap_err());
+    }
+    let (contract_address, _) = output.unwrap();
+    let erc20 = IERC20Dispatcher { contract_address: contract_address };
+    let erc4626 = IERC4626Dispatcher { contract_address: contract_address };
+    let protocol_vault = IProtocolVaultDispatcher { contract_address: contract_address };
+    DeployedVault {
+        contract_address: contract_address, erc20, erc4626, protocol_vault, owning_account,
+    }
+}
+
+#[derive(Copy, Drop)]
 pub struct DepositInfo {
     depositor: Account,
     position_id: PositionId,
     quantized_amount: u64,
     salt: felt252,
+    asset_id: AssetId,
 }
 
 #[derive(Copy, Drop)]
@@ -263,6 +330,28 @@ pub impl SyntheticInfoImpl of SyntheticInfoTrait {
         }
     }
 
+    fn new_with_resolution(
+        asset_name: felt252, risk_factor_data: RiskFactorTiers, oracles_len: u8, resolution: u64,
+    ) -> SyntheticInfo {
+        let mut oracles = array![];
+        for i in 1..oracles_len + 1 {
+            oracles
+                .append(
+                    OracleTrait::new(
+                        secret_key: i.into() + ORACLE_SECRET_KEY_OFFSET, name: i.into(),
+                    ),
+                );
+        }
+
+        SyntheticInfo {
+            asset_name,
+            asset_id: AssetIdTrait::new(value: asset_name),
+            risk_factor_data,
+            oracles: oracles.span(),
+            resolution_factor: resolution,
+        }
+    }
+
     fn sign_price(self: @SyntheticInfo, oracle_price: u128) -> Span<SignedPrice> {
         let timestamp = Time::now().seconds.try_into().unwrap();
         let mut signed_prices = array![];
@@ -290,6 +379,7 @@ pub struct PerpsTestsFacade {
     pub operator: Account,
     pub event_info: EventSpy,
     salt_gen: felt252,
+    pub registered_spots: Array<(AssetId, ContractAddress)>,
 }
 
 #[generate_trait]
@@ -300,6 +390,21 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
         let events = self.event_info.get_events().emitted_by(contract_address).events;
         events[events.len() - 1]
     }
+
+    fn get_last_events(
+        ref self: PerpsTestsFacade, contract_address: ContractAddress, count: u32,
+    ) -> Span<@Event> {
+        let events = self.event_info.get_events().emitted_by(contract_address).events;
+        let mut a: Array<@Event> = ArrayTrait::new();
+        for i in 0..count {
+            let x = count - i;
+            let offset = events.len() - x;
+            let (_, event) = events.at(offset);
+            a.append(event);
+        }
+        a.span()
+    }
+
     fn generate_salt(ref self: PerpsTestsFacade) -> felt252 {
         self.salt_gen += 1;
         self.salt_gen
@@ -363,9 +468,106 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             operator: perpetuals_config.operator,
             event_info: snforge_std::spy_events(),
             salt_gen: 0,
+            registered_spots: array![(COLLATERAL_ASSET_ID(), token_state.address)],
         };
         perpetual_wrapper.set_roles();
         perpetual_wrapper
+    }
+
+    fn find_contract_for_asset_id(ref self: PerpsTestsFacade, asset_id: AssetId) -> TokenState {
+        let mut i = 0;
+        while i < self.registered_spots.len() {
+            let (registered_asset_id, contract_address) = self.registered_spots[i];
+            if *registered_asset_id == asset_id {
+                return TokenState { address: *contract_address, owner: self.token_state.owner };
+            }
+            i += 1;
+        }
+        panic!("Asset ID not found");
+    }
+
+    fn register_vault_share_spot_asset(
+        ref self: PerpsTestsFacade, position_vault: PositionId,
+    ) -> VaultState {
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        let vault = deploy_protocol_vault_with_dispatcher(
+            perps_address: self.perpetuals_contract,
+            vault_position_id: position_vault,
+            usdc_token_state: self.token_state,
+        );
+
+        let risk_factor_first_tier_boundary = MAX_U128;
+        let risk_factor_tier_size = 1;
+        let risk_factor_1 = array![100].span();
+
+        let asset_info = SyntheticInfoTrait::new_with_resolution(
+            asset_name: 'VS_1',
+            risk_factor_data: RiskFactorTiers {
+                tiers: risk_factor_1,
+                first_tier_boundary: risk_factor_first_tier_boundary,
+                tier_size: risk_factor_tier_size,
+            },
+            oracles_len: 1,
+            resolution: 1000000,
+        );
+
+        let asset_id = asset_info.asset_id;
+        let assets_dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+
+        self.set_app_governor_as_caller();
+        assets_dispatcher
+            .add_vault_collateral_asset(
+                asset_id,
+                erc20_contract_address: vault.contract_address,
+                quantum: 1,
+                resolution_factor: asset_info.resolution_factor,
+                risk_factor_tiers: risk_factor_1,
+                :risk_factor_first_tier_boundary,
+                :risk_factor_tier_size,
+                quorum: asset_info.oracles.len().try_into().unwrap(),
+            );
+
+        assert_add_spot_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            asset_id: asset_info.asset_id,
+            risk_factor_tiers: asset_info.risk_factor_data.tiers,
+            risk_factor_first_tier_boundary: asset_info.risk_factor_data.first_tier_boundary,
+            risk_factor_tier_size: asset_info.risk_factor_data.tier_size,
+            resolution_factor: asset_info.resolution_factor,
+            quorum: asset_info.oracles.len().try_into().unwrap(),
+            contract_address: vault.contract_address,
+        );
+
+        for oracle in asset_info.oracles {
+            self.set_app_governor_as_caller();
+            assets_dispatcher
+                .add_oracle_to_asset(
+                    asset_info.asset_id,
+                    *oracle.key_pair.public_key,
+                    *oracle.name,
+                    asset_info.asset_name,
+                );
+        }
+
+        let operator_nonce = self.get_nonce();
+
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+            .activate_vault(
+                operator_nonce: operator_nonce,
+                order: ConvertPositionToVault {
+                    position_to_convert: position_vault,
+                    vault_asset_id: asset_id,
+                    expiration: Time::now(),
+                },
+            );
+
+        self.registered_spots.append((asset_id, vault.contract_address));
+        return VaultState {
+            position_id: position_vault, asset_id, deployed_vault: vault, asset_info,
+        };
     }
 
     fn new_position(
@@ -377,7 +579,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IPositionsDispatcher { contract_address: self.perpetuals_contract }
-            .new_position(:operator_nonce, :position_id, :owner_public_key, :owner_account);
+            .new_position(
+                :operator_nonce,
+                :position_id,
+                :owner_public_key,
+                :owner_account,
+                owner_protection_enabled: true,
+            );
     }
 
     fn price_tick(ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, price: u128) {
@@ -403,14 +611,36 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         position_id: PositionId,
         quantized_amount: u64,
     ) -> DepositInfo {
+        self._deposit(:depositor, :position_id, :quantized_amount, asset_id: self.collateral_id)
+    }
+
+    fn deposit_spot(
+        ref self: PerpsTestsFacade,
+        depositor: Account,
+        asset_id: AssetId,
+        position_id: PositionId,
+        quantized_amount: u64,
+    ) -> DepositInfo {
+        self._deposit(:depositor, :position_id, :quantized_amount, :asset_id)
+    }
+
+    fn _deposit(
+        ref self: PerpsTestsFacade,
+        depositor: Account,
+        position_id: PositionId,
+        quantized_amount: u64,
+        asset_id: AssetId,
+    ) -> DepositInfo {
         let unquantized_amount = quantized_amount * self.collateral_quantum;
         let address = depositor.address;
-        let user_balance_before = self.token_state.balance_of(account: address);
-        let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
+
+        let token_state = self.find_contract_for_asset_id(:asset_id);
+
+        let user_balance_before = token_state.balance_of(account: address);
+        let contract_balance_before = token_state.balance_of(self.perpetuals_contract);
         let now = Time::now();
 
-        self
-            .token_state
+        token_state
             .approve(
                 owner: address,
                 spender: self.perpetuals_contract,
@@ -420,21 +650,21 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(:position_id, :quantized_amount, :salt);
+            .deposit(asset_id: asset_id, :position_id, :quantized_amount, :salt);
 
         validate_balance(
-            token_state: self.token_state,
+            token_state: token_state,
             :address,
             expected_balance: user_balance_before - unquantized_amount.into(),
         );
         validate_balance(
-            token_state: self.token_state,
+            token_state: token_state,
             address: self.perpetuals_contract,
             expected_balance: contract_balance_before + unquantized_amount.into(),
         );
 
         let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
+            token_address: token_state.address,
             depositor: address,
             :position_id,
             :quantized_amount,
@@ -446,26 +676,27 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
             depositing_address: address,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
             :salt,
         );
 
-        DepositInfo { depositor, position_id, quantized_amount, salt }
+        DepositInfo { depositor, position_id, quantized_amount, salt, asset_id }
     }
 
     fn cancel_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
-        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
-        let user_balance_before = self.token_state.balance_of(depositor.address);
-        let contract_balance_before = self.token_state.balance_of(self.perpetuals_contract);
+        let DepositInfo { depositor, position_id, quantized_amount, salt, asset_id } = deposit_info;
+        let token_state = self.find_contract_for_asset_id(:asset_id);
+        let user_balance_before = token_state.balance_of(depositor.address);
+        let contract_balance_before = token_state.balance_of(self.perpetuals_contract);
 
         depositor.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .cancel_deposit(:position_id, :quantized_amount, :salt);
+            .cancel_deposit(asset_id: asset_id, :position_id, :quantized_amount, :salt);
         let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
+            token_address: token_state.address,
             depositor: depositor.address,
             :position_id,
             :quantized_amount,
@@ -475,12 +706,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let unquantized_amount = quantized_amount * self.collateral_quantum;
 
         validate_balance(
-            token_state: self.token_state,
+            token_state: token_state,
             address: depositor.address,
             expected_balance: user_balance_before + unquantized_amount.into(),
         );
         validate_balance(
-            token_state: self.token_state,
+            token_state: token_state,
             address: self.perpetuals_contract,
             expected_balance: contract_balance_before - unquantized_amount.into(),
         );
@@ -491,7 +722,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
             depositing_address: depositor.address,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :quantized_amount,
             :unquantized_amount,
             deposit_request_hash: deposit_hash,
@@ -500,8 +731,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn process_deposit(ref self: PerpsTestsFacade, deposit_info: DepositInfo) {
-        let DepositInfo { depositor, position_id, quantized_amount, salt } = deposit_info;
-        let collateral_balance_before = self.get_position_collateral_balance(position_id);
+        let DepositInfo { depositor, position_id, quantized_amount, salt, asset_id } = deposit_info;
+        let collateral_balance_before = if (asset_id == self.collateral_id) {
+            self.get_position_collateral_balance(position_id)
+        } else {
+            self.get_position_asset_balance(position_id, asset_id)
+        };
+
+        let token_state = self.find_contract_for_asset_id(:asset_id);
 
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -509,17 +746,27 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .process_deposit(
                 :operator_nonce,
                 depositor: depositor.address,
+                asset_id: asset_id,
                 :position_id,
                 :quantized_amount,
                 :salt,
             );
-        self
-            .validate_collateral_balance(
-                :position_id, expected_balance: collateral_balance_before + quantized_amount.into(),
-            );
+
+        if (asset_id == self.collateral_id) {
+            self
+                .validate_collateral_balance(
+                    :position_id,
+                    expected_balance: collateral_balance_before + quantized_amount.into(),
+                );
+        } else {
+            self
+                .validate_asset_balance(
+                    :position_id, asset_id: asset_id, expected_balance: quantized_amount.into(),
+                );
+        }
 
         let deposit_hash = deposit_hash(
-            token_address: self.token_state.address,
+            token_address: token_state.address,
             depositor: depositor.address,
             :position_id,
             :quantized_amount,
@@ -532,7 +779,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             :position_id,
             depositing_address: depositor.address,
-            collateral_id: self.collateral_id,
+            collateral_id: asset_id,
             :quantized_amount,
             unquantized_amount: quantized_amount * self.collateral_quantum,
             deposit_request_hash: deposit_hash,
@@ -646,6 +893,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer_request(
                 signature,
+                asset_id: self.collateral_id,
                 recipient: recipient.position_id,
                 position_id: sender.position_id,
                 :amount,
@@ -688,6 +936,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .transfer(
                 :operator_nonce,
+                asset_id: self.collateral_id,
                 recipient: recipient.position_id,
                 position_id: position_id,
                 amount: amount,
@@ -765,13 +1014,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_position_assets(position_id: order_a.position_id);
         let user_a_collateral_balance_before = user_a_balance_before.collateral_balance;
         let user_a_synthetic_balance_before = get_synthetic_balance(
-            assets: user_a_balance_before.synthetics, :asset_id,
+            assets: user_a_balance_before.assets, :asset_id,
         );
         let user_b_balance_before = dispatcher
             .get_position_assets(position_id: order_b.position_id);
         let user_b_collateral_balance_before = user_b_balance_before.collateral_balance;
         let user_b_synthetic_balance_before = get_synthetic_balance(
-            assets: user_b_balance_before.synthetics, :asset_id,
+            assets: user_b_balance_before.assets, :asset_id,
         );
         let fee_position_balance_before = dispatcher
             .get_position_assets(position_id: FEE_POSITION)
@@ -876,16 +1125,17 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         settlement: Settlement,
     ) -> (PositionData, PositionData) {
         let mut new_synthetics_a = ArrayTrait::new();
-        for synthetic in position_data_a.synthetics {
+        for synthetic in position_data_a.assets {
             if *synthetic.id == asset_id {
                 let new_balance = *synthetic.balance + settlement.actual_amount_base_a.into();
                 new_synthetics_a
                     .append(
-                        SyntheticAsset {
+                        AssetBalanceInfo {
                             id: *synthetic.id,
                             balance: new_balance,
                             price: *synthetic.price,
                             risk_factor: *synthetic.risk_factor,
+                            cached_funding_index: FundingIndex { value: 0 },
                         },
                     );
             } else {
@@ -894,16 +1144,17 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         }
 
         let mut new_synthetics_b = ArrayTrait::new();
-        for synthetic in position_data_b.synthetics {
+        for synthetic in position_data_b.assets {
             if *synthetic.id == asset_id {
                 let new_balance = *synthetic.balance - settlement.actual_amount_base_a.into();
                 new_synthetics_b
                     .append(
-                        SyntheticAsset {
+                        AssetBalanceInfo {
                             id: *synthetic.id,
                             balance: new_balance,
                             price: *synthetic.price,
                             risk_factor: *synthetic.risk_factor,
+                            cached_funding_index: FundingIndex { value: 0 },
                         },
                     );
             } else {
@@ -916,13 +1167,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 collateral_balance: position_data_a.collateral_balance
                     + settlement.actual_amount_quote_a.into()
                     - settlement.actual_fee_a.into(),
-                synthetics: new_synthetics_a.span(),
+                assets: new_synthetics_a.span(),
             },
             PositionData {
                 collateral_balance: position_data_b.collateral_balance
                     - settlement.actual_amount_quote_a.into()
                     - settlement.actual_fee_b.into(),
-                synthetics: new_synthetics_b.span(),
+                assets: new_synthetics_b.span(),
             },
         )
     }
@@ -1001,7 +1252,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                     :position_id, expected_balance: position_data.collateral_balance,
                 );
 
-            for synthetic in position_data.synthetics {
+            for synthetic in position_data.assets {
                 self
                     .validate_synthetic_balance(
                         :position_id, asset_id: *synthetic.id, expected_balance: *synthetic.balance,
@@ -1028,13 +1279,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_position_assets(position_id: liquidated_user.position_id);
         let liquidated_collateral_balance_before = liquidated_balance_before.collateral_balance;
         let liquidated_synthetic_balance_before = get_synthetic_balance(
-            assets: liquidated_balance_before.synthetics, :asset_id,
+            assets: liquidated_balance_before.assets, :asset_id,
         );
         let liquidator_balance_before = dispatcher
             .get_position_assets(position_id: liquidator_order.position_id);
         let liquidator_collateral_balance_before = liquidator_balance_before.collateral_balance;
         let liquidator_synthetic_balance_before = get_synthetic_balance(
-            assets: liquidator_balance_before.synthetics, :asset_id,
+            assets: liquidator_balance_before.assets, :asset_id,
         );
         let fee_position_balance_before = dispatcher
             .get_position_assets(position_id: FEE_POSITION)
@@ -1131,13 +1382,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_position_assets(position_id: deleveraged_user.position_id);
         let deleveraged_collateral_balance_before = deleveraged_balance_before.collateral_balance;
         let deleveraged_synthetic_balance_before = get_synthetic_balance(
-            assets: deleveraged_balance_before.synthetics, asset_id: base_asset_id,
+            assets: deleveraged_balance_before.assets, asset_id: base_asset_id,
         );
         let deleverager_balance_before = dispatcher
             .get_position_assets(position_id: deleverager_user.position_id);
         let deleverager_collateral_balance_before = deleverager_balance_before.collateral_balance;
         let deleverager_synthetic_balance_before = get_synthetic_balance(
-            assets: deleverager_balance_before.synthetics, asset_id: base_asset_id,
+            assets: deleverager_balance_before.assets, asset_id: base_asset_id,
         );
 
         let operator_nonce = self.get_nonce();
@@ -1217,7 +1468,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         assert_eq!(
-            dispatcher.get_synthetic_config(synthetic_id: *synthetic_info.asset_id).status,
+            dispatcher.get_asset_config(synthetic_id: *synthetic_info.asset_id).status,
             AssetStatus::PENDING,
         );
 
@@ -1243,7 +1494,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             asset_id: synthetic_id,
         );
-        assert_eq!(dispatcher.get_synthetic_config(:synthetic_id).status, AssetStatus::INACTIVE);
+        assert_eq!(dispatcher.get_asset_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
     fn reduce_inactive_asset_position(
@@ -1265,15 +1516,15 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IAssetsDispatcher { contract_address: self.perpetuals_contract }
-            .funding_tick(:operator_nonce, :funding_ticks);
+            .funding_tick(:operator_nonce, :funding_ticks, timestamp: Time::now());
     }
 
-    fn get_position_synthetic_balance(
+    fn get_position_asset_balance(
         self: @PerpsTestsFacade, position_id: PositionId, synthetic_id: AssetId,
     ) -> Balance {
         let assets = IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_assets(position_id);
-        get_synthetic_balance(assets: assets.synthetics, asset_id: synthetic_id)
+        get_synthetic_balance(assets: assets.assets, asset_id: synthetic_id)
     }
 
     fn get_position_collateral_balance(
@@ -1284,9 +1535,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .collateral_balance
     }
 
-    fn get_synthetic_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
+    fn get_asset_price(self: @PerpsTestsFacade, synthetic_id: AssetId) -> Price {
         IAssetsDispatcher { contract_address: *self.perpetuals_contract }
-            .get_synthetic_timely_data(synthetic_id: synthetic_id)
+            .get_timely_data(synthetic_id: synthetic_id)
             .price
     }
 
@@ -1303,7 +1554,119 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .is_liquidatable(position_id)
     }
-    /// TODO: add all the necessary functions to interact with the contract.
+
+    fn tv_tr_of_position(self: @PerpsTestsFacade, position_id: PositionId) -> PositionTVTR {
+        IPositionsDispatcher { contract_address: *self.perpetuals_contract }
+            .get_position_tv_tr(position_id)
+    }
+
+    fn preview_vault_deposit(ref self: PerpsTestsFacade, vault: VaultState, amount: u64) -> u64 {
+        let preview_result = vault
+            .deployed_vault
+            .erc4626
+            .preview_deposit(assets: amount.wide_mul(self.collateral_quantum).into());
+
+        return (preview_result / self.collateral_quantum.into()).try_into().unwrap();
+    }
+
+    fn redeem_from_vault(
+        ref self: PerpsTestsFacade,
+        vault: VaultState,
+        withdrawing_user: User,
+        receiving_user: User,
+        shares_to_burn_user: u64,
+        value_of_shares_user: u64,
+        shares_to_burn_vault: u64,
+        value_of_shares_vault: u64,
+        actual_shares_user: u64,
+        actual_collateral_user: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        let user_order = LimitOrder {
+            source_position: withdrawing_user.position_id,
+            receive_position: receiving_user.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: -shares_to_burn_user.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: value_of_shares_user.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        let vault_order = LimitOrder {
+            source_position: vault.position_id,
+            receive_position: vault.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: shares_to_burn_vault.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -value_of_shares_vault.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .redeem_from_vault(
+                :operator_nonce,
+                signature: array![0, 0].span(),
+                order: user_order,
+                vault_approval: vault_order,
+                vault_signature: array![0, 0].span(),
+                actual_shares_user: -actual_shares_user.try_into().unwrap(),
+                actual_collateral_user: actual_collateral_user.try_into().unwrap(),
+            );
+    }
+
+    fn deposit_into_vault(
+        ref self: PerpsTestsFacade,
+        vault: VaultState,
+        amount_to_invest: u64,
+        min_shares_to_receive: u64,
+        depositing_user: User,
+        receiving_user: User,
+    ) -> DepositInfo {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        let salt = self.generate_salt();
+
+        let order = LimitOrder {
+            source_position: depositing_user.position_id,
+            receive_position: receiving_user.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: min_shares_to_receive.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -(amount_to_invest.try_into().unwrap()),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt,
+        };
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .invest_in_vault(:operator_nonce, signature: array![0, 0].span(), order: order);
+
+        let last_event = self.get_last_event(contract_address: self.perpetuals_contract);
+        let deposit_event: deposit_events::Deposit = event_as::<
+            deposit_events::Deposit,
+        >(
+            spied_event: last_event,
+            expected_event_selector: @selector!("Deposit"),
+            expected_event_name: "Deposit",
+        );
+
+        DepositInfo {
+            depositor: Account { address: self.perpetuals_contract, key_pair: KEY_PAIR_1() },
+            position_id: receiving_user.position_id,
+            quantized_amount: deposit_event.quantized_amount,
+            salt,
+            asset_id: vault.asset_id,
+        }
+    }
 }
 
 
@@ -1331,6 +1694,15 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         assert_eq!(self.get_position_collateral_balance(position_id), expected_balance);
     }
 
+    fn validate_asset_balance(
+        self: @PerpsTestsFacade,
+        position_id: PositionId,
+        asset_id: AssetId,
+        expected_balance: Balance,
+    ) {
+        assert_eq!(self.get_position_asset_balance(position_id, asset_id), expected_balance);
+    }
+
     fn validate_synthetic_balance(
         self: @PerpsTestsFacade,
         position_id: PositionId,
@@ -1339,10 +1711,10 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
     ) {
         let synthetic_assets = IPositionsDispatcher { contract_address: *self.perpetuals_contract }
             .get_position_assets(:position_id)
-            .synthetics;
-        let synthetic_balance = get_synthetic_balance(assets: synthetic_assets, :asset_id);
+            .assets;
+        let asset_balances = get_synthetic_balance(assets: synthetic_assets, :asset_id);
 
-        assert_eq!(synthetic_balance, expected_balance);
+        assert_eq!(asset_balances, expected_balance);
     }
 
     fn validate_total_value(
@@ -1366,11 +1738,31 @@ pub fn advance_time(seconds: u64) {
     start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
 }
 
-fn get_synthetic_balance(assets: Span<SyntheticAsset>, asset_id: AssetId) -> Balance {
+fn get_synthetic_balance(assets: Span<AssetBalanceInfo>, asset_id: AssetId) -> Balance {
     for asset in assets {
         if asset.id == @asset_id {
             return asset.balance.clone();
         }
     }
     0_i64.into()
+}
+
+pub fn event_as<T, +starknet::Event<T>, +Drop<T>, +Debug<T>, +PartialEq<T>>(
+    spied_event: @(ContractAddress, Event),
+    expected_event_selector: @felt252,
+    expected_event_name: ByteArray,
+) -> T {
+    let (_, raw_event) = spied_event;
+    let mut data = raw_event.data.span();
+    let mut keys = raw_event.keys.span();
+
+    if keys.pop_front() != Option::Some(expected_event_selector) {
+        panic!(
+            "The expected event type '{expected_event_name}' does not match the actual event type",
+        );
+    }
+
+    let actual_event = starknet::Event::<T>::deserialize(ref :keys, ref :data);
+
+    return actual_event.unwrap();
 }

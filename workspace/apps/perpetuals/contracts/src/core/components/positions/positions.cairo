@@ -18,12 +18,12 @@ pub(crate) mod Positions {
     use perpetuals::core::components::positions::interface::IPositions;
     use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::synthetic::SyntheticAsset;
+    use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
         POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
-        PositionTrait, SyntheticBalance,
+        PositionTrait, AssetBalance,
     };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
@@ -83,8 +83,8 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
             let position = self.get_position_snapshot(:position_id);
-            let (provisional_delta, synthetics) = self
-                .derive_funding_delta_and_unchanged_synthetics(
+            let (provisional_delta, assets) = self
+                .derive_funding_delta_and_unchanged_assets(
                     :position, position_diff: Default::default(),
                 );
             let collateral_balance = self
@@ -92,7 +92,7 @@ pub(crate) mod Positions {
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
 
-            PositionData { synthetics, collateral_balance }
+            PositionData { assets, collateral_balance }
         }
 
         /// This function is primarily used as a view function—knowing the total value and/or
@@ -101,8 +101,8 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionTVTR {
             let position = self.get_position_snapshot(:position_id);
-            let (provisional_delta, unchanged_synthetics) = self
-                .derive_funding_delta_and_unchanged_synthetics(
+            let (provisional_delta, unchanged_assets) = self
+                .derive_funding_delta_and_unchanged_assets(
                     :position, position_diff: Default::default(),
                 );
             let collateral_balance = self
@@ -110,7 +110,7 @@ pub(crate) mod Positions {
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
 
-            calculate_position_tvtr(:unchanged_synthetics, :collateral_balance)
+            calculate_position_tvtr(:unchanged_assets, :collateral_balance)
         }
 
         /// This function is mostly used as view function - it's better to use the
@@ -163,6 +163,7 @@ pub(crate) mod Positions {
             position_id: PositionId,
             owner_public_key: PublicKey,
             owner_account: ContractAddress,
+            owner_protection_enabled: bool,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
@@ -172,6 +173,7 @@ pub(crate) mod Positions {
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
+            position.owner_protection_enabled.write(owner_protection_enabled);
             if owner_account.is_non_zero() {
                 position.owner_account.write(Option::Some(owner_account));
             }
@@ -183,6 +185,15 @@ pub(crate) mod Positions {
                         owner_account: owner_account,
                     },
                 );
+        }
+
+        fn enable_owner_protection(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            position_id: PositionId,
+            signature: Signature,
+        ) {
+            panic_with_felt252('TODO')
         }
 
         /// Registers a request to set the position's owner_account.
@@ -405,10 +416,10 @@ pub(crate) mod Positions {
             let position_mut = self.get_position_mut(:position_id);
             position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
 
-            if let Option::Some((synthetic_id, synthetic_diff)) = position_diff.synthetic_diff {
+            if let Option::Some((synthetic_id, asset_diff)) = position_diff.asset_diff {
                 self
                     ._update_synthetic_balance_and_funding(
-                        position: position_mut, :synthetic_id, :synthetic_diff,
+                        position: position_mut, :synthetic_id, :asset_diff,
                     );
             };
         }
@@ -436,7 +447,7 @@ pub(crate) mod Positions {
             position: StoragePath<Position>,
             synthetic_id: AssetId,
         ) -> Balance {
-            if let Option::Some(synthetic) = position.synthetic_balance.read(synthetic_id) {
+            if let Option::Some(synthetic) = position.asset_balances.read(synthetic_id) {
                 synthetic.balance
             } else {
                 0_i64.into()
@@ -454,7 +465,7 @@ pub(crate) mod Positions {
                 return collateral_provisional_balance + provisional_delta;
             }
 
-            for (synthetic_id, synthetic) in position.synthetic_balance {
+            for (synthetic_id, synthetic) in position.asset_balances {
                 if synthetic.balance.is_zero() {
                     continue;
                 }
@@ -471,22 +482,22 @@ pub(crate) mod Positions {
         /// Returns all assets from the position, excluding assets with zero balance
         /// and those included in `position_diff`.
         /// Also calculates the provisional funding delta for the position.
-        fn derive_funding_delta_and_unchanged_synthetics(
+        fn derive_funding_delta_and_unchanged_assets(
             self: @ComponentState<TContractState>,
             position: StoragePath<Position>,
             position_diff: PositionDiff,
-        ) -> (Balance, Span<SyntheticAsset>) {
+        ) -> (Balance, Span<AssetBalanceInfo>) {
             let assets = get_dep_component!(self, Assets);
-            let mut unchanged_synthetics = array![];
+            let mut unchanged_assets = array![];
 
-            let synthetic_diff_id = if let Option::Some((id, _)) = position_diff.synthetic_diff {
+            let synthetic_diff_id = if let Option::Some((id, _)) = position_diff.asset_diff {
                 id
             } else {
                 Default::default()
             };
             let mut provisional_delta: Balance = 0_i64.into();
 
-            for (synthetic_id, synthetic) in position.synthetic_balance {
+            for (synthetic_id, synthetic) in position.asset_balances {
                 let balance = synthetic.balance;
                 if balance.is_zero() {
                     continue;
@@ -501,13 +512,13 @@ pub(crate) mod Positions {
                     continue;
                 }
 
-                let price = assets.get_synthetic_price(synthetic_id);
-                let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
-                unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor });
+                let price = assets.get_asset_price(synthetic_id);
+                let risk_factor = assets.get_asset_risk_factor(synthetic_id, balance, price);
+                unchanged_assets
+                    .append(AssetBalanceInfo { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
             }
 
-            (provisional_delta, unchanged_synthetics.span())
+            (provisional_delta, unchanged_assets.span())
         }
     }
 
@@ -530,12 +541,12 @@ pub(crate) mod Positions {
         /// current funding index.
         ///
         /// The main collateral balance is updated using the following formula:
-        /// main_collateral_balance += synthetic_balance * (old_funding_index - new_funding_index).
+        /// main_collateral_balance += asset_balances * (old_funding_index - new_funding_index).
         /// After the adjustment, the `funding_index` is set to `global_funding_index`.
         ///
         /// Example:
         /// main_collateral_balance = 1000;
-        /// synthetic_balance = 50;
+        /// asset_balances = 50;
         /// old_funding_index = 200;
         /// new_funding_index = 210;
         ///
@@ -543,14 +554,14 @@ pub(crate) mod Positions {
         ///
         /// After the update:
         /// main_collateral_balance = 500; // 1000 + 50 * (200 - 210)
-        /// synthetic_balance = 300;
+        /// asset_balances = 300;
         /// synthetic_funding_index = 210;
         ///
         fn _update_synthetic_balance_and_funding(
             ref self: ComponentState<TContractState>,
             position: StoragePath<Mutable<Position>>,
             synthetic_id: AssetId,
-            synthetic_diff: Balance,
+            asset_diff: Balance,
         ) {
             let assets = get_dep_component!(@self, Assets);
             let global_funding_index = assets.get_funding_index(:synthetic_id);
@@ -558,7 +569,7 @@ pub(crate) mod Positions {
             // Adjusts the main collateral balance accordingly:
             let (collateral_funding, current_synthetic_balance) = if let Option::Some(synthetic) =
                 position
-                .synthetic_balance
+                .asset_balances
                 .read(synthetic_id) {
                 let current_synthetic_balance = synthetic.balance;
                 (
@@ -573,27 +584,26 @@ pub(crate) mod Positions {
                 (0_i64.into(), 0_i64.into())
             };
             position.collateral_balance.add_and_write(collateral_funding);
-
             // Updates the synthetic balance and funding index:
-            let synthetic_asset = SyntheticBalance {
+            let synthetic_asset = AssetBalance {
                 version: POSITION_VERSION,
-                balance: current_synthetic_balance + synthetic_diff,
+                balance: current_synthetic_balance + asset_diff,
                 funding_index: global_funding_index,
             };
-            position.synthetic_balance.write(synthetic_id, synthetic_asset);
+            position.asset_balances.write(synthetic_id, synthetic_asset);
         }
 
         fn _get_position_state(
             self: @ComponentState<TContractState>, position: StoragePath<Position>,
         ) -> PositionState {
             let position_diff = Default::default();
-            let (provisional_delta, unchanged_synthetics) = self
-                .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+            let (provisional_delta, unchanged_assets) = self
+                .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
             let collateral_balance = self
                 .get_collateral_provisional_balance(
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
-            evaluate_position(:unchanged_synthetics, :collateral_balance)
+            evaluate_position(:unchanged_assets, :collateral_balance)
         }
     }
 }

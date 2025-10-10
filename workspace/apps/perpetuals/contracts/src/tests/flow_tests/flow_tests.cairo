@@ -2,6 +2,19 @@ use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::User;
 
 #[test]
+fn basic_setup() {
+    /// Link to spreadsheet with calculations:
+    /// https://docs.google.com/spreadsheets/d/1BIJ6Oq7hAsF-Vb6EJSQFYbCQJMyrncuWDC4NoKLiV1U/edit?gid=0#gid=0
+
+    let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
+    let user_a = test.new_user();
+    let user_b = test.new_user();
+
+    // test.process_deposit(test.deposit(user_a, 10_000));
+    // test.process_deposit(test.deposit(user_b, 10_000));
+}
+
+#[test]
 fn test_two_users_two_synthetics() {
     /// Link to spreadsheet with calculations:
     /// https://docs.google.com/spreadsheets/d/1BIJ6Oq7hAsF-Vb6EJSQFYbCQJMyrncuWDC4NoKLiV1U/edit?gid=0#gid=0
@@ -733,7 +746,7 @@ fn test_multi_trade_single_order() {
     let mut trades: Array<(OrderRequest, OrderRequest)> = ArrayTrait::new();
 
     // tv = balance - fee = balance - 5% of tx value = 20_000 - price / 20
-    // tr = synthetic_balance * synthetic_price * risk = 1 * price * 0.1 = price / 10
+    // tr = asset_balances * synthetic_price * risk = 1 * price * 0.1 = price / 10
     let user_tv = 19949;
     let user_tr = 102;
     //tv = balance - total_fee

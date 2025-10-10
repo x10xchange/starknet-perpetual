@@ -39,6 +39,13 @@ impl FundingIndexMul of FundingIndexMulTrait {
     }
 }
 
+impl FundingIndexDefault of Default<FundingIndex> {
+    #[inline]
+    fn default() -> FundingIndex {
+        FundingIndex { value: 0 }
+    }
+}
+
 /// Calculate the funding payment for a position with the given balance.
 ///
 /// The funding payment is calculated as:
@@ -109,6 +116,9 @@ pub fn validate_funding_rate(
     time_diff: u64,
     synthetic_price: Price,
 ) {
+    if (time_diff.is_zero()) {
+        return;
+    }
     assert_with_byte_array(
         condition: index_diff.into() <= synthetic_price.mul(rhs: max_funding_rate)
             * time_diff.into(),
@@ -226,14 +236,27 @@ mod tests {
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, 0);
 
-        // extended contributed test
+        // positive funding, positive balance
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(225000000);
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, 2024999);
 
+        // positive funding, negative balance
         let index = FundingIndex { value: 38654705 };
         let balance = BalanceTrait::new(-225000000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, -2025000);
+
+        // negative funding, negative balance
+        let index = FundingIndex { value: -38654705 };
+        let balance = BalanceTrait::new(-225000000);
+        let result: i64 = index.mul(balance).into();
+        assert_eq!(result, 2024999);
+
+        // negative funding, positive balance
+        let index = FundingIndex { value: -38654705 };
+        let balance = BalanceTrait::new(225000000);
         let result: i64 = index.mul(balance).into();
         assert_eq!(result, -2025000);
     }

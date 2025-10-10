@@ -1,9 +1,10 @@
-use openzeppelin::token::erc20::interface::IERC20Dispatcher;
+use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::synthetic::{SyntheticConfig, SyntheticTimelyData};
+use perpetuals::core::types::asset::synthetic::{AssetConfig, TimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
+use starknet::ContractAddress;
 use starkware_utils::signature::stark::PublicKey;
 use starkware_utils::time::time::{TimeDelta, Timestamp};
 
@@ -27,9 +28,20 @@ pub trait IAssets<TContractState> {
         quorum: u8,
         resolution_factor: u64,
     );
+    fn add_vault_collateral_asset(
+        ref self: TContractState,
+        asset_id: AssetId,
+        erc20_contract_address: ContractAddress,
+        quantum: u64,
+        resolution_factor: u64,
+        risk_factor_tiers: Span<u16>,
+        risk_factor_first_tier_boundary: u128,
+        risk_factor_tier_size: u128,
+        quorum: u8,
+    );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn funding_tick(
-        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>,
+        ref self: TContractState, operator_nonce: u64, funding_ticks: Span<FundingTick>, timestamp: Timestamp,
     );
     fn price_tick(
         ref self: TContractState,
@@ -54,9 +66,9 @@ pub trait IAssets<TContractState> {
     fn get_max_oracle_price_validity(self: @TContractState) -> TimeDelta;
     fn get_num_of_active_synthetic_assets(self: @TContractState) -> usize;
     fn get_collateral_id(self: @TContractState) -> AssetId;
-    fn get_synthetic_config(self: @TContractState, synthetic_id: AssetId) -> SyntheticConfig;
-    fn get_synthetic_timely_data(
+    fn get_asset_config(self: @TContractState, synthetic_id: AssetId) -> AssetConfig;
+    fn get_timely_data(
         self: @TContractState, synthetic_id: AssetId,
-    ) -> SyntheticTimelyData;
+    ) -> TimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
 }

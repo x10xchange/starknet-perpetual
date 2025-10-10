@@ -1,4 +1,4 @@
-use core::num::traits::Zero;
+use core::num::traits::{Pow, Zero};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsDispatcher, IAssetsDispatcherTrait, IAssetsSafeDispatcher,
     IAssetsSafeDispatcherTrait,
@@ -24,7 +24,10 @@ use perpetuals::core::types::asset::AssetStatus;
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
-use perpetuals::core::types::price::{PRICE_SCALE, PriceTrait, SignedPrice};
+use perpetuals::core::types::price::{
+    PRICE_SCALE, PriceTrait, SignedPrice,
+    convert_oracle_to_perps_price,
+};
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
@@ -48,7 +51,7 @@ use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
     initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
-    validate_balance,
+    setup_state_with_pending_vault_share, validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
@@ -65,6 +68,7 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
     cheat_caller_address_once,
 };
+use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
 
 
 #[test]
@@ -114,6 +118,7 @@ fn test_caller_failures() {
         .process_deposit(
             operator_nonce: Zero::zero(),
             depositor: test_address(),
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: POSITION_ID_1,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: 0,
@@ -146,6 +151,7 @@ fn test_caller_failures() {
     let result = dispatcher
         .transfer_request(
             signature: array![].span(),
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
             amount: TRANSFER_AMOUNT.into(),
@@ -158,6 +164,7 @@ fn test_caller_failures() {
     let result = dispatcher
         .transfer(
             operator_nonce: Zero::zero(),
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: POSITION_ID_1,
             position_id: POSITION_ID_2,
             amount: TRANSFER_AMOUNT.into(),
@@ -242,7 +249,9 @@ fn test_caller_failures() {
     assert_panic_with_error(:result, expected_error: "ONLY_APP_GOVERNOR");
 
     let result = dispatcher
-        .funding_tick(operator_nonce: Zero::zero(), funding_ticks: array![].span());
+        .funding_tick(
+            operator_nonce: Zero::zero(), funding_ticks: array![].span(), timestamp: Time::now(),
+        );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
     let result = dispatcher
@@ -262,6 +271,7 @@ fn test_caller_failures() {
             position_id: POSITION_ID_1,
             owner_public_key: Zero::zero(),
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
     assert_panic_with_error(:result, expected_error: "ONLY_OPERATOR");
 
@@ -316,6 +326,7 @@ fn test_expiration_validation() {
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     // Deposit money for user.
@@ -329,13 +340,20 @@ fn test_expiration_validation() {
         );
 
     cheat_caller_address_once(:contract_address, caller_address: user.address);
-    deposit_dispatcher.deposit(:position_id, quantized_amount: amount, salt: user.salt_counter);
+    deposit_dispatcher
+        .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
+            :position_id,
+            quantized_amount: amount,
+            salt: user.salt_counter,
+        );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
     deposit_dispatcher
         .process_deposit(
             operator_nonce: 1,
             depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: amount,
             salt: user.salt_counter,
@@ -521,6 +539,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_1,
             owner_public_key: KEY_PAIR_1().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -530,6 +549,7 @@ fn test_signature_validation() {
             position_id: POSITION_ID_2,
             owner_public_key: KEY_PAIR_2().public_key,
             owner_account: Zero::zero(),
+            owner_protection_enabled: true,
         );
 
     // Deposit money for users.
@@ -552,7 +572,10 @@ fn test_signature_validation() {
     cheat_caller_address_once(:contract_address, caller_address: user_a.address);
     deposit_dispatcher
         .deposit(
-            position_id: user_a.position_id, quantized_amount: amount, salt: user_a.salt_counter,
+            asset_id: cfg.collateral_cfg.collateral_id,
+            position_id: user_a.position_id,
+            quantized_amount: amount,
+            salt: user_a.salt_counter,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -560,6 +583,7 @@ fn test_signature_validation() {
         .process_deposit(
             operator_nonce: 4,
             depositor: user_a.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user_a.position_id,
             quantized_amount: amount,
             salt: user_a.salt_counter,
@@ -568,7 +592,10 @@ fn test_signature_validation() {
     cheat_caller_address_once(:contract_address, caller_address: user_b.address);
     deposit_dispatcher
         .deposit(
-            position_id: user_b.position_id, quantized_amount: amount, salt: user_b.salt_counter,
+            asset_id: cfg.collateral_cfg.collateral_id,
+            position_id: user_b.position_id,
+            quantized_amount: amount,
+            salt: user_b.salt_counter,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -576,6 +603,7 @@ fn test_signature_validation() {
         .process_deposit(
             operator_nonce: 5,
             depositor: user_b.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user_b.position_id,
             quantized_amount: amount,
             salt: user_b.salt_counter,
@@ -731,6 +759,7 @@ fn test_new_position() {
             :position_id,
             :owner_public_key,
             :owner_account,
+            owner_protection_enabled: true,
         );
 
     // Catch the event.
@@ -1074,13 +1103,7 @@ fn test_successful_deactivate_synthetic_asset() {
     // Setup parameters:
     let synthetic_id = cfg.synthetic_cfg.synthetic_id;
     assert!(
-        state
-            .assets
-            .synthetic_config
-            .entry(synthetic_id)
-            .read()
-            .unwrap()
-            .status == AssetStatus::ACTIVE,
+        state.assets.asset_config.entry(synthetic_id).read().unwrap().status == AssetStatus::ACTIVE,
     );
 
     // Test:
@@ -1097,7 +1120,7 @@ fn test_successful_deactivate_synthetic_asset() {
     assert!(
         state
             .assets
-            .synthetic_config
+            .asset_config
             .entry(synthetic_id)
             .read()
             .unwrap()
@@ -1242,6 +1265,7 @@ fn test_successful_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1307,12 +1331,14 @@ fn test_deposit_already_registered() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1341,6 +1367,7 @@ fn test_successful_process_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1359,6 +1386,7 @@ fn test_successful_process_deposit() {
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1404,6 +1432,7 @@ fn test_successful_cancel_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1433,6 +1462,86 @@ fn test_successful_cancel_deposit() {
     );
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_canceled_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.collateral_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit cancellation:
+    validate_balance(token_state, user.address, USER_INIT_BALANCE.try_into().unwrap());
+    validate_balance(token_state, test_address(), CONTRACT_INIT_BALANCE.try_into().unwrap());
+}
+
+#[test]
+fn test_successful_reject_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
+
+    // Fund user.
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::days(1)).into(),
+    );
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: token_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+    let mut spy = snforge_std::spy_events();
+
+    // Check before cancel deposit:
+    validate_balance(
+        token_state, user.address, (USER_INIT_BALANCE - user_deposit_amount).try_into().unwrap(),
+    );
+    validate_balance(
+        token_state,
+        test_address(),
+        (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
+    );
+
+    // Test:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .reject_deposit(
+            operator_nonce: state.get_operator_nonce(),
+            depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1469,6 +1578,7 @@ fn test_cancel_non_registered_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1497,6 +1607,7 @@ fn test_cancel_deposit_different_hash() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1504,6 +1615,7 @@ fn test_cancel_deposit_different_hash() {
 
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter + 1,
@@ -1534,6 +1646,7 @@ fn test_cancel_already_done_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1544,6 +1657,7 @@ fn test_cancel_already_done_deposit() {
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1555,6 +1669,7 @@ fn test_cancel_already_done_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1585,6 +1700,7 @@ fn test_double_cancel_deposit() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1595,12 +1711,14 @@ fn test_double_cancel_deposit() {
     );
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
         );
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1631,6 +1749,7 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -1638,6 +1757,7 @@ fn test_cancel_deposit_before_cancellation_delay_passed() {
 
     state
         .cancel_deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -2473,6 +2593,7 @@ fn test_successful_transfer_request_using_public_key() {
     state
         .transfer_request(
             :signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2517,6 +2638,7 @@ fn test_successful_transfer_request_with_owner() {
     state
         .transfer_request(
             :signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2564,6 +2686,7 @@ fn test_successful_transfer() {
     state
         .transfer_request(
             signature: sender_signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2574,6 +2697,7 @@ fn test_successful_transfer() {
     state
         .transfer(
             :operator_nonce,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2659,6 +2783,7 @@ fn test_invalid_transfer_request_amount_is_zero() {
     state
         .transfer_request(
             signature: sender_signature,
+            asset_id: cfg.collateral_cfg.collateral_id,
             recipient: transfer_args.recipient,
             position_id: transfer_args.position_id,
             amount: transfer_args.amount,
@@ -2671,7 +2796,7 @@ fn test_invalid_transfer_request_amount_is_zero() {
 
 #[test]
 #[should_panic(expected: 'SYNTHETIC_EXPIRED_PRICE')]
-fn test_validate_synthetic_prices_expired() {
+fn test_validate_asset_prices_expired() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -2692,6 +2817,7 @@ fn test_validate_synthetic_prices_expired() {
                 },
             ]
                 .span(),
+            timestamp: Time::now(),
         );
     // Setup parameters:
     let expiration = Time::now().add(Time::days(1));
@@ -2730,7 +2856,7 @@ fn test_validate_synthetic_prices_expired() {
 }
 
 #[test]
-fn test_validate_synthetic_prices_pending_asset() {
+fn test_validate_asset_prices_pending_asset() {
     // Setup state, token and user:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
@@ -2751,10 +2877,15 @@ fn test_validate_synthetic_prices_pending_asset() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .assets
-        .funding_tick(operator_nonce: state.get_operator_nonce(), funding_ticks: array![].span());
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(),
+            funding_ticks: array![].span(),
+            timestamp: Time::now(),
+        );
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -2764,6 +2895,7 @@ fn test_validate_synthetic_prices_pending_asset() {
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -2805,6 +2937,7 @@ fn test_validate_prices() {
                 },
             ]
                 .span(),
+            timestamp: Time::now(),
         );
 
     // Setup parameters:
@@ -2888,6 +3021,7 @@ fn test_validate_prices_no_update_needed() {
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
         .deposit(
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -2897,6 +3031,7 @@ fn test_validate_prices_no_update_needed() {
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
             depositor: user.address,
+            asset_id: cfg.collateral_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: DEPOSIT_AMOUNT,
             salt: user.salt_counter,
@@ -2932,7 +3067,10 @@ fn test_funding_tick_basic() {
     // 3 <= 3.
     let mut spy = snforge_std::spy_events();
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(), :funding_ticks, timestamp: Time::now(),
+        );
 
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
@@ -2941,9 +3079,7 @@ fn test_funding_tick_basic() {
     );
 
     // Check:
-    assert!(
-        state.assets.get_synthetic_timely_data(synthetic_id).funding_index == new_funding_index,
-    );
+    assert!(state.assets.get_timely_data(synthetic_id).funding_index == new_funding_index);
 }
 
 #[test]
@@ -2974,7 +3110,10 @@ fn test_invalid_funding_rate() {
     // synthetic_price * max_funding_rate * time_diff = 100 * 3% per hour * 1 hour = 3.
     // 3 > 4.
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(), :funding_ticks, timestamp: Time::now(),
+        );
 }
 
 #[test]
@@ -2997,7 +3136,10 @@ fn test_invalid_funding_len() {
 
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
-    state.funding_tick(operator_nonce: state.get_operator_nonce(), :funding_ticks);
+    state
+        .funding_tick(
+            operator_nonce: state.get_operator_nonce(), :funding_ticks, timestamp: Time::now(),
+        );
 }
 
 // `price_tick` tests.
@@ -3052,10 +3194,10 @@ fn test_price_tick_basic() {
         spied_event: events[2], asset_id: synthetic_id, price: PriceTrait::new(value: 100),
     );
 
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3122,9 +3264,9 @@ fn test_price_tick_odd() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3180,10 +3322,10 @@ fn test_price_tick_even() {
             ]
                 .span(),
         );
-    assert!(state.assets.get_synthetic_config(synthetic_id).status == AssetStatus::ACTIVE);
+    assert!(state.assets.get_asset_config(synthetic_id).status == AssetStatus::ACTIVE);
     assert!(state.assets.get_num_of_active_synthetic_assets() == 1);
 
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == new_time);
     assert!(data.price.value() == 100 * PRICE_SCALE);
 }
@@ -3373,7 +3515,7 @@ fn test_price_tick_golden() {
             :oracle_price,
             signed_prices: [signed_price1, signed_price0, signed_price2].span(),
         );
-    let data = state.assets.get_synthetic_timely_data(synthetic_id);
+    let data = state.assets.get_timely_data(synthetic_id);
     assert!(data.last_price_update == Time::now());
     assert!(data.price.value() == 6430);
 }
@@ -3532,4 +3674,546 @@ fn test_successful_remove_nonexistent_oracle() {
     // Test:
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.remove_oracle_from_asset(asset_id: synthetic_id, oracle_public_key: key_pair.public_key);
+}
+
+// #[test]
+// #[should_panic(expected: 'MISMATCHED_RESOLUTION')]
+// fn test_unsuccessful_add_vault_share_asset_mismatched_resolution() {
+//     // Setup state, token:
+//     let cfg: PerpetualsInitConfig = Default::default();
+//     let token_state = cfg.collateral_cfg.token_cfg.deploy();
+//     let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+//     let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+
+//     // Setup test parameters:
+//     let risk_factor_first_tier_boundary = MAX_U128;
+//     let risk_factor_tier_size = 1;
+//     let risk_factor_1 = array![10].span();
+
+//     // Test:
+//     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+//     state
+//         .add_vault_collateral_asset(
+//             asset_id: cfg.vault_share_cfg.collateral_id,
+//             erc20_contract_address: vault_share_state.address,
+//             quantum: 10_000_000,
+//             resolution_factor: 1_000_000_000,
+//             risk_factor_tiers: risk_factor_1,
+//             :risk_factor_first_tier_boundary,
+//             :risk_factor_tier_size,
+//             quorum: 1_u8,
+//         );
+// }
+
+#[test]
+#[should_panic(expected: 'INVALID_ZERO_QUANTUM')]
+fn test_unsuccessful_add_vault_share_asset_zero_quantum() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let vault_share_state = cfg.vault_share_cfg.token_cfg.deploy();
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: vault_share_state.address,
+            quantum: 0,
+            resolution_factor: 1_000_000_000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+}
+
+#[test]
+#[should_panic(
+    expected: "Entry point selector 0x4c4fb1ab068f6039d5780c68dd0fa2f8742cceb3426d19667778ca7f3518a9 not found in contract 0x1724987234973219347210837402",
+)]
+fn test_unsuccessful_add_vault_share_asset_not_erc20() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+
+    // Setup test parameters:
+    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_tier_size = 1;
+    let risk_factor_1 = array![10].span();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: test_address(),
+            quantum: 10_000_000,
+            resolution_factor: 1_000_000_000,
+            risk_factor_tiers: risk_factor_1,
+            :risk_factor_first_tier_boundary,
+            :risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+}
+
+#[test]
+fn test_successful_add_vault_share_asset() {
+    // Setup state, token:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_asset(cfg: @cfg, token_state: @token_state);
+    let mut spy = snforge_std::spy_events();
+
+    // VS has 10^18
+    // quantum 10^12
+    // resolution 10^(18-12) = 10^6
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_spot_event_with_expected(
+        spied_event: events[0],
+        asset_id: cfg.vault_share_cfg.collateral_id,
+        risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+        risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+        risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+        resolution_factor: cfg.vault_share_cfg.resolution_factor,
+        quorum: 1_u8,
+        contract_address: cfg.vault_share_cfg.contract_address,
+    );
+
+    let asset_config = state.assets.get_asset_config(cfg.vault_share_cfg.collateral_id);
+
+    assert!(asset_config.resolution_factor == 1000000);
+    assert!(
+        asset_config
+            .risk_factor_first_tier_boundary == cfg
+            .vault_share_cfg
+            .risk_factor_first_tier_boundary,
+    );
+    assert!(asset_config.risk_factor_tier_size == cfg.vault_share_cfg.risk_factor_tier_size);
+    assert!(asset_config.quorum == 1_u8);
+    assert!(asset_config.status == AssetStatus::PENDING);
+}
+
+#[test]
+fn test_successful_vault_token_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+    let vault_share_state = cfg.vault_share_cfg.token_state;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let starting_user_balance = user_deposit_amount * 3;
+
+    // Fund user.
+    vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
+    vault_share_state
+        .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Check before deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance);
+    validate_balance(vault_share_state, test_address(), 0);
+    let mut spy = snforge_std::spy_events();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: vault_share_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.vault_share_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance - user_deposit_amount);
+    validate_balance(vault_share_state, test_address(), user_deposit_amount.try_into().unwrap());
+    let status = state.deposits.get_deposit_status(:deposit_hash);
+    if let DepositStatus::PENDING(timestamp) = status {
+        assert!(timestamp == expected_time);
+    } else {
+        panic!("Deposit not found");
+    }
+}
+
+
+#[test]
+#[should_panic(expected: 'SYNTHETIC_NOT_EXISTS')]
+fn test_unsuccessful_vault_token_deposit_unregistered_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: 1,
+            salt: user.salt_counter,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'NOT_SPOT_ASSET')]
+fn test_unsuccessful_vault_token_deposit_synthetic_asset() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    init_position(cfg: @cfg, ref :state, :user);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.synthetic_cfg.synthetic_id,
+            position_id: user.position_id,
+            quantized_amount: 1,
+            salt: user.salt_counter,
+        );
+}
+#[test]
+fn test_successful_vault_token_cancel_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+    let vault_share_state = cfg.vault_share_cfg.token_state;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let starting_user_balance = user_deposit_amount * 3;
+
+    // Fund user.
+    vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
+    vault_share_state
+        .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // Setup parameters:
+    let expected_time = Time::now().add(delta: Time::days(1));
+    start_cheat_block_timestamp_global(block_timestamp: expected_time.into());
+
+    // Check before deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance);
+    validate_balance(vault_share_state, test_address(), 0);
+    let mut spy = snforge_std::spy_events();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: vault_share_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_event_with_expected(
+        spied_event: events[0],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.vault_share_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit:
+    validate_balance(vault_share_state, user.address, starting_user_balance - user_deposit_amount);
+    validate_balance(vault_share_state, test_address(), user_deposit_amount.try_into().unwrap());
+
+    // Test:
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    state
+        .cancel_deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_canceled_event_with_expected(
+        spied_event: events[1],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.vault_share_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    // Check after deposit cancellation:
+    validate_balance(vault_share_state, user.address, starting_user_balance);
+    validate_balance(vault_share_state, test_address(), 0);
+}
+
+#[test]
+fn test_successful_vault_share_process_deposit() {
+    // Setup state, token and user:
+    let cfg: PerpetualsInitConfig = Default::default();
+    let mut state = setup_state_with_active_asset(
+        cfg: @cfg, token_state: @cfg.collateral_cfg.token_cfg.deploy(),
+    );
+    let user = Default::default();
+    let vault_share_state = cfg.vault_share_cfg.token_state;
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_vault_collateral_asset(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: cfg.vault_share_cfg.contract_address,
+            quantum: cfg.vault_share_cfg.quantum,
+            resolution_factor: cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: cfg.vault_share_cfg.risk_factor_tiers,
+            risk_factor_first_tier_boundary: cfg.vault_share_cfg.risk_factor_first_tier_boundary,
+            risk_factor_tier_size: cfg.vault_share_cfg.risk_factor_tier_size,
+            quorum: 1_u8,
+        );
+
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let starting_user_balance = user_deposit_amount * 3;
+
+    // Fund user.
+    vault_share_state.fund(recipient: user.address, amount: starting_user_balance);
+    vault_share_state
+        .approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    let mut spy = snforge_std::spy_events();
+
+    // Test:
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+    let deposit_hash = deposit_hash(
+        token_address: vault_share_state.address,
+        depositor: user.address,
+        position_id: user.position_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        salt: user.salt_counter,
+    );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .process_deposit(
+            operator_nonce: state.get_operator_nonce(),
+            depositor: user.address,
+            asset_id: cfg.vault_share_cfg.collateral_id,
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_deposit_processed_event_with_expected(
+        spied_event: events[1],
+        position_id: user.position_id,
+        depositing_address: user.address,
+        collateral_id: cfg.vault_share_cfg.collateral_id,
+        quantized_amount: DEPOSIT_AMOUNT,
+        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        deposit_request_hash: deposit_hash,
+        salt: user.salt_counter,
+    );
+
+    let status = state.deposits.get_deposit_status(:deposit_hash);
+    assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
+
+    validate_asset_balance(
+        ref :state,
+        position_id: user.position_id,
+        asset_id: cfg.vault_share_cfg.collateral_id,
+        expected_balance: DEPOSIT_AMOUNT.into(),
+    );
+}
+
+#[test]
+fn test_price_tick_vault_share_asset() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_pending_vault_share(cfg: @cfg, token_state: @token_state);
+
+    let mut spy = snforge_std::spy_events();
+    let asset_name = 'VAULT_SHARE';
+    let oracle1_name = 'ORCL1';
+    let oracle1 = Oracle { oracle_name: oracle1_name, asset_name, key_pair: KEY_PAIR_1() };
+    let vault_share_id = cfg.vault_share_cfg.collateral_id;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+    state
+        .add_oracle_to_asset(
+            asset_id: vault_share_id,
+            oracle_public_key: oracle1.key_pair.public_key,
+            oracle_name: oracle1_name,
+            :asset_name,
+        );
+    let old_time: u64 = Time::now().into();
+    let new_time = Time::now().add(delta: MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+    start_cheat_block_timestamp_global(block_timestamp: new_time.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    //one unit of vault share is priced at $12
+    let oracle_price: u128 = 12 * 10_u128.pow(18);
+    let operator_nonce = state.get_operator_nonce();
+    state
+        .price_tick(
+            :operator_nonce,
+            asset_id: vault_share_id,
+            :oracle_price,
+            signed_prices: [
+                oracle1.get_signed_price(:oracle_price, timestamp: old_time.try_into().unwrap())
+            ]
+                .span(),
+        );
+
+    // Catch the event.
+    let events = spy.get_events().emitted_by(test_address()).events;
+    assert_add_oracle_event_with_expected(
+        spied_event: events[0],
+        asset_id: vault_share_id,
+        :asset_name,
+        oracle_public_key: oracle1.key_pair.public_key,
+        oracle_name: oracle1_name,
+    );
+
+    let expected_price = convert_oracle_to_perps_price(
+        oracle_price: oracle_price, resolution_factor: cfg.vault_share_cfg.resolution_factor,
+    );
+    assert_asset_activated_event_with_expected(spied_event: events[1], asset_id: vault_share_id);
+    assert_price_tick_event_with_expected(
+        spied_event: events[2], asset_id: vault_share_id, price: expected_price,
+    );
+    assert!(state.assets.get_asset_config(vault_share_id).status == AssetStatus::ACTIVE);
+    //check synthetic count is not incremented 
+    assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
+
+    let data = state.assets.get_timely_data(vault_share_id);
+    assert!(data.last_price_update == new_time);
+    assert!(data.price.value() == expected_price.value());
 }
