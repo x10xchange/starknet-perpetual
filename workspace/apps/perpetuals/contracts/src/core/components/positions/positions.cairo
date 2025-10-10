@@ -83,7 +83,7 @@ pub(crate) mod Positions {
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> PositionData {
             let position = self.get_position_snapshot(:position_id);
-            let (provisional_delta, synthetics) = self
+            let (provisional_delta, assets) = self
                 .derive_funding_delta_and_unchanged_assets(
                     :position, position_diff: Default::default(),
                 );
@@ -92,7 +92,7 @@ pub(crate) mod Positions {
                     :position, provisional_delta: Option::Some(provisional_delta),
                 );
 
-            PositionData { synthetics, collateral_balance }
+            PositionData { assets, collateral_balance }
         }
 
         /// This function is primarily used as a view function—knowing the total value and/or

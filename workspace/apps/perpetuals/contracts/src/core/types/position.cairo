@@ -71,7 +71,7 @@ pub impl PositionDiffEnrichedIntoSyntheticEnrichedPositionDiff of Into<
 
 #[derive(Copy, Debug, Drop, Serde, PartialEq)]
 pub struct PositionData {
-    pub synthetics: Span<AssetBalanceInfo>,
+    pub assets: Span<AssetBalanceInfo>,
     pub collateral_balance: Balance,
 }
 

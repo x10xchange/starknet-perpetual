@@ -345,15 +345,6 @@ pub mod Core {
                     public_key: position.get_owner_public_key(),
                 );
 
-            // accrue funding before transfer
-            self
-                .positions
-                .apply_diff(
-                    :position_id,
-                    position_diff: PositionDiff {
-                        collateral_diff: 0_i64.into(), asset_diff: Option::None,
-                    },
-                );
             /// Validations - Fundamentals:
             let position_diff = PositionDiff {
                 collateral_diff: -amount.into(), asset_diff: Option::None,
@@ -1717,7 +1708,7 @@ pub mod Core {
             position_diff: PositionDiff,
             tvtr_before: Nullable<PositionTVTR>,
         ) -> PositionTVTR {
-            let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
+            let synthetic_enriched_position_diff = self.enrich_asset(:position, :position_diff);
             let tvtr_before = match match_nullable(tvtr_before) {
                 FromNullableResult::Null => {
                     let (provisional_delta, unchanged_assets) = self
@@ -1761,7 +1752,7 @@ pub mod Core {
             let (provisional_delta, unchanged_assets) = self
                 .positions
                 .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
-            let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
+            let synthetic_enriched_position_diff = self.enrich_asset(:position, :position_diff);
             let position_diff_enriched = self
                 .enrich_collateral(
                     :position,
@@ -1784,7 +1775,7 @@ pub mod Core {
                 .positions
                 .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
 
-            let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
+            let synthetic_enriched_position_diff = self.enrich_asset(:position, :position_diff);
             let position_diff_enriched = self
                 .enrich_collateral(
                     :position,
@@ -1820,7 +1811,7 @@ pub mod Core {
         }
 
         /// Enriches the synthetic part, leaving collateral raw.
-        fn enrich_synthetic(
+        fn enrich_asset(
             self: @ContractState, position: StoragePath<Position>, position_diff: PositionDiff,
         ) -> AssetEnrichedPositionDiff {
             let asset_diff_enriched = if let Option::Some((synthetic_id, diff)) = position_diff
