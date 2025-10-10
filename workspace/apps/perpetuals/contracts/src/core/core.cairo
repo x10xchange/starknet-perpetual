@@ -1154,15 +1154,6 @@ pub mod Core {
                 );
         }
 
-        /// Converts a position to a vault position.
-        // TODO : add doc, add to the spec
-        fn convert_position_to_vault(
-            ref self: ContractState,
-            operator_nonce: u64,
-            signature: Signature,
-            order: ConvertPositionToVault,
-        ) {}
-
         fn liquidate_vault_shares(
             ref self: ContractState,
             operator_nonce: u64,
@@ -1729,9 +1720,9 @@ pub mod Core {
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
             let tvtr_before = match match_nullable(tvtr_before) {
                 FromNullableResult::Null => {
-                    let (provisional_delta, unchanged_synthetics) = self
+                    let (provisional_delta, unchanged_assets) = self
                         .positions
-                        .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                        .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
                     let position_diff_enriched = self
                         .enrich_collateral(
                             :position,
@@ -1739,7 +1730,7 @@ pub mod Core {
                             provisional_delta: Option::Some(provisional_delta),
                         );
 
-                    calculate_position_tvtr_before(:unchanged_synthetics, :position_diff_enriched)
+                    calculate_position_tvtr_before(:unchanged_assets, :position_diff_enriched)
                 },
                 FromNullableResult::NotNull(value) => value.unbox(),
             };
@@ -1767,9 +1758,9 @@ pub mod Core {
                 ._validate_synthetic_shrinks(
                     :position, asset_id: synthetic_diff_id, amount: synthetic_diff_balance.into(),
                 );
-            let (provisional_delta, unchanged_synthetics) = self
+            let (provisional_delta, unchanged_assets) = self
                 .positions
-                .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
             let position_diff_enriched = self
                 .enrich_collateral(
@@ -1779,7 +1770,7 @@ pub mod Core {
                 );
 
             liquidated_position_validations(
-                :position_id, :unchanged_synthetics, :position_diff_enriched,
+                :position_id, :unchanged_assets, :position_diff_enriched,
             );
         }
 
@@ -1789,9 +1780,9 @@ pub mod Core {
             position: StoragePath<Position>,
             position_diff: PositionDiff,
         ) {
-            let (provisional_delta, unchanged_synthetics) = self
+            let (provisional_delta, unchanged_assets) = self
                 .positions
-                .derive_funding_delta_and_unchanged_synthetics(:position, :position_diff);
+                .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
 
             let synthetic_enriched_position_diff = self.enrich_synthetic(:position, :position_diff);
             let position_diff_enriched = self
@@ -1802,7 +1793,7 @@ pub mod Core {
                 );
 
             deleveraged_position_validations(
-                :position_id, :unchanged_synthetics, :position_diff_enriched,
+                :position_id, :unchanged_assets, :position_diff_enriched,
             );
         }
 
