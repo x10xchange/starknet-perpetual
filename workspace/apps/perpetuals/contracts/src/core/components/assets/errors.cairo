@@ -1,5 +1,5 @@
 use perpetuals::core::types::asset::AssetId;
-use starkware_utils::signature::stark::{PublicKey};
+use starkware_utils::signature::stark::PublicKey;
 
 pub const ALREADY_INITIALIZED: felt252 = 'ALREADY_INITIALIZED';
 pub const ASSET_ALREADY_EXISTS: felt252 = 'ASSET_ALREADY_EXISTS';

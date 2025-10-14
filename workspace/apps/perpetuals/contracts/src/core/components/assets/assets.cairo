@@ -1,6 +1,6 @@
 #[starknet::component]
 pub mod AssetsComponent {
-use RolesComponent::InternalTrait as RolesInternalTrait;
+    use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
     use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
@@ -245,12 +245,12 @@ use RolesComponent::InternalTrait as RolesInternalTrait;
 
         /// Update synthetic asset risk factors.
         /// Validations:
-               /// - Only the operator can call this function, cause it must be sequenced.
-               /// (Liqudation may fail if submitted out of order)
-               /// - Each risk factor in risk_factor_tiers is less or equal to 1000.
-               /// - After update postitions risk must be the same or lower.
-               ///
-               /// Execution:
+        /// - Only the operator can call this function, cause it must be sequenced.
+        /// (Liqudation may fail if submitted out of order)
+        /// - Each risk factor in risk_factor_tiers is less or equal to 1000.
+        /// - After update postitions risk must be the same or lower.
+        ///
+        /// Execution:
         fn update_synthetic_asset_risk_factor(
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
@@ -272,88 +272,88 @@ use RolesComponent::InternalTrait as RolesInternalTrait;
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
 
-             let mut old_synthetic_config = self._get_synthetic_config(asset_id);
-             let old_risk_factor_tiers = self.get_risk_factor_tiers(asset_id);
-             let mut old_index: i64 = (old_risk_factor_tiers.len() - 1).into();
-             let mut old_bound = old_synthetic_config.risk_factor_first_tier_boundary;
-             if old_risk_factor_tiers.len() > 1 {
-                old_bound +=  old_synthetic_config.risk_factor_tier_size  * (old_risk_factor_tiers.len() - 2).into();
-             }
-             let mut new_index: i64 = (risk_factor_tiers.len() - 1).into();
-             let mut new_bound = risk_factor_first_tier_boundary;
-             if risk_factor_tiers.len() > 1 {
+            let mut old_synthetic_config = self._get_synthetic_config(asset_id);
+            let old_risk_factor_tiers = self.get_risk_factor_tiers(asset_id);
+            let mut old_index: i64 = (old_risk_factor_tiers.len() - 1).into();
+            let mut old_bound = old_synthetic_config.risk_factor_first_tier_boundary;
+            if old_risk_factor_tiers.len() > 1 {
+                old_bound += old_synthetic_config.risk_factor_tier_size
+                    * (old_risk_factor_tiers.len() - 2).into();
+            }
+            let mut new_index: i64 = (risk_factor_tiers.len() - 1).into();
+            let mut new_bound = risk_factor_first_tier_boundary;
+            if risk_factor_tiers.len() > 1 {
                 new_bound += risk_factor_tier_size * (risk_factor_tiers.len() - 2).into();
-             }
-             if (new_index >= 0 || old_index >= 0) {
-                 while true {
+            }
+            if (new_index >= 0 || old_index >= 0) {
+                while true {
                     let old_factor = old_risk_factor_tiers.at(old_index.try_into().unwrap()).value;
                     let new_factor = risk_factor_tiers.at(new_index.try_into().unwrap());
                     assert(old_factor >= new_factor, INVALID_RF_VALUE);
                     if old_bound < new_bound {
                         new_index -= 1;
                         if new_index == 0 {
-                           new_bound -= risk_factor_first_tier_boundary
-                        } else if new_index > 0{
+                            new_bound -= risk_factor_first_tier_boundary
+                        } else if new_index > 0 {
                             new_bound -= risk_factor_tier_size;
                         }
-                     } else if old_bound > new_bound {
-                         old_index -= 1;
-                         if old_index == 0 {
+                    } else if old_bound > new_bound {
+                        old_index -= 1;
+                        if old_index == 0 {
                             old_bound -= old_synthetic_config.risk_factor_first_tier_boundary;
-                         } else if old_index > 0{
-                             old_bound -= old_synthetic_config.risk_factor_tier_size;
-                         }
-                     }
-                     else {
-                             new_index -= 1;
-                             old_index -= 1;
-                             if new_index == 0 {
-                                new_bound -= risk_factor_first_tier_boundary
-                             } else if new_index > 0{
-                                 new_bound -= risk_factor_tier_size;
-                             }
-                             if old_index == 0 {
-                                old_bound -= old_synthetic_config.risk_factor_first_tier_boundary;
-                             } else if old_index > 0{
-                                 old_bound -= old_synthetic_config.risk_factor_tier_size;
-                             }
-                     }
-                     if (new_index <= 0 && old_index <= 0) {
-                         break;
-                     }
-               }
+                        } else if old_index > 0 {
+                            old_bound -= old_synthetic_config.risk_factor_tier_size;
+                        }
+                    } else {
+                        new_index -= 1;
+                        old_index -= 1;
+                        if new_index == 0 {
+                            new_bound -= risk_factor_first_tier_boundary
+                        } else if new_index > 0 {
+                            new_bound -= risk_factor_tier_size;
+                        }
+                        if old_index == 0 {
+                            old_bound -= old_synthetic_config.risk_factor_first_tier_boundary;
+                        } else if old_index > 0 {
+                            old_bound -= old_synthetic_config.risk_factor_tier_size;
+                        }
+                    }
+                    if (new_index <= 0 && old_index <= 0) {
+                        break;
+                    }
+                }
             }
             old_synthetic_config.risk_factor_tier_size = risk_factor_tier_size;
             old_synthetic_config.risk_factor_first_tier_boundary = risk_factor_first_tier_boundary;
             let synthetic_entry = self.synthetic_config.entry(asset_id);
-             synthetic_entry.write(Option::Some(old_synthetic_config));
+            synthetic_entry.write(Option::Some(old_synthetic_config));
 
             let mut prev_risk_factor = 0_u16;
             let entry = self.risk_factor_tiers.entry(asset_id);
             while true {
-               if entry.pop().is_none() {
-                   break;
-               }
+                if entry.pop().is_none() {
+                    break;
+                }
             }
             for risk_factor in risk_factor_tiers {
-               assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
-               self
-                   .risk_factor_tiers
-                   .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
-                   .push(RiskFactorTrait::new(*risk_factor));
-               prev_risk_factor = *risk_factor;
+                assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
+                self
+                    .risk_factor_tiers
+                    .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
+                    .push(RiskFactorTrait::new(*risk_factor));
+                prev_risk_factor = *risk_factor;
             }
-               self
-                  .emit(
-                      events::SyntheticChanged {
-                          asset_id: asset_id,
-                          risk_factor_tiers: risk_factor_tiers,
-                          risk_factor_first_tier_boundary: risk_factor_first_tier_boundary,
-                          risk_factor_tier_size: risk_factor_tier_size,
-                          resolution_factor: old_synthetic_config.resolution_factor,
-                          quorum: old_synthetic_config.quorum,
-                      },
-                  );
+            self
+                .emit(
+                    events::SyntheticChanged {
+                        asset_id: asset_id,
+                        risk_factor_tiers: risk_factor_tiers,
+                        risk_factor_first_tier_boundary: risk_factor_first_tier_boundary,
+                        risk_factor_tier_size: risk_factor_tier_size,
+                        resolution_factor: old_synthetic_config.resolution_factor,
+                        quorum: old_synthetic_config.quorum,
+                    },
+                );
         }
 
 
