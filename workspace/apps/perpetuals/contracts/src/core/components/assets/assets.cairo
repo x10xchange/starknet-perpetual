@@ -31,10 +31,10 @@ pub mod AssetsComponent {
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::balance::Balance;
+    use perpetuals::core::types::balance::{Balance, BalanceImpl};
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::{
-        Price, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
+        Price, PriceImpl, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
     };
     use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use starknet::ContractAddress;
@@ -273,56 +273,18 @@ pub mod AssetsComponent {
             }
 
             let mut old_synthetic_config = self._get_synthetic_config(asset_id);
-            let old_risk_factor_tiers = self.get_risk_factor_tiers(asset_id);
-            let mut old_index: i64 = (old_risk_factor_tiers.len() - 1).into();
-            let mut old_bound = old_synthetic_config.risk_factor_first_tier_boundary;
-            if old_risk_factor_tiers.len() > 1 {
-                old_bound += old_synthetic_config.risk_factor_tier_size
-                    * (old_risk_factor_tiers.len() - 2).into();
+            let mut bound = risk_factor_first_tier_boundary;
+
+            for risk_factor in risk_factor_tiers {
+                let mut old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id,
+                        synthetic_value: bound - 1
+                    );
+                assert(old_factor.value >= *risk_factor, INVALID_RF_VALUE);
+                bound += risk_factor_tier_size;
             }
-            let mut new_index: i64 = (risk_factor_tiers.len() - 1).into();
-            let mut new_bound = risk_factor_first_tier_boundary;
-            if risk_factor_tiers.len() > 1 {
-                new_bound += risk_factor_tier_size * (risk_factor_tiers.len() - 2).into();
-            }
-            if (new_index >= 0 || old_index >= 0) {
-                while true {
-                    let old_factor = old_risk_factor_tiers.at(old_index.try_into().unwrap()).value;
-                    let new_factor = risk_factor_tiers.at(new_index.try_into().unwrap());
-                    assert(old_factor >= new_factor, INVALID_RF_VALUE);
-                    if old_bound < new_bound {
-                        new_index -= 1;
-                        if new_index == 0 {
-                            new_bound -= risk_factor_first_tier_boundary
-                        } else if new_index > 0 {
-                            new_bound -= risk_factor_tier_size;
-                        }
-                    } else if old_bound > new_bound {
-                        old_index -= 1;
-                        if old_index == 0 {
-                            old_bound -= old_synthetic_config.risk_factor_first_tier_boundary;
-                        } else if old_index > 0 {
-                            old_bound -= old_synthetic_config.risk_factor_tier_size;
-                        }
-                    } else {
-                        new_index -= 1;
-                        old_index -= 1;
-                        if new_index == 0 {
-                            new_bound -= risk_factor_first_tier_boundary
-                        } else if new_index > 0 {
-                            new_bound -= risk_factor_tier_size;
-                        }
-                        if old_index == 0 {
-                            old_bound -= old_synthetic_config.risk_factor_first_tier_boundary;
-                        } else if old_index > 0 {
-                            old_bound -= old_synthetic_config.risk_factor_tier_size;
-                        }
-                    }
-                    if (new_index <= 0 && old_index <= 0) {
-                        break;
-                    }
-                }
-            }
+
             old_synthetic_config.risk_factor_tier_size = risk_factor_tier_size;
             old_synthetic_config.risk_factor_first_tier_boundary = risk_factor_first_tier_boundary;
             let synthetic_entry = self.synthetic_config.entry(asset_id);
@@ -652,9 +614,25 @@ pub mod AssetsComponent {
             balance: Balance,
             price: Price,
         ) -> RiskFactor {
+            let synthetic_value: u128 = price.mul(rhs: balance).abs();
+            return self.get_synthetic_risk_factor_for_value(synthetic_id,synthetic_value);
+        }
+
+         /// Get the risk factor of a synthetic asset.
+        ///   - synthetic_value = |price * balance|
+        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   first risk factor.
+        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
+        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - If the index is out of bounds, return the last risk factor.
+        /// - If the asset is not synthetic, panic.
+        fn get_synthetic_risk_factor_for_value(
+            self: @ComponentState<TContractState>,
+            synthetic_id: AssetId,
+            synthetic_value: u128,
+        ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
-                let synthetic_value: u128 = price.mul(rhs: balance).abs();
                 let index = if synthetic_value < synthetic_config.risk_factor_first_tier_boundary {
                     0_u128
                 } else {
