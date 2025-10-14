@@ -5,7 +5,7 @@ use core::num::traits::zero::Zero;
 // Example: 0.75 is represented as 75.
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct RiskFactor {
-    value: u16 // Stores number * 1000
+    pub value: u16 // Stores number * 1000
 }
 
 
