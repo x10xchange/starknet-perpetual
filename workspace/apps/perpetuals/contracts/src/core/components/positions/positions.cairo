@@ -514,7 +514,15 @@ pub(crate) mod Positions {
                 let price = assets.get_synthetic_price(synthetic_id);
                 let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
                 unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
+                    .append(
+                        SyntheticAsset {
+                            id: synthetic_id,
+                            balance,
+                            price,
+                            risk_factor,
+                            cached_funding_index: synthetic.funding_index,
+                        },
+                    );
             }
 
             (provisional_delta, unchanged_synthetics.span())

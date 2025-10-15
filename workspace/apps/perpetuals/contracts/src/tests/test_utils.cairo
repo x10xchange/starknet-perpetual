@@ -322,7 +322,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             :position_id,
             owner_public_key: user.get_public_key(),
             owner_account: Zero::zero(),
-            owner_protection_enabled: false
+            owner_protection_enabled: false,
         );
     let position_diff = PositionDiff {
         collateral_diff: COLLATERAL_BALANCE_AMOUNT.into(), synthetic_diff: Option::None,

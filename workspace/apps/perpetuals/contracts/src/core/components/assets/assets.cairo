@@ -622,7 +622,7 @@ pub mod AssetsComponent {
             price: Price,
         ) -> RiskFactor {
             let synthetic_value: u128 = price.mul(rhs: balance).abs();
-            return self.get_synthetic_risk_factor_for_value(synthetic_id,synthetic_value);
+            return self.get_synthetic_risk_factor_for_value(synthetic_id, synthetic_value);
         }
 
         /// Get the risk factor of a synthetic asset.
