@@ -275,13 +275,20 @@ pub mod AssetsComponent {
             let mut old_synthetic_config = self._get_synthetic_config(asset_id);
             let mut bound = risk_factor_first_tier_boundary;
 
-            for risk_factor in risk_factor_tiers {
+            for i in 0..risk_factor_tiers.len() {
                 let mut old_factor = self
                     .get_synthetic_risk_factor_for_value(
-                        synthetic_id: asset_id,
-                        synthetic_value: bound - 1
+                        synthetic_id: asset_id, synthetic_value: bound - 1,
                     );
-                assert(old_factor.value >= *risk_factor, INVALID_RF_VALUE);
+                assert(old_factor.value >= *risk_factor_tiers.at(i), INVALID_RF_VALUE);
+                old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound,
+                    );
+                if i + 1 < risk_factor_tiers.len() {
+                    assert(old_factor.value >= *risk_factor_tiers.at(i + 1), INVALID_RF_VALUE);
+                }
+
                 bound += risk_factor_tier_size;
             }
 
@@ -618,7 +625,7 @@ pub mod AssetsComponent {
             return self.get_synthetic_risk_factor_for_value(synthetic_id,synthetic_value);
         }
 
-         /// Get the risk factor of a synthetic asset.
+        /// Get the risk factor of a synthetic asset.
         ///   - synthetic_value = |price * balance|
         ///   - If the synthetic value is less than or equal to the first tier boundary, return the
         ///   first risk factor.
@@ -627,9 +634,7 @@ pub mod AssetsComponent {
         ///   - If the index is out of bounds, return the last risk factor.
         /// - If the asset is not synthetic, panic.
         fn get_synthetic_risk_factor_for_value(
-            self: @ComponentState<TContractState>,
-            synthetic_id: AssetId,
-            synthetic_value: u128,
+            self: @ComponentState<TContractState>, synthetic_id: AssetId, synthetic_value: u128,
         ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
