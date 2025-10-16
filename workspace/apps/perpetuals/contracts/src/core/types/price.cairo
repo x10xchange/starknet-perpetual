@@ -1,4 +1,3 @@
-use starkware_utils::math::abs::Abs;
 use core::num::traits::{One, Pow, Zero};
 use perpetuals::core::types::balance::Balance;
 use starkware_utils::math::utils::mul_wide_and_div;
