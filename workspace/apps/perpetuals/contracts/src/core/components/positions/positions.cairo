@@ -415,7 +415,6 @@ pub(crate) mod Positions {
         ) {
             let position_mut = self.get_position_mut(:position_id);
             position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
-
             if let Option::Some((synthetic_id, synthetic_diff)) = position_diff.synthetic_diff {
                 self
                     ._update_synthetic_balance_and_funding(
@@ -515,7 +514,15 @@ pub(crate) mod Positions {
                 let price = assets.get_synthetic_price(synthetic_id);
                 let risk_factor = assets.get_synthetic_risk_factor(synthetic_id, balance, price);
                 unchanged_synthetics
-                    .append(SyntheticAsset { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
+                    .append(
+                        SyntheticAsset {
+                            id: synthetic_id,
+                            balance,
+                            price,
+                            risk_factor,
+                            cached_funding_index: synthetic.funding_index,
+                        },
+                    );
             }
 
             (provisional_delta, unchanged_synthetics.span())

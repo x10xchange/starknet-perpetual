@@ -11,16 +11,17 @@ pub mod AssetsComponent {
     use perpetuals::core::components::assets::errors::{
         ALREADY_INITIALIZED, ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL,
         COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED, FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET,
-        INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_SAME_QUORUM,
-        INVALID_TIMESTAMP, INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME, INVALID_ZERO_ORACLE_NAME,
-        INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM, INVALID_ZERO_QUORUM,
-        INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY, INVALID_ZERO_RF_TIERS_LEN,
-        INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS, NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS,
-        ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS, ORACLE_PUBLIC_KEY_NOT_REGISTERED,
-        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
-        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
-        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
-        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL, oracle_public_key_not_registered,
+        INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN, INVALID_PRICE_TIMESTAMP, INVALID_RF_VALUE,
+        INVALID_SAME_QUORUM, INVALID_TIMESTAMP, INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME,
+        INVALID_ZERO_ORACLE_NAME, INVALID_ZERO_PUBLIC_KEY, INVALID_ZERO_QUANTUM,
+        INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY,
+        INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS,
+        NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
+        ORACLE_PUBLIC_KEY_NOT_REGISTERED, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
+        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
+        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
+        oracle_public_key_not_registered,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -30,10 +31,10 @@ pub mod AssetsComponent {
         SyntheticConfig, SyntheticTimelyData, SyntheticTrait,
     };
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::balance::Balance;
+    use perpetuals::core::types::balance::{Balance, BalanceImpl};
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
     use perpetuals::core::types::price::{
-        Price, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
+        Price, PriceImpl, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
     };
     use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use starknet::ContractAddress;
@@ -81,6 +82,7 @@ pub mod AssetsComponent {
     pub enum Event {
         OracleAdded: events::OracleAdded,
         SyntheticAdded: events::SyntheticAdded,
+        SyntheticChanged: events::SyntheticChanged,
         AssetActivated: events::AssetActivated,
         SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         FundingTick: events::FundingTick,
@@ -240,6 +242,89 @@ pub mod AssetsComponent {
                     },
                 );
         }
+
+        /// Update synthetic asset risk factors.
+        /// Validations:
+        /// - Only the operator can call this function, cause it must be sequenced.
+        /// (Liqudation may fail if submitted out of order)
+        /// - Each risk factor in risk_factor_tiers is less or equal to 1000.
+        /// - After update postitions risk must be the same or lower.
+        ///
+        /// Execution:
+        fn update_synthetic_asset_risk_factor(
+            ref self: ComponentState<TContractState>,
+            operator_nonce: u64,
+            asset_id: AssetId,
+            risk_factor_tiers: Span<u16>,
+            risk_factor_first_tier_boundary: u128,
+            risk_factor_tier_size: u128,
+        ) {
+            // Validations:
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
+            nonce.use_checked_nonce(:operator_nonce);
+
+            assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
+            assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
+            assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
+            assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
+            if let Option::Some(collateral_id) = self.collateral_id.read() {
+                assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
+            }
+
+            let mut old_synthetic_config = self._get_synthetic_config(asset_id);
+            let mut bound = risk_factor_first_tier_boundary;
+
+            for i in 0..risk_factor_tiers.len() {
+                let mut old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound - 1,
+                    );
+                assert(old_factor.value >= *risk_factor_tiers.at(i), INVALID_RF_VALUE);
+                old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound,
+                    );
+                if i + 1 < risk_factor_tiers.len() {
+                    assert(old_factor.value >= *risk_factor_tiers.at(i + 1), INVALID_RF_VALUE);
+                }
+
+                bound += risk_factor_tier_size;
+            }
+
+            old_synthetic_config.risk_factor_tier_size = risk_factor_tier_size;
+            old_synthetic_config.risk_factor_first_tier_boundary = risk_factor_first_tier_boundary;
+            let synthetic_entry = self.synthetic_config.entry(asset_id);
+            synthetic_entry.write(Option::Some(old_synthetic_config));
+
+            let mut prev_risk_factor = 0_u16;
+            let entry = self.risk_factor_tiers.entry(asset_id);
+            while true {
+                if entry.pop().is_none() {
+                    break;
+                }
+            }
+            for risk_factor in risk_factor_tiers {
+                assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
+                self
+                    .risk_factor_tiers
+                    .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
+                    .push(RiskFactorTrait::new(*risk_factor));
+                prev_risk_factor = *risk_factor;
+            }
+            self
+                .emit(
+                    events::SyntheticChanged {
+                        asset_id: asset_id,
+                        risk_factor_tiers: risk_factor_tiers,
+                        risk_factor_first_tier_boundary: risk_factor_first_tier_boundary,
+                        risk_factor_tier_size: risk_factor_tier_size,
+                        resolution_factor: old_synthetic_config.resolution_factor,
+                        quorum: old_synthetic_config.quorum,
+                    },
+                );
+        }
+
 
         /// - Deactivate synthetic asset.
         ///
@@ -536,9 +621,23 @@ pub mod AssetsComponent {
             balance: Balance,
             price: Price,
         ) -> RiskFactor {
+            let synthetic_value: u128 = price.mul(rhs: balance).abs();
+            return self.get_synthetic_risk_factor_for_value(synthetic_id, synthetic_value);
+        }
+
+        /// Get the risk factor of a synthetic asset.
+        ///   - synthetic_value = |price * balance|
+        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   first risk factor.
+        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
+        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - If the index is out of bounds, return the last risk factor.
+        /// - If the asset is not synthetic, panic.
+        fn get_synthetic_risk_factor_for_value(
+            self: @ComponentState<TContractState>, synthetic_id: AssetId, synthetic_value: u128,
+        ) -> RiskFactor {
             if let Option::Some(synthetic_config) = self.synthetic_config.read(synthetic_id) {
                 let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
-                let synthetic_value: u128 = price.mul(rhs: balance).abs();
                 let index = if synthetic_value < synthetic_config.risk_factor_first_tier_boundary {
                     0_u128
                 } else {

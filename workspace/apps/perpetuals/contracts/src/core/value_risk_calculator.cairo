@@ -10,7 +10,7 @@ use perpetuals::core::types::position::{
     PositionDiffEnriched, PositionId, SyntheticEnrichedPositionDiff,
 };
 use perpetuals::core::types::price::{Price, PriceMulTrait};
-use perpetuals::core::types::risk_factor::{RiskFactorMulTrait};
+use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
 use starkware_utils::errors::assert_with_byte_array;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
@@ -86,9 +86,7 @@ pub fn evaluate_position(
     get_position_state(position_tvtr: tvtr)
 }
 
-pub fn assert_healthy_or_healthier(
-    position_id: PositionId, tvtr: TVTRChange,
-) {
+pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
         // If the position is healthy we can return.
@@ -261,8 +259,7 @@ mod tests {
     use perpetuals::core::types::balance::BalanceTrait;
     use perpetuals::core::types::funding::FundingIndex;
     use perpetuals::core::types::price::{Price, PriceTrait};
-    use perpetuals::core::types::risk_factor::RiskFactor;
-    use perpetuals::core::types::risk_factor::{RiskFactorTrait};
+    use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
     use super::*;
 
 

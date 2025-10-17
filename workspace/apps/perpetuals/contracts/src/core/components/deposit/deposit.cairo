@@ -155,13 +155,14 @@ pub(crate) mod Deposit {
                 DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
                 DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
             }
-            self._cancel_deposit(
-                depositor: depositor,
-                position_id: position_id,
-                quantized_amount: quantized_amount,
-                salt: salt,
-                deposit_hash: deposit_hash
-            )
+            self
+                ._cancel_deposit(
+                    depositor: depositor,
+                    position_id: position_id,
+                    quantized_amount: quantized_amount,
+                    salt: salt,
+                    deposit_hash: deposit_hash,
+                )
         }
 
 
@@ -208,13 +209,14 @@ pub(crate) mod Deposit {
                 DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
             }
 
-            self._cancel_deposit(
-                            depositor: depositor,
-                            position_id: position_id,
-                            quantized_amount: quantized_amount,
-                            salt: salt,
-                            deposit_hash: deposit_hash
-            )
+            self
+                ._cancel_deposit(
+                    depositor: depositor,
+                    position_id: position_id,
+                    quantized_amount: quantized_amount,
+                    salt: salt,
+                    deposit_hash: deposit_hash,
+                )
         }
 
 
@@ -333,7 +335,6 @@ pub(crate) mod Deposit {
         ) {
             let assets = get_dep_component!(@self, Assets);
             let token_contract = assets.get_collateral_token_contract();
-
 
             self.registered_deposits.write(key: deposit_hash, value: DepositStatus::CANCELED);
             let quantum = assets.get_collateral_quantum();
