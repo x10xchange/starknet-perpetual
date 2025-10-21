@@ -135,18 +135,28 @@ pub mod VaultComponent {
                 );
 
             /// Executions:
-            let actual_quantized_vault_shares_amount = self
+            let (asset_type, erc20_vault_dispatcher, vault_share_quantum) = assets
+                .get_token_contract_and_quantum(asset_id: vault_share_asset_id);
+            assert(asset_type == AssetType::VAULT_SHARE_COLLATERAL, NOT_VAULT_SHARE_ASSET);
+            let actual_unquantized_vault_shares_amount = self
                 ._execute_deposit_into_vault(
                     :position_id,
                     :vault_position_id,
                     :collateral_quantized_amount,
-                    :vault_share_asset_id,
+                    vault_address: erc20_vault_dispatcher.contract_address,
+                    :vault_share_quantum,
                 );
 
+            let perps_address = get_contract_address();
+            let actual_quantized_vault_shares_amount: u64 = (actual_unquantized_vault_shares_amount
+                / vault_share_quantum.into())
+                .try_into()
+                .expect(AMOUNT_OVERFLOW);
             let mut deposit = get_dep_component_mut!(ref self, Deposit);
             deposit
                 .deposit(
                     asset_id: vault_share_asset_id,
+                    depositor: perps_address,
                     :position_id,
                     quantized_amount: actual_quantized_vault_shares_amount,
                     // As the operator nonce is unique, it can be used as salt.
@@ -358,7 +368,7 @@ pub mod VaultComponent {
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
             get_dep_component!(@self, Assets).validate_active_asset(asset_id: vault_share_asset_id);
-            let mut positions = get_dep_component_mut!(ref self, Positions);
+            let mut positions = get_dep_component!(@self, Positions);
 
             // Depositing position must not be a vault position.
             assert(!self._is_vault_position(:position_id), POSITION_IS_VAULT_POSITION);
@@ -394,16 +404,12 @@ pub mod VaultComponent {
             position_id: PositionId,
             vault_position_id: PositionId,
             collateral_quantized_amount: u64,
-            vault_share_asset_id: AssetId,
-        ) -> u64 {
-            let (_, erc20_vault_dispatcher, vault_share_quantum) = get_dep_component!(@self, Assets)
-                .get_token_contract_and_quantum(asset_id: vault_share_asset_id);
+            vault_address: ContractAddress,
+            vault_share_quantum: u64,
+        ) -> u256 {
             // Deposit into vault.
             let actual_unquantized_vault_shares_amount = self
-                ._deposit_to_vault_contract(
-                    vault_address: erc20_vault_dispatcher.contract_address,
-                    :collateral_quantized_amount,
-                );
+                ._deposit_to_vault_contract(:vault_address, :collateral_quantized_amount);
 
             // Build position diffs.
             let position_diff = PositionDiff {
@@ -425,10 +431,7 @@ pub mod VaultComponent {
             positions.apply_diff(:position_id, :position_diff);
             positions.apply_diff(position_id: vault_position_id, position_diff: vault_diff);
 
-            // Convert unquantized amount to quantized amount.
-            (actual_unquantized_vault_shares_amount / vault_share_quantum.into())
-                .try_into()
-                .expect(AMOUNT_OVERFLOW)
+            actual_unquantized_vault_shares_amount
         }
 
         fn _deposit_to_vault_contract(
@@ -503,7 +506,7 @@ pub mod VaultComponent {
             assert(vault_position.is_zero(), VAULT_CONTRACT_ALREADY_EXISTS);
 
             //Position check
-            let mut positions = get_dep_component_mut!(ref self, Positions);
+            let mut positions = get_dep_component!(@self, Positions);
             let vault_position = positions.get_position_snapshot(position_id: vault_position_id);
 
             for (asset_id, asset_balance) in vault_position.assets_balance {
@@ -536,7 +539,7 @@ pub mod VaultComponent {
             vault_share_asset_id: AssetId,
         ) -> (StoragePath<Position>, StoragePath<Position>) {
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
-            let mut positions = get_dep_component_mut!(ref self, Positions);
+            let mut positions = get_dep_component!(@self, Positions);
 
             assert(number_of_shares.is_non_zero(), INVALID_ZERO_AMOUNT);
             assert(minimum_received_total_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
@@ -624,7 +627,6 @@ pub mod VaultComponent {
                 );
 
             // Apply diffs.
-            let mut positions = get_dep_component_mut!(ref self, Positions);
             positions.apply_diff(:position_id, :position_diff);
             positions.apply_diff(position_id: vault_position_id, position_diff: vault_diff);
 
