@@ -1336,6 +1336,11 @@ pub mod Core {
                 ._validate_asset_balance_is_not_negative(
                     position: vault_position, asset_id: self.assets.get_collateral_id(),
                 );
+
+            self
+                ._validate_asset_balance_is_not_negative(
+                    position: redeeming_position, asset_id: order.base_asset_id,
+                );                
             // user health checks
 
             self
