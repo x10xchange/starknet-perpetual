@@ -1,5 +1,5 @@
 #[starknet::component]
-pub(crate) mod Positions {
+pub mod Positions {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;

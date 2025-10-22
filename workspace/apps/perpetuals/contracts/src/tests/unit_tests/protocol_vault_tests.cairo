@@ -19,7 +19,7 @@ use starkware_utils::storage::iterable_map::*;
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use crate::core::components::vault::protocol_vault::{
+use vault::interface::{
     IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
 };
 

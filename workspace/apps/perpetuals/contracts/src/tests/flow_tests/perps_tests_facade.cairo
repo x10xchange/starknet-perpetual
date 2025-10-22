@@ -59,8 +59,8 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
 use crate::core::components::deposit::events as deposit_events;
-use crate::core::components::vault::protocol_vault::IProtocolVaultDispatcher;
-use crate::core::components::vault::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
+use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+use crate::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use crate::core::core::Core::Event::DepositEvent;
 use crate::core::types::funding::FundingIndex;
 use crate::tests::constants::KEY_PAIR_1;

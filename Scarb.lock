@@ -139,13 +139,14 @@ dependencies = [
 
 [[package]]
 name = "perpetuals"
-version = "0.3.0"
+version = "0.2.0"
 dependencies = [
  "openzeppelin",
  "openzeppelin_testing",
  "snforge_std",
  "starkware_utils",
  "starkware_utils_testing",
+ "vault",
 ]
 
 [[package]]
@@ -179,4 +180,15 @@ dependencies = [
  "openzeppelin",
  "snforge_std",
  "starkware_utils",
+]
+
+[[package]]
+name = "vault"
+version = "0.2.0"
+dependencies = [
+ "openzeppelin",
+ "perpetuals",
+ "snforge_std",
+ "starkware_utils",
+ "starkware_utils_testing",
 ]

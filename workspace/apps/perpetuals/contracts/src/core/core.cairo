@@ -71,13 +71,11 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
+    use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::assets::interface::IAssets;
-    use crate::core::components::vault;
-    use crate::core::components::vault::protocol_vault::{
-        IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
-    };
-    use crate::core::components::vault::vaults::Vaults;
-    use crate::core::components::vault::vaults::Vaults::InternalTrait as VaultsInternal;
+    use crate::core::components::vaults;
+    use crate::core::components::vaults::vaults::Vaults;
+    use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::price::PRICE_SCALE;
 
