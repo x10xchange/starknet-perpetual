@@ -32,10 +32,8 @@ pub(crate) mod Vaults {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::vault::events;
-    use perpetuals::core::components::vault::protocol_vault::{
-        IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait,
-    };
+    use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::position::PositionId;
@@ -49,6 +47,7 @@ pub(crate) mod Vaults {
     };
     use crate::core::components::positions;
     use super::{ConvertPositionToVault, IVaults, STORAGE_VERSION, VaultConfig};
+    use crate::core::components::vaults::events;
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]

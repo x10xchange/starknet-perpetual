@@ -1,5 +1,5 @@
 [package]
-name = "perpetuals"
+name = "vault"
 version = "0.2.0"
 edition = "2024_07"
 
@@ -7,12 +7,11 @@ edition = "2024_07"
 starknet.workspace = true
 starkware_utils.workspace = true
 openzeppelin.workspace = true
-vault = { path = "../../../vault" }
+perpetuals = { path = "../apps/perpetuals/contracts/" }
 
 [dev-dependencies]
 assert_macros.workspace = true
 snforge_std.workspace = true
-openzeppelin_testing.workspace = true
 starkware_utils_testing.workspace = true
 
 [[target.starknet-contract]]
@@ -34,11 +33,8 @@ inlining-strategy = "avoid"
 panic-backtrace = true
 
 [[test]]
-name = "perpetuals_unittest"
+name = "vault_unittest"
 build-external-contracts = [
-    "starkware_utils::erc20::erc20_mocks::DualCaseERC20Mock",
-    "openzeppelin_presets::account::AccountUpgradeable",
-    "vault::protocol_vault::ProtocolVault"
 ]
 
 [lib]

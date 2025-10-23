@@ -91,8 +91,32 @@ pub impl LimitOrderImpl of LimitOrderTrait {
     }
 }
 
+/// selector!(
+///   "\"Order\"(
+///    \"source_position\":\"PositionId\",
+///    \"receive_position\":\"PositionId\",
+///    \"base_asset_id\":\"AssetId\",
+///    \"base_amount\":\"i64\",
+///    \"quote_asset_id\":\"AssetId\",
+///    \"quote_amount\":\"i64\",
+///    \"fee_asset_id\":\"AssetId\",
+///    \"fee_amount\":\"u64\",
+///    \"expiration\":\"Timestamp\",
+///    \"salt\":\"felt\"
+///    )
+///    \"PositionId\"(
+///    \"value\":\"u32\"
+///    )"
+///    \"AssetId\"(
+///    \"value\":\"felt\"
+///    )"
+///    \"Timestamp\"(
+///    \"seconds\":\"u64\"
+///    )
+/// );
+
 const LIMIT_ORDER_TYPE_HASH: HashType =
-    0x36da8d51815527cabfaa9c982f564c80fa7429616739306036f1f9b608dd112;
+    0x03c79b3b5997e78a29ab2fb5e8bc8244f222c5e01ae914c10f956bd0f805199a;
 
 
 impl LimitOrderStructHashImpl of StructHash<LimitOrder> {
@@ -182,7 +206,7 @@ pub impl OrderImpl of OrderTrait {
 #[cfg(test)]
 mod tests {
     use openzeppelin_testing::common::IntoBase16String;
-    use super::ORDER_TYPE_HASH;
+    use super::{LIMIT_ORDER_TYPE_HASH, ORDER_TYPE_HASH};
 
     #[test]
     fn test_order_type_hash() {
@@ -190,5 +214,12 @@ mod tests {
             "\"Order\"(\"position_id\":\"felt\",\"base_asset_id\":\"AssetId\",\"base_amount\":\"i64\",\"quote_asset_id\":\"AssetId\",\"quote_amount\":\"i64\",\"fee_asset_id\":\"AssetId\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert!(ORDER_TYPE_HASH.into_base_16_string() == expected.into_base_16_string());
+    }
+    #[test]
+    fn test_limit_order_type_hash() {
+        let expected = selector!(
+            "\"LimitOrder\"(\"source_position\":\"PositionId\",\"receive_position\":\"PositionId\",\"base_asset_id\":\"AssetId\",\"base_amount\":\"i64\",\"quote_asset_id\":\"AssetId\",\"quote_amount\":\"i64\",\"fee_asset_id\":\"AssetId\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"PositionId\"(\"value\":\"u32\")\"AssetId\"(\"value\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+        );
+        assert!(LIMIT_ORDER_TYPE_HASH.into_base_16_string() == expected.into_base_16_string());
     }
 }

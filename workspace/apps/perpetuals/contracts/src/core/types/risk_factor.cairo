@@ -5,7 +5,7 @@ use core::num::traits::zero::Zero;
 // Example: 0.75 is represented as 75.
 #[derive(Copy, Debug, Default, Drop, PartialEq, Serde, starknet::Store)]
 pub struct RiskFactor {
-    value: u16 // Stores number * 1000
+    pub value: u16 // Stores number * 1000
 }
 
 
@@ -56,11 +56,8 @@ impl RiskFactorZero of core::num::traits::Zero<RiskFactor> {
 #[cfg(test)]
 mod tests {
     use core::num::traits::zero::Zero;
-    use super::{
-        RiskFactor, RiskFactorMulAssetValue, RiskFactorMulTrait,
-        RiskFactorTrait,
-    };
     use starkware_utils::math::abs::Abs;
+    use super::{RiskFactor, RiskFactorMulAssetValue, RiskFactorMulTrait, RiskFactorTrait};
 
     #[test]
     fn test_new() {
@@ -94,17 +91,8 @@ mod tests {
 
     #[test]
     fn test_mul() {
-        assert_eq!(
-            RiskFactorTrait::new(750).mul(300_i128.abs()), (225),
-        );
-        assert_eq!(
-            RiskFactorTrait::new(750).mul(301_i128.abs()), 225,
-        );
-        // assert_eq!(
-        //     RiskFactorTrait::new(750).mul(AssetValueTrait::new(299_i128)), AssetRiskTrait::new(224),
-        // );
-        // assert_eq!(
-        //     RiskFactorTrait::new(710).mul(AssetValueTrait::new(299_i128)), AssetRiskTrait::new(212),
-        // );
+        assert_eq!(RiskFactorTrait::new(750).mul(300_i128.abs()), (225));
+        assert_eq!(RiskFactorTrait::new(750).mul(301_i128.abs()), 225);
+        assert_eq!(RiskFactorTrait::new(750).mul(299_i128.abs()), 224);
     }
 }

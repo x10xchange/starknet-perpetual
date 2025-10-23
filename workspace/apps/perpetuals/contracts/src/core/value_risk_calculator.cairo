@@ -86,9 +86,7 @@ pub fn evaluate_position(
     get_position_state(position_tvtr: tvtr)
 }
 
-pub fn assert_healthy_or_healthier(
-    position_id: PositionId, tvtr: TVTRChange,
-) {
+pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     let position_state_after_change = get_position_state(position_tvtr: tvtr.after);
     if position_state_after_change == PositionState::Healthy {
         // If the position is healthy we can return.
