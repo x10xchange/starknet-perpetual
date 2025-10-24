@@ -1,9 +1,10 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::{LimitOrder, Order};
 use perpetuals::core::types::position::PositionId;
-use starknet::ContractAddress;
+use starknet::{ClassHash, ContractAddress};
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
+use super::types::vault::ConvertPositionToVault;
 
 #[derive(Copy, Drop, Serde)]
 pub struct Settlement {
@@ -16,6 +17,8 @@ pub struct Settlement {
     pub actual_fee_a: u64,
     pub actual_fee_b: u64,
 }
+
+pub const EXTERNAL_COMPONENT_VAULT: felt252 = 0x1;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -99,10 +102,11 @@ pub trait ICore<TContractState> {
         base_amount_a: i64,
     );
 
+    fn register_vault_component(ref self: TContractState, component_address: ClassHash);
+    fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
     fn invest_in_vault(
         ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
     );
-
     fn redeem_from_vault(
         ref self: TContractState,
         operator_nonce: u64,

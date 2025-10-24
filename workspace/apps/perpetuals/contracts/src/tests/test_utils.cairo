@@ -40,6 +40,7 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
 use crate::core::components::deposit::interface::IDeposit;
+use crate::core::interface::{ICore, ICoreDispatcher, ICoreDispatcherTrait};
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.
@@ -260,7 +261,10 @@ pub struct SyntheticCfg {
 // Internal functions.
 
 fn CONTRACT_STATE() -> Core::ContractState {
-    Core::contract_state_for_testing()
+    let mut state = Core::contract_state_for_testing();
+    let vault_external_component = snforge_std::declare("VaultsManager").unwrap().contract_class();
+    state.register_vault_component(component_address: *vault_external_component.class_hash);
+    state
 }
 
 pub fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
@@ -374,7 +378,9 @@ pub fn setup_state_with_pending_vault_share(
     state
 }
 
-pub fn send_price_tick_for_vault_share(ref state: Core::ContractState, cfg: @PerpetualsInitConfig, price: u64) {
+pub fn send_price_tick_for_vault_share(
+    ref state: Core::ContractState, cfg: @PerpetualsInitConfig, price: u64,
+) {
     let mut spy = snforge_std::spy_events();
     let asset_name = 'VAULT_SHARE';
     let oracle1_name = 'ORCL1';
@@ -680,9 +686,18 @@ pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @Perpetua
     dispatcher.register_operator(account: *cfg.operator);
 }
 
+pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress) {
+    let vault_external_component = snforge_std::declare("VaultsManager").unwrap().contract_class();
+    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
+    let core_dispatcher = ICoreDispatcher { contract_address };
+    core_dispatcher
+        .register_vault_component(component_address: *vault_external_component.class_hash);
+}
+
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
     let contract_address = cfg.deploy(:token_state);
     set_roles_by_dispatcher(:contract_address, :cfg);
+    register_vault_component_by_dispatcher(:contract_address);
     contract_address
 }
 

@@ -5,6 +5,7 @@ use perpetuals::core::errors::{illegal_base_to_quote_ratio_err, illegal_fee_to_q
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starkware_utils::errors::assert_with_byte_array;
+use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
 use starkware_utils::signature::stark::HashType;
@@ -50,7 +51,7 @@ fn validate_against_actual_amounts(
 #[derive(Copy, Drop, Hash, Serde)]
 // An order to buy or sell an asset for a collateral asset.
 // The base amount and quote amount have opposite signs.
-pub struct LimitOrder {
+pub(crate) struct LimitOrder {
     pub source_position: PositionId,
     pub receive_position: PositionId,
     // The asset to be bought or sold.
@@ -119,7 +120,7 @@ const LIMIT_ORDER_TYPE_HASH: HashType =
     0x03c79b3b5997e78a29ab2fb5e8bc8244f222c5e01ae914c10f956bd0f805199a;
 
 
-impl LimitOrderStructHashImpl of StructHash<LimitOrder> {
+pub impl LimitOrderStructHashImpl of StructHash<LimitOrder> {
     fn hash_struct(self: @LimitOrder) -> HashType {
         let hash_state = PoseidonTrait::new();
         hash_state.update_with(LIMIT_ORDER_TYPE_HASH).update_with(*self).finalize()
