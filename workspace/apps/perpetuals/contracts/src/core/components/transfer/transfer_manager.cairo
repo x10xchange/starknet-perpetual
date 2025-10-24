@@ -1,6 +1,5 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
-use starknet::ContractAddress;
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
 
@@ -269,7 +268,6 @@ pub(crate) mod TransferManager {
             salt: felt252,
         ) {
             self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
@@ -301,7 +299,7 @@ pub(crate) mod TransferManager {
     }
 
     #[generate_trait]
-    pub impl InternalFunctions of VaultsFunctionsTrait {
+    pub impl InternalFunctions of TransferManagerFunctionsTrait {
         fn _execute_transfer(
             ref self: ContractState,
             recipient: PositionId,

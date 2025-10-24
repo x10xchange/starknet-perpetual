@@ -269,10 +269,19 @@ fn CONTRACT_STATE() -> Core::ContractState {
     let transfers_external_component = snforge_std::declare("TransferManager")
         .unwrap()
         .contract_class();
+
+    let liquidations_external_component = snforge_std::declare("LiquidationManager")
+        .unwrap()
+        .contract_class();
+
     state.register_vault_component(component_address: *vault_external_component.class_hash);
     state
         .register_withdraw_component(component_address: *withdrawals_external_component.class_hash);
     state.register_transfer_component(component_address: *transfers_external_component.class_hash);
+    state
+        .register_liquidation_component(
+            component_address: *liquidations_external_component.class_hash,
+        );
     state
 }
 
@@ -703,6 +712,9 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
     let transfers_external_component = snforge_std::declare("TransferManager")
         .unwrap()
         .contract_class();
+    let liquidations_external_component = snforge_std::declare("LiquidationManager")
+        .unwrap()
+        .contract_class();
 
     cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
     let core_dispatcher = ICoreDispatcher { contract_address };
@@ -714,6 +726,12 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
     cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
     core_dispatcher
         .register_transfer_component(component_address: *transfers_external_component.class_hash);
+
+    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
+    core_dispatcher
+        .register_liquidation_component(
+            component_address: *liquidations_external_component.class_hash,
+        );
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {

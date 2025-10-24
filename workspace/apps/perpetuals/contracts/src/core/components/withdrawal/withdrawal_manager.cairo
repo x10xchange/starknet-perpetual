@@ -291,7 +291,4 @@ pub(crate) mod WithdrawalManager {
                 );
         }
     }
-
-    #[generate_trait]
-    pub impl InternalFunctions of VaultsFunctionsTrait {}
 }

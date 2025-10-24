@@ -5,7 +5,6 @@ use perpetuals::core::errors::{illegal_base_to_quote_ratio_err, illegal_fee_to_q
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starkware_utils::errors::assert_with_byte_array;
-use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
 use starkware_utils::signature::stark::HashType;
