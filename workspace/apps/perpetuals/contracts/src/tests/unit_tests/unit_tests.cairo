@@ -25,8 +25,7 @@ use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick}
 use perpetuals::core::types::order::Order;
 use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
 use perpetuals::core::types::price::{
-    PRICE_SCALE, PriceTrait, SignedPrice,
-    convert_oracle_to_perps_price,
+    PRICE_SCALE, PriceTrait, SignedPrice, convert_oracle_to_perps_price,
 };
 use perpetuals::core::types::risk_factor::RiskFactorTrait;
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
@@ -55,7 +54,10 @@ use perpetuals::tests::test_utils::{
     setup_state_with_pending_vault_share, validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
-use snforge_std::{start_cheat_block_timestamp_global, test_address};
+use snforge_std::{
+    start_cheat_block_timestamp_global, start_cheat_caller_address_global,
+    stop_cheat_caller_address_global, test_address,
+};
 use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
@@ -4440,7 +4442,8 @@ fn test_successful_remove_nonexistent_oracle() {
 //     let risk_factor_1 = array![10].span();
 
 //     // Test:
-//     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
+//     cheat_caller_address_once(contract_address: test_address(), caller_address:
+//     cfg.app_governor);
 //     state
 //         .add_vault_collateral_asset(
 //             asset_id: cfg.vault_share_cfg.collateral_id,
@@ -4959,7 +4962,7 @@ fn test_price_tick_vault_share_asset() {
         spied_event: events[2], asset_id: vault_share_id, price: expected_price,
     );
     assert!(state.assets.get_asset_config(vault_share_id).status == AssetStatus::ACTIVE);
-    //check synthetic count is not incremented 
+    //check synthetic count is not incremented
     assert!(state.assets.get_num_of_active_synthetic_assets() == 0);
 
     let data = state.assets.get_timely_data(vault_share_id);

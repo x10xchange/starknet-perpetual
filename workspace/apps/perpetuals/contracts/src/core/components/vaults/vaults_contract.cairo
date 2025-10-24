@@ -1,4 +1,3 @@
-use openzeppelin::utils::snip12::SNIP12Metadata;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::order::{LimitOrder, LimitOrderTrait};
 use perpetuals::core::types::position::PositionId;
@@ -45,6 +44,7 @@ pub(crate) mod VaultsManager {
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -71,16 +71,17 @@ pub(crate) mod VaultsManager {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::time::time::{Time};
+    use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::vaults::events;
     use crate::core::errors::order_expired_err;
     use crate::core::types::position::PositionDiff;
     use crate::core::utils::validate_signature;
     use super::{
-        ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, SNIP12Metadata,
-        STORAGE_VERSION, Signature,
+        ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, STORAGE_VERSION,
+        Signature,
     };
+
 
     const NAME: felt252 = 'Vaults';
     const VERSION: felt252 = 'v0';
