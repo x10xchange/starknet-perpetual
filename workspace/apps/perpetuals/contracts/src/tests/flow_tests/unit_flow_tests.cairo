@@ -1022,6 +1022,50 @@ fn test_transfer() {
 }
 
 #[test]
+fn test_withdraw_with_owner() {
+    // Setup.
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    // Create users.
+    let user_1 = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: user_1.account, position_id: user_1.position_id, quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    // Withdraw.
+    let mut withdraw_info = state.facade.withdraw_request(user: user_1, amount: 15000);
+    state.facade.withdraw(:withdraw_info);
+}
+
+#[test]
+#[should_panic(expected: 'CALLER_IS_NOT_OWNER_ACCOUNT')]
+fn test_withdraw_with_owner_fails_if_not_caller() {
+    // Setup.
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    // Create users.
+    let user_1 = state.new_user_with_position();
+    let user_2 = state.new_user_with_position();
+
+    // Deposit to users.
+    let deposit_info_user_1 = state
+        .facade
+        .deposit(
+            depositor: user_1.account, position_id: user_1.position_id, quantized_amount: 100000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+
+    // Withdraw.
+    let mut withdraw_info = state.facade.withdraw_request_with_caller(user: user_1, amount: 15000, caller: user_2);
+    state.facade.withdraw(:withdraw_info);
+}
+
+#[test]
 #[should_panic(expected: 'ASSET_BALANCE_NEGATIVE')]
 fn test_transfer_withdraw_with_negative_collateral() {
     // Setup.

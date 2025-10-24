@@ -19,7 +19,6 @@ use perpetuals::core::components::positions::Positions::{FEE_POSITION, INSURANCE
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
@@ -457,6 +456,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let withdrawal_external_component = snforge_std::declare("WithdrawalManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -480,6 +483,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         ICoreDispatcher { contract_address: perpetuals_contract }
             .register_vault_component(component_address: *vault_external_component.class_hash);
+
+        ICoreDispatcher { contract_address: perpetuals_contract }
+            .register_withdraw_component(
+                component_address: *withdrawal_external_component.class_hash,
+            );
         perpetual_wrapper
     }
 
@@ -797,6 +805,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn withdraw_request(ref self: PerpsTestsFacade, user: User, amount: u64) -> RequestInfo {
+        self.withdraw_request_with_caller(:user, :amount, caller: user)
+    }
+
+    fn withdraw_request_with_caller(
+        ref self: PerpsTestsFacade, user: User, amount: u64, caller: User,
+    ) -> RequestInfo {
         let account = user.account;
         let position_id = user.position_id;
         let recipient = account.address;
@@ -809,7 +823,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_message_hash(public_key: account.key_pair.public_key);
         let signature = account.sign_message(message: request_hash);
 
-        account.set_as_caller(self.perpetuals_contract);
+        caller.account.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .withdraw_request(:signature, :recipient, :position_id, :amount, :expiration, :salt);
 

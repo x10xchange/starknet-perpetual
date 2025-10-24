@@ -69,7 +69,10 @@ pub mod Core {
     use crate::core::components::vaults::vaults_contract::{
         IVaultExternalDispatcherTrait, IVaultExternalLibraryDispatcher,
     };
-    use crate::core::interface::EXTERNAL_COMPONENT_VAULT;
+    use crate::core::components::withdrawal::withdrawal_manager::{
+        IWithdrawalManagerDispatcherTrait, IWithdrawalManagerLibraryDispatcher,
+    };
+    use crate::core::interface::{EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::validate_signature;
 
@@ -197,7 +200,6 @@ pub mod Core {
         TransferRequest: events::TransferRequest,
         Withdraw: events::Withdraw,
         WithdrawRequest: events::WithdrawRequest,
-        InvestInVaultEvent: events::InvestInVault,
         #[flat]
         FulfillmentEvent: Fulfillement::Event,
     }
@@ -264,36 +266,10 @@ pub mod Core {
             if (self._is_vault(vault_position: position_id)) {
                 panic_with_felt252('VAULT_CANNOT_INITIATE_WITHDRAW');
             }
-
-            let position = self.positions.get_position_snapshot(:position_id);
-            let collateral_id = self.assets.get_collateral_id();
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            let owner_account = if (position.owner_protection_enabled.read()) {
-                position.get_owner_account()
-            } else {
-                Option::None
-            };
-            let hash = self
-                .request_approvals
-                .register_approval(
-                    owner_account: owner_account,
-                    public_key: position.get_owner_public_key(),
-                    :signature,
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                );
             self
-                .emit(
-                    events::WithdrawRequest {
-                        position_id,
-                        recipient,
-                        collateral_id,
-                        amount,
-                        expiration,
-                        withdraw_request_hash: hash,
-                        salt,
-                    },
+                ._get_withdrawal_manager_dispatcher()
+                .withdraw_request(
+                    :signature, :recipient, :position_id, :amount, :expiration, :salt,
                 );
         }
 
@@ -325,50 +301,10 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-            validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
-            let collateral_id = self.assets.get_collateral_id();
-            let position = self.positions.get_position_snapshot(:position_id);
-            let hash = self
-                .request_approvals
-                .consume_approved_request(
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                    public_key: position.get_owner_public_key(),
-                );
-
-            /// Validations - Fundamentals:
-            let position_diff = PositionDiff {
-                collateral_diff: -amount.into(), asset_diff: Option::None,
-            };
-
             self
-                .positions
-                .validate_healthy_or_healthier_position(
-                    :position_id, :position, :position_diff, tvtr_before: Default::default(),
-                );
-
-            self.positions.apply_diff(:position_id, :position_diff);
-            let quantum = self.assets.get_collateral_quantum();
-            let withdraw_unquantized_amount = quantum * amount;
-            let token_contract = self.assets.get_collateral_token_contract();
-            token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
-
-            self
-                .emit(
-                    events::Withdraw {
-                        position_id,
-                        recipient,
-                        collateral_id,
-                        amount,
-                        expiration,
-                        withdraw_request_hash: hash,
-                        salt,
-                    },
-                );
+                ._get_withdrawal_manager_dispatcher()
+                .withdraw(:operator_nonce, :recipient, :position_id, :amount, :expiration, :salt);
         }
 
         /// Executes a transfer request.
@@ -1022,6 +958,12 @@ pub mod Core {
                 ._get_vault_manager_dispatcher()
                 .invest_in_vault(operator_nonce: operator_nonce, :signature, :order)
         }
+        fn register_withdraw_component(ref self: ContractState, component_address: ClassHash) {
+            self
+                .external_components
+                .entry(EXTERNAL_COMPONENT_WITHDRAWALS)
+                .write(value: component_address);
+        }
     }
 
     #[generate_trait]
@@ -1030,8 +972,16 @@ pub mod Core {
             ref self: ContractState,
         ) -> IVaultExternalLibraryDispatcher {
             let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_VAULT).read();
-            assert(class_hash.is_non_zero(), 'VAULT_COMPONENT_NOT_REGISTERED');
+            assert(class_hash.is_non_zero(), 'VAULT_MANAGER_NOT_REGISTERED');
             IVaultExternalLibraryDispatcher { class_hash: class_hash }
+        }
+
+        fn _get_withdrawal_manager_dispatcher(
+            ref self: ContractState,
+        ) -> IWithdrawalManagerLibraryDispatcher {
+            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_WITHDRAWALS).read();
+            assert(class_hash.is_non_zero(), 'WITHDRAW_MANAGER_NOT_REGISTERED');
+            IWithdrawalManagerLibraryDispatcher { class_hash: class_hash }
         }
 
         fn _execute_trade(
