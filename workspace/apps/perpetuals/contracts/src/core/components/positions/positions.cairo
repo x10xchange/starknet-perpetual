@@ -42,12 +42,15 @@ pub mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::math::abs::Abs;
+    use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::signature::stark::{PublicKey, Signature};
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
+    use crate::core::errors::{INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE};
     use crate::core::types::asset::synthetic::AssetBalanceDiffEnriched;
     use crate::core::types::balance::BalanceDiff;
     use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
@@ -629,6 +632,20 @@ pub mod Positions {
             );
             assert_healthy_or_healthier(:position_id, :tvtr);
             tvtr.after
+        }
+
+        fn _validate_synthetic_shrinks(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            asset_id: AssetId,
+            amount: i64,
+        ) {
+            let position_base_balance: i64 = self
+                .get_synthetic_balance(:position, synthetic_id: asset_id)
+                .into();
+
+            assert(!have_same_sign(amount, position_base_balance), INVALID_AMOUNT_SIGN);
+            assert(amount.abs() <= position_base_balance.abs(), INVALID_BASE_CHANGE);
         }
     }
 

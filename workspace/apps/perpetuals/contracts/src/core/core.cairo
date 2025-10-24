@@ -4,12 +4,11 @@ pub mod Core {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-    use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, SYNTHETIC_NOT_EXISTS};
+    use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::fulfillment::Fulfillement as FulfillmentComponent;
@@ -17,28 +16,20 @@ pub mod Core {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
     use perpetuals::core::components::positions::Positions::{
-        FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternalTrait,
+        FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::errors::{
-        ASSET_ID_NOT_COLLATERAL, CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION,
-        DIFFERENT_BASE_ASSET_IDS, INVALID_ACTUAL_BASE_SIGN, INVALID_ACTUAL_QUOTE_SIGN,
-        INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_QUOTE_AMOUNT_SIGN,
-        INVALID_QUOTE_FEE_AMOUNT, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, SYNTHETIC_IS_ACTIVE,
-        TRANSFER_EXPIRED, WITHDRAW_EXPIRED, order_expired_err,
+        INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, SYNTHETIC_IS_ACTIVE,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
-    use perpetuals::core::types::order::{LimitOrder, Order, OrderTrait};
+    use perpetuals::core::types::order::{LimitOrder, Order};
     use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceMulTrait;
-    use perpetuals::core::types::transfer::TransferArgs;
     use perpetuals::core::types::vault::ConvertPositionToVault;
-    use perpetuals::core::types::withdraw::WithdrawArgs;
-    use perpetuals::core::value_risk_calculator::{
-        PositionTVTR, deleveraged_position_validations, liquidated_position_validations,
-    };
+    use perpetuals::core::value_risk_calculator::{PositionTVTR, deleveraged_position_validations};
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
     use starknet::event::EventEmitter;
@@ -51,20 +42,20 @@ pub mod Core {
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
     use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
-    use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use starkware_utils::errors::assert_with_byte_array;
-    use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::signature::stark::{PublicKey, Signature};
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
+    use starkware_utils::time::time::{TimeDelta, Timestamp};
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
+    use crate::core::components::liquidation::liquidation_manager::{
+        ILiquidationManagerDispatcherTrait, ILiquidationManagerLibraryDispatcher,
+    };
     use crate::core::components::transfer::transfer_manager::{
         ITransferManagerDispatcherTrait, ITransferManagerLibraryDispatcher,
     };
@@ -75,10 +66,12 @@ pub mod Core {
     use crate::core::components::withdrawal::withdrawal_manager::{
         IWithdrawalManagerDispatcherTrait, IWithdrawalManagerLibraryDispatcher,
     };
+    use crate::core::errors::INVALID_AMOUNT_SIGN;
     use crate::core::interface::{
-        EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+        EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
+        EXTERNAL_COMPONENT_WITHDRAWALS,
     };
-    use crate::core::utils::validate_signature;
+    use crate::core::utils::{validate_signature, validate_trade};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -338,6 +331,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 ._get_transfer_manager_dispatcher()
                 .transfer(
@@ -440,32 +434,6 @@ pub mod Core {
         }
 
 
-        /// Executes a liquidate of a user position with liquidator order.
-        ///
-        /// Validations:
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The funding validation interval has not passed since the last funding tick.
-        /// - The prices of all assets in the system are valid.
-        /// - Validates signatures for liquidator order using the public keys of it owner.
-        /// - Ensures the fee amounts are positive.
-        /// - Validates that the base and quote asset types match between the liquidator and
-        /// liquidated orders.
-        /// - Verifies the signs of amounts:
-        ///   - Ensures the sign of amounts in each order is consistent.
-        ///   - Ensures the signs between liquidated order and liquidator order amount are opposite.
-        /// - Ensures the liquidator order fulfillment amount do not exceed its limit.
-        /// - Validates that the fee ratio does not increase.
-        /// - Ensures the base-to-quote amount ratio does not decrease.
-        /// - Validates liquidated position is liquidatable.
-        ///
-        /// Execution:
-        /// - Subtract the fees from each position's collateral.
-        /// - Add the fees to the `fee_position`.
-        /// - Update orders' position, based on `actual_amount_base`.
-        /// - Adjust collateral balances.
-        /// - Perform fundamental validation for both positions after the execution.
-        /// - Update liquidator order fulfillment.
         fn liquidate(
             ref self: ContractState,
             operator_nonce: u64,
@@ -479,144 +447,18 @@ pub mod Core {
             /// insurance fund position.
             liquidated_fee_amount: u64,
         ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
-            assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
-
-            let liquidator_position_id = liquidator_order.position_id;
-            assert(liquidator_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
-
-            let collateral_id = self.assets.get_collateral_id();
-            let liquidated_order = Order {
-                position_id: liquidated_position_id,
-                base_asset_id: liquidator_order.base_asset_id,
-                base_amount: actual_amount_base_liquidated,
-                quote_asset_id: liquidator_order.quote_asset_id,
-                quote_amount: actual_amount_quote_liquidated,
-                fee_asset_id: liquidator_order.fee_asset_id,
-                fee_amount: liquidated_fee_amount,
-                // Dummy values needed to initialize the struct and pass validation.
-                salt: Zero::zero(),
-                expiration: Time::now(),
-            };
-
-            // Validations.
             self
-                ._validate_trade(
-                    order_a: liquidated_order,
-                    order_b: liquidator_order,
-                    actual_amount_base_a: actual_amount_base_liquidated,
-                    actual_amount_quote_a: actual_amount_quote_liquidated,
-                    actual_fee_a: liquidated_fee_amount,
-                    actual_fee_b: actual_liquidator_fee,
-                );
-
-            let liquidator_position = self.positions.get_position_snapshot(liquidator_position_id);
-            let liquidated_position = self
-                .positions
-                .get_position_snapshot(position_id: liquidated_position_id);
-
-            // Signatures validation:
-            let liquidator_order_hash = validate_signature(
-                public_key: liquidator_position.get_owner_public_key(),
-                message: liquidator_order,
-                signature: liquidator_signature,
-            );
-
-            // Validate and update fulfillment.
-            self
-                .fulfillment_tracking
-                .update_fulfillment(
-                    position_id: liquidator_position_id,
-                    hash: liquidator_order_hash,
-                    order_base_amount: liquidator_order.base_amount,
-                    // Passing the negative of actual amounts to `liquidator_order` as it is linked
-                    // to liquidated_order.
-                    actual_base_amount: -actual_amount_base_liquidated,
-                );
-
-            /// Execution:
-            let liquidated_position_diff = PositionDiff {
-                collateral_diff: actual_amount_quote_liquidated.into()
-                    - liquidated_fee_amount.into(),
-                asset_diff: Option::Some(
-                    (liquidator_order.base_asset_id, actual_amount_base_liquidated.into()),
-                ),
-            };
-            // Passing the negative of actual amounts to order_b as it is linked to order_a.
-            let liquidator_position_diff = PositionDiff {
-                collateral_diff: -actual_amount_quote_liquidated.into()
-                    - actual_liquidator_fee.into(),
-                asset_diff: Option::Some(
-                    (liquidator_order.base_asset_id, -actual_amount_base_liquidated.into()),
-                ),
-            };
-            let insurance_position_diff = PositionDiff {
-                collateral_diff: liquidated_fee_amount.into(), asset_diff: Option::None,
-            };
-            let fee_position_diff = PositionDiff {
-                collateral_diff: actual_liquidator_fee.into(), asset_diff: Option::None,
-            };
-
-            /// Validations - Fundamentals:
-            self
-                ._validate_liquidated_position(
-                    position_id: liquidated_position_id,
-                    position: liquidated_position,
-                    position_diff: liquidated_position_diff,
-                );
-            self
-                .positions
-                .validate_healthy_or_healthier_position(
-                    position_id: liquidator_position_id,
-                    position: liquidator_position,
-                    position_diff: liquidator_position_diff,
-                    tvtr_before: Default::default(),
-                );
-
-            // Apply Diffs.
-            self
-                .positions
-                .apply_diff(
-                    position_id: liquidated_position_id, position_diff: liquidated_position_diff,
-                );
-
-            self
-                .positions
-                .apply_diff(
-                    position_id: liquidator_order.position_id,
-                    position_diff: liquidator_position_diff,
-                );
-
-            self.positions.apply_diff(position_id: FEE_POSITION, position_diff: fee_position_diff);
-
-            self
-                .positions
-                .apply_diff(
-                    position_id: INSURANCE_FUND_POSITION, position_diff: insurance_position_diff,
-                );
-
-            self
-                .emit(
-                    events::Liquidate {
-                        liquidated_position_id,
-                        liquidator_order_position_id: liquidator_position_id,
-                        liquidator_order_base_asset_id: liquidator_order.base_asset_id,
-                        liquidator_order_base_amount: liquidator_order.base_amount,
-                        liquidator_order_quote_asset_id: liquidator_order.quote_asset_id,
-                        liquidator_order_quote_amount: liquidator_order.quote_amount,
-                        liquidator_order_fee_asset_id: liquidator_order.fee_asset_id,
-                        liquidator_order_fee_amount: liquidator_order.fee_amount,
-                        actual_amount_base_liquidated,
-                        actual_amount_quote_liquidated,
-                        actual_liquidator_fee,
-                        insurance_fund_fee_asset_id: collateral_id,
-                        insurance_fund_fee_amount: liquidated_fee_amount,
-                        liquidator_order_hash: liquidator_order_hash,
-                    },
+                ._get_liquidation_manager_dispatcher()
+                .liquidate(
+                    :operator_nonce,
+                    :liquidator_signature,
+                    :liquidated_position_id,
+                    :liquidator_order,
+                    :actual_amount_base_liquidated,
+                    :actual_amount_quote_liquidated,
+                    :actual_liquidator_fee,
+                    :liquidated_fee_amount,
                 );
         }
 
@@ -892,6 +734,12 @@ pub mod Core {
                 .entry(EXTERNAL_COMPONENT_TRANSFERS)
                 .write(value: component_address);
         }
+        fn register_liquidation_component(ref self: ContractState, component_address: ClassHash) {
+            self
+                .external_components
+                .entry(EXTERNAL_COMPONENT_LIQUIDATIONS)
+                .write(value: component_address);
+        }
     }
 
     #[generate_trait]
@@ -900,7 +748,7 @@ pub mod Core {
             ref self: ContractState,
         ) -> IVaultExternalLibraryDispatcher {
             let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_VAULT).read();
-            assert(class_hash.is_non_zero(), 'VAULT_MANAGER_NOT_REGISTERED');
+            assert(class_hash.is_non_zero(), 'NO_VAULT_MANAGER');
             IVaultExternalLibraryDispatcher { class_hash: class_hash }
         }
 
@@ -908,7 +756,7 @@ pub mod Core {
             ref self: ContractState,
         ) -> IWithdrawalManagerLibraryDispatcher {
             let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_WITHDRAWALS).read();
-            assert(class_hash.is_non_zero(), 'WITHDRAW_MANAGER_NOT_REGISTERED');
+            assert(class_hash.is_non_zero(), 'NO_WITHDRAW_MANAGER');
             IWithdrawalManagerLibraryDispatcher { class_hash: class_hash }
         }
 
@@ -916,8 +764,16 @@ pub mod Core {
             ref self: ContractState,
         ) -> ITransferManagerLibraryDispatcher {
             let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_TRANSFERS).read();
-            assert(class_hash.is_non_zero(), 'TRANSFER_MANAGER_NOT_REGISTERED');
+            assert(class_hash.is_non_zero(), 'NO_TRANSFER_MANAGER');
             ITransferManagerLibraryDispatcher { class_hash: class_hash }
+        }
+
+        fn _get_liquidation_manager_dispatcher(
+            ref self: ContractState,
+        ) -> ILiquidationManagerLibraryDispatcher {
+            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_LIQUIDATIONS).read();
+            assert(class_hash.is_non_zero(), 'NO_LIQUIDATION_MANAGER');
+            ILiquidationManagerLibraryDispatcher { class_hash: class_hash }
         }
 
         fn _execute_trade(
@@ -933,15 +789,17 @@ pub mod Core {
             tvtr_a_before: Nullable<PositionTVTR>,
             tvtr_b_before: Nullable<PositionTVTR>,
         ) -> (PositionTVTR, PositionTVTR) {
-            self
-                ._validate_trade(
-                    :order_a,
-                    :order_b,
-                    :actual_amount_base_a,
-                    :actual_amount_quote_a,
-                    :actual_fee_a,
-                    :actual_fee_b,
-                );
+            let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
+            validate_trade(
+                :order_a,
+                :order_b,
+                :actual_amount_base_a,
+                :actual_amount_quote_a,
+                :actual_fee_a,
+                :actual_fee_b,
+                synthetic_asset: Some(synthetic_asset),
+                collateral_id: self.assets.get_collateral_id(),
+            );
 
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
@@ -1055,94 +913,6 @@ pub mod Core {
             (tvtr_a_after, tvtr_b_after)
         }
 
-
-        fn _validate_order(ref self: ContractState, order: Order) {
-            // Verify that position is not fee position.
-            assert(order.position_id != FEE_POSITION, CANT_TRADE_WITH_FEE_POSITION);
-            // This is to make sure that the fee is relative to the quote amount.
-            assert(order.quote_amount.abs() > order.fee_amount, INVALID_QUOTE_FEE_AMOUNT);
-            // Non-zero amount check.
-            assert(order.base_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            assert(order.quote_amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-
-            // Expiration check.
-            let now = Time::now();
-            assert_with_byte_array(now <= order.expiration, order_expired_err(order.position_id));
-
-            // Sign Validation for amounts.
-            assert(!have_same_sign(order.quote_amount, order.base_amount), INVALID_AMOUNT_SIGN);
-
-            // Validate asset ids.
-            let collateral_id = self.assets.get_collateral_id();
-            assert(order.quote_asset_id == collateral_id, ASSET_ID_NOT_COLLATERAL);
-            assert(order.fee_asset_id == collateral_id, ASSET_ID_NOT_COLLATERAL);
-        }
-
-        fn _validate_trade(
-            ref self: ContractState,
-            order_a: Order,
-            order_b: Order,
-            actual_amount_base_a: i64,
-            actual_amount_quote_a: i64,
-            actual_fee_a: u64,
-            actual_fee_b: u64,
-        ) {
-            // Base asset check.
-            assert(order_a.base_asset_id == order_b.base_asset_id, DIFFERENT_BASE_ASSET_IDS);
-            self.assets.validate_asset_active(synthetic_id: order_a.base_asset_id);
-
-            assert(order_a.position_id != order_b.position_id, INVALID_SAME_POSITIONS);
-
-            self._validate_order(order: order_a);
-            self._validate_order(order: order_b);
-
-            // Non-zero actual amount check.
-            assert(actual_amount_base_a.is_non_zero(), INVALID_ZERO_AMOUNT);
-            assert(actual_amount_quote_a.is_non_zero(), INVALID_ZERO_AMOUNT);
-
-            // Sign Validation for amounts.
-            assert(
-                !have_same_sign(order_a.quote_amount, order_b.quote_amount),
-                INVALID_QUOTE_AMOUNT_SIGN,
-            );
-            assert(
-                have_same_sign(order_a.base_amount, actual_amount_base_a), INVALID_ACTUAL_BASE_SIGN,
-            );
-            assert(
-                have_same_sign(order_a.quote_amount, actual_amount_quote_a),
-                INVALID_ACTUAL_QUOTE_SIGN,
-            );
-
-            order_a
-                .validate_against_actual_amounts(
-                    actual_amount_base: actual_amount_base_a,
-                    actual_amount_quote: actual_amount_quote_a,
-                    actual_fee: actual_fee_a,
-                );
-            order_b
-                .validate_against_actual_amounts(
-                    // Passing the negative of actual amounts to order_b as it is linked to order_a.
-                    actual_amount_base: -actual_amount_base_a,
-                    actual_amount_quote: -actual_amount_quote_a,
-                    actual_fee: actual_fee_b,
-                );
-        }
-
-        fn _validate_synthetic_shrinks(
-            ref self: ContractState,
-            position: StoragePath<Position>,
-            asset_id: AssetId,
-            amount: i64,
-        ) {
-            let position_base_balance: i64 = self
-                .positions
-                .get_synthetic_balance(:position, synthetic_id: asset_id)
-                .into();
-
-            assert(!have_same_sign(amount, position_base_balance), INVALID_AMOUNT_SIGN);
-            assert(amount.abs() <= position_base_balance.abs(), INVALID_BASE_CHANGE);
-        }
-
         fn _validate_imposed_reduction_trade(
             ref self: ContractState,
             position_id_a: PositionId,
@@ -1165,49 +935,15 @@ pub mod Core {
 
             // Ensure that TR does not increase and that the base amount retains the same sign.
             self
+                .positions
                 ._validate_synthetic_shrinks(
                     position: position_a, asset_id: base_asset_id, amount: base_amount_a,
                 );
             self
+                .positions
                 ._validate_synthetic_shrinks(
                     position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
                 );
-        }
-
-        fn _validate_liquidated_position(
-            ref self: ContractState,
-            position_id: PositionId,
-            position: StoragePath<Position>,
-            position_diff: PositionDiff,
-        ) {
-            let (synthetic_diff_id, synthetic_diff_balance) = if let Option::Some((id, balance)) =
-                position_diff
-                .asset_diff {
-                (id, balance)
-            } else {
-                panic_with_felt252(SYNTHETIC_NOT_EXISTS)
-            };
-            self
-                ._validate_synthetic_shrinks(
-                    :position, asset_id: synthetic_diff_id, amount: synthetic_diff_balance.into(),
-                );
-            let (provisional_delta, unchanged_assets) = self
-                .positions
-                .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
-            let synthetic_enriched_position_diff = self
-                .positions
-                .enrich_asset(:position, :position_diff);
-            let position_diff_enriched = self
-                .positions
-                .enrich_collateral(
-                    :position,
-                    position_diff: synthetic_enriched_position_diff,
-                    provisional_delta: Option::Some(provisional_delta),
-                );
-
-            liquidated_position_validations(
-                :position_id, :unchanged_assets, :position_diff_enriched,
-            );
         }
 
         fn _validate_deleveraged_position(

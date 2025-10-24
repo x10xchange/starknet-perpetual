@@ -7,3 +7,4 @@ pub(crate) mod transfer;
 pub(crate) mod vaults;
 
 pub(crate) mod withdrawal;
+pub(crate) mod liquidation;
