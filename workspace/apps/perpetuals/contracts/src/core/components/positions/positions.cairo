@@ -1,11 +1,13 @@
 #[starknet::component]
 pub mod Positions {
+    use core::nullable::{FromNullableResult, match_nullable};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
+    use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::errors::{
@@ -22,8 +24,8 @@ pub mod Positions {
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
-        POSITION_VERSION, Position, PositionData, PositionDiff, PositionId, PositionMutableTrait,
-        PositionTrait, AssetBalance,
+        AssetBalance, POSITION_VERSION, Position, PositionData, PositionDiff, PositionId,
+        PositionMutableTrait, PositionTrait,
     };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
@@ -46,6 +48,12 @@ pub mod Positions {
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
+    use crate::core::types::asset::synthetic::AssetBalanceDiffEnriched;
+    use crate::core::types::balance::BalanceDiff;
+    use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
+    use crate::core::value_risk_calculator::{
+        assert_healthy_or_healthier, calculate_position_tvtr_before, calculate_position_tvtr_change,
+    };
 
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
@@ -515,10 +523,112 @@ pub mod Positions {
                 let price = assets.get_asset_price(synthetic_id);
                 let risk_factor = assets.get_asset_risk_factor(synthetic_id, balance, price);
                 unchanged_assets
-                    .append(AssetBalanceInfo { id: synthetic_id, balance, price, risk_factor, cached_funding_index: synthetic.funding_index });
+                    .append(
+                        AssetBalanceInfo {
+                            id: synthetic_id,
+                            balance,
+                            price,
+                            risk_factor,
+                            cached_funding_index: synthetic.funding_index,
+                        },
+                    );
             }
 
             (provisional_delta, unchanged_assets.span())
+        }
+
+
+        fn validate_asset_balance_is_not_negative(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            asset_id: AssetId,
+        ) {
+            let assets = get_dep_component!(self, Assets);
+            let balance = if (asset_id == assets.get_collateral_id()) {
+                self.get_collateral_provisional_balance(position, None)
+            } else {
+                self.get_synthetic_balance(:position, synthetic_id: asset_id)
+            };
+
+            assert(balance >= 0_i64.into(), 'ASSET_BALANCE_NEGATIVE');
+        }
+
+        fn enrich_collateral(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            position_diff: AssetEnrichedPositionDiff,
+            provisional_delta: Option<Balance>,
+        ) -> PositionDiffEnriched {
+            let before = self.get_collateral_provisional_balance(:position, :provisional_delta);
+            let after = before + position_diff.collateral_diff;
+            let collateral_enriched = BalanceDiff { before: before, after };
+
+            PositionDiffEnriched {
+                collateral_enriched: collateral_enriched,
+                asset_diff_enriched: position_diff.asset_diff_enriched,
+            }
+        }
+
+        fn enrich_asset(
+            self: @ComponentState<TContractState>,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+        ) -> AssetEnrichedPositionDiff {
+            let asset_enriched = if let Option::Some((asset_id, diff)) = position_diff.asset_diff {
+                let balance_before = self.get_synthetic_balance(:position, synthetic_id: asset_id);
+                let balance_after = balance_before + diff;
+                let assets = get_dep_component!(self, Assets);
+                let price = assets.get_asset_price(:asset_id);
+                let risk_factor_before = assets
+                    .get_asset_risk_factor(:asset_id, balance: balance_before, :price);
+                let risk_factor_after = assets
+                    .get_asset_risk_factor(:asset_id, balance: balance_after, :price);
+
+                let asset_diff_enriched = AssetBalanceDiffEnriched {
+                    asset_id,
+                    balance_before,
+                    balance_after,
+                    price,
+                    risk_factor_before,
+                    risk_factor_after,
+                };
+                Option::Some(asset_diff_enriched)
+            } else {
+                Option::None
+            };
+            AssetEnrichedPositionDiff {
+                collateral_diff: position_diff.collateral_diff, asset_diff_enriched: asset_enriched,
+            }
+        }
+
+        fn validate_healthy_or_healthier_position(
+            self: @ComponentState<TContractState>,
+            position_id: PositionId,
+            position: StoragePath<Position>,
+            position_diff: PositionDiff,
+            tvtr_before: Nullable<PositionTVTR>,
+        ) -> PositionTVTR {
+            let asset_enriched_position_diff = self.enrich_asset(:position, :position_diff);
+            let tvtr_before = match match_nullable(tvtr_before) {
+                FromNullableResult::Null => {
+                    let (provisional_delta, unchanged_assets) = self
+                        .derive_funding_delta_and_unchanged_assets(:position, :position_diff);
+                    let position_diff_enriched = self
+                        .enrich_collateral(
+                            :position,
+                            position_diff: asset_enriched_position_diff,
+                            provisional_delta: Option::Some(provisional_delta),
+                        );
+
+                    calculate_position_tvtr_before(:unchanged_assets, :position_diff_enriched)
+                },
+                FromNullableResult::NotNull(value) => value.unbox(),
+            };
+            let tvtr = calculate_position_tvtr_change(
+                :tvtr_before, synthetic_enriched_position_diff: asset_enriched_position_diff,
+            );
+            assert_healthy_or_healthier(:position_id, :tvtr);
+            tvtr.after
         }
     }
 
@@ -557,6 +667,7 @@ pub mod Positions {
         /// asset_balances = 300;
         /// synthetic_funding_index = 210;
         ///
+
         fn _update_synthetic_balance_and_funding(
             ref self: ComponentState<TContractState>,
             position: StoragePath<Mutable<Position>>,

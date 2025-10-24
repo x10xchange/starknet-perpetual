@@ -19,6 +19,7 @@ use perpetuals::core::components::positions::Positions::{FEE_POSITION, INSURANCE
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
+
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
@@ -58,10 +59,10 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use crate::core::components::deposit::events as deposit_events;
 use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
-use crate::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
+use crate::core::components::deposit::events as deposit_events;
 use crate::core::core::Core::Event::DepositEvent;
+use crate::core::interface::EXTERNAL_COMPONENT_VAULT;
 use crate::core::types::funding::FundingIndex;
 use crate::tests::constants::KEY_PAIR_1;
 
@@ -451,6 +452,11 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
 pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn new(token_state: TokenState) -> PerpsTestsFacade {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
+
+        let vault_external_component = snforge_std::declare("VaultsManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -471,6 +477,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             registered_spots: array![(COLLATERAL_ASSET_ID(), token_state.address)],
         };
         perpetual_wrapper.set_roles();
+
+        ICoreDispatcher { contract_address: perpetuals_contract }
+            .register_vault_component(component_address: *vault_external_component.class_hash);
         perpetual_wrapper
     }
 
@@ -554,7 +563,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         self.operator.set_as_caller(self.perpetuals_contract);
 
-        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
             .activate_vault(
                 operator_nonce: operator_nonce,
                 order: ConvertPositionToVault {

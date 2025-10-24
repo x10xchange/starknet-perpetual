@@ -19,11 +19,10 @@ pub mod AssetsComponent {
         INVALID_ZERO_QUORUM, INVALID_ZERO_RESOLUTION_FACTOR, INVALID_ZERO_RF_FIRST_BOUNDRY,
         INVALID_ZERO_RF_TIERS_LEN, INVALID_ZERO_RF_TIER_SIZE, INVALID_ZERO_TOKEN_ADDRESS,
         NOT_SYNTHETIC, ORACLE_ALREADY_EXISTS, ORACLE_NAME_TOO_LONG, ORACLE_NOT_EXISTS,
-        ORACLE_PUBLIC_KEY_NOT_REGISTERED, QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED,
-        SYNTHETIC_ALREADY_EXISTS, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
-        SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL,
-        ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL,
-        oracle_public_key_not_registered, VAULT_NOT_ACTIVE
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_ALREADY_EXISTS,
+        SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS,
+        UNSORTED_RISK_FACTOR_TIERS, ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE,
+        ZERO_MAX_ORACLE_PRICE, ZERO_MAX_PRICE_INTERVAL, oracle_public_key_not_registered,
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -32,11 +31,9 @@ pub mod AssetsComponent {
     use perpetuals::core::types::asset::synthetic::{
         AssetConfig, AssetType, SyntheticTrait, TimelyData,
     };
-    use perpetuals::core::types::asset::vault::{VaultData, VaultStatus};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::{Balance, BalanceImpl};
     use perpetuals::core::types::funding::{FundingIndex, FundingTick, validate_funding_rate};
-    use perpetuals::core::types::position::PositionId;
     use perpetuals::core::types::price::{
         Price, PriceImpl, PriceMulTrait, SignedPrice, convert_oracle_to_perps_price,
     };
@@ -409,7 +406,7 @@ pub mod AssetsComponent {
                 funding_ticks.len() == self.get_num_of_active_synthetic_assets(),
                 INVALID_FUNDING_TICK_LEN,
             );
-            self._validate_price_interval_integrity(current_time: Time::now());
+            self.validate_price_interval_integrity(current_time: Time::now());
 
             let last_funding_tick = self.last_funding_tick.read();
             let time_diff: u64 = (Time::now().sub(other: last_funding_tick)).into();
@@ -616,8 +613,8 @@ pub mod AssetsComponent {
             self.last_price_validation.write(Time::now());
         }
 
-        fn get_asset_price(self: @ComponentState<TContractState>, synthetic_id: AssetId) -> Price {
-            if let Option::Some(data) = self.timely_data.read(synthetic_id) {
+        fn get_asset_price(self: @ComponentState<TContractState>, asset_id: AssetId) -> Price {
+            if let Option::Some(data) = self.timely_data.read(asset_id) {
                 data.price
             } else {
                 panic_with_felt252(NOT_SYNTHETIC)
@@ -634,12 +631,12 @@ pub mod AssetsComponent {
         /// - If the asset is not synthetic, panic.
         fn get_asset_risk_factor(
             self: @ComponentState<TContractState>,
-            synthetic_id: AssetId,
+            asset_id: AssetId,
             balance: Balance,
             price: Price,
         ) -> RiskFactor {
             let synthetic_value: u128 = price.mul(rhs: balance).abs();
-            return self.get_synthetic_risk_factor_for_value(synthetic_id, synthetic_value);
+            return self.get_synthetic_risk_factor_for_value(asset_id, synthetic_value);
         }
 
         /// Get the risk factor of a synthetic asset.
@@ -702,7 +699,19 @@ pub mod AssetsComponent {
                 current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
                 FUNDING_EXPIRED,
             );
-            self._validate_price_interval_integrity(:current_time);
+            self.validate_price_interval_integrity(:current_time);
+        }
+
+        fn validate_price_interval_integrity(
+            ref self: ComponentState<TContractState>, current_time: Timestamp,
+        ) {
+            /// If `max_price_interval` has passed since `last_price_validation`, validate
+            /// synthetic prices and update `last_price_validation` to current time.
+            let max_price_interval = self.max_price_interval.read();
+            if current_time.sub(self.last_price_validation.read()) > max_price_interval {
+                self._validate_asset_prices(current_time, max_price_interval);
+                self.last_price_validation.write(current_time);
+            }
         }
     }
 
@@ -744,7 +753,7 @@ pub mod AssetsComponent {
                 index_diff: index_diff.abs(),
                 :max_funding_rate,
                 :time_diff,
-                synthetic_price: self.get_asset_price(:synthetic_id),
+                synthetic_price: self.get_asset_price(asset_id: synthetic_id),
             );
             timely_data.funding_index = new_funding_index;
             self.timely_data.write(synthetic_id, timely_data);
@@ -884,17 +893,6 @@ pub mod AssetsComponent {
             };
         }
 
-        fn _validate_price_interval_integrity(
-            ref self: ComponentState<TContractState>, current_time: Timestamp,
-        ) {
-            /// If `max_price_interval` has passed since `last_price_validation`, validate
-            /// synthetic prices and update `last_price_validation` to current time.
-            let max_price_interval = self.max_price_interval.read();
-            if current_time.sub(self.last_price_validation.read()) > max_price_interval {
-                self._validate_asset_prices(current_time, max_price_interval);
-                self.last_price_validation.write(current_time);
-            }
-        }
 
         fn _add_asset(
             ref self: ComponentState<TContractState>,
