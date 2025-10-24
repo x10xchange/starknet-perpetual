@@ -14,6 +14,7 @@ use starknet::ContractAddress;
 use starkware_utils::signature::stark::PublicKey;
 use starkware_utils::time::time::Timestamp;
 use starkware_utils_testing::test_utils::assert_expected_event_emitted;
+use crate::core::components::transfer::transfer_manager::{Transfer, TransferRequest};
 
 
 pub fn assert_new_position_event_with_expected(
@@ -280,7 +281,7 @@ pub fn assert_transfer_request_event_with_expected(
     transfer_request_hash: felt252,
     salt: felt252,
 ) {
-    let expected_event = events::TransferRequest {
+    let expected_event = TransferRequest {
         position_id, recipient, collateral_id, amount, expiration, transfer_request_hash, salt,
     };
     assert_expected_event_emitted(
@@ -301,7 +302,7 @@ pub fn assert_transfer_event_with_expected(
     transfer_request_hash: felt252,
     salt: felt252,
 ) {
-    let expected_event = events::Transfer {
+    let expected_event = Transfer {
         position_id, recipient, collateral_id, amount, expiration, transfer_request_hash, salt,
     };
     assert_expected_event_emitted(
@@ -471,7 +472,7 @@ pub fn assert_add_spot_event_with_expected(
         risk_factor_tier_size,
         resolution_factor,
         quorum,
-        contract_address
+        contract_address,
     };
     assert_expected_event_emitted(
         :spied_event,

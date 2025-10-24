@@ -65,6 +65,9 @@ pub mod Core {
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
+    use crate::core::components::transfer::transfer_manager::{
+        ITransferManagerDispatcherTrait, ITransferManagerLibraryDispatcher,
+    };
     use crate::core::components::vaults::types::VaultConfig;
     use crate::core::components::vaults::vaults_contract::{
         IVaultExternalDispatcherTrait, IVaultExternalLibraryDispatcher,
@@ -72,10 +75,10 @@ pub mod Core {
     use crate::core::components::withdrawal::withdrawal_manager::{
         IWithdrawalManagerDispatcherTrait, IWithdrawalManagerLibraryDispatcher,
     };
-    use crate::core::interface::{EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS};
-    use crate::core::types::asset::synthetic::AssetType;
+    use crate::core::interface::{
+        EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+    };
     use crate::core::utils::validate_signature;
-
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -196,8 +199,6 @@ pub mod Core {
         InactiveAssetPositionReduced: events::InactiveAssetPositionReduced,
         Liquidate: events::Liquidate,
         Trade: events::Trade,
-        Transfer: events::Transfer,
-        TransferRequest: events::TransferRequest,
         Withdraw: events::Withdraw,
         WithdrawRequest: events::WithdrawRequest,
         #[flat]
@@ -307,18 +308,6 @@ pub mod Core {
                 .withdraw(:operator_nonce, :recipient, :position_id, :amount, :expiration, :salt);
         }
 
-        /// Executes a transfer request.
-        ///
-        /// Validations:
-        /// - Validates the position exists.
-        /// - Validates the request does not exist.
-        /// - If the position has an owner account, validate that the caller is the position owner
-        /// account.
-        /// - Validates the signature.
-        ///
-        /// Execution:
-        /// - Registers the transfer request.
-        /// - Emits a `TransferRequest` event.
         fn transfer_request(
             ref self: ContractState,
             signature: Signature,
@@ -329,66 +318,16 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            if (asset_id != self.assets.get_collateral_id()) {
-                let asset_config = self.assets.get_asset_config(asset_id);
-                assert(
-                    asset_config.asset_type == AssetType::SPOT_COLLATERAL
-                        || asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL,
-                    'NOT_TRANSFERABLE_ASSET',
-                );
-            }
-
             if (self._is_vault(vault_position: position_id)) {
                 panic_with_felt252('VAULT_CANNOT_INITIATE_TRANSFER');
             }
-
-            self.positions.get_position_snapshot(position_id: recipient);
-            let position = self.positions.get_position_snapshot(:position_id);
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            let owner_account = if (position.owner_protection_enabled.read()) {
-                position.get_owner_account()
-            } else {
-                Option::None
-            };
-            let hash = self
-                .request_approvals
-                .register_approval(
-                    owner_account: owner_account,
-                    public_key: position.get_owner_public_key(),
-                    :signature,
-                    args: TransferArgs {
-                        position_id, recipient, salt, expiration, collateral_id: asset_id, amount,
-                    },
-                );
             self
-                .emit(
-                    events::TransferRequest {
-                        position_id,
-                        recipient,
-                        collateral_id: asset_id,
-                        amount,
-                        expiration,
-                        transfer_request_hash: hash,
-                        salt,
-                    },
+                ._get_transfer_manager_dispatcher()
+                .transfer_request(
+                    :signature, :asset_id, :recipient, :position_id, :amount, :expiration, :salt,
                 );
         }
 
-        /// Executes a transfer.
-        ///
-        /// Validations:
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The funding validation interval has not passed since the last funding tick.
-        /// - The prices of all assets in the system are valid.
-        /// - Validates both the sender and recipient positions exist.
-        /// - Ensures the amount is positive.
-        /// - Validates the expiration time.
-        /// - Validates request approval.
-        ///
-        /// Execution:
-        /// - Adjust collateral balances.
-        /// - Validates the sender position is healthy or healthier after the execution.
         fn transfer(
             ref self: ContractState,
             operator_nonce: u64,
@@ -399,34 +338,16 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
-            assert(recipient != position_id, INVALID_SAME_POSITIONS);
-            let position = self.positions.get_position_snapshot(:position_id);
-            let hash = self
-                .request_approvals
-                .consume_approved_request(
-                    args: TransferArgs {
-                        recipient, position_id, collateral_id: asset_id, amount, expiration, salt,
-                    },
-                    public_key: position.get_owner_public_key(),
-                );
-
-            self._execute_transfer(:recipient, :position_id, collateral_id: asset_id, :amount);
-
             self
-                .emit(
-                    events::Transfer {
-                        recipient,
-                        position_id,
-                        collateral_id: asset_id,
-                        amount,
-                        expiration,
-                        transfer_request_hash: hash,
-                        salt,
-                    },
+                ._get_transfer_manager_dispatcher()
+                .transfer(
+                    :operator_nonce,
+                    :asset_id,
+                    :recipient,
+                    :position_id,
+                    :amount,
+                    :expiration,
+                    :salt,
                 );
         }
 
@@ -964,6 +885,13 @@ pub mod Core {
                 .entry(EXTERNAL_COMPONENT_WITHDRAWALS)
                 .write(value: component_address);
         }
+
+        fn register_transfer_component(ref self: ContractState, component_address: ClassHash) {
+            self
+                .external_components
+                .entry(EXTERNAL_COMPONENT_TRANSFERS)
+                .write(value: component_address);
+        }
     }
 
     #[generate_trait]
@@ -982,6 +910,14 @@ pub mod Core {
             let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_WITHDRAWALS).read();
             assert(class_hash.is_non_zero(), 'WITHDRAW_MANAGER_NOT_REGISTERED');
             IWithdrawalManagerLibraryDispatcher { class_hash: class_hash }
+        }
+
+        fn _get_transfer_manager_dispatcher(
+            ref self: ContractState,
+        ) -> ITransferManagerLibraryDispatcher {
+            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_TRANSFERS).read();
+            assert(class_hash.is_non_zero(), 'TRANSFER_MANAGER_NOT_REGISTERED');
+            ITransferManagerLibraryDispatcher { class_hash: class_hash }
         }
 
         fn _execute_trade(
@@ -1119,71 +1055,6 @@ pub mod Core {
             (tvtr_a_after, tvtr_b_after)
         }
 
-
-        fn _execute_transfer(
-            ref self: ContractState,
-            recipient: PositionId,
-            position_id: PositionId,
-            collateral_id: AssetId,
-            amount: u64,
-        ) {
-            // Parameters
-
-            let (position_diff_sender, position_diff_recipient) = if (collateral_id == self
-                .assets
-                .get_collateral_id()) {
-                let position_diff_sender = PositionDiff {
-                    collateral_diff: -amount.into(), asset_diff: Option::None,
-                };
-
-                let position_diff_recipient = PositionDiff {
-                    collateral_diff: amount.into(), asset_diff: Option::None,
-                };
-                (position_diff_sender, position_diff_recipient)
-            } else {
-                let position_diff_sender = PositionDiff {
-                    collateral_diff: 0_i64.into(),
-                    asset_diff: Option::Some((collateral_id, -amount.into())),
-                };
-
-                let position_diff_recipient = PositionDiff {
-                    collateral_diff: 0_i64.into(),
-                    asset_diff: Option::Some((collateral_id, amount.into())),
-                };
-                (position_diff_sender, position_diff_recipient)
-            };
-
-            /// Validations - Fundamentals:
-            let position = self.positions.get_position_snapshot(:position_id);
-            self
-                .positions
-                .validate_healthy_or_healthier_position(
-                    :position_id,
-                    :position,
-                    position_diff: position_diff_sender,
-                    tvtr_before: Default::default(),
-                );
-
-            // Execute transfer
-            self.positions.apply_diff(:position_id, position_diff: position_diff_sender);
-            self
-                .positions
-                .apply_diff(position_id: recipient, position_diff: position_diff_recipient);
-
-            self._validate_asset_balance_is_not_negative(:position, asset_id: collateral_id);
-        }
-
-        fn _validate_asset_balance_is_not_negative(
-            ref self: ContractState, position: StoragePath<Position>, asset_id: AssetId,
-        ) {
-            let balance = if (asset_id == self.assets.get_collateral_id()) {
-                self.positions.get_collateral_provisional_balance(position, None)
-            } else {
-                self.positions.get_synthetic_balance(:position, synthetic_id: asset_id)
-            };
-
-            assert(balance >= 0_i64.into(), 'ASSET_BALANCE_NEGATIVE');
-        }
 
         fn _validate_order(ref self: ContractState, order: Order) {
             // Verify that position is not fee position.
