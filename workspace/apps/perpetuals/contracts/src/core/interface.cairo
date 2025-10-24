@@ -20,6 +20,7 @@ pub struct Settlement {
 
 pub const EXTERNAL_COMPONENT_VAULT: felt252 = 0x1;
 pub const EXTERNAL_COMPONENT_WITHDRAWALS: felt252 = 0x2;
+pub const EXTERNAL_COMPONENT_TRANSFERS: felt252 = 0x3;
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -105,6 +106,8 @@ pub trait ICore<TContractState> {
 
     fn register_vault_component(ref self: TContractState, component_address: ClassHash);
     fn register_withdraw_component(ref self: TContractState, component_address: ClassHash);
+    fn register_transfer_component(ref self: TContractState, component_address: ClassHash);
+
     fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
     fn invest_in_vault(
         ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,

@@ -460,6 +460,9 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let transfers_external_component = snforge_std::declare("TransferManager")
+            .unwrap()
+            .contract_class();
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -487,6 +490,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: perpetuals_contract }
             .register_withdraw_component(
                 component_address: *withdrawal_external_component.class_hash,
+            );
+
+        ICoreDispatcher { contract_address: perpetuals_contract }
+            .register_transfer_component(
+                component_address: *transfers_external_component.class_hash,
             );
         perpetual_wrapper
     }
