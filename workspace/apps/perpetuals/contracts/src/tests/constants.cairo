@@ -45,7 +45,7 @@ pub fn OPERATOR() -> ContractAddress {
     'OPERATOR'.try_into().unwrap()
 }
 
-pub const UPGRADE_DELAY: u64 = 5_u64;
+pub const UPGRADE_DELAY: u64 = 0_u64;
 /// 1 day in seconds.
 pub const MAX_PRICE_INTERVAL: TimeDelta = TimeDelta { seconds: DAY };
 /// 1 day in seconds.

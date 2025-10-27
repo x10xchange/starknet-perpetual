@@ -3,6 +3,10 @@ use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
 use core::num::traits::WideMul;
+use external_components::interface::{
+    EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
+    EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+};
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use openzeppelin_testing::deployment::declare_and_deploy;
@@ -45,7 +49,10 @@ use perpetuals::tests::event_test_utils::{
 use perpetuals::tests::test_utils::{deploy_account, validate_balance};
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
-use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
+use snforge_std::{
+    CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
+    start_cheat_block_timestamp_global, stop_cheat_caller_address,
+};
 use starknet::ContractAddress;
 use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
@@ -60,8 +67,11 @@ use starkware_utils_testing::test_utils::{
 };
 use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
 use crate::core::components::deposit::events as deposit_events;
+use crate::core::components::external_components;
+use crate::core::components::external_components::interface::{
+    IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
+};
 use crate::core::core::Core::Event::DepositEvent;
-use crate::core::interface::EXTERNAL_COMPONENT_VAULT;
 use crate::core::types::funding::FundingIndex;
 use crate::tests::constants::KEY_PAIR_1;
 
@@ -436,6 +446,8 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
 
         self.set_governance_admin_as_caller();
         dispatcher.register_app_role_admin(*self.role_admin);
+        self.set_governance_admin_as_caller();
+        dispatcher.register_upgrade_governor(*self.governance_admin);
 
         self.set_app_role_admin_as_caller();
         dispatcher.register_app_governor(*self.app_governor);
@@ -493,27 +505,70 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         };
         perpetual_wrapper.set_roles();
 
-        ICoreDispatcher { contract_address: perpetuals_contract }
-            .register_vault_component(component_address: *vault_external_component.class_hash);
+        cheat_caller_address(
+            contract_address: perpetuals_contract,
+            caller_address: GOVERNANCE_ADMIN(),
+            span: CheatSpan::Indefinite,
+        );
+        let external_components_dispatcher = IExternalComponentsDispatcher {
+            contract_address: perpetuals_contract,
+        };
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_VAULT,
+                component_address: *vault_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_VAULT,
+                component_address: *vault_external_component.class_hash,
+            );
 
-        ICoreDispatcher { contract_address: perpetuals_contract }
-            .register_withdraw_component(
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+                component_address: *withdrawal_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
                 component_address: *withdrawal_external_component.class_hash,
             );
 
-        ICoreDispatcher { contract_address: perpetuals_contract }
-            .register_transfer_component(
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_TRANSFERS,
+                component_address: *transfers_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_TRANSFERS,
                 component_address: *transfers_external_component.class_hash,
             );
 
-        ICoreDispatcher { contract_address: perpetuals_contract }
-            .register_liquidation_component(
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
                 component_address: *liquidations_external_component.class_hash,
             );
-        ICoreDispatcher { contract_address: perpetuals_contract }
-            .register_deleverage_component(
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+                component_address: *liquidations_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
             );
+
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+                component_address: *deleverage_external_component.class_hash,
+            );
+        stop_cheat_caller_address(contract_address: perpetuals_contract);
         perpetual_wrapper
     }
 
