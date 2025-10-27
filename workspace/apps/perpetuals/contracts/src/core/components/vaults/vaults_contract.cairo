@@ -564,7 +564,7 @@ pub(crate) mod VaultsManager {
                 .fulfillment_tracking
                 .update_fulfillment(
                     position_id: vault_position_id,
-                    hash: order.get_message_hash(vault_position.get_owner_public_key()),
+                    hash: vault_approval.get_message_hash(vault_position.get_owner_public_key()),
                     order_base_amount: vault_approval.base_amount.try_into().unwrap(),
                     actual_base_amount: -actual_shares_user.try_into().unwrap(),
                 );
