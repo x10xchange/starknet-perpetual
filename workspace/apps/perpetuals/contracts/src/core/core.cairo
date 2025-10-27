@@ -18,23 +18,21 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
-    use perpetuals::core::errors::{
-        INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, SYNTHETIC_IS_ACTIVE,
-    };
+    use perpetuals::core::errors::SYNTHETIC_IS_ACTIVE;
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::order::{LimitOrder, Order};
-    use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
+    use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
-    use perpetuals::core::value_risk_calculator::{PositionTVTR, deleveraged_position_validations};
+    use perpetuals::core::value_risk_calculator::{PositionTVTR};
     use starknet::ContractAddress;
     use starknet::class_hash::ClassHash;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
@@ -44,7 +42,6 @@ pub mod Core {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::signature::stark::{PublicKey, Signature};
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
@@ -70,7 +67,6 @@ pub mod Core {
         IWithdrawalManagerDispatcherTrait, IWithdrawalManagerLibraryDispatcher,
     };
     use crate::core::constants::{NAME, VERSION};
-    use crate::core::errors::INVALID_AMOUNT_SIGN;
     use crate::core::interface::{
         EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS,
         EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
@@ -550,6 +546,7 @@ pub mod Core {
                     .try_into()
                     .expect('QUOTE_AMOUNT_OVERFLOW');
             self
+                .positions
                 ._validate_imposed_reduction_trade(
                     :position_id_a,
                     :position_id_b,
@@ -863,39 +860,6 @@ pub mod Core {
                     },
                 );
             (tvtr_a_after, tvtr_b_after)
-        }
-
-        fn _validate_imposed_reduction_trade(
-            ref self: ContractState,
-            position_id_a: PositionId,
-            position_id_b: PositionId,
-            position_a: StoragePath<Position>,
-            position_b: StoragePath<Position>,
-            base_asset_id: AssetId,
-            base_amount_a: i64,
-            quote_amount_a: i64,
-        ) {
-            // Validate positions.
-            assert(position_id_a != position_id_b, INVALID_SAME_POSITIONS);
-
-            // Non-zero amount check.
-            assert(base_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
-            assert(quote_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
-
-            // Sign Validation for amounts.
-            assert(!have_same_sign(base_amount_a, quote_amount_a), INVALID_AMOUNT_SIGN);
-
-            // Ensure that TR does not increase and that the base amount retains the same sign.
-            self
-                .positions
-                ._validate_synthetic_shrinks(
-                    position: position_a, asset_id: base_asset_id, amount: base_amount_a,
-                );
-            self
-                .positions
-                ._validate_synthetic_shrinks(
-                    position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
-                );
         }
 
         fn _is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
