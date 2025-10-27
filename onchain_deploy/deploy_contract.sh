@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 decimal_to_hex() {
     if [[ $# -eq 0 ]]; then
@@ -93,10 +94,28 @@ echo "LIQUIDATE_COMPONENT_HASH: ${LIQUIDATE_COMPONENT_HASH}"
 echo "Press Ctrl+C to exit or any key to continue"
 read -n 1 -s
 
+DELEVERAGE_COMPONENT_HASH=$(starkli declare -w target/dev/perpetuals_DeleverageManager.contract_class.json  --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5)
+echo "DELEVERAGE_COMPONENT_HASH: ${DELEVERAGE_COMPONENT_HASH}"
+echo "Press Ctrl+C to exit or any key to continue"
+read -n 1 -s
+
 ADDRESS=0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796
 starkli invoke -w "$ADDRESS" add_new_implementation "${HASH}" 1 0 --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
 starkli invoke -w "$ADDRESS" replace_to "${HASH}" 1 0 --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke -w "$ADDRESS" register_vault_component "${VAULT_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke -w "$ADDRESS" register_transfer_component "${TRANSFER_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke -w "$ADDRESS" register_withdraw_component "${WITHDRAW_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke -w "$ADDRESS" register_liquidation_component "${LIQUIDATE_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5   
+
+
+starkli invoke -w "$ADDRESS" register_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5   
+starkli invoke -w "$ADDRESS" activate_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5   
+
+starkli invoke -w "$ADDRESS" register_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+starkli invoke -w "$ADDRESS" activate_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+
+starkli invoke -w "$ADDRESS" register_external_component str:WITHDRAWALS "${WITHDRAW_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+starkli invoke -w "$ADDRESS" activate_external_component str:WITHDRAWALS "${WITHDRAW_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+
+starkli invoke -w "$ADDRESS" register_external_component str:LIQUIDATIONS "${LIQUIDATE_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+starkli invoke -w "$ADDRESS" activate_external_component str:LIQUIDATIONS "${LIQUIDATE_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+
+starkli invoke -w "$ADDRESS" register_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+starkli invoke -w "$ADDRESS" activate_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
+

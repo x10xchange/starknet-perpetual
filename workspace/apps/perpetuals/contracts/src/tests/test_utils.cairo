@@ -362,7 +362,7 @@ pub fn setup_state_with_pending_vault_share(
     cfg: @PerpetualsInitConfig, token_state: @TokenState,
 ) -> Core::ContractState {
     let mut state = init_state(:cfg, :token_state);
-    // Synthetic asset configs.
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     state
         .assets
         .add_synthetic_asset(

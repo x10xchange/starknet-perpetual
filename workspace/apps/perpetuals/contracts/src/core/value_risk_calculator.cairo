@@ -127,9 +127,7 @@ pub fn liquidated_position_validations(
     unchanged_assets: Span<AssetBalanceInfo>,
     position_diff_enriched: PositionDiffEnriched,
 ) {
-    let tvtr_before = calculate_position_tvtr_before(
-        :unchanged_assets, :position_diff_enriched,
-    );
+    let tvtr_before = calculate_position_tvtr_before(:unchanged_assets, :position_diff_enriched);
     let tvtr = calculate_position_tvtr_change(
         :tvtr_before, synthetic_enriched_position_diff: position_diff_enriched.into(),
     );
@@ -149,9 +147,7 @@ pub fn deleveraged_position_validations(
     unchanged_assets: Span<AssetBalanceInfo>,
     position_diff_enriched: PositionDiffEnriched,
 ) {
-    let tvtr_before = calculate_position_tvtr_before(
-        :unchanged_assets, :position_diff_enriched,
-    );
+    let tvtr_before = calculate_position_tvtr_before(:unchanged_assets, :position_diff_enriched);
     let tvtr = calculate_position_tvtr_change(
         :tvtr_before, synthetic_enriched_position_diff: position_diff_enriched.into(),
     );
@@ -616,8 +612,7 @@ mod tests {
         let unchanged_assets = array![asset].span();
         let position_diff_enriched = Default::default();
         let tvtr_before = calculate_position_tvtr_before(
-            unchanged_assets: unchanged_assets,
-            position_diff_enriched: position_diff_enriched,
+            unchanged_assets: unchanged_assets, position_diff_enriched: position_diff_enriched,
         );
         //tvtr_before.total_value = balance * PRICE_1() = 50 * 900 = 45_000
         //tvtr_before.total_risk = balance * PRICE_1() * RISK_FACTOR_1() = 50 * 900 *
@@ -673,8 +668,7 @@ mod tests {
             ),
         };
         let tvtr_before = calculate_position_tvtr_before(
-            unchanged_assets: unchanged_assets,
-            position_diff_enriched: position_diff_enriched,
+            unchanged_assets: unchanged_assets, position_diff_enriched: position_diff_enriched,
         );
         //tvtr_before.total_value = balance_1 * PRICE_1() + balance_2 * PRICE_2()
         // + balance_3 * PRICE_3()  + collateral_balance_before  = 50 * 900 + 100 * 1000  + 150 *
@@ -717,8 +711,7 @@ mod tests {
             ),
         };
         let tvtr_before = calculate_position_tvtr_before(
-            unchanged_assets: unchanged_assets,
-            position_diff_enriched: position_diff_enriched,
+            unchanged_assets: unchanged_assets, position_diff_enriched: position_diff_enriched,
         );
         //tvtr_before.total_value = asset.balance * asset.price + collateral_balance_before
         //= 200 * 900  + 50  = 180_050

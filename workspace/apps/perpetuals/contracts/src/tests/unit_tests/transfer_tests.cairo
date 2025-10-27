@@ -3,22 +3,16 @@ use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::tests::constants::*;
-
 use perpetuals::tests::test_utils::{
-     PerpetualsInitConfig, User, UserTrait,
-     deposit_vault_share, init_position,
-     init_position_zero_collateral, 
-    send_price_tick_for_vault_share,  
-    setup_state_with_pending_vault_share, validate_asset_balance, 
+    PerpetualsInitConfig, User, UserTrait, deposit_vault_share, init_position,
+    init_position_zero_collateral, send_price_tick_for_vault_share,
+    setup_state_with_pending_vault_share, validate_asset_balance,
 };
-use snforge_std::{test_address};
+use snforge_std::test_address;
 use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::storage::iterable_map::*;
-use starkware_utils::time::time::{Time};
-use starkware_utils_testing::test_utils::{
-    Deployable, 
-    cheat_caller_address_once,
-};
+use starkware_utils::time::time::Time;
+use starkware_utils_testing::test_utils::{Deployable, cheat_caller_address_once};
 use crate::core::types::position::PositionId;
 
 

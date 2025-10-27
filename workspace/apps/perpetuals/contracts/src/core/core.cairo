@@ -29,9 +29,7 @@ pub mod Core {
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::{
-        Map, StorageMapReadAccess,
-    };
+    use starknet::storage::{Map, StorageMapReadAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -45,9 +43,7 @@ pub mod Core {
     };
     use starkware_utils::time::time::{TimeDelta, Timestamp};
     use crate::core::components::assets::interface::IAssets;
-    use crate::core::components::deleverage::deleverage_manager::{
-        IDeleverageManagerDispatcherTrait,
-    };
+    use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
     use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
@@ -290,6 +286,8 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -328,6 +326,8 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -413,8 +413,8 @@ pub mod Core {
             actual_fee_b: u64,
         ) {
             self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
 
             self
                 ._execute_trade(
@@ -445,6 +445,8 @@ pub mod Core {
             /// insurance fund position.
             liquidated_fee_amount: u64,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -488,6 +490,8 @@ pub mod Core {
             deleveraged_quote_amount: i64,
         ) {
             /// Validations:
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
