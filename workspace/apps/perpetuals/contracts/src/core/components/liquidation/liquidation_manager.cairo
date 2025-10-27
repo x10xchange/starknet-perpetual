@@ -200,13 +200,7 @@ pub(crate) mod LiquidationManager {
             actual_liquidator_fee: u64,
             liquidated_fee_amount: u64,
         ) {
-            /// Validations:
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
-
             assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
-
             let liquidator_position_id = liquidator_order.position_id;
             assert(liquidator_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
 

@@ -167,10 +167,6 @@ pub(crate) mod DeleverageManager {
             deleveraged_base_amount: i64,
             deleveraged_quote_amount: i64,
         ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
-
             let deleveraged_position = self
                 .positions
                 .get_position_snapshot(position_id: deleveraged_position_id);

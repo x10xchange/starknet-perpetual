@@ -265,8 +265,6 @@ pub(crate) mod TransferManager {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
             let position = self.positions.get_position_snapshot(:position_id);
@@ -278,9 +276,7 @@ pub(crate) mod TransferManager {
                     },
                     public_key: position.get_owner_public_key(),
                 );
-
             self._execute_transfer(:recipient, :position_id, collateral_id: asset_id, :amount);
-
             self
                 .emit(
                     Transfer {

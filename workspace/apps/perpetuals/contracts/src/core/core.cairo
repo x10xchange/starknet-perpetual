@@ -290,6 +290,8 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -328,6 +330,8 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -413,8 +417,8 @@ pub mod Core {
             actual_fee_b: u64,
         ) {
             self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
 
             self
                 ._execute_trade(
@@ -445,6 +449,8 @@ pub mod Core {
             /// insurance fund position.
             liquidated_fee_amount: u64,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
@@ -488,6 +494,8 @@ pub mod Core {
             deleveraged_quote_amount: i64,
         ) {
             /// Validations:
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components

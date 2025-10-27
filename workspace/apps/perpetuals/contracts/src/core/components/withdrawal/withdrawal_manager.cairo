@@ -244,8 +244,6 @@ pub(crate) mod WithdrawalManager {
             expiration: super::Timestamp,
             salt: felt252,
         ) {
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
             let collateral_id = self.assets.get_collateral_id();
             let position = self.positions.get_position_snapshot(:position_id);
