@@ -468,6 +468,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let deleverage_external_component = snforge_std::declare("DeleverageManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -505,6 +509,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: perpetuals_contract }
             .register_liquidation_component(
                 component_address: *liquidations_external_component.class_hash,
+            );
+        ICoreDispatcher { contract_address: perpetuals_contract }
+            .register_deleverage_component(
+                component_address: *deleverage_external_component.class_hash,
             );
         perpetual_wrapper
     }
