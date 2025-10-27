@@ -120,6 +120,9 @@ pub mod ProtocolVault {
             let asset_dispatcher = IPositionsDispatcher { contract_address: asset_storage };
             let position_tvtr = asset_dispatcher
                 .get_position_tv_tr(self.get_contract().owning_position_id.read().into());
+
+            let tv = position_tvtr.total_value;
+            assert(tv >= 0, 'POSITION_HAS_NEGATIVE_TV');
             return position_tvtr.total_value.abs().into();
         }
     }
