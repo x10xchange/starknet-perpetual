@@ -70,15 +70,13 @@ pub(crate) mod LiquidationManager {
     };
     use starkware_utils::time::time::Time;
     use crate::core::components::assets::errors::SYNTHETIC_NOT_EXISTS;
+    use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::CANT_LIQUIDATE_IF_POSITION;
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::utils::{validate_signature, validate_trade};
     use crate::core::value_risk_calculator::liquidated_position_validations;
     use super::{ILiquidationManager, Liquidate, Order};
 
-
-    const NAME: felt252 = 'Perpetuals';
-    const VERSION: felt252 = 'v0';
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {

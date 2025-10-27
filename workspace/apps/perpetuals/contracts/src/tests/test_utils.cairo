@@ -39,6 +39,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use crate::core::components::deleverage;
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::interface::{ICore, ICoreDispatcher, ICoreDispatcherTrait};
 
@@ -269,8 +270,11 @@ fn CONTRACT_STATE() -> Core::ContractState {
     let transfers_external_component = snforge_std::declare("TransferManager")
         .unwrap()
         .contract_class();
-
     let liquidations_external_component = snforge_std::declare("LiquidationManager")
+        .unwrap()
+        .contract_class();
+
+    let deleverage_external_component = snforge_std::declare("DeleverageManager")
         .unwrap()
         .contract_class();
 
@@ -281,6 +285,10 @@ fn CONTRACT_STATE() -> Core::ContractState {
     state
         .register_liquidation_component(
             component_address: *liquidations_external_component.class_hash,
+        );
+    state
+        .register_deleverage_component(
+            component_address: *deleverage_external_component.class_hash,
         );
     state
 }
@@ -716,6 +724,10 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
         .unwrap()
         .contract_class();
 
+    let deleverage_external_component = snforge_std::declare("DeleverageManager")
+        .unwrap()
+        .contract_class();
+
     cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
     let core_dispatcher = ICoreDispatcher { contract_address };
     core_dispatcher
@@ -726,6 +738,11 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
     cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
     core_dispatcher
         .register_transfer_component(component_address: *transfers_external_component.class_hash);
+    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
+    core_dispatcher
+        .register_deleverage_component(
+            component_address: *deleverage_external_component.class_hash,
+        );
 
     cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
     core_dispatcher

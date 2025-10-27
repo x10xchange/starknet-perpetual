@@ -85,14 +85,12 @@ pub(crate) mod WithdrawalManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
+    use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::{INVALID_ZERO_AMOUNT, WITHDRAW_EXPIRED};
     use crate::core::types::position::PositionDiff;
     use crate::core::types::withdraw::WithdrawArgs;
     use super::{IWithdrawalManager, Signature, Timestamp, Withdraw, WithdrawRequest};
 
-
-    const NAME: felt252 = 'Perpetuals';
-    const VERSION: felt252 = 'v0';
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {

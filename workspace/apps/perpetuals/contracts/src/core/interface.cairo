@@ -18,10 +18,11 @@ pub struct Settlement {
     pub actual_fee_b: u64,
 }
 
-pub const EXTERNAL_COMPONENT_VAULT: felt252 = 0x1;
-pub const EXTERNAL_COMPONENT_WITHDRAWALS: felt252 = 0x2;
-pub const EXTERNAL_COMPONENT_TRANSFERS: felt252 = 0x3;
-pub const EXTERNAL_COMPONENT_LIQUIDATIONS: felt252 = 0x4;
+pub const EXTERNAL_COMPONENT_VAULT: felt252 = 'VAULTS';
+pub const EXTERNAL_COMPONENT_WITHDRAWALS: felt252 = 'WITHDRAWALS';
+pub const EXTERNAL_COMPONENT_TRANSFERS: felt252 = 'TRANSFERS';
+pub const EXTERNAL_COMPONENT_LIQUIDATIONS: felt252 = 'LIQUIDATIONS';
+pub const EXTERNAL_COMPONENT_DELEVERAGES: felt252 = 'DELEVERAGES';
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
@@ -109,6 +110,7 @@ pub trait ICore<TContractState> {
     fn register_withdraw_component(ref self: TContractState, component_address: ClassHash);
     fn register_transfer_component(ref self: TContractState, component_address: ClassHash);
     fn register_liquidation_component(ref self: TContractState, component_address: ClassHash);
+    fn register_deleverage_component(ref self: TContractState, component_address: ClassHash);
 
     fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
     fn invest_in_vault(

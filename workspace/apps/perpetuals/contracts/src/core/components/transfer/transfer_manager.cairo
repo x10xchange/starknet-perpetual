@@ -87,11 +87,9 @@ pub(crate) mod TransferManager {
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use crate::core::types::transfer::TransferArgs;
+    use crate::core::constants::{NAME, VERSION};
     use super::{ITransferManager, Signature, Timestamp, Transfer, TransferRequest};
 
-
-    const NAME: felt252 = 'Perpetuals';
-    const VERSION: felt252 = 'v0';
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {
@@ -334,12 +332,12 @@ pub(crate) mod TransferManager {
             };
 
             /// Validations - Fundamentals:
-            let position = self.positions.get_position_snapshot(:position_id);
+            let sender_position = self.positions.get_position_snapshot(:position_id);
             self
                 .positions
                 .validate_healthy_or_healthier_position(
                     :position_id,
-                    :position,
+                    position: sender_position,
                     position_diff: position_diff_sender,
                     tvtr_before: Default::default(),
                 );
@@ -352,7 +350,9 @@ pub(crate) mod TransferManager {
 
             self
                 .positions
-                .validate_asset_balance_is_not_negative(:position, asset_id: collateral_id);
+                .validate_asset_balance_is_not_negative(
+                    position: sender_position, asset_id: collateral_id,
+                );
         }
     }
 }

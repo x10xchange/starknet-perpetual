@@ -50,7 +50,9 @@ pub mod Positions {
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
-    use crate::core::errors::{INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE};
+    use crate::core::errors::{
+        INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
+    };
     use crate::core::types::asset::synthetic::AssetBalanceDiffEnriched;
     use crate::core::types::balance::BalanceDiff;
     use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
@@ -646,6 +648,37 @@ pub mod Positions {
 
             assert(!have_same_sign(amount, position_base_balance), INVALID_AMOUNT_SIGN);
             assert(amount.abs() <= position_base_balance.abs(), INVALID_BASE_CHANGE);
+        }
+
+        fn _validate_imposed_reduction_trade(
+            ref self: ComponentState<TContractState>,
+            position_id_a: PositionId,
+            position_id_b: PositionId,
+            position_a: StoragePath<Position>,
+            position_b: StoragePath<Position>,
+            base_asset_id: AssetId,
+            base_amount_a: i64,
+            quote_amount_a: i64,
+        ) {
+            // Validate positions.
+            assert(position_id_a != position_id_b, INVALID_SAME_POSITIONS);
+
+            // Non-zero amount check.
+            assert(base_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
+            assert(quote_amount_a.is_non_zero(), INVALID_ZERO_AMOUNT);
+
+            // Sign Validation for amounts.
+            assert(!have_same_sign(base_amount_a, quote_amount_a), INVALID_AMOUNT_SIGN);
+
+            // Ensure that TR does not increase and that the base amount retains the same sign.
+            self
+                ._validate_synthetic_shrinks(
+                    position: position_a, asset_id: base_asset_id, amount: base_amount_a,
+                );
+            self
+                ._validate_synthetic_shrinks(
+                    position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
+                );
         }
     }
 
