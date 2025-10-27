@@ -16,16 +16,5 @@ pub trait IExternalComponents<TContractState> {
     fn activate_external_component(
         ref self: TContractState, component_type: felt252, component_address: ClassHash,
     );
-    // fn register_vault_component(ref self: TContractState, component_address: ClassHash);
-// fn register_withdraw_component(ref self: TContractState, component_address: ClassHash);
-// fn register_transfer_component(ref self: TContractState, component_address: ClassHash);
-// fn register_liquidation_component(ref self: TContractState, component_address: ClassHash);
-// fn register_deleverage_component(ref self: TContractState, component_address: ClassHash);
-
-    // fn activate_vault_component(ref self: TContractState, component_address: ClassHash);
-// fn activate_withdraw_component(ref self: TContractState, component_address: ClassHash);
-// fn activate_transfer_component(ref self: TContractState, component_address: ClassHash);
-// fn activate_liquidation_component(ref self: TContractState, component_address: ClassHash);
-// fn activate_deleverage_component(ref self: TContractState, component_address: ClassHash);
 }
 
