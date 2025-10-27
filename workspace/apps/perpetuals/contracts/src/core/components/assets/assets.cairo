@@ -933,6 +933,8 @@ pub mod AssetsComponent {
                     )
                 },
                 AssetType::VAULT_SHARE_COLLATERAL => {
+                    assert(risk_factor_tiers.len() == 1, 'INVALID_VAULT_RF_TIERS');
+
                     SyntheticTrait::vault_share(
                         AssetStatus::PENDING,
                         risk_factor_first_tier_boundary,
@@ -944,6 +946,7 @@ pub mod AssetsComponent {
                     )
                 },
                 AssetType::SPOT_COLLATERAL => {
+                    assert(risk_factor_tiers.len() == 1, 'INVALID_SPOT_RF_TIERS');
                     SyntheticTrait::spot(
                         AssetStatus::PENDING,
                         risk_factor_first_tier_boundary,
