@@ -24,8 +24,9 @@ use perpetuals::tests::event_test_utils::{
 };
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    start_cheat_block_timestamp_global, test_address,
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
+    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
+    test_address,
 };
 use starknet::ContractAddress;
 use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
@@ -41,6 +42,11 @@ use starkware_utils_testing::test_utils::{
 };
 use crate::core::components::deleverage;
 use crate::core::components::deposit::interface::IDeposit;
+use crate::core::components::external_components::interface::{
+    EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
+    EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS, IExternalComponents,
+    IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
+};
 use crate::core::interface::{ICore, ICoreDispatcher, ICoreDispatcherTrait};
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
@@ -263,33 +269,6 @@ pub struct SyntheticCfg {
 
 fn CONTRACT_STATE() -> Core::ContractState {
     let mut state = Core::contract_state_for_testing();
-    let vault_external_component = snforge_std::declare("VaultsManager").unwrap().contract_class();
-    let withdrawals_external_component = snforge_std::declare("WithdrawalManager")
-        .unwrap()
-        .contract_class();
-    let transfers_external_component = snforge_std::declare("TransferManager")
-        .unwrap()
-        .contract_class();
-    let liquidations_external_component = snforge_std::declare("LiquidationManager")
-        .unwrap()
-        .contract_class();
-
-    let deleverage_external_component = snforge_std::declare("DeleverageManager")
-        .unwrap()
-        .contract_class();
-
-    state.register_vault_component(component_address: *vault_external_component.class_hash);
-    state
-        .register_withdraw_component(component_address: *withdrawals_external_component.class_hash);
-    state.register_transfer_component(component_address: *transfers_external_component.class_hash);
-    state
-        .register_liquidation_component(
-            component_address: *liquidations_external_component.class_hash,
-        );
-    state
-        .register_deleverage_component(
-            component_address: *deleverage_external_component.class_hash,
-        );
     state
 }
 
@@ -315,6 +294,11 @@ pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
         contract_address: test_address(), caller_address: *cfg.app_role_admin,
     );
     state.register_operator(account: *cfg.operator);
+
+    cheat_caller_address_once(
+        contract_address: test_address(), caller_address: *cfg.governance_admin,
+    );
+    state.register_upgrade_governor(account: *cfg.governance_admin)
 }
 
 pub fn assert_with_error(boolean: bool, array: ByteArray) {
@@ -360,6 +344,7 @@ pub fn setup_state_with_pending_asset(
 ) -> Core::ContractState {
     let mut state = init_state(:cfg, :token_state);
     // Synthetic asset configs.
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     state
         .assets
         .add_synthetic_asset(
@@ -498,10 +483,87 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
     );
     let mut state = initialized_contract_state(:cfg, :token_state);
     set_roles(ref :state, :cfg);
-    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     // Fund the contract.
     (*token_state)
         .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    let vault_external_component = snforge_std::declare("VaultsManager").unwrap().contract_class();
+    let withdrawals_external_component = snforge_std::declare("WithdrawalManager")
+        .unwrap()
+        .contract_class();
+    let transfers_external_component = snforge_std::declare("TransferManager")
+        .unwrap()
+        .contract_class();
+    let liquidations_external_component = snforge_std::declare("LiquidationManager")
+        .unwrap()
+        .contract_class();
+
+    let deleverage_external_component = snforge_std::declare("DeleverageManager")
+        .unwrap()
+        .contract_class();
+
+    cheat_caller_address(
+        contract_address: test_address(),
+        caller_address: *cfg.governance_admin,
+        span: CheatSpan::Indefinite,
+    );
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
+        );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
+        );
+
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+
+    stop_cheat_caller_address(contract_address: test_address());
 
     state
 }
@@ -710,6 +772,8 @@ pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @Perpetua
     dispatcher.register_app_governor(account: *cfg.app_governor);
     cheat_caller_address_once(:contract_address, caller_address: *cfg.app_role_admin);
     dispatcher.register_operator(account: *cfg.operator);
+    cheat_caller_address_once(:contract_address, caller_address: *cfg.governance_admin);
+    dispatcher.register_upgrade_governor(account: *cfg.governance_admin);
 }
 
 pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress) {
@@ -728,27 +792,66 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
         .unwrap()
         .contract_class();
 
-    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
-    let core_dispatcher = ICoreDispatcher { contract_address };
-    core_dispatcher
-        .register_vault_component(component_address: *vault_external_component.class_hash);
-    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
-    core_dispatcher
-        .register_withdraw_component(component_address: *withdrawals_external_component.class_hash);
-    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
-    core_dispatcher
-        .register_transfer_component(component_address: *transfers_external_component.class_hash);
-    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
-    core_dispatcher
-        .register_deleverage_component(
+    cheat_caller_address(
+        :contract_address, caller_address: GOVERNANCE_ADMIN(), span: CheatSpan::Indefinite,
+    );
+    let external_components_dispatcher = IExternalComponentsDispatcher { contract_address };
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
+        );
+
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
             component_address: *deleverage_external_component.class_hash,
         );
 
-    cheat_caller_address_once(:contract_address, caller_address: GOVERNANCE_ADMIN());
-    core_dispatcher
-        .register_liquidation_component(
-            component_address: *liquidations_external_component.class_hash,
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
         );
+    stop_cheat_caller_address(:contract_address);
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {

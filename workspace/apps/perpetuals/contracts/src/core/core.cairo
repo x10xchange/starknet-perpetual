@@ -1,7 +1,6 @@
 #[starknet::contract]
 pub mod Core {
     use core::dict::{Felt252Dict, Felt252DictTrait};
-    use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
@@ -27,13 +26,11 @@ pub mod Core {
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
-    use perpetuals::core::value_risk_calculator::{PositionTVTR};
+    use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
-    use starknet::class_hash::ClassHash;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
+        Map, StorageMapReadAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
@@ -49,28 +46,18 @@ pub mod Core {
     use starkware_utils::time::time::{TimeDelta, Timestamp};
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::{
-        IDeleverageManagerDispatcherTrait, IDeleverageManagerLibraryDispatcher,
+        IDeleverageManagerDispatcherTrait,
     };
+    use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
+    use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
-    use crate::core::components::liquidation::liquidation_manager::{
-        ILiquidationManagerDispatcherTrait, ILiquidationManagerLibraryDispatcher,
-    };
-    use crate::core::components::transfer::transfer_manager::{
-        ITransferManagerDispatcherTrait, ITransferManagerLibraryDispatcher,
-    };
+    use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
+    use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
     use crate::core::components::vaults::types::VaultConfig;
-    use crate::core::components::vaults::vaults_contract::{
-        IVaultExternalDispatcherTrait, IVaultExternalLibraryDispatcher,
-    };
-    use crate::core::components::withdrawal::withdrawal_manager::{
-        IWithdrawalManagerDispatcherTrait, IWithdrawalManagerLibraryDispatcher,
-    };
+    use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
+    use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::constants::{NAME, VERSION};
-    use crate::core::interface::{
-        EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS,
-        EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
-    };
     use crate::core::utils::{validate_signature, validate_trade};
 
 
@@ -87,6 +74,11 @@ pub mod Core {
     );
     component!(path: Positions, storage: positions, event: PositionsEvent);
     component!(path: Fulfillement, storage: fulfillment_tracking, event: FulfillmentEvent);
+    component!(
+        path: ExternalComponentsComponent,
+        storage: external_components,
+        event: ExternalComponentsEvent,
+    );
 
 
     #[abi(embed_v0)]
@@ -116,9 +108,11 @@ pub mod Core {
     #[abi(embed_v0)]
     impl PositionsImpl = Positions::PositionsImpl<ContractState>;
 
+    impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    impl ExternalComponentsImpl =
+        ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {
@@ -159,8 +153,8 @@ pub mod Core {
         // vault storage to be accessed via library call
         pub registered_vaults_by_asset: Map<AssetId, VaultConfig>,
         pub registered_vaults_by_position: Map<PositionId, VaultConfig>,
-        //component storage
-        pub external_components: Map<felt252, ClassHash>,
+        #[substorage(v0)]
+        pub external_components: ExternalComponentsComponent::Storage,
     }
 
     #[event]
@@ -194,6 +188,8 @@ pub mod Core {
         WithdrawRequest: events::WithdrawRequest,
         #[flat]
         FulfillmentEvent: Fulfillement::Event,
+        #[flat]
+        ExternalComponentsEvent: ExternalComponentsComponent::Event,
     }
 
     #[constructor]
@@ -259,6 +255,7 @@ pub mod Core {
                 panic_with_felt252('VAULT_CANNOT_INITIATE_WITHDRAW');
             }
             self
+                .external_components
                 ._get_withdrawal_manager_dispatcher()
                 .withdraw_request(
                     :signature, :recipient, :position_id, :amount, :expiration, :salt,
@@ -295,6 +292,7 @@ pub mod Core {
         ) {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
+                .external_components
                 ._get_withdrawal_manager_dispatcher()
                 .withdraw(:operator_nonce, :recipient, :position_id, :amount, :expiration, :salt);
         }
@@ -313,6 +311,7 @@ pub mod Core {
                 panic_with_felt252('VAULT_CANNOT_INITIATE_TRANSFER');
             }
             self
+                .external_components
                 ._get_transfer_manager_dispatcher()
                 .transfer_request(
                     :signature, :asset_id, :recipient, :position_id, :amount, :expiration, :salt,
@@ -331,6 +330,7 @@ pub mod Core {
         ) {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
+                .external_components
                 ._get_transfer_manager_dispatcher()
                 .transfer(
                     :operator_nonce,
@@ -447,6 +447,7 @@ pub mod Core {
         ) {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
+                .external_components
                 ._get_liquidation_manager_dispatcher()
                 .liquidate(
                     :operator_nonce,
@@ -489,6 +490,7 @@ pub mod Core {
             /// Validations:
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
+                .external_components
                 ._get_deleverage_manager_dispatcher()
                 .deleverage(
                     :operator_nonce,
@@ -597,6 +599,7 @@ pub mod Core {
             actual_collateral_user: i64,
         ) {
             self
+                .external_components
                 ._get_vault_manager_dispatcher()
                 .redeem_from_vault(
                     :operator_nonce,
@@ -607,13 +610,6 @@ pub mod Core {
                     :actual_shares_user,
                     :actual_collateral_user,
                 )
-        }
-
-        fn register_vault_component(ref self: ContractState, component_address: ClassHash) {
-            self
-                .external_components
-                .entry(EXTERNAL_COMPONENT_VAULT)
-                .write(value: component_address);
         }
 
         fn liquidate_vault_shares(
@@ -627,6 +623,7 @@ pub mod Core {
             actual_collateral_user: i64,
         ) {
             self
+                .external_components
                 ._get_vault_manager_dispatcher()
                 .liquidate_vault_shares(
                     :operator_nonce,
@@ -642,6 +639,7 @@ pub mod Core {
             ref self: ContractState, operator_nonce: u64, order: ConvertPositionToVault,
         ) {
             self
+                .external_components
                 ._get_vault_manager_dispatcher()
                 .activate_vault(operator_nonce: operator_nonce, :order)
         }
@@ -652,79 +650,14 @@ pub mod Core {
             order: LimitOrder,
         ) {
             self
+                .external_components
                 ._get_vault_manager_dispatcher()
                 .invest_in_vault(operator_nonce: operator_nonce, :signature, :order)
-        }
-        fn register_withdraw_component(ref self: ContractState, component_address: ClassHash) {
-            self
-                .external_components
-                .entry(EXTERNAL_COMPONENT_WITHDRAWALS)
-                .write(value: component_address);
-        }
-
-        fn register_transfer_component(ref self: ContractState, component_address: ClassHash) {
-            self
-                .external_components
-                .entry(EXTERNAL_COMPONENT_TRANSFERS)
-                .write(value: component_address);
-        }
-        fn register_liquidation_component(ref self: ContractState, component_address: ClassHash) {
-            self
-                .external_components
-                .entry(EXTERNAL_COMPONENT_LIQUIDATIONS)
-                .write(value: component_address);
-        }
-
-        fn register_deleverage_component(ref self: ContractState, component_address: ClassHash) {
-            self
-                .external_components
-                .entry(EXTERNAL_COMPONENT_DELEVERAGES)
-                .write(value: component_address);
         }
     }
 
     #[generate_trait]
     pub impl InternalCoreFunctions of InternalCoreFunctionsTrait {
-        fn _get_vault_manager_dispatcher(
-            ref self: ContractState,
-        ) -> IVaultExternalLibraryDispatcher {
-            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_VAULT).read();
-            assert(class_hash.is_non_zero(), 'NO_VAULT_MANAGER');
-            IVaultExternalLibraryDispatcher { class_hash: class_hash }
-        }
-
-        fn _get_withdrawal_manager_dispatcher(
-            ref self: ContractState,
-        ) -> IWithdrawalManagerLibraryDispatcher {
-            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_WITHDRAWALS).read();
-            assert(class_hash.is_non_zero(), 'NO_WITHDRAW_MANAGER');
-            IWithdrawalManagerLibraryDispatcher { class_hash: class_hash }
-        }
-
-        fn _get_transfer_manager_dispatcher(
-            ref self: ContractState,
-        ) -> ITransferManagerLibraryDispatcher {
-            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_TRANSFERS).read();
-            assert(class_hash.is_non_zero(), 'NO_TRANSFER_MANAGER');
-            ITransferManagerLibraryDispatcher { class_hash: class_hash }
-        }
-
-        fn _get_liquidation_manager_dispatcher(
-            ref self: ContractState,
-        ) -> ILiquidationManagerLibraryDispatcher {
-            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_LIQUIDATIONS).read();
-            assert(class_hash.is_non_zero(), 'NO_LIQUIDATION_MANAGER');
-            ILiquidationManagerLibraryDispatcher { class_hash: class_hash }
-        }
-
-        fn _get_deleverage_manager_dispatcher(
-            ref self: ContractState,
-        ) -> IDeleverageManagerLibraryDispatcher {
-            let class_hash = self.external_components.entry(EXTERNAL_COMPONENT_DELEVERAGES).read();
-            assert(class_hash.is_non_zero(), 'NO_DELEVERAGE_MANAGER');
-            IDeleverageManagerLibraryDispatcher { class_hash: class_hash }
-        }
-
         fn _execute_trade(
             ref self: ContractState,
             signature_a: Signature,
@@ -863,7 +796,10 @@ pub mod Core {
         }
 
         fn _is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
-            self._get_vault_manager_dispatcher().is_vault(vault_position: vault_position)
+            self
+                .external_components
+                ._get_vault_manager_dispatcher()
+                .is_vault(vault_position: vault_position)
         }
     }
 }
