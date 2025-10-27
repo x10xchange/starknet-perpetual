@@ -9,9 +9,8 @@ fn basic_setup() {
     let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
     let user_a = test.new_user();
     let user_b = test.new_user();
-
     // test.process_deposit(test.deposit(user_a, 10_000));
-    // test.process_deposit(test.deposit(user_b, 10_000));
+// test.process_deposit(test.deposit(user_b, 10_000));
 }
 
 #[test]

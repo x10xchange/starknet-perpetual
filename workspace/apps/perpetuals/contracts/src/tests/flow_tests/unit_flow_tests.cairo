@@ -1061,7 +1061,9 @@ fn test_withdraw_with_owner_fails_if_not_caller() {
     state.facade.process_deposit(deposit_info: deposit_info_user_1);
 
     // Withdraw.
-    let mut withdraw_info = state.facade.withdraw_request_with_caller(user: user_1, amount: 15000, caller: user_2);
+    let mut withdraw_info = state
+        .facade
+        .withdraw_request_with_caller(user: user_1, amount: 15000, caller: user_2);
     state.facade.withdraw(:withdraw_info);
 }
 
@@ -2330,7 +2332,9 @@ fn test_funding_index_rounding() {
 }
 
 #[test]
-#[should_panic(expected: "POSITION_IS_NOT_FAIR_DELEVERAGE position_id: PositionId { value: 101 } TV before -2, TR before 2, TV after 2, TR after 0")]
+#[should_panic(
+    expected: "POSITION_IS_NOT_FAIR_DELEVERAGE position_id: PositionId { value: 101 } TV before -2, TR before 2, TV after 2, TR after 0",
+)]
 fn test_unfair_deleverage() {
     // Setup.
     let risk_factor_data = RiskFactorTiers {
@@ -2437,7 +2441,7 @@ fn test_unfair_deleverage() {
             deleveraged_user: deleveraged_user,
             deleverager_user: deleverager_user,
             base_asset_id: asset_id,
-            deleveraged_base: -2, 
+            deleveraged_base: -2,
             deleveraged_quote: 204,
         );
 }

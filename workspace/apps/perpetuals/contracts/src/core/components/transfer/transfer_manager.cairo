@@ -83,11 +83,11 @@ pub(crate) mod TransferManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
+    use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::{INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use crate::core::types::transfer::TransferArgs;
-    use crate::core::constants::{NAME, VERSION};
     use super::{ITransferManager, Signature, Timestamp, Transfer, TransferRequest};
 
 
