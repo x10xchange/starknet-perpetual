@@ -465,11 +465,14 @@ pub(crate) mod VaultsManager {
                 self.positions.is_liquidatable(liquidated_position_id), 'POSITION_NOT_LIQUIDATABLE',
             );
 
+            assert(actual_shares_user < 0, 'SHARES_MUST_BE_NEGATIVE');
+            assert(actual_collateral_user > 0, 'COLLATERAL_MUST_BE_POSITIVE');
+
             let user_order = LimitOrder {
                 source_position: liquidated_position_id,
                 receive_position: liquidated_position_id,
                 base_asset_id: liquidated_asset_id,
-                base_amount: -actual_shares_user,
+                base_amount: actual_shares_user,
                 quote_asset_id: self.assets.get_collateral_id(),
                 quote_amount: actual_collateral_user,
                 fee_asset_id: self.assets.get_collateral_id(),

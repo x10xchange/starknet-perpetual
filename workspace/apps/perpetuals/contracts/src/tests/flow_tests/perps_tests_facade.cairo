@@ -1726,6 +1726,43 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
     }
 
+    fn liquidate_shares(
+        ref self: PerpsTestsFacade,
+        vault: VaultState,
+        liquidated_user: User,
+        shares_to_burn_vault: u64,
+        value_of_shares_vault: u64,
+        actual_shares_user: u64,
+        actual_collateral_user: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        let vault_order = LimitOrder {
+            source_position: vault.position_id,
+            receive_position: vault.position_id,
+            base_asset_id: vault.asset_id,
+            base_amount: shares_to_burn_vault.try_into().unwrap(),
+            quote_asset_id: self.collateral_id,
+            quote_amount: -value_of_shares_vault.try_into().unwrap(),
+            fee_asset_id: self.collateral_id,
+            fee_amount: 0_u64,
+            expiration: Time::now().add(Time::weeks(1)),
+            salt: self.generate_salt(),
+        };
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .liquidate_vault_shares(
+                :operator_nonce,
+                liquidated_position_id: liquidated_user.position_id,
+                vault_approval: vault_order,
+                vault_signature: array![0, 0].span(),
+                liquidated_asset_id: vault.asset_id,
+                actual_shares_user: -actual_shares_user.try_into().unwrap(),
+                actual_collateral_user: actual_collateral_user.try_into().unwrap(),
+            );
+    }
+
     fn deposit_into_vault(
         ref self: PerpsTestsFacade,
         vault: VaultState,

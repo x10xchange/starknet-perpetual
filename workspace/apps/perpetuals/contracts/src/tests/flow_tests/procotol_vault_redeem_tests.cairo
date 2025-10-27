@@ -585,3 +585,250 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
             actual_collateral_user: value_of_shares,
         );
 }
+
+
+#[test]
+fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -2000,
+            fee_amount: 0,
+        );
+
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 2000,
+            fee_amount: 0,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //redeeming user has
+    // 1000 x vault_shares @ 1usd
+    // 2 x BTC @ 1000usd
+    // - 2000 usd collateral cost of trade
+    // 1000 * 0.1 vault_share risk
+    // 2000 * 0.3 btc risk
+    // total risk = 700usd
+    // total value = 1000 + 2000 - 2000 = 1000
+    // TV/TR = 1000/700 = 1.4285 = healthy
+
+    state.facade.validate_total_value(redeeming_user.position_id, 1000);
+    state.facade.validate_total_risk(redeeming_user.position_id, 700);
+
+    state.facade.price_tick(@synthetic_info, 500);
+    //redeeming user has
+    // 1000 x vault_shares @ 1usd
+    // 2 x BTC @ 500usd
+    // - 2000 usd collateral cost of trade
+    // 1000 * 0.1 vault_share risk
+    // 1000 * 0.3 btc risk
+    // total risk = 400
+    // total value = 1000 + 1000 - 2000 = 0
+    // TV/TR = 0/400 = 0 = unhealthy
+
+    state.facade.validate_total_value(redeeming_user.position_id, 0);
+    state.facade.validate_total_risk(redeeming_user.position_id, 400);
+
+    state
+        .facade
+        .liquidate_shares(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 400,
+            actual_shares_user: 400,
+            actual_collateral_user: 400,
+        );
+}
+
+
+#[test]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before 0, TR before 400, TV after -100, TR after 360",
+)]
+fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    // Create a custom asset configuration to test interesting risk factor scenarios.
+    let synthetic_info = SyntheticInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
+    let asset_id = synthetic_info.asset_id;
+
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 2,
+            base_asset_id: asset_id,
+            quote_amount: -2000,
+            fee_amount: 0,
+        );
+
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -2,
+            base_asset_id: asset_id,
+            quote_amount: 2000,
+            fee_amount: 0,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    //redeeming user has
+    // 1000 x vault_shares @ 1usd
+    // 2 x BTC @ 1000usd
+    // - 2000 usd collateral cost of trade
+    // 1000 * 0.1 vault_share risk
+    // 2000 * 0.3 btc risk
+    // total risk = 700usd
+    // total value = 1000 + 2000 - 2000 = 1000
+    // TV/TR = 1000/700 = 1.4285 = healthy
+
+    state.facade.validate_total_value(redeeming_user.position_id, 1000);
+    state.facade.validate_total_risk(redeeming_user.position_id, 700);
+
+    state.facade.price_tick(@synthetic_info, 500);
+    //redeeming user has
+    // 1000 x vault_shares @ 1usd
+    // 2 x BTC @ 500usd
+    // - 2000 usd collateral cost of trade
+    // 1000 * 0.1 vault_share risk
+    // 1000 * 0.3 btc risk
+    // total risk = 400
+    // total value = 1000 + 1000 - 2000 = 0
+    // TV/TR = 0/400 = 0 = unhealthy
+
+    state.facade.validate_total_value(redeeming_user.position_id, 0);
+    state.facade.validate_total_risk(redeeming_user.position_id, 400);
+
+    state
+        .facade
+        .liquidate_shares(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 400,
+            actual_shares_user: 400,
+            actual_collateral_user: 300,
+        );
+}
