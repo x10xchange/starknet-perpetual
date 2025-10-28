@@ -64,18 +64,15 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::components::deposit::Deposit as DepositComponent;
     use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::vaults::types::VaultConfig;
-    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starknet::ContractAddress;
-    use starknet::storage::{Map, StoragePointerReadAccess};
+    use starknet::storage::StoragePointerReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -119,8 +116,6 @@ pub(crate) mod WithdrawalManager {
         #[flat]
         PositionsEvent: PositionsComponent::Event,
         #[flat]
-        DepositEvent: DepositComponent::Event,
-        #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
@@ -132,26 +127,16 @@ pub(crate) mod WithdrawalManager {
 
     #[storage]
     pub struct Storage {
-        registered_vaults_by_asset: Map<AssetId, VaultConfig>,
-        registered_vaults_by_position: Map<PositionId, VaultConfig>,
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
         operator_nonce: OperatorNonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
-        // #[substorage(v0)]
-        // pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
-        // #[substorage(v0)]
-        // src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
-        #[substorage(v0)]
-        pub deposits: DepositComponent::Storage,
-        // #[substorage(v0)]
-        // pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
@@ -167,7 +152,6 @@ pub(crate) mod WithdrawalManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
-    component!(path: DepositComponent, storage: deposits, event: DepositEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -177,7 +161,6 @@ pub(crate) mod WithdrawalManager {
 
     impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
 
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
 
     impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
 

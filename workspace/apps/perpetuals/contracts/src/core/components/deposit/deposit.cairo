@@ -28,6 +28,7 @@ pub(crate) mod Deposit {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::signature::stark::HashType;
     use starkware_utils::time::time::{Time, TimeDelta};
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
 
     #[storage]
@@ -58,6 +59,7 @@ pub(crate) mod Deposit {
         impl Positions: PositionsComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl Vaults: VaultsComponent::HasComponent<TContractState>,
     > of IDeposit<ComponentState<TContractState>> {
         /// Deposit is called by the user to add a deposit request.
         ///
@@ -277,6 +279,7 @@ pub(crate) mod Deposit {
         impl Positions: PositionsComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl Vaults: VaultsComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(ref self: ComponentState<TContractState>, cancel_delay: TimeDelta) {
             assert(self.cancel_delay.read().is_zero(), errors::ALREADY_INITIALIZED);
@@ -294,6 +297,7 @@ pub(crate) mod Deposit {
         ) {
             // check recipient position exists
             get_dep_component_mut!(ref self, Positions).get_position_snapshot(:position_id);
+            let mut vaults = get_dep_component_mut!(ref self, Vaults);
 
             assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
             let assets = get_dep_component!(@self, Assets);

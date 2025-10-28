@@ -106,8 +106,6 @@ pub(crate) mod DeleverageManager {
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
-        pub deposits: DepositComponent::Storage,
-        #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: FulfillmentComponent::Storage,
@@ -122,7 +120,6 @@ pub(crate) mod DeleverageManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
-    component!(path: DepositComponent, storage: deposits, event: DepositEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -131,7 +128,6 @@ pub(crate) mod DeleverageManager {
     );
 
     impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
     impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
     impl RolesImpl = RolesComponent::RolesImpl<ContractState>;

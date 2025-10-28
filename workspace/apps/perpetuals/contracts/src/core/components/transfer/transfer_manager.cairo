@@ -64,8 +64,6 @@ pub(crate) mod TransferManager {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::components::deposit::Deposit as DepositComponent;
-    use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
@@ -118,8 +116,6 @@ pub(crate) mod TransferManager {
         #[flat]
         PositionsEvent: PositionsComponent::Event,
         #[flat]
-        DepositEvent: DepositComponent::Event,
-        #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
@@ -142,8 +138,6 @@ pub(crate) mod TransferManager {
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
-        pub deposits: DepositComponent::Storage,
-        #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: FulfillmentComponent::Storage,
@@ -158,7 +152,6 @@ pub(crate) mod TransferManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
-    component!(path: DepositComponent, storage: deposits, event: DepositEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -167,7 +160,6 @@ pub(crate) mod TransferManager {
     );
 
     impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
     impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
     impl RolesImpl = RolesComponent::RolesImpl<ContractState>;

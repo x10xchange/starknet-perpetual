@@ -4,12 +4,10 @@ use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::vault::ConvertPositionToVault;
 use starkware_utils::signature::stark::Signature;
 
-const STORAGE_VERSION: u8 = 1;
 
 #[starknet::interface]
 pub trait IVaultExternal<TContractState> {
     fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
-    fn is_vault(ref self: TContractState, vault_position: PositionId) -> bool;
     fn invest_in_vault(
         ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
     );
@@ -39,7 +37,6 @@ pub trait IVaultExternal<TContractState> {
 #[starknet::contract]
 pub(crate) mod VaultsManager {
     use core::num::traits::{WideMul, Zero};
-    use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
@@ -56,11 +53,8 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::vaults::types::VaultConfig;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
-    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -74,13 +68,12 @@ pub(crate) mod VaultsManager {
     use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::vaults::events;
+    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
+    use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::errors::order_expired_err;
     use crate::core::types::position::PositionDiff;
-    use crate::core::utils::validate_signature;
-    use super::{
-        ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, STORAGE_VERSION,
-        Signature,
-    };
+    use super::super::vaults::IVaults;
+    use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
 
 
     const NAME: felt252 = 'Vaults';
@@ -100,7 +93,6 @@ pub(crate) mod VaultsManager {
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
-        VaultOpened: events::VaultOpened,
         InvestInVault: events::InvestInVault,
         #[flat]
         FulfillmentEvent: FulfillmentComponent::Event,
@@ -122,12 +114,12 @@ pub(crate) mod VaultsManager {
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[storage]
     pub struct Storage {
-        registered_vaults_by_asset: Map<AssetId, VaultConfig>,
-        registered_vaults_by_position: Map<PositionId, VaultConfig>,
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
@@ -154,6 +146,8 @@ pub(crate) mod VaultsManager {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -168,6 +162,8 @@ pub(crate) mod VaultsManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
     impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
 
@@ -191,91 +187,8 @@ pub(crate) mod VaultsManager {
         fn activate_vault(
             ref self: ContractState, operator_nonce: u64, order: ConvertPositionToVault,
         ) {
-            let vault_asset_id = order.vault_asset_id;
-            let vault_position = order.position_to_convert;
-            let expiration = order.expiration;
-
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-
-            let existing_entry = self.registered_vaults_by_asset.read(vault_asset_id);
-            assert(existing_entry.version == 0, 'VAULT_ALREADY_ACTIVATED');
-
-            let existing_position_entry = self.registered_vaults_by_position.read(vault_position);
-            assert(existing_position_entry.version == 0, 'VAULT_ALREADY_ACTIVATED');
-
-            let position_info = self.positions.get_position_snapshot(vault_position);
-
-            let asset_config = self.assets.get_asset_config(vault_asset_id);
-
-            let erc4626_dispatcher = IERC4626Dispatcher {
-                contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
-            };
-
-            let vault_dispatcher = IProtocolVaultDispatcher {
-                contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
-            };
-            assert(
-                vault_dispatcher.get_owning_position_id() == vault_position.value,
-                'VAULT_OWNERSHIP_MISMATCH',
-            );
-
-            assert(
-                erc4626_dispatcher
-                    .asset() == self
-                    .assets
-                    .get_collateral_token_contract()
-                    .contract_address,
-                'VAULT_ASSET_MISMATCH',
-            );
-
-            for (asset_id, balance_info) in position_info.asset_balances {
-                if balance_info.balance.is_zero() {
-                    continue;
-                }
-                let asset_config = self.assets.get_asset_config(asset_id);
-
-                if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
-                    panic_with_felt252('VAULT_CANNOT_HOLD_VAULT');
-                }
-            }
-
-            self
-                .registered_vaults_by_asset
-                .write(
-                    vault_asset_id,
-                    VaultConfig {
-                        version: STORAGE_VERSION,
-                        asset_id: vault_asset_id,
-                        position_id: vault_position.value,
-                    },
-                );
-
-            self
-                .registered_vaults_by_position
-                .write(
-                    vault_position,
-                    VaultConfig {
-                        version: STORAGE_VERSION,
-                        asset_id: vault_asset_id,
-                        position_id: vault_position.value,
-                    },
-                );
-
-            self
-                .emit(
-                    Event::VaultOpened(
-                        events::VaultOpened {
-                            position_id: vault_position, asset_id: vault_asset_id,
-                        },
-                    ),
-                )
+            self.vaults.activate_vault(operator_nonce: operator_nonce, order: order);
         }
-        fn is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
-            return self.registered_vaults_by_position.read(vault_position).version != 0;
-        }
-
 
         fn invest_in_vault(
             ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
@@ -284,7 +197,7 @@ pub(crate) mod VaultsManager {
             let current_time = Time::now();
             self.assets.validate_price_interval_integrity(current_time: current_time);
 
-            let vault_config = self.get_vault_config_for_asset(order.base_asset_id);
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let from_position_id = order.source_position;
             let vault_position_id = vault_config.position_id.into();
 
@@ -318,7 +231,11 @@ pub(crate) mod VaultsManager {
             //     signature: signature,
             // );
 
-            assert(!self.is_vault(from_position_id), 'FROM_POSITION_IS_VAULT');
+            assert(!self.vaults.is_vault_position(from_position_id), 'FROM_POSITION_IS_VAULT');
+            assert(
+                !self.vaults.is_vault_position(receiving_position_id),
+                'RECEIVING_POSITION_IS_VAULT',
+            );
             let vault_share_config = self.assets.get_asset_config(vault_config.asset_id);
 
             let vault_dispatcher = IERC4626Dispatcher {
@@ -495,21 +412,6 @@ pub(crate) mod VaultsManager {
 
     #[generate_trait]
     pub impl InternalFunctions of VaultsFunctionsTrait {
-        fn get_vault_config_for_position(
-            ref self: ContractState, vault_position: PositionId,
-        ) -> VaultConfig {
-            let vault_config = self.registered_vaults_by_position.read(vault_position);
-            assert(vault_config.version != 0, 'UNKNOWN_VAULT');
-            vault_config
-        }
-
-        fn get_vault_config_for_asset(
-            ref self: ContractState, vault_asset_id: AssetId,
-        ) -> VaultConfig {
-            let vault_config = self.registered_vaults_by_asset.read(vault_asset_id);
-            assert(vault_config.version != 0, 'UNKNOWN_VAULT');
-            vault_config
-        }
         fn _execute_redeem(
             ref self: ContractState,
             order: LimitOrder,
@@ -519,7 +421,7 @@ pub(crate) mod VaultsManager {
             actual_collateral_user: i64,
             validate_user_fulfillment: bool,
         ) {
-            let vault_config = self.get_vault_config_for_asset(order.base_asset_id);
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let vault_position_id: PositionId = vault_config.position_id.into();
             let redeeming_position_id = order.source_position;
             let receiving_position_id = order.receive_position;
@@ -573,6 +475,7 @@ pub(crate) mod VaultsManager {
                 );
 
             let vault_config = self
+                .vaults
                 .get_vault_config_for_position(vault_position: vault_position_id);
             let vault_asset = self.assets.get_asset_config(vault_config.asset_id);
 

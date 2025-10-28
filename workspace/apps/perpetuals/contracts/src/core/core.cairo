@@ -10,7 +10,6 @@ pub mod Core {
     use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
-    use perpetuals::core::components::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -29,7 +28,7 @@ pub mod Core {
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::{Map, StorageMapReadAccess};
+    use starknet::storage::StorageMapReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -50,7 +49,7 @@ pub mod Core {
     use crate::core::components::fulfillment::interface::IFulfillment;
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
     use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
-    use crate::core::components::vaults::types::VaultConfig;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::constants::{NAME, VERSION};
@@ -76,6 +75,8 @@ pub mod Core {
         storage: external_components,
         event: ExternalComponentsEvent,
     );
+
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
 
     #[abi(embed_v0)]
@@ -105,7 +106,7 @@ pub mod Core {
     #[abi(embed_v0)]
     impl PositionsImpl = Positions::PositionsImpl<ContractState>;
 
-    impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    // impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl ExternalComponentsImpl =
@@ -147,11 +148,10 @@ pub mod Core {
         pub positions: Positions::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: Fulfillement::Storage,
-        // vault storage to be accessed via library call
-        pub registered_vaults_by_asset: Map<AssetId, VaultConfig>,
-        pub registered_vaults_by_position: Map<PositionId, VaultConfig>,
         #[substorage(v0)]
         pub external_components: ExternalComponentsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     #[event]
@@ -187,6 +187,8 @@ pub mod Core {
         FulfillmentEvent: Fulfillement::Event,
         #[flat]
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[constructor]
@@ -801,10 +803,7 @@ pub mod Core {
         }
 
         fn _is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
-            self
-                .external_components
-                ._get_vault_manager_dispatcher()
-                .is_vault(vault_position: vault_position)
+            self.vaults.is_vault_position(vault_position)
         }
     }
 }
