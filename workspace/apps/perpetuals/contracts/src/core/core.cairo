@@ -54,6 +54,7 @@ pub mod Core {
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::constants::{NAME, VERSION};
+    use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
 
 
@@ -676,6 +677,7 @@ pub mod Core {
             tvtr_b_before: Nullable<PositionTVTR>,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
+            assert(synthetic_asset.asset_type == AssetType::SYNTHETIC, 'TRADE_ASSET_NOT_SYNTHETIC');
             validate_trade(
                 :order_a,
                 :order_b,
@@ -686,7 +688,6 @@ pub mod Core {
                 synthetic_asset: Some(synthetic_asset),
                 collateral_id: self.assets.get_collateral_id(),
             );
-
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
 
