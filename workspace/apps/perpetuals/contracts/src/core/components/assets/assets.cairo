@@ -360,7 +360,7 @@ pub mod AssetsComponent {
             get_dep_component!(@self, Roles).only_app_governor();
             let mut config = self._get_asset_config(:synthetic_id);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
-
+            assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
             config.status = AssetStatus::INACTIVE;
             self.asset_config.entry(synthetic_id).write(Option::Some(config));
             self.num_of_active_synthetic_assets.sub_and_write(1);
