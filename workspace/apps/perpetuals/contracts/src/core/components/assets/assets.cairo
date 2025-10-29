@@ -47,7 +47,6 @@ pub mod AssetsComponent {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::{MINUTE, TWO_POW_128, TWO_POW_32, TWO_POW_40};
-    use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::signature::stark::{PublicKey, validate_stark_signature};
     use starkware_utils::storage::iterable_map::{
@@ -55,6 +54,7 @@ pub mod AssetsComponent {
     };
     use starkware_utils::storage::utils::{AddToStorage, SubFromStorage};
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+    use crate::core::types::price::SN_PERPS_SCALE;
 
     const MAX_TIME: u64 = 2_u64.pow(56);
 
@@ -224,27 +224,21 @@ pub mod AssetsComponent {
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
 
-            assert(quantum.is_non_zero(), INVALID_ZERO_QUANTUM);
+            assert(quantum == 1, 'INVALID_SHARE_QUANTUM');
             let erc20Contract = IERC20MetadataDispatcher {
                 contract_address: erc20_contract_address,
             };
             let underlying_decimals = erc20Contract.decimals();
+            let underlying_resolution = 10_u128.pow(underlying_decimals.into());
+            assert(underlying_resolution == SN_PERPS_SCALE, 'INVALID_UNDERLYING');
             let calculated_resolution: u64 = (10_u256.pow(underlying_decimals.into())
                 / quantum.into())
                 .try_into()
                 .unwrap();
-
-            assert_with_byte_array(
-                calculated_resolution == resolution_factor,
-                format!(
-                    "MISMATCHED_RESOLUTION: calculated {}, received {}, underlying_decimals {}",
-                    calculated_resolution,
-                    resolution_factor,
-                    underlying_decimals,
-                ),
+            assert(
+                calculated_resolution == SN_PERPS_SCALE.try_into().unwrap(),
+                'INVALID_SHARE_RESOLUTION',
             );
-
-            assert(calculated_resolution.is_non_zero(), 'INVALID_ZERO_RESOLUTION');
             self
                 ._add_asset(
                     asset_id,

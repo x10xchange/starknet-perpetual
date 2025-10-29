@@ -1,7 +1,6 @@
 use core::num::traits::Zero;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
 use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
-use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
@@ -11,7 +10,7 @@ use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{PerpetualsInitConfig, init_by_dispatcher};
 use snforge_std::test_address;
 use starknet::ContractAddress;
-use starkware_utils::time::time::{Time, Timestamp};
+use starkware_utils::time::time::{Time};
 use starkware_utils_testing::test_utils::Deployable;
 
 
@@ -41,7 +40,7 @@ fn test_process_deposit_only_operator() {
 #[test]
 #[should_panic(expected: 'POSITION_DOESNT_EXIST')]
 fn test_withdraw_request_position_doesnt_exist() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = ICoreDispatcher { contract_address };
     dispatcher
         .withdraw_request(
@@ -57,7 +56,7 @@ fn test_withdraw_request_position_doesnt_exist() {
 #[test]
 #[should_panic(expected: "ONLY_OPERATOR")]
 fn test_withdraw_only_operator() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = ICoreDispatcher { contract_address };
     dispatcher
         .withdraw(
@@ -220,7 +219,7 @@ fn test_deactivate_synthetic_only_app_governor() {
 #[test]
 #[should_panic(expected: "ONLY_OPERATOR")]
 fn test_funding_tick_only_operator() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = IAssetsDispatcher { contract_address };
     dispatcher
         .funding_tick(
@@ -245,7 +244,7 @@ fn test_price_tick_only_operator() {
 #[test]
 #[should_panic(expected: "ONLY_OPERATOR")]
 fn test_new_position_only_operator() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = IPositionsDispatcher { contract_address };
     dispatcher
         .new_position(
@@ -260,7 +259,7 @@ fn test_new_position_only_operator() {
 #[test]
 #[should_panic(expected: "ONLY_OPERATOR")]
 fn test_set_owner_account_only_operator() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = IPositionsDispatcher { contract_address };
     dispatcher
         .set_owner_account(
@@ -274,7 +273,7 @@ fn test_set_owner_account_only_operator() {
 #[test]
 #[should_panic(expected: ('POSITION_DOESNT_EXIST',))]
 fn test_set_public_key_request_position_doesnt_exist() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = IPositionsDispatcher { contract_address };
     dispatcher
         .set_public_key_request(
@@ -288,7 +287,7 @@ fn test_set_public_key_request_position_doesnt_exist() {
 #[test]
 #[should_panic(expected: "ONLY_OPERATOR")]
 fn test_set_public_key_only_operator() {
-    let (cfg, contract_address) = setup();
+    let (_, contract_address) = setup();
     let dispatcher = IPositionsDispatcher { contract_address };
     dispatcher
         .set_public_key(

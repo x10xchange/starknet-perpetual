@@ -65,13 +65,12 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+use vault::interface::{IProtocolVaultDispatcher};
 use crate::core::components::deposit::events as deposit_events;
 use crate::core::components::external_components;
 use crate::core::components::external_components::interface::{
     IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
 };
-use crate::core::core::Core::Event::DepositEvent;
 use crate::core::types::funding::FundingIndex;
 use crate::tests::constants::KEY_PAIR_1;
 

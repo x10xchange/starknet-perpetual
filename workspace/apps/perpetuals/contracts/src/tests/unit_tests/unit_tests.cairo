@@ -1,21 +1,17 @@
 use core::num::traits::{Pow, Zero};
 use perpetuals::core::components::assets::interface::{
-    IAssets, IAssetsDispatcher, IAssetsDispatcherTrait, IAssetsSafeDispatcher,
-    IAssetsSafeDispatcherTrait,
+    IAssets, IAssetsDispatcher, IAssetsDispatcherTrait,
 };
 use perpetuals::core::components::deposit::Deposit::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
-    DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait, IDepositSafeDispatcher,
-    IDepositSafeDispatcherTrait,
+    DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait,
 };
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::{
     FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
 };
-use perpetuals::core::components::positions::errors::POSITION_DOESNT_EXIST;
 use perpetuals::core::components::positions::interface::{
-    IPositions, IPositionsDispatcher, IPositionsDispatcherTrait, IPositionsSafeDispatcher,
-    IPositionsSafeDispatcherTrait,
+    IPositions, IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::core::Core::SNIP12MetadataImpl;
 use perpetuals::core::errors::WITHDRAW_EXPIRED;
@@ -44,8 +40,7 @@ use perpetuals::tests::event_test_utils::{
     assert_set_owner_account_event_with_expected, assert_set_public_key_event_with_expected,
     assert_set_public_key_request_event_with_expected, assert_trade_event_with_expected,
     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
-    assert_update_synthetic_quorum_event_with_expected, assert_withdraw_event_with_expected,
-    assert_withdraw_request_event_with_expected,
+    assert_update_synthetic_quorum_event_with_expected,
 };
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
@@ -55,8 +50,7 @@ use perpetuals::tests::test_utils::{
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{
-    start_cheat_block_timestamp_global, start_cheat_caller_address_global,
-    stop_cheat_caller_address_global, test_address,
+    start_cheat_block_timestamp_global,test_address,
 };
 use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::replaceability::interface::IReplaceable;
@@ -68,7 +62,7 @@ use starkware_utils::math::abs::Abs;
 use starkware_utils::storage::iterable_map::*;
 use starkware_utils::time::time::{Time, Timestamp};
 use starkware_utils_testing::test_utils::{
-    Deployable, TokenTrait, assert_panic_with_error, assert_panic_with_felt_error,
+    Deployable, TokenTrait, assert_panic_with_felt_error,
     cheat_caller_address_once,
 };
 use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
@@ -4016,7 +4010,7 @@ fn test_successful_remove_nonexistent_oracle() {
 // }
 
 #[test]
-#[should_panic(expected: 'INVALID_ZERO_QUANTUM')]
+#[should_panic(expected: 'INVALID_SHARE_QUANTUM')]
 fn test_unsuccessful_add_vault_share_asset_zero_quantum() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -4065,7 +4059,7 @@ fn test_unsuccessful_add_vault_share_asset_not_erc20() {
         .add_vault_collateral_asset(
             asset_id: cfg.vault_share_cfg.collateral_id,
             erc20_contract_address: test_address(),
-            quantum: 10_000_000,
+            quantum: 1,
             resolution_factor: 1_000_000_000,
             risk_factor_tiers: risk_factor_1,
             :risk_factor_first_tier_boundary,

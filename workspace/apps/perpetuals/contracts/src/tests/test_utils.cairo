@@ -40,14 +40,12 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use crate::core::components::deleverage;
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::components::external_components::interface::{
     EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
     EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS, IExternalComponents,
     IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
 };
-use crate::core::interface::{ICore, ICoreDispatcher, ICoreDispatcherTrait};
 
 /// The `User` struct represents a user corresponding to a position in the state of the Core
 /// contract.
@@ -174,6 +172,18 @@ pub impl CoreImpl of CoreTrait {
     }
 }
 
+
+fn deploy_vault_share(self: @TokenConfig) -> TokenState {
+    let mut calldata = ArrayTrait::new();
+    // self.name.serialize(ref calldata);
+    // self.symbol.serialize(ref calldata);
+    // self.initial_supply.serialize(ref calldata);
+    self.owner.serialize(ref calldata);
+    let token_contract = snforge_std::declare("VaultToken").unwrap().contract_class();
+    let (address, _) = token_contract.deploy(@calldata).unwrap();
+    TokenState { address, owner: *self.owner }
+}
+
 impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
     fn default() -> PerpetualsInitConfig {
         let vault_share_cfg = TokenConfig {
@@ -183,7 +193,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             owner: COLLATERAL_OWNER(),
         };
 
-        let vault_share_state = vault_share_cfg.deploy();
+        let vault_share_state = deploy_vault_share(@vault_share_cfg);
 
         let vault_share_risk_factor_first_tier_boundary = MAX_U128;
         let vault_share_risk_factor_tier_size = 1;
@@ -221,7 +231,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                 token_cfg: vault_share_cfg,
                 token_state: vault_share_state,
                 collateral_id: VAULT_SHARE_COLLATERAL_1_ID(),
-                quantum: 1000000000000,
+                quantum: 1,
                 risk_factor_tiers: vault_share_risk_factor_1,
                 risk_factor_first_tier_boundary: vault_share_risk_factor_first_tier_boundary,
                 risk_factor_tier_size: vault_share_risk_factor_tier_size,
@@ -447,7 +457,7 @@ pub fn send_price_tick_for_vault_share(
 pub fn deposit_vault_share(
     ref state: Core::ContractState, cfg: @PerpetualsInitConfig, user: User, number_of_shares: u64,
 ) {
-    let on_chain_amount = (number_of_shares.into()) * 10_u128.pow(18);
+    let on_chain_amount = (number_of_shares.into()) * 10_u128.pow(6);
     let quantum = *(cfg.vault_share_cfg.quantum);
     let quantized_amount: u64 = (on_chain_amount / (quantum.into())).try_into().unwrap();
 
@@ -648,6 +658,7 @@ pub fn validate_asset_balance(
 ) {
     let snapshot = state.positions.get_position_snapshot(:position_id);
     let balance = snapshot.asset_balances.read(asset_id).map_or(0_i64.into(), |b| b.balance);
+    println!("balance = {:?}, expected = {:?}", balance, expected_balance);
     assert!(balance == expected_balance);
 }
 
