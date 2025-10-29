@@ -81,6 +81,7 @@ pub(crate) mod TransferManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::{INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED};
     use crate::core::types::asset::synthetic::AssetType;
@@ -123,6 +124,8 @@ pub(crate) mod TransferManager {
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[storage]
@@ -145,6 +148,8 @@ pub(crate) mod TransferManager {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -158,14 +163,8 @@ pub(crate) mod TransferManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl TransferManagerImpl of ITransferManager<ContractState> {
@@ -198,6 +197,12 @@ pub(crate) mod TransferManager {
                         || asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL,
                     'NOT_TRANSFERABLE_ASSET',
                 );
+
+                if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
+                    assert(
+                        !self.vaults.is_vault_position(recipient), 'TRANSFER_VAULT_SHARES_TO_VAULT',
+                    );
+                }
             }
 
             self.positions.get_position_snapshot(position_id: recipient);
