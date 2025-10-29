@@ -100,7 +100,7 @@ pub trait ICore<TContractState> {
         base_amount_a: i64,
     );
 
-    fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
+    fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault, signature: Signature);
     fn invest_in_vault(
         ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
     );

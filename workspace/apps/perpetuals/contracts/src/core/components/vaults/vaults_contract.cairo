@@ -7,7 +7,12 @@ use starkware_utils::signature::stark::Signature;
 
 #[starknet::interface]
 pub trait IVaultExternal<TContractState> {
-    fn activate_vault(ref self: TContractState, operator_nonce: u64, order: ConvertPositionToVault);
+    fn activate_vault(
+        ref self: TContractState,
+        operator_nonce: u64,
+        order: ConvertPositionToVault,
+        signature: Signature,
+    );
     fn invest_in_vault(
         ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
     );
@@ -70,14 +75,13 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::events;
     use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
+    use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::order_expired_err;
     use crate::core::types::position::PositionDiff;
+    use crate::core::utils::validate_signature;
     use super::super::vaults::IVaults;
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
 
-
-    const NAME: felt252 = 'Vaults';
-    const VERSION: felt252 = 'v0';
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {
@@ -185,9 +189,14 @@ pub(crate) mod VaultsManager {
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {
         fn activate_vault(
-            ref self: ContractState, operator_nonce: u64, order: ConvertPositionToVault,
+            ref self: ContractState,
+            operator_nonce: u64,
+            order: ConvertPositionToVault,
+            signature: Signature,
         ) {
-            self.vaults.activate_vault(operator_nonce: operator_nonce, order: order);
+            self
+                .vaults
+                .activate_vault(operator_nonce: operator_nonce, order: order, signature: signature);
         }
 
         fn invest_in_vault(
@@ -216,20 +225,20 @@ pub(crate) mod VaultsManager {
                 .positions
                 .get_position_snapshot(position_id: from_position_id);
 
+            let order_hash = validate_signature(
+                public_key: sending_position_snapshot.get_owner_public_key(),
+                message: order,
+                signature: signature,
+            );
+
             self
                 .fulfillment_tracking
                 .update_fulfillment(
                     position_id: from_position_id,
-                    hash: order.get_message_hash(sending_position_snapshot.get_owner_public_key()),
+                    hash: order_hash,
                     order_base_amount: order.quote_amount,
                     actual_base_amount: order.quote_amount,
                 );
-
-            // let user_order_hash = validate_signature(
-            //     public_key: sending_position_snapshot.get_owner_public_key(),
-            //     message: order,
-            //     signature: signature,
-            // );
 
             assert(!self.vaults.is_vault_position(from_position_id), 'FROM_POSITION_IS_VAULT');
             assert(
@@ -359,7 +368,8 @@ pub(crate) mod VaultsManager {
                     :vault_signature,
                     :actual_shares_user,
                     :actual_collateral_user,
-                    validate_user_fulfillment: true,
+                    validate_user_order: true,
+                    user_signature: signature,
                 );
         }
 
@@ -405,7 +415,8 @@ pub(crate) mod VaultsManager {
                     :vault_signature,
                     :actual_shares_user,
                     :actual_collateral_user,
-                    validate_user_fulfillment: false,
+                    validate_user_order: false,
+                    user_signature: array![0, 0].span(),
                 );
         }
     }
@@ -419,7 +430,8 @@ pub(crate) mod VaultsManager {
             vault_signature: Signature,
             actual_shares_user: i64,
             actual_collateral_user: i64,
-            validate_user_fulfillment: bool,
+            validate_user_order: bool,
+            user_signature: Signature,
         ) {
             let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let vault_position_id: PositionId = vault_config.position_id.into();
@@ -455,21 +467,33 @@ pub(crate) mod VaultsManager {
             let amount_to_burn = actual_shares_user;
             let value_to_receive = actual_collateral_user;
 
-            if (validate_user_fulfillment) {
+            if (validate_user_order) {
+                let order_hash = validate_signature(
+                    public_key: redeeming_position.get_owner_public_key(),
+                    message: order,
+                    signature: user_signature,
+                );
                 self
                     .fulfillment_tracking
                     .update_fulfillment(
                         position_id: redeeming_position_id,
-                        hash: order.get_message_hash(redeeming_position.get_owner_public_key()),
+                        hash: order_hash,
                         order_base_amount: order.base_amount.try_into().unwrap(),
                         actual_base_amount: actual_shares_user.try_into().unwrap(),
                     );
             }
+
+            let vault_order_hash = validate_signature(
+                public_key: vault_position.get_owner_public_key(),
+                message: vault_approval,
+                signature: vault_signature,
+            );
+
             self
                 .fulfillment_tracking
                 .update_fulfillment(
                     position_id: vault_position_id,
-                    hash: vault_approval.get_message_hash(vault_position.get_owner_public_key()),
+                    hash: vault_order_hash,
                     order_base_amount: vault_approval.base_amount.try_into().unwrap(),
                     actual_base_amount: -actual_shares_user.try_into().unwrap(),
                 );

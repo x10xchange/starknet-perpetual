@@ -643,12 +643,15 @@ pub mod Core {
                 )
         }
         fn activate_vault(
-            ref self: ContractState, operator_nonce: u64, order: ConvertPositionToVault,
+            ref self: ContractState,
+            operator_nonce: u64,
+            order: ConvertPositionToVault,
+            signature: Signature,
         ) {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .activate_vault(operator_nonce: operator_nonce, :order)
+                .activate_vault(operator_nonce: operator_nonce, :order, :signature)
         }
         fn invest_in_vault(
             ref self: ContractState,

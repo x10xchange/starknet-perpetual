@@ -33,6 +33,7 @@ pub mod Vaults {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::signature::stark::Signature;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
@@ -104,6 +105,7 @@ pub mod Vaults {
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
             order: ConvertPositionToVault,
+            signature: Signature,
         ) {
             let vault_asset_id = order.vault_asset_id;
             let vault_position = order.position_to_convert;
