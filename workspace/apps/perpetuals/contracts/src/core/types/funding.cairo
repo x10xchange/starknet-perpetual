@@ -116,9 +116,6 @@ pub fn validate_funding_rate(
     time_diff: u64,
     synthetic_price: Price,
 ) {
-    if (time_diff.is_zero()) {
-        return;
-    }
     assert_with_byte_array(
         condition: index_diff.into() <= synthetic_price.mul(rhs: max_funding_rate)
             * time_diff.into(),
