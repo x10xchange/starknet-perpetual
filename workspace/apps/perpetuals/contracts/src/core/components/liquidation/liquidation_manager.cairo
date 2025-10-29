@@ -69,6 +69,8 @@ pub(crate) mod LiquidationManager {
     };
     use starkware_utils::time::time::Time;
     use crate::core::components::assets::errors::SYNTHETIC_NOT_EXISTS;
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_LIQUIDATIONS;
+    use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::CANT_LIQUIDATE_IF_POSITION;
     use crate::core::types::position::{Position, PositionDiff};
@@ -145,6 +147,14 @@ pub(crate) mod LiquidationManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+
+
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_LIQUIDATIONS
+        }
+    }
 
     #[abi(embed_v0)]
     impl LiquidationManagerImpl of ILiquidationManager<ContractState> {

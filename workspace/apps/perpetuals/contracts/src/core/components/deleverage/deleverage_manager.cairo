@@ -51,6 +51,8 @@ pub(crate) mod DeleverageManager {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DELEVERAGES;
+    use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::constants::{NAME, VERSION};
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::value_risk_calculator::deleveraged_position_validations;
@@ -127,6 +129,12 @@ pub(crate) mod DeleverageManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
 
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_DELEVERAGES
+        }
+    }
 
 
     #[abi(embed_v0)]

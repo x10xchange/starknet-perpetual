@@ -67,6 +67,9 @@ pub(crate) mod VaultsManager {
     };
     use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_VAULT;
+    use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::positions::interface::IPositions;
     use crate::core::components::vaults::events;
     use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
@@ -126,18 +129,12 @@ pub(crate) mod VaultsManager {
         operator_nonce: OperatorNonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
-        // #[substorage(v0)]
-        // pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
-        // #[substorage(v0)]
-        // src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
         pub deposits: DepositComponent::Storage,
-        // #[substorage(v0)]
-        // pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
@@ -165,22 +162,12 @@ pub(crate) mod VaultsManager {
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
-
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-
-
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_VAULT
+        }
+    }
 
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {

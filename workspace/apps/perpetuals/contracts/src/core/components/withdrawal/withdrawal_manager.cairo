@@ -82,6 +82,8 @@ pub(crate) mod WithdrawalManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
+    use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::{INVALID_ZERO_AMOUNT, WITHDRAW_EXPIRED};
     use crate::core::types::position::PositionDiff;
@@ -158,6 +160,13 @@ pub(crate) mod WithdrawalManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_WITHDRAWALS
+        }
+    }
 
     #[abi(embed_v0)]
     impl WithdrawalManagerImpl of IWithdrawalManager<ContractState> {
