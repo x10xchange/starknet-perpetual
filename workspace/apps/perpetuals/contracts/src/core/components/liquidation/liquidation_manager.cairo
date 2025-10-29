@@ -51,6 +51,7 @@ pub(crate) mod LiquidationManager {
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
+    use perpetuals::core::components::fulfillment::interface::IFulfillment;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
@@ -144,14 +145,6 @@ pub(crate) mod LiquidationManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
-
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl LiquidationManagerImpl of ILiquidationManager<ContractState> {

@@ -159,22 +159,6 @@ pub(crate) mod WithdrawalManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
 
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-
-
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-
-
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
-
     #[abi(embed_v0)]
     impl WithdrawalManagerImpl of IWithdrawalManager<ContractState> {
         fn withdraw_request(
