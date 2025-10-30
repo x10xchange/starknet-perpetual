@@ -1,6 +1,7 @@
 #[starknet::component]
 pub mod Positions {
-    use core::nullable::{FromNullableResult, match_nullable};
+    use crate::core::components::snip::SNIP12MetadataImpl;
+use core::nullable::{FromNullableResult, match_nullable};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -18,7 +19,6 @@ pub mod Positions {
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
-    use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
     use perpetuals::core::types::balance::Balance;
@@ -62,6 +62,8 @@ pub mod Positions {
 
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
+
+    impl SnipImpl = SNIP12MetadataImpl;
 
 
     #[storage]

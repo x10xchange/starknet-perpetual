@@ -48,6 +48,7 @@ pub mod Core {
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
@@ -111,16 +112,6 @@ pub mod Core {
     #[abi(embed_v0)]
     impl ExternalComponentsImpl =
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
 
 
     #[storage]

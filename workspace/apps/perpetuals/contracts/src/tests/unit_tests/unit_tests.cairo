@@ -13,7 +13,7 @@ use perpetuals::core::components::positions::Positions::{
 use perpetuals::core::components::positions::interface::{
     IPositions, IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::errors::WITHDRAW_EXPIRED;
 use perpetuals::core::interface::{ICore, ICoreSafeDispatcher, ICoreSafeDispatcherTrait};
 use perpetuals::core::types::asset::AssetStatus;

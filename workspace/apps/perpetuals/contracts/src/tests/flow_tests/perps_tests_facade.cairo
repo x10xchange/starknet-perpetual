@@ -23,7 +23,7 @@ use perpetuals::core::components::positions::Positions::{FEE_POSITION, INSURANCE
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};

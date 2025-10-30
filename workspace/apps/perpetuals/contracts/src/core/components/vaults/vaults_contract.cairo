@@ -65,33 +65,22 @@ pub(crate) mod VaultsManager {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::errors::assert_with_byte_array;
-    use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+    use crate::core::components::positions::interface::IPositions;
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::events;
-    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
-    use crate::core::constants::{NAME, VERSION};
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::order_expired_err;
     use crate::core::types::position::PositionDiff;
     use crate::core::utils::validate_signature;
-    use super::super::vaults::IVaults;
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
 
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
 
 
     #[event]
@@ -169,22 +158,21 @@ pub(crate) mod VaultsManager {
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
+    // impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
 
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
+    // impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
 
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
+    // impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
 
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
+    // impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
 
+    // impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
 
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
+    // impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
 
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
+    // impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
 
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    // impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {

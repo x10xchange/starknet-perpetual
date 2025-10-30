@@ -27,7 +27,7 @@ pub mod Vaults {
     use perpetuals::core::components::vaults::types::VaultConfig;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetType;
-    use perpetuals::core::types::position::PositionId;
+    use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
@@ -38,8 +38,10 @@ pub mod Vaults {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::events;
     use crate::core::types::vault::ConvertPositionToVault;
+    use crate::core::utils::validate_signature;
     use super::{IVaults, STORAGE_VERSION};
 
 
@@ -117,8 +119,15 @@ pub mod Vaults {
 
             let mut positions = get_dep_component_mut!(ref self, Positions);
             let assets = get_dep_component!(@self, Assets);
+            let position_info = positions.get_position_snapshot(vault_position);
 
             /// Validations:
+
+            validate_signature(
+                public_key: position_info.get_owner_public_key(),
+                message: order,
+                signature: signature,
+            );
 
             let existing_entry = self.registered_vaults_by_asset.read(vault_asset_id);
             assert(existing_entry.version == 0, 'VAULT_ALREADY_ACTIVATED');
@@ -126,7 +135,6 @@ pub mod Vaults {
             let existing_position_entry = self.registered_vaults_by_position.read(vault_position);
             assert(existing_position_entry.version == 0, 'VAULT_ALREADY_ACTIVATED');
 
-            let position_info = positions.get_position_snapshot(vault_position);
             let asset_config = assets.get_asset_config(vault_asset_id);
 
             let erc4626_dispatcher = IERC4626Dispatcher {
