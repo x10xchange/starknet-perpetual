@@ -49,9 +49,7 @@ use perpetuals::tests::test_utils::{
     setup_state_with_pending_vault_share, validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
-use snforge_std::{
-    start_cheat_block_timestamp_global,test_address,
-};
+use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
@@ -62,8 +60,7 @@ use starkware_utils::math::abs::Abs;
 use starkware_utils::storage::iterable_map::*;
 use starkware_utils::time::time::{Time, Timestamp};
 use starkware_utils_testing::test_utils::{
-    Deployable, TokenTrait, assert_panic_with_felt_error,
-    cheat_caller_address_once,
+    Deployable, TokenTrait, assert_panic_with_felt_error, cheat_caller_address_once,
 };
 use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
 

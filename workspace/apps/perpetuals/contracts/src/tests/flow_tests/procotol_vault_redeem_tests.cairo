@@ -1,4 +1,4 @@
-use core::num::traits::{Bounded};
+use core::num::traits::Bounded;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;

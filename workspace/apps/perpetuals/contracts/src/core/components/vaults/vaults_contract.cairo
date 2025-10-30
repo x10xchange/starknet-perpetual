@@ -82,7 +82,6 @@ pub(crate) mod VaultsManager {
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
 
 
-
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {

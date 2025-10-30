@@ -1,7 +1,6 @@
 #[starknet::component]
 pub mod Positions {
-    use crate::core::components::snip::SNIP12MetadataImpl;
-use core::nullable::{FromNullableResult, match_nullable};
+    use core::nullable::{FromNullableResult, match_nullable};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -50,6 +49,7 @@ use core::nullable::{FromNullableResult, match_nullable};
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::errors::{
         INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
     };
