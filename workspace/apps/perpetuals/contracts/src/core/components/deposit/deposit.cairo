@@ -28,6 +28,7 @@ pub(crate) mod Deposit {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::signature::stark::HashType;
     use starkware_utils::time::time::{Time, TimeDelta};
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
 
     #[storage]
@@ -58,6 +59,7 @@ pub(crate) mod Deposit {
         impl Positions: PositionsComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl Vaults: VaultsComponent::HasComponent<TContractState>,
     > of IDeposit<ComponentState<TContractState>> {
         /// Deposit is called by the user to add a deposit request.
         ///
@@ -277,6 +279,7 @@ pub(crate) mod Deposit {
         impl Positions: PositionsComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl Vaults: VaultsComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(ref self: ComponentState<TContractState>, cancel_delay: TimeDelta) {
             assert(self.cancel_delay.read().is_zero(), errors::ALREADY_INITIALIZED);
@@ -294,6 +297,7 @@ pub(crate) mod Deposit {
         ) {
             // check recipient position exists
             get_dep_component_mut!(ref self, Positions).get_position_snapshot(:position_id);
+            let mut vaults = get_dep_component_mut!(ref self, Vaults);
 
             assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
             let assets = get_dep_component!(@self, Assets);
@@ -304,6 +308,11 @@ pub(crate) mod Deposit {
                 (token_contract, quantum)
             } else {
                 let asset_config = assets.get_asset_config(asset_id);
+                if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
+                    assert(
+                        !vaults.is_vault_position(position_id), 'DEPOSIT_VAULT_SHARES_INTO_VAULT',
+                    );
+                }
                 assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
                 let token_contract = IERC20Dispatcher {
                     contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),

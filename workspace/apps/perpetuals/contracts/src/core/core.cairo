@@ -10,7 +10,6 @@ pub mod Core {
     use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
-    use perpetuals::core::components::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -29,7 +28,7 @@ pub mod Core {
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::{Map, StorageMapReadAccess};
+    use starknet::storage::StorageMapReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -49,11 +48,13 @@ pub mod Core {
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
-    use crate::core::components::vaults::types::VaultConfig;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::constants::{NAME, VERSION};
+    use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
 
 
@@ -75,6 +76,8 @@ pub mod Core {
         storage: external_components,
         event: ExternalComponentsEvent,
     );
+
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
 
     #[abi(embed_v0)]
@@ -104,21 +107,11 @@ pub mod Core {
     #[abi(embed_v0)]
     impl PositionsImpl = Positions::PositionsImpl<ContractState>;
 
-    impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    // impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl ExternalComponentsImpl =
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
 
 
     #[storage]
@@ -146,11 +139,10 @@ pub mod Core {
         pub positions: Positions::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: Fulfillement::Storage,
-        // vault storage to be accessed via library call
-        pub registered_vaults_by_asset: Map<AssetId, VaultConfig>,
-        pub registered_vaults_by_position: Map<PositionId, VaultConfig>,
         #[substorage(v0)]
         pub external_components: ExternalComponentsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     #[event]
@@ -186,6 +178,8 @@ pub mod Core {
         FulfillmentEvent: Fulfillement::Event,
         #[flat]
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[constructor]
@@ -640,12 +634,15 @@ pub mod Core {
                 )
         }
         fn activate_vault(
-            ref self: ContractState, operator_nonce: u64, order: ConvertPositionToVault,
+            ref self: ContractState,
+            operator_nonce: u64,
+            order: ConvertPositionToVault,
+            signature: Signature,
         ) {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .activate_vault(operator_nonce: operator_nonce, :order)
+                .activate_vault(operator_nonce: operator_nonce, :order, :signature)
         }
         fn invest_in_vault(
             ref self: ContractState,
@@ -676,6 +673,7 @@ pub mod Core {
             tvtr_b_before: Nullable<PositionTVTR>,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
+            assert(synthetic_asset.asset_type == AssetType::SYNTHETIC, 'TRADE_ASSET_NOT_SYNTHETIC');
             validate_trade(
                 :order_a,
                 :order_b,
@@ -686,7 +684,6 @@ pub mod Core {
                 synthetic_asset: Some(synthetic_asset),
                 collateral_id: self.assets.get_collateral_id(),
             );
-
             let position_id_a = order_a.position_id;
             let position_id_b = order_b.position_id;
 
@@ -800,10 +797,7 @@ pub mod Core {
         }
 
         fn _is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
-            self
-                .external_components
-                ._get_vault_manager_dispatcher()
-                .is_vault(vault_position: vault_position)
+            self.vaults.is_vault_position(vault_position)
         }
     }
 }

@@ -60,12 +60,9 @@ pub(crate) mod TransferManager {
     use core::num::traits::Zero;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
-    use perpetuals::core::components::deposit::Deposit as DepositComponent;
-    use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
@@ -83,23 +80,15 @@ pub(crate) mod TransferManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
-    use crate::core::constants::{NAME, VERSION};
+    use crate::core::components::snip::SNIP12MetadataImpl;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::{INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, TRANSFER_EXPIRED};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use crate::core::types::transfer::TransferArgs;
     use super::{ITransferManager, Signature, Timestamp, Transfer, TransferRequest};
 
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
+    impl SnipImpl = SNIP12MetadataImpl;
 
 
     #[event]
@@ -118,8 +107,6 @@ pub(crate) mod TransferManager {
         #[flat]
         PositionsEvent: PositionsComponent::Event,
         #[flat]
-        DepositEvent: DepositComponent::Event,
-        #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
@@ -127,6 +114,8 @@ pub(crate) mod TransferManager {
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[storage]
@@ -142,8 +131,6 @@ pub(crate) mod TransferManager {
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
-        pub deposits: DepositComponent::Storage,
-        #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: FulfillmentComponent::Storage,
@@ -151,6 +138,8 @@ pub(crate) mod TransferManager {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -158,22 +147,14 @@ pub(crate) mod TransferManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
-    component!(path: DepositComponent, storage: deposits, event: DepositEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
-    impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-    impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
-    impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-    impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-    impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-    impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl TransferManagerImpl of ITransferManager<ContractState> {
@@ -206,6 +187,12 @@ pub(crate) mod TransferManager {
                         || asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL,
                     'NOT_TRANSFERABLE_ASSET',
                 );
+
+                if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
+                    assert(
+                        !self.vaults.is_vault_position(recipient), 'TRANSFER_VAULT_SHARES_TO_VAULT',
+                    );
+                }
             }
 
             self.positions.get_position_snapshot(position_id: recipient);

@@ -1,5 +1,5 @@
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::interface::ICore;
 use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::tests::constants::*;

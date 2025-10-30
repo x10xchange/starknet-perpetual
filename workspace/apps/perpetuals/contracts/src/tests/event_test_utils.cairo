@@ -1,7 +1,7 @@
 use perpetuals::core::components::assets::events as assets_events;
 use perpetuals::core::components::deposit::events as deposit_events;
 use perpetuals::core::components::positions::events as positions_events;
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::events;
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::funding::FundingIndex;
