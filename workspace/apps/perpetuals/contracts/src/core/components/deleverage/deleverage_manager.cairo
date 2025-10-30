@@ -53,7 +53,6 @@ pub(crate) mod DeleverageManager {
     };
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DELEVERAGES;
     use crate::core::components::external_components::named_component::ITypedComponent;
-    use crate::core::constants::{NAME, VERSION};
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::value_risk_calculator::deleveraged_position_validations;
     use super::{AssetId, Deleverage, IDeleverageManager};

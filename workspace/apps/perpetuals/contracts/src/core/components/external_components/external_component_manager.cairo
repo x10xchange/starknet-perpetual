@@ -60,18 +60,6 @@ pub mod ExternalComponents {
             component_type: felt252,
             component_address: ClassHash,
         ) {
-            let declared_type = ITypedComponentLibraryDispatcher { class_hash: component_address }
-                .component_type();
-
-            assert_with_byte_array(
-                declared_type == component_type,
-                format!(
-                    "Component type mismatch: declared {:?}, expected {:?}",
-                    declared_type,
-                    component_type,
-                ),
-            );
-
             self._register_external_component(component_type, component_address);
         }
 
@@ -170,7 +158,17 @@ pub mod ExternalComponents {
             let update_delay = TimeDelta {
                 seconds: (get_dep_component!(@self, Replaceability).get_upgrade_delay()),
             };
+            let declared_type = ITypedComponentLibraryDispatcher { class_hash: class_hash }
+                .component_type();
 
+            assert_with_byte_array(
+                declared_type == component_type,
+                format!(
+                    "Component type mismatch: declared {}, expected {:?}",
+                    declared_type,
+                    component_type,
+                ),
+            );
             if (component_type == EXTERNAL_COMPONENT_VAULT)
                 || (component_type == EXTERNAL_COMPONENT_WITHDRAWALS)
                 || (component_type == EXTERNAL_COMPONENT_TRANSFERS)
@@ -196,6 +194,7 @@ pub mod ExternalComponents {
             component_type: felt252,
             class_hash: ClassHash,
         ) {
+            get_dep_component!(@self, Roles).only_upgrade_governor();
             let entry = self.registered_external_components.entry(component_type);
             let (registered_class_hash, activation_time) = entry.read();
             assert_with_byte_array(

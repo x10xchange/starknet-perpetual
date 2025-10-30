@@ -26,8 +26,8 @@ use perpetuals::tests::event_test_utils::{
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
-    test_address,
+    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    stop_cheat_caller_address, test_address,
 };
 use starknet::ContractAddress;
 use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
@@ -518,24 +518,14 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         caller_address: *cfg.governance_admin,
         span: CheatSpan::Indefinite,
     );
-    state
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_VAULT,
-            component_address: *vault_external_component.class_hash,
-        );
-    state
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_VAULT,
-            component_address: *vault_external_component.class_hash,
-        );
 
     state
         .register_external_component(
-            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
-            component_address: *withdrawals_external_component.class_hash,
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
         );
     state
-        .activate_external_component(
+        .register_external_component(
             component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
             component_address: *withdrawals_external_component.class_hash,
         );
@@ -546,34 +536,44 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
             component_address: *transfers_external_component.class_hash,
         );
     state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    state
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+    state
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    state
         .activate_external_component(
             component_type: EXTERNAL_COMPONENT_TRANSFERS,
             component_address: *transfers_external_component.class_hash,
         );
-
     state
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-            component_address: *liquidations_external_component.class_hash,
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_VAULT,
+            component_address: *vault_external_component.class_hash,
         );
     state
         .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-            component_address: *liquidations_external_component.class_hash,
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
         );
-
-    state
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-            component_address: *deleverage_external_component.class_hash,
-        );
-
-    state
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-            component_address: *deleverage_external_component.class_hash,
-        );
-
+    stop_cheat_block_timestamp_global();
     stop_cheat_caller_address(contract_address: test_address());
 
     state
@@ -814,55 +814,54 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
             component_address: *vault_external_component.class_hash,
         );
     external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .register_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+    start_cheat_block_timestamp_global(
+        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
+    );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+            component_address: *deleverage_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+            component_address: *liquidations_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_TRANSFERS,
+            component_address: *transfers_external_component.class_hash,
+        );
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+            component_address: *withdrawals_external_component.class_hash,
+        );
+    external_components_dispatcher
         .activate_external_component(
             component_type: EXTERNAL_COMPONENT_VAULT,
             component_address: *vault_external_component.class_hash,
         );
-
-    external_components_dispatcher
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
-            component_address: *withdrawals_external_component.class_hash,
-        );
-    external_components_dispatcher
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
-            component_address: *withdrawals_external_component.class_hash,
-        );
-
-    external_components_dispatcher
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_TRANSFERS,
-            component_address: *transfers_external_component.class_hash,
-        );
-    external_components_dispatcher
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_TRANSFERS,
-            component_address: *transfers_external_component.class_hash,
-        );
-
-    external_components_dispatcher
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-            component_address: *liquidations_external_component.class_hash,
-        );
-    external_components_dispatcher
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-            component_address: *liquidations_external_component.class_hash,
-        );
-
-    external_components_dispatcher
-        .register_external_component(
-            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-            component_address: *deleverage_external_component.class_hash,
-        );
-
-    external_components_dispatcher
-        .activate_external_component(
-            component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-            component_address: *deleverage_external_component.class_hash,
-        );
+    stop_cheat_block_timestamp_global();
     stop_cheat_caller_address(:contract_address);
 }
 

@@ -1,4 +1,5 @@
 mod caller_failure_tests;
+mod external_components_tests;
 mod flow_tests;
 mod infra;
 mod multi_trade_regression_tests;
