@@ -6,6 +6,8 @@ pub(crate) mod fulfillment;
 pub(crate) mod liquidation;
 pub(crate) mod operator_nonce;
 pub mod positions;
+
+pub(crate) mod snip;
 pub(crate) mod transfer;
 pub(crate) mod vaults;
 

@@ -18,7 +18,6 @@ pub mod Positions {
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
-    use perpetuals::core::core::Core::SNIP12MetadataImpl;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
     use perpetuals::core::types::balance::Balance;
@@ -50,6 +49,7 @@ pub mod Positions {
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
+    use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::errors::{
         INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
     };
@@ -62,6 +62,8 @@ pub mod Positions {
 
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
+
+    impl SnipImpl = SNIP12MetadataImpl;
 
 
     #[storage]

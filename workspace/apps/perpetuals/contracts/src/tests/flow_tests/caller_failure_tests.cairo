@@ -10,7 +10,7 @@ use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{PerpetualsInitConfig, init_by_dispatcher};
 use snforge_std::test_address;
 use starknet::ContractAddress;
-use starkware_utils::time::time::{Time};
+use starkware_utils::time::time::Time;
 use starkware_utils_testing::test_utils::Deployable;
 
 

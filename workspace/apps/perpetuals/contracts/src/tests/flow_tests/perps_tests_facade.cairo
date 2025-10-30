@@ -23,7 +23,7 @@ use perpetuals::core::components::positions::Positions::{FEE_POSITION, INSURANCE
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::core::Core::SNIP12MetadataImpl;
+use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -65,7 +65,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use vault::interface::{IProtocolVaultDispatcher};
+use vault::interface::IProtocolVaultDispatcher;
 use crate::core::components::deposit::events as deposit_events;
 use crate::core::components::external_components;
 use crate::core::components::external_components::interface::{
@@ -84,6 +84,7 @@ pub struct VaultState {
     pub asset_id: AssetId,
     pub deployed_vault: DeployedVault,
     pub asset_info: SyntheticInfo,
+    pub user: User,
 }
 
 #[generate_trait]
@@ -584,13 +585,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn register_vault_share_spot_asset(
-        ref self: PerpsTestsFacade, position_vault: PositionId,
+        ref self: PerpsTestsFacade, position_vault: User,
     ) -> VaultState {
         self.operator.set_as_caller(self.perpetuals_contract);
 
         let vault = deploy_protocol_vault_with_dispatcher(
             perps_address: self.perpetuals_contract,
-            vault_position_id: position_vault,
+            vault_position_id: position_vault.position_id,
             usdc_token_state: self.token_state,
         );
 
@@ -649,21 +650,27 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         let operator_nonce = self.get_nonce();
 
+        let order = ConvertPositionToVault {
+            position_to_convert: position_vault.position_id,
+            vault_asset_id: asset_id,
+            expiration: Time::now(),
+        };
+        let signature = position_vault
+            .account
+            .sign_message(order.get_message_hash(position_vault.account.key_pair.public_key));
+
         self.operator.set_as_caller(self.perpetuals_contract);
 
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .activate_vault(
-                operator_nonce: operator_nonce,
-                order: ConvertPositionToVault {
-                    position_to_convert: position_vault,
-                    vault_asset_id: asset_id,
-                    expiration: Time::now(),
-                },
-            );
+            .activate_vault(operator_nonce: operator_nonce, order: order, signature: signature);
 
         self.registered_spots.append((asset_id, vault.contract_address));
         return VaultState {
-            position_id: position_vault, asset_id, deployed_vault: vault, asset_info,
+            position_id: position_vault.position_id,
+            asset_id,
+            deployed_vault: vault,
+            asset_info,
+            user: position_vault,
         };
     }
 
@@ -1700,6 +1707,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             salt: self.generate_salt(),
         };
 
+        let user_order_signature = withdrawing_user
+            .account
+            .sign_message(
+                user_order.get_message_hash(withdrawing_user.account.key_pair.public_key),
+            );
+
         let vault_order = LimitOrder {
             source_position: vault.position_id,
             receive_position: vault.position_id,
@@ -1713,13 +1726,18 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             salt: self.generate_salt(),
         };
 
+        let vault_order_signature = vault
+            .user
+            .account
+            .sign_message(vault_order.get_message_hash(vault.user.account.key_pair.public_key));
+
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .redeem_from_vault(
                 :operator_nonce,
-                signature: array![0, 0].span(),
+                signature: user_order_signature,
                 order: user_order,
                 vault_approval: vault_order,
-                vault_signature: array![0, 0].span(),
+                vault_signature: vault_order_signature,
                 actual_shares_user: -actual_shares_user.try_into().unwrap(),
                 actual_collateral_user: actual_collateral_user.try_into().unwrap(),
             );
@@ -1750,12 +1768,17 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             salt: self.generate_salt(),
         };
 
+        let vault_order_signature = vault
+            .user
+            .account
+            .sign_message(vault_order.get_message_hash(vault.user.account.key_pair.public_key));
+
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .liquidate_vault_shares(
                 :operator_nonce,
                 liquidated_position_id: liquidated_user.position_id,
                 vault_approval: vault_order,
-                vault_signature: array![0, 0].span(),
+                vault_signature: vault_order_signature,
                 liquidated_asset_id: vault.asset_id,
                 actual_shares_user: -actual_shares_user.try_into().unwrap(),
                 actual_collateral_user: actual_collateral_user.try_into().unwrap(),
@@ -1787,8 +1810,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             salt,
         };
 
+        let order_hash = order.get_message_hash(depositing_user.account.key_pair.public_key);
+        let signature = depositing_user.account.sign_message(order_hash);
+
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .invest_in_vault(:operator_nonce, signature: array![0, 0].span(), order: order);
+            .invest_in_vault(:operator_nonce, signature: signature, order: order);
 
         let last_event = self.get_last_event(contract_address: self.perpetuals_contract);
         let deposit_event: deposit_events::Deposit = event_as::<

@@ -1,4 +1,4 @@
-use core::num::traits::{Bounded, Pow};
+use core::num::traits::Bounded;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
@@ -18,7 +18,7 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state
         .facade
@@ -142,7 +142,7 @@ fn test_redeem_from_protocol_vault_unfair__user_redeem() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state
         .facade
@@ -191,7 +191,7 @@ fn test_redeem_from_protocol_vault_unfair__vault_redeem() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state
         .facade
@@ -241,7 +241,7 @@ fn test_redeem_from_protocol_vault_over_fulfilled_user() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state
         .facade
@@ -292,7 +292,7 @@ fn test_redeem_from_protocol_vault_over_fulfilled_vault() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state
         .facade
@@ -343,7 +343,7 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 
@@ -471,7 +471,7 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 
@@ -597,7 +597,7 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 
@@ -722,7 +722,7 @@ fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user.position_id);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 

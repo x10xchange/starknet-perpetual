@@ -58,6 +58,7 @@ pub(crate) mod LiquidationManager {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
     };
+    use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starknet::storage::StoragePath;
     use starkware_utils::components::pausable::PausableComponent;
@@ -71,23 +72,11 @@ pub(crate) mod LiquidationManager {
     use crate::core::components::assets::errors::SYNTHETIC_NOT_EXISTS;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_LIQUIDATIONS;
     use crate::core::components::external_components::named_component::ITypedComponent;
-    use crate::core::constants::{NAME, VERSION};
     use crate::core::errors::CANT_LIQUIDATE_IF_POSITION;
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::utils::{validate_signature, validate_trade};
     use crate::core::value_risk_calculator::liquidated_position_validations;
     use super::{ILiquidationManager, Liquidate, Order};
-
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
 
 
     #[event]

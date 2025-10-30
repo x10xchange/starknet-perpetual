@@ -31,7 +31,6 @@ pub trait IDeleverageManager<TContractState> {
 pub(crate) mod DeleverageManager {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -42,6 +41,7 @@ pub(crate) mod DeleverageManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::types::position::PositionId;
     use starknet::storage::StoragePath;
     use starkware_utils::components::pausable::PausableComponent;
@@ -57,16 +57,6 @@ pub(crate) mod DeleverageManager {
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::value_risk_calculator::deleveraged_position_validations;
     use super::{AssetId, Deleverage, IDeleverageManager};
-
-    /// Required for hash computation.
-    pub impl SNIP12MetadataImpl of SNIP12Metadata {
-        fn name() -> felt252 {
-            NAME
-        }
-        fn version() -> felt252 {
-            VERSION
-        }
-    }
 
 
     #[event]

@@ -309,7 +309,9 @@ pub(crate) mod Deposit {
             } else {
                 let asset_config = assets.get_asset_config(asset_id);
                 if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
-                    assert(!vaults.is_vault_position(position_id), 'DEPOSIT_VAULT_SHARES_INTO_VAULT');
+                    assert(
+                        !vaults.is_vault_position(position_id), 'DEPOSIT_VAULT_SHARES_INTO_VAULT',
+                    );
                 }
                 assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
                 let token_contract = IERC20Dispatcher {
