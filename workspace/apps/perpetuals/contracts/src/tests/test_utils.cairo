@@ -545,9 +545,7 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
             component_address: *deleverage_external_component.class_hash,
         );
-    start_cheat_block_timestamp_global(
-        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
-    );
+
     state
         .activate_external_component(
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
@@ -573,7 +571,6 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
             component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
             component_address: *withdrawals_external_component.class_hash,
         );
-    stop_cheat_block_timestamp_global();
     stop_cheat_caller_address(contract_address: test_address());
 
     state
@@ -788,7 +785,9 @@ pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @Perpetua
     dispatcher.register_upgrade_governor(account: *cfg.governance_admin);
 }
 
-pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress) {
+pub fn register_external_components_by_dispatcher(
+    contract_address: ContractAddress, cfg: @PerpetualsInitConfig,
+) {
     let vault_external_component = snforge_std::declare("VaultsManager").unwrap().contract_class();
     let withdrawals_external_component = snforge_std::declare("WithdrawalManager")
         .unwrap()
@@ -833,9 +832,7 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
             component_address: *deleverage_external_component.class_hash,
         );
-    start_cheat_block_timestamp_global(
-        block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
-    );
+    start_cheat_block_timestamp_global(Time::now().add(Time::seconds(*cfg.upgrade_delay)).into());
     external_components_dispatcher
         .activate_external_component(
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
@@ -861,14 +858,13 @@ pub fn register_vault_component_by_dispatcher(contract_address: ContractAddress)
             component_type: EXTERNAL_COMPONENT_VAULT,
             component_address: *vault_external_component.class_hash,
         );
-    stop_cheat_block_timestamp_global();
     stop_cheat_caller_address(:contract_address);
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
     let contract_address = cfg.deploy(:token_state);
     set_roles_by_dispatcher(:contract_address, :cfg);
-    register_vault_component_by_dispatcher(:contract_address);
+    register_external_components_by_dispatcher(:contract_address, :cfg);
     contract_address
 }
 

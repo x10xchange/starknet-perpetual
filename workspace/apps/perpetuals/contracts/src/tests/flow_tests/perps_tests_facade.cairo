@@ -51,7 +51,7 @@ use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilt
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
-    start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    start_cheat_block_timestamp_global,
     stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
@@ -543,9 +543,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
             );
-        start_cheat_block_timestamp_global(
-            block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
-        );
         external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
@@ -571,7 +568,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 component_type: EXTERNAL_COMPONENT_VAULT,
                 component_address: *vault_external_component.class_hash,
             );
-        stop_cheat_block_timestamp_global();
         stop_cheat_caller_address(contract_address: perpetuals_contract);
         perpetual_wrapper
     }

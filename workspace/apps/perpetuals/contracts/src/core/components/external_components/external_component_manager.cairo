@@ -164,7 +164,7 @@ pub mod ExternalComponents {
             assert_with_byte_array(
                 declared_type == component_type,
                 format!(
-                    "Component type mismatch: declared {}, expected {:?}",
+                    "Component type mismatch: declared {}, expected {}",
                     declared_type,
                     component_type,
                 ),

@@ -175,10 +175,6 @@ pub(crate) mod VaultsManager {
         fn invest_in_vault(
             ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
         ) {
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            let current_time = Time::now();
-            self.assets.validate_price_interval_integrity(current_time: current_time);
-
             let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let from_position_id = order.source_position;
             let vault_position_id = vault_config.position_id.into();
@@ -328,12 +324,6 @@ pub(crate) mod VaultsManager {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
-            //TODO signature validation
-
             self
                 ._execute_redeem(
                     order: order,
@@ -356,11 +346,6 @@ pub(crate) mod VaultsManager {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
-            //     /// Validations - System State:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
             assert(
                 self.positions.is_liquidatable(liquidated_position_id), 'POSITION_NOT_LIQUIDATABLE',
             );

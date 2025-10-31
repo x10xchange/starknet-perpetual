@@ -4,9 +4,12 @@ use snforge_std::cheatcodes::contract_class::DeclareResultTrait;
 use snforge_std::start_cheat_block_timestamp_global;
 use starknet::ContractAddress;
 use starkware_utils::time::time::{Time, Timestamp};
-use starkware_utils_testing::test_utils::{Deployable, cheat_caller_address_once};
+use starkware_utils_testing::test_utils::{
+    Deployable, assert_panic_with_error, cheat_caller_address_once,
+};
 use crate::core::components::external_components::interface::{
     IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
+    IExternalComponentsSafeDispatcher, IExternalComponentsSafeDispatcherTrait,
 };
 use crate::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 
@@ -21,30 +24,33 @@ fn setup() -> (PerpetualsInitConfig, ContractAddress) {
 }
 
 #[test]
-#[should_panic(
-    expected: "Component type mismatch: declared 4774172256114920773, expected 1555453606895766819411",
-)]
+#[feature("safe_dispatcher")]
 fn test_rejects_mismatch_in_component_names() {
     let (cfg, contract_address) = setup();
     let invalid_named_component = snforge_std::declare("MockInvalidExternalComponent")
         .unwrap()
         .contract_class();
-    let external_components_dispatcher = IExternalComponentsDispatcher {
+    let external_components_dispatcher = IExternalComponentsSafeDispatcher {
         contract_address: contract_address,
     };
     cheat_caller_address_once(
         contract_address: contract_address, caller_address: cfg.governance_admin,
     );
-    external_components_dispatcher
+    let result = external_components_dispatcher
         .register_external_component(
             component_type: 'TRANSFERS', component_address: *invalid_named_component.class_hash,
         );
+
+    assert_panic_with_error(
+        :result,
+        expected_error: format!(
+            "Component type mismatch: declared {}, expected {}", 'BAD_NAME', 'TRANSFERS',
+        ),
+    );
 }
 
 #[test]
-#[should_panic(
-    expected: "1555453606895766819411 not registered with hash 2145356471302369182080032873155110099968963987536582030103586514602973634825",
-)]
+#[feature("safe_dispatcher")]
 fn test_should_reject_activation_of_different_hash() {
     let (cfg, contract_address) = setup();
     let invalid_named_component = snforge_std::declare("MockInvalidExternalComponent")
@@ -53,7 +59,7 @@ fn test_should_reject_activation_of_different_hash() {
     let valid_named_component = snforge_std::declare("MockValidExternalComponent")
         .unwrap()
         .contract_class();
-    let external_components_dispatcher = IExternalComponentsDispatcher {
+    let external_components_dispatcher = IExternalComponentsSafeDispatcher {
         contract_address: contract_address,
     };
     cheat_caller_address_once(
@@ -62,7 +68,8 @@ fn test_should_reject_activation_of_different_hash() {
     external_components_dispatcher
         .register_external_component(
             component_type: 'TRANSFERS', component_address: *valid_named_component.class_hash,
-        );
+        )
+        .unwrap();
 
     start_cheat_block_timestamp_global(
         block_timestamp: Time::now().add(delta: Time::weeks(2)).into(),
@@ -71,32 +78,44 @@ fn test_should_reject_activation_of_different_hash() {
     cheat_caller_address_once(
         contract_address: contract_address, caller_address: cfg.governance_admin,
     );
-    external_components_dispatcher
+    let result = external_components_dispatcher
         .activate_external_component(
             component_type: 'TRANSFERS', component_address: *invalid_named_component.class_hash,
         );
+
+    assert_panic_with_error(
+        :result,
+        expected_error: format!(
+            "{} not registered with hash {:?}", 'TRANSFERS', *invalid_named_component.class_hash,
+        ),
+    );
 }
 
 
 #[test]
-#[should_panic(
-    expected: "1555453606895766819411 not registered with hash 2145356471302369182080032873155110099968963987536582030103586514602973634825",
-)]
+#[feature("safe_dispatcher")]
 fn test_should_reject_activation_of_component_without_valid_registration() {
     let (cfg, contract_address) = setup();
     let valid_named_component = snforge_std::declare("MockValidExternalComponent")
         .unwrap()
         .contract_class();
-    let external_components_dispatcher = IExternalComponentsDispatcher {
+    let external_components_dispatcher = IExternalComponentsSafeDispatcher {
         contract_address: contract_address,
     };
     cheat_caller_address_once(
         contract_address: contract_address, caller_address: cfg.governance_admin,
     );
-    external_components_dispatcher
+    let result = external_components_dispatcher
         .activate_external_component(
             component_type: 'TRANSFERS', component_address: *valid_named_component.class_hash,
         );
+
+    assert_panic_with_error(
+        :result,
+        expected_error: format!(
+            "{} not registered with hash {:?}", 'TRANSFERS', *valid_named_component.class_hash,
+        ),
+    );
 }
 
 #[test]
@@ -137,7 +156,7 @@ fn test_should_reject_activation_if_not_enough_time_passed() {
 
 
 #[test]
-#[should_panic(expected: "MOCK_TRANSFER")]
+#[should_panic(expected: 'MOCK_TRANSFER')]
 fn test_should_activate_registered_component() {
     let (cfg, contract_address) = setup();
     let valid_named_component = snforge_std::declare("MockValidExternalComponent")
@@ -148,10 +167,6 @@ fn test_should_activate_registered_component() {
     };
     cheat_caller_address_once(
         contract_address: contract_address, caller_address: cfg.governance_admin,
-    );
-
-    start_cheat_block_timestamp_global(
-        block_timestamp: Time::now().add(delta: Time::seconds(0)).into(),
     );
 
     external_components_dispatcher
