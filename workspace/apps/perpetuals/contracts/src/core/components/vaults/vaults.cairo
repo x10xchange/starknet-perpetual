@@ -133,6 +133,8 @@ pub mod Vaults {
 
             let asset_config = assets.get_asset_config(vault_asset_id);
 
+            assert(asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL, 'NOT_VAULT_SHARE');
+
             let erc4626_dispatcher = IERC4626Dispatcher {
                 contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
             };
