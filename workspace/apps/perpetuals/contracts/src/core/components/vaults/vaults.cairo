@@ -133,6 +133,8 @@ pub mod Vaults {
 
             let asset_config = assets.get_asset_config(vault_asset_id);
 
+            assert(asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL, 'NOT_VAULT_SHARE');
+
             let erc4626_dispatcher = IERC4626Dispatcher {
                 contract_address: asset_config.token_contract.expect('NOT_ERC4626'),
             };
@@ -143,6 +145,11 @@ pub mod Vaults {
             assert(
                 vault_dispatcher.get_owning_position_id() == vault_position.value,
                 'VAULT_OWNERSHIP_MISMATCH',
+            );
+
+            assert(
+                vault_dispatcher.get_perps_contract() == starknet::get_contract_address(),
+                'VAULT_PERPS_CONTRACT_MISMATCH',
             );
 
             assert(
