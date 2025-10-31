@@ -467,6 +467,8 @@ pub(crate) mod VaultsManager {
             };
 
             let pnl_collateral_dispatcher = self.assets.get_collateral_token_contract();
+            let perps_contract_balance_before = pnl_collateral_dispatcher
+                .balance_of(starknet::get_contract_address());
 
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
 
@@ -570,7 +572,14 @@ pub(crate) mod VaultsManager {
                 self
                     .positions
                     .apply_diff(position_id: receiving_position_id, position_diff: position_diff);
-            };
+            }
+
+            let new_perps_contract_balance = pnl_collateral_dispatcher
+                .balance_of(starknet::get_contract_address());
+            assert(
+                new_perps_contract_balance == perps_contract_balance_before,
+                'COLLATERAL_NOT_RETURNED',
+            );
         }
     }
 }
