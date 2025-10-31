@@ -596,7 +596,7 @@ pub mod Core {
         ) {
             self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);            
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
@@ -642,7 +642,7 @@ pub mod Core {
         ) {
             self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);            
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
@@ -656,7 +656,7 @@ pub mod Core {
         ) {
             self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);            
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()

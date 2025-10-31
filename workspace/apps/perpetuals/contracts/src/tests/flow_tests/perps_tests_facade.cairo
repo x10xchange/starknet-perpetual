@@ -51,8 +51,7 @@ use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilt
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
-    start_cheat_block_timestamp_global,
-    stop_cheat_caller_address,
+    start_cheat_block_timestamp_global, stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
 use starkware_utils::components::request_approvals::interface::{
