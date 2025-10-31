@@ -1,4 +1,5 @@
 use core::num::traits::Bounded;
+use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
@@ -830,5 +831,47 @@ fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
             value_of_shares_vault: 400,
             actual_shares_user: 400,
             actual_collateral_user: 300,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'ONLY_PERPS_CAN_WITHDRAW')]
+fn test_withdraw_cannot_be_called_except_by_perps_contract() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let receiving_user = state.new_user_with_position();
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
+
+    let dispatcher: IERC4626Dispatcher = vault_config.deployed_vault.erc4626;
+    dispatcher
+        .withdraw(
+            assets: 1000,
+            receiver: receiving_user.account.address,
+            owner: vault_config.deployed_vault.owning_account.address,
+        );
+}
+
+#[test]
+#[should_panic(expected: 'ONLY_PERPS_CAN_WITHDRAW')]
+fn test_redeem_cannot_be_called_except_by_perps_contract() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let receiving_user = state.new_user_with_position();
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
+
+    let dispatcher: IERC4626Dispatcher = vault_config.deployed_vault.erc4626;
+    dispatcher
+        .redeem(
+            shares: 1000,
+            receiver: receiving_user.account.address,
+            owner: vault_config.deployed_vault.owning_account.address,
         );
 }

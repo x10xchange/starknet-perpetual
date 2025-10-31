@@ -81,6 +81,9 @@ pub mod ProtocolVault {
         fn get_owning_position_id(ref self: ContractState) -> u32 {
             self.owning_position_id.read()
         }
+        fn get_perps_contract(self: @ContractState) -> ContractAddress {
+            self.perps_contract.read()
+        }
     }
 
     impl ERC4626ImmutableConfig of ERC4626Component::ImmutableConfig {

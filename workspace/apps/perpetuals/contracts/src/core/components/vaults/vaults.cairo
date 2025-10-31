@@ -146,6 +146,11 @@ pub mod Vaults {
             );
 
             assert(
+                vault_dispatcher.get_perps_contract() == starknet::get_contract_address(),
+                'VAULT_PERPS_CONTRACT_MISMATCH',
+            );
+
+            assert(
                 erc4626_dispatcher
                     .asset() == assets
                     .get_collateral_token_contract()
