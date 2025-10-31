@@ -46,22 +46,18 @@ pub(crate) mod VaultsManager {
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
-    use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit as DepositComponent;
     use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::fulfillment::interface::IFulfillment;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
-    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starkware_utils::components::pausable::PausableComponent;
-    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::errors::assert_with_byte_array;
@@ -71,6 +67,8 @@ pub(crate) mod VaultsManager {
     };
     use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_VAULT;
+    use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::positions::interface::IPositions;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::events;
@@ -118,18 +116,12 @@ pub(crate) mod VaultsManager {
         operator_nonce: OperatorNonceComponent::Storage,
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
-        // #[substorage(v0)]
-        // pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
-        // #[substorage(v0)]
-        // src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
         pub deposits: DepositComponent::Storage,
-        // #[substorage(v0)]
-        // pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
@@ -157,21 +149,12 @@ pub(crate) mod VaultsManager {
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
-    // impl OperatorNonceImpl = OperatorNonceComponent::OperatorNonceImpl<ContractState>;
-
-    // impl DepositImpl = DepositComponent::DepositImpl<ContractState>;
-
-    // impl RequestApprovalsImpl = RequestApprovalsComponent::RequestApprovalsImpl<ContractState>;
-
-    // impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
-
-    // impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
-
-    // impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-
-    // impl PositionsImpl = PositionsComponent::PositionsImpl<ContractState>;
-
-    // impl FullfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_VAULT
+        }
+    }
 
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {
@@ -189,10 +172,6 @@ pub(crate) mod VaultsManager {
         fn invest_in_vault(
             ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
         ) {
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            let current_time = Time::now();
-            self.assets.validate_price_interval_integrity(current_time: current_time);
-
             let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let from_position_id = order.source_position;
             let vault_position_id = vault_config.position_id.into();
@@ -342,12 +321,6 @@ pub(crate) mod VaultsManager {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
-            //TODO signature validation
-
             self
                 ._execute_redeem(
                     order: order,
@@ -370,11 +343,6 @@ pub(crate) mod VaultsManager {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
-            //     /// Validations - System State:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self.assets.validate_assets_integrity();
-
             assert(
                 self.positions.is_liquidatable(liquidated_position_id), 'POSITION_NOT_LIQUIDATABLE',
             );

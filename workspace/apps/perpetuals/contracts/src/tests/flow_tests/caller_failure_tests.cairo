@@ -12,7 +12,9 @@ use snforge_std::test_address;
 use starknet::ContractAddress;
 use starkware_utils::time::time::Time;
 use starkware_utils_testing::test_utils::Deployable;
-
+use crate::core::components::external_components::interface::{
+    IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
+};
 
 fn setup() -> (PerpetualsInitConfig, ContractAddress) {
     let cfg: PerpetualsInitConfig = Default::default();
@@ -295,5 +297,31 @@ fn test_set_public_key_only_operator() {
             position_id: POSITION_ID_1,
             new_public_key: Zero::zero(),
             expiration: Time::now(),
+        );
+}
+
+#[test]
+#[should_panic(expected: "ONLY_UPGRADE_GOVERNOR")]
+fn test_register_new_component_only_upgrade_governor() {
+    let (_, contract_address) = setup();
+    let external_components_dispatcher = IExternalComponentsDispatcher {
+        contract_address: contract_address,
+    };
+    external_components_dispatcher
+        .register_external_component(
+            component_type: 'TRANSFERS', component_address: 'SOME_HASH'.try_into().unwrap(),
+        );
+}
+
+#[test]
+#[should_panic(expected: "ONLY_UPGRADE_GOVERNOR")]
+fn test_activate_new_component_only_upgrade_governor() {
+    let (_, contract_address) = setup();
+    let external_components_dispatcher = IExternalComponentsDispatcher {
+        contract_address: contract_address,
+    };
+    external_components_dispatcher
+        .activate_external_component(
+            component_type: 'TRANSFERS', component_address: 'SOME_HASH'.try_into().unwrap(),
         );
 }

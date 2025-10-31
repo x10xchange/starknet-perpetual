@@ -21,7 +21,6 @@ pub mod Vaults {
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
-    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::vaults::types::VaultConfig;
@@ -30,13 +29,13 @@ pub mod Vaults {
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
     use starkware_utils::components::pausable::PausableComponent;
-    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::signature::stark::Signature;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
+    use starkware_utils::time::time::validate_expiration;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::events;
@@ -112,10 +111,7 @@ pub mod Vaults {
             let vault_asset_id = order.vault_asset_id;
             let vault_position = order.position_to_convert;
             let expiration = order.expiration;
-
-            get_dep_component!(@self, Pausable).assert_not_paused();
-            let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
-            nonce.use_checked_nonce(:operator_nonce);
+            validate_expiration(:expiration, err: 'ACTIVATE_ORDER_EXPIRED');
 
             let mut positions = get_dep_component_mut!(ref self, Positions);
             let assets = get_dep_component!(@self, Assets);

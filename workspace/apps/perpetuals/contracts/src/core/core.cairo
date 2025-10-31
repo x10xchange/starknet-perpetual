@@ -4,7 +4,6 @@ pub mod Core {
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
@@ -53,7 +52,6 @@ pub mod Core {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
-    use crate::core::constants::{NAME, VERSION};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
 
@@ -596,6 +594,9 @@ pub mod Core {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
@@ -639,6 +640,9 @@ pub mod Core {
             order: ConvertPositionToVault,
             signature: Signature,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
@@ -650,6 +654,9 @@ pub mod Core {
             signature: Span<felt252>,
             order: LimitOrder,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()

@@ -19,6 +19,7 @@ pub mod ExternalComponents {
     use crate::core::components::external_components::interface::{
         EXTERNAL_COMPONENT_DELEVERAGES, IExternalComponents,
     };
+    use crate::core::components::external_components::named_component::ITypedComponentLibraryDispatcher;
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerLibraryDispatcher;
     use crate::core::components::transfer::transfer_manager::ITransferManagerLibraryDispatcher;
     use crate::core::components::vaults::vaults_contract::IVaultExternalLibraryDispatcher;
@@ -27,6 +28,7 @@ pub mod ExternalComponents {
         EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
         EXTERNAL_COMPONENT_WITHDRAWALS,
     };
+    use super::super::named_component::ITypedComponentDispatcherTrait;
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
@@ -156,7 +158,17 @@ pub mod ExternalComponents {
             let update_delay = TimeDelta {
                 seconds: (get_dep_component!(@self, Replaceability).get_upgrade_delay()),
             };
+            let declared_type = ITypedComponentLibraryDispatcher { class_hash: class_hash }
+                .component_type();
 
+            assert_with_byte_array(
+                declared_type == component_type,
+                format!(
+                    "Component type mismatch: declared {}, expected {}",
+                    declared_type,
+                    component_type,
+                ),
+            );
             if (component_type == EXTERNAL_COMPONENT_VAULT)
                 || (component_type == EXTERNAL_COMPONENT_WITHDRAWALS)
                 || (component_type == EXTERNAL_COMPONENT_TRANSFERS)
@@ -182,6 +194,7 @@ pub mod ExternalComponents {
             component_type: felt252,
             class_hash: ClassHash,
         ) {
+            get_dep_component!(@self, Roles).only_upgrade_governor();
             let entry = self.registered_external_components.entry(component_type);
             let (registered_class_hash, activation_time) = entry.read();
             assert_with_byte_array(

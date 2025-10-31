@@ -518,55 +518,54 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 component_type: EXTERNAL_COMPONENT_VAULT,
                 component_address: *vault_external_component.class_hash,
             );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+                component_address: *withdrawal_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_TRANSFERS,
+                component_address: *transfers_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+                component_address: *liquidations_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+                component_address: *deleverage_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
+                component_address: *deleverage_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
+                component_address: *liquidations_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_TRANSFERS,
+                component_address: *transfers_external_component.class_hash,
+            );
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
+                component_address: *withdrawal_external_component.class_hash,
+            );
         external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_VAULT,
                 component_address: *vault_external_component.class_hash,
-            );
-
-        external_components_dispatcher
-            .register_external_component(
-                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
-                component_address: *withdrawal_external_component.class_hash,
-            );
-        external_components_dispatcher
-            .activate_external_component(
-                component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
-                component_address: *withdrawal_external_component.class_hash,
-            );
-
-        external_components_dispatcher
-            .register_external_component(
-                component_type: EXTERNAL_COMPONENT_TRANSFERS,
-                component_address: *transfers_external_component.class_hash,
-            );
-        external_components_dispatcher
-            .activate_external_component(
-                component_type: EXTERNAL_COMPONENT_TRANSFERS,
-                component_address: *transfers_external_component.class_hash,
-            );
-
-        external_components_dispatcher
-            .register_external_component(
-                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-                component_address: *liquidations_external_component.class_hash,
-            );
-        external_components_dispatcher
-            .activate_external_component(
-                component_type: EXTERNAL_COMPONENT_LIQUIDATIONS,
-                component_address: *liquidations_external_component.class_hash,
-            );
-
-        external_components_dispatcher
-            .register_external_component(
-                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-                component_address: *deleverage_external_component.class_hash,
-            );
-
-        external_components_dispatcher
-            .activate_external_component(
-                component_type: EXTERNAL_COMPONENT_DELEVERAGES,
-                component_address: *deleverage_external_component.class_hash,
             );
         stop_cheat_caller_address(contract_address: perpetuals_contract);
         perpetual_wrapper

@@ -46,7 +46,6 @@ pub(crate) mod LiquidationManager {
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::utils::snip12::SNIP12Metadata;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -70,6 +69,8 @@ pub(crate) mod LiquidationManager {
     };
     use starkware_utils::time::time::Time;
     use crate::core::components::assets::errors::SYNTHETIC_NOT_EXISTS;
+    use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_LIQUIDATIONS;
+    use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::errors::CANT_LIQUIDATE_IF_POSITION;
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::utils::{validate_signature, validate_trade};
@@ -134,6 +135,14 @@ pub(crate) mod LiquidationManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+
+
+    #[abi(embed_v0)]
+    impl TypedComponent of ITypedComponent<ContractState> {
+        fn component_type(ref self: ContractState) -> felt252 {
+            EXTERNAL_COMPONENT_LIQUIDATIONS
+        }
+    }
 
     #[abi(embed_v0)]
     impl LiquidationManagerImpl of ILiquidationManager<ContractState> {
