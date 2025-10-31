@@ -76,7 +76,7 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::order_expired_err;
     use crate::core::types::position::PositionDiff;
-    use crate::core::utils::validate_signature;
+    use crate::core::utils::{validate_signature, validate_trade};
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
 
 
@@ -389,6 +389,8 @@ pub(crate) mod VaultsManager {
             user_signature: Signature,
         ) {
             let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
+            let vault_asset = self.assets.get_asset_config(vault_config.asset_id);
+
             let vault_position_id: PositionId = vault_config.position_id.into();
             let redeeming_position_id = order.source_position;
             let receiving_position_id = order.receive_position;
@@ -400,6 +402,17 @@ pub(crate) mod VaultsManager {
             assert_with_byte_array(
                 actual_collateral_user >= 0,
                 format!("INVALID_ACTUAL_COLLATERAL_AMOUNT: {}", actual_collateral_user),
+            );
+
+            validate_trade(
+                order_a: order,
+                order_b: vault_approval,
+                actual_amount_base_a: actual_shares_user,
+                actual_amount_quote_a: actual_collateral_user,
+                actual_fee_a: 0_u64,
+                actual_fee_b: 0_u64,
+                asset: Some(vault_asset),
+                collateral_id: self.assets.get_collateral_id(),
             );
 
             order
@@ -452,11 +465,6 @@ pub(crate) mod VaultsManager {
                     order_base_amount: vault_approval.base_amount.try_into().unwrap(),
                     actual_base_amount: -actual_shares_user.try_into().unwrap(),
                 );
-
-            let vault_config = self
-                .vaults
-                .get_vault_config_for_position(vault_position: vault_position_id);
-            let vault_asset = self.assets.get_asset_config(vault_config.asset_id);
 
             let vault_dispatcher = IProtocolVaultDispatcher {
                 contract_address: vault_asset.token_contract.expect('NOT_ERC20'),

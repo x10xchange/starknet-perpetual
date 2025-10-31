@@ -211,7 +211,7 @@ pub(crate) mod LiquidationManager {
                 actual_amount_quote_a: actual_amount_quote_liquidated,
                 actual_fee_a: liquidated_fee_amount,
                 actual_fee_b: actual_liquidator_fee,
-                synthetic_asset: Some(liquidated_asset),
+                asset: Some(liquidated_asset),
                 collateral_id: collateral_id,
             );
 

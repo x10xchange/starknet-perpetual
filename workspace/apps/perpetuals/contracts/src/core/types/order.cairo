@@ -10,8 +10,6 @@ use starkware_utils::math::fraction::FractionTrait;
 use starkware_utils::signature::stark::HashType;
 use starkware_utils::time::time::Timestamp;
 
-pub const VERSION: u8 = 0;
-
 fn validate_against_actual_amounts(
     base_amount: i64,
     quote_amount: i64,
@@ -46,6 +44,46 @@ fn validate_against_actual_amounts(
     );
 }
 
+pub trait ValidateableOrderTrait<T> {
+    fn position_id(self: @T) -> PositionId;
+    // The base asset
+    fn base_asset_id(self: @T) -> AssetId;
+    // The amount of the base asset to be bought or sold.
+    fn base_amount(self: @T) -> i64;
+    // The quote asset.
+    fn quote_asset_id(self: @T) -> AssetId;
+    // The amount of the quote asset to be paid or received.
+    fn quote_amount(self: @T) -> i64;
+    // The fee asset.
+    fn fee_asset_id(self: @T) -> AssetId;
+    // The amount of the fee asset to be paid.
+    fn fee_amount(self: @T) -> u64;
+    // The expiration time of the order.
+    fn expiration(self: @T) -> Timestamp;
+
+    fn validate_against_actual_amounts(
+        self: @T, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
+    ) {
+        let order_base_amount = Self::base_amount(:self);
+        let order_quote_amount = Self::quote_amount(:self);
+        let order_fee_amount = Self::fee_amount(:self);
+        let position = Self::position_id(:self);
+
+        validate_against_actual_amounts(
+            base_amount: order_base_amount,
+            quote_amount: order_quote_amount,
+            fee_amount: order_fee_amount,
+            :actual_amount_base,
+            :actual_amount_quote,
+            :actual_fee,
+            position: position,
+        )
+    }
+}
+
+
+pub const VERSION: u8 = 0;
+
 
 #[derive(Copy, Drop, Hash, Serde)]
 // An order to buy or sell an asset for a collateral asset.
@@ -70,6 +108,34 @@ pub(crate) struct LimitOrder {
     // A random value to make each order unique.
     pub salt: felt252,
 }
+
+pub impl LimitOrderValidationTraitImpl of ValidateableOrderTrait<LimitOrder> {
+    fn position_id(self: @LimitOrder) -> PositionId {
+        *self.source_position
+    }
+    fn base_asset_id(self: @LimitOrder) -> AssetId {
+        *self.base_asset_id
+    }
+    fn base_amount(self: @LimitOrder) -> i64 {
+        *self.base_amount
+    }
+    fn quote_asset_id(self: @LimitOrder) -> AssetId {
+        *self.quote_asset_id
+    }
+    fn quote_amount(self: @LimitOrder) -> i64 {
+        *self.quote_amount
+    }
+    fn fee_asset_id(self: @LimitOrder) -> AssetId {
+        *self.fee_asset_id
+    }
+    fn fee_amount(self: @LimitOrder) -> u64 {
+        *self.fee_amount
+    }
+    fn expiration(self: @LimitOrder) -> Timestamp {
+        *self.expiration
+    }
+}
+
 
 #[generate_trait]
 pub impl LimitOrderImpl of LimitOrderTrait {
@@ -149,6 +215,33 @@ pub struct Order {
     pub salt: felt252,
 }
 
+impl OrderValidationTraitImpl of ValidateableOrderTrait<Order> {
+    fn position_id(self: @Order) -> PositionId {
+        *self.position_id
+    }
+    fn base_asset_id(self: @Order) -> AssetId {
+        *self.base_asset_id
+    }
+    fn base_amount(self: @Order) -> i64 {
+        *self.base_amount
+    }
+    fn quote_asset_id(self: @Order) -> AssetId {
+        *self.quote_asset_id
+    }
+    fn quote_amount(self: @Order) -> i64 {
+        *self.quote_amount
+    }
+    fn fee_asset_id(self: @Order) -> AssetId {
+        *self.fee_asset_id
+    }
+    fn fee_amount(self: @Order) -> u64 {
+        *self.fee_amount
+    }
+    fn expiration(self: @Order) -> Timestamp {
+        *self.expiration
+    }
+}
+
 
 /// selector!(
 ///   "\"Order\"(
@@ -183,25 +276,6 @@ impl StructHashImpl of StructHash<Order> {
     }
 }
 
-#[generate_trait]
-pub impl OrderImpl of OrderTrait {
-    /// Validates order variables against actual amounts:
-    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
-    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
-    fn validate_against_actual_amounts(
-        self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
-    ) {
-        validate_against_actual_amounts(
-            base_amount: *self.base_amount,
-            quote_amount: *self.quote_amount,
-            fee_amount: *self.fee_amount,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :actual_fee,
-            position: *self.position_id,
-        )
-    }
-}
 
 #[cfg(test)]
 mod tests {
