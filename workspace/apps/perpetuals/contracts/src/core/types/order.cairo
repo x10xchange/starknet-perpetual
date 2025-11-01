@@ -12,38 +12,55 @@ use starkware_utils::time::time::Timestamp;
 
 pub const VERSION: u8 = 0;
 
-fn validate_against_actual_amounts(
-    base_amount: i64,
-    quote_amount: i64,
-    fee_amount: u64,
-    actual_amount_base: i64,
-    actual_amount_quote: i64,
-    actual_fee: u64,
-    position: PositionId,
-) {
-    let order_base_to_quote_ratio = FractionTrait::new(
-        numerator: (base_amount).into(), denominator: (quote_amount).abs().into(),
-    );
-    let actual_base_to_quote_ratio = FractionTrait::new(
-        numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
-    );
-    assert_with_byte_array(
-        order_base_to_quote_ratio <= actual_base_to_quote_ratio,
-        illegal_base_to_quote_ratio_err(position),
-    );
+pub trait ValidateableOrderTrait<T> {
+    fn position_id(self: @T) -> PositionId;
+    // The base asset
+    fn base_asset_id(self: @T) -> AssetId;
+    // The amount of the base asset to be bought or sold.
+    fn base_amount(self: @T) -> i64;
+    // The quote asset.
+    fn quote_asset_id(self: @T) -> AssetId;
+    // The amount of the quote asset to be paid or received.
+    fn quote_amount(self: @T) -> i64;
+    // The fee asset.
+    fn fee_asset_id(self: @T) -> AssetId;
+    // The amount of the fee asset to be paid.
+    fn fee_amount(self: @T) -> u64;
+    // The expiration time of the order.
+    fn expiration(self: @T) -> Timestamp;
 
-    // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
-    // operator's fee.
-    let actual_fee_to_quote_ratio = FractionTrait::new(
-        numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
-    );
-    let order_fee_to_quote_ratio = FractionTrait::new(
-        numerator: (fee_amount).into(), denominator: (quote_amount).abs().into(),
-    );
-    assert_with_byte_array(
-        actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
-        illegal_fee_to_quote_ratio_err(position),
-    );
+    fn validate_against_actual_amounts(
+        self: @T, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
+    ) {
+        let order_base_amount = Self::base_amount(:self);
+        let order_quote_amount = Self::quote_amount(:self);
+        let order_fee_amount = Self::fee_amount(:self);
+        let position = Self::position_id(:self);
+
+        let order_base_to_quote_ratio = FractionTrait::new(
+            numerator: (order_base_amount).into(), denominator: (order_quote_amount).abs().into(),
+        );
+        let actual_base_to_quote_ratio = FractionTrait::new(
+            numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
+        );
+        assert_with_byte_array(
+            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
+            illegal_base_to_quote_ratio_err(position),
+        );
+
+        // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
+        // operator's fee.
+        let actual_fee_to_quote_ratio = FractionTrait::new(
+            numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
+        );
+        let order_fee_to_quote_ratio = FractionTrait::new(
+            numerator: (order_fee_amount).into(), denominator: (order_quote_amount).abs().into(),
+        );
+        assert_with_byte_array(
+            actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
+            illegal_fee_to_quote_ratio_err(position),
+        );
+    }
 }
 
 
@@ -71,23 +88,30 @@ pub(crate) struct LimitOrder {
     pub salt: felt252,
 }
 
-#[generate_trait]
-pub impl LimitOrderImpl of LimitOrderTrait {
-    /// Validates order variables against actual amounts:
-    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
-    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
-    fn validate_against_actual_amounts(
-        self: @LimitOrder, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
-    ) {
-        validate_against_actual_amounts(
-            base_amount: *self.base_amount,
-            quote_amount: *self.quote_amount,
-            fee_amount: *self.fee_amount,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :actual_fee,
-            position: *self.source_position,
-        )
+pub impl LimitOrderValidationTraitImpl of ValidateableOrderTrait<LimitOrder> {
+    fn position_id(self: @LimitOrder) -> PositionId {
+        *self.source_position
+    }
+    fn base_asset_id(self: @LimitOrder) -> AssetId {
+        *self.base_asset_id
+    }
+    fn base_amount(self: @LimitOrder) -> i64 {
+        *self.base_amount
+    }
+    fn quote_asset_id(self: @LimitOrder) -> AssetId {
+        *self.quote_asset_id
+    }
+    fn quote_amount(self: @LimitOrder) -> i64 {
+        *self.quote_amount
+    }
+    fn fee_asset_id(self: @LimitOrder) -> AssetId {
+        *self.fee_asset_id
+    }
+    fn fee_amount(self: @LimitOrder) -> u64 {
+        *self.fee_amount
+    }
+    fn expiration(self: @LimitOrder) -> Timestamp {
+        *self.expiration
     }
 }
 
@@ -149,6 +173,33 @@ pub struct Order {
     pub salt: felt252,
 }
 
+impl OrderValidationTraitImpl of ValidateableOrderTrait<Order> {
+    fn position_id(self: @Order) -> PositionId {
+        *self.position_id
+    }
+    fn base_asset_id(self: @Order) -> AssetId {
+        *self.base_asset_id
+    }
+    fn base_amount(self: @Order) -> i64 {
+        *self.base_amount
+    }
+    fn quote_asset_id(self: @Order) -> AssetId {
+        *self.quote_asset_id
+    }
+    fn quote_amount(self: @Order) -> i64 {
+        *self.quote_amount
+    }
+    fn fee_asset_id(self: @Order) -> AssetId {
+        *self.fee_asset_id
+    }
+    fn fee_amount(self: @Order) -> u64 {
+        *self.fee_amount
+    }
+    fn expiration(self: @Order) -> Timestamp {
+        *self.expiration
+    }
+}
+
 
 /// selector!(
 ///   "\"Order\"(
@@ -183,25 +234,6 @@ impl StructHashImpl of StructHash<Order> {
     }
 }
 
-#[generate_trait]
-pub impl OrderImpl of OrderTrait {
-    /// Validates order variables against actual amounts:
-    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
-    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
-    fn validate_against_actual_amounts(
-        self: @Order, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
-    ) {
-        validate_against_actual_amounts(
-            base_amount: *self.base_amount,
-            quote_amount: *self.quote_amount,
-            fee_amount: *self.fee_amount,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :actual_fee,
-            position: *self.position_id,
-        )
-    }
-}
 
 #[cfg(test)]
 mod tests {

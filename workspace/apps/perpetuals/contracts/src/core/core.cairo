@@ -688,7 +688,7 @@ pub mod Core {
                 :actual_amount_quote_a,
                 :actual_fee_a,
                 :actual_fee_b,
-                synthetic_asset: Some(synthetic_asset),
+                asset: Some(synthetic_asset),
                 collateral_id: self.assets.get_collateral_id(),
             );
             let position_id_a = order_a.position_id;
