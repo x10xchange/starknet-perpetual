@@ -10,39 +10,7 @@ use starkware_utils::math::fraction::FractionTrait;
 use starkware_utils::signature::stark::HashType;
 use starkware_utils::time::time::Timestamp;
 
-fn validate_against_actual_amounts(
-    base_amount: i64,
-    quote_amount: i64,
-    fee_amount: u64,
-    actual_amount_base: i64,
-    actual_amount_quote: i64,
-    actual_fee: u64,
-    position: PositionId,
-) {
-    let order_base_to_quote_ratio = FractionTrait::new(
-        numerator: (base_amount).into(), denominator: (quote_amount).abs().into(),
-    );
-    let actual_base_to_quote_ratio = FractionTrait::new(
-        numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
-    );
-    assert_with_byte_array(
-        order_base_to_quote_ratio <= actual_base_to_quote_ratio,
-        illegal_base_to_quote_ratio_err(position),
-    );
-
-    // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
-    // operator's fee.
-    let actual_fee_to_quote_ratio = FractionTrait::new(
-        numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
-    );
-    let order_fee_to_quote_ratio = FractionTrait::new(
-        numerator: (fee_amount).into(), denominator: (quote_amount).abs().into(),
-    );
-    assert_with_byte_array(
-        actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
-        illegal_fee_to_quote_ratio_err(position),
-    );
-}
+pub const VERSION: u8 = 0;
 
 pub trait ValidateableOrderTrait<T> {
     fn position_id(self: @T) -> PositionId;
@@ -69,20 +37,31 @@ pub trait ValidateableOrderTrait<T> {
         let order_fee_amount = Self::fee_amount(:self);
         let position = Self::position_id(:self);
 
-        validate_against_actual_amounts(
-            base_amount: order_base_amount,
-            quote_amount: order_quote_amount,
-            fee_amount: order_fee_amount,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :actual_fee,
-            position: position,
-        )
+        let order_base_to_quote_ratio = FractionTrait::new(
+            numerator: (order_base_amount).into(), denominator: (order_quote_amount).abs().into(),
+        );
+        let actual_base_to_quote_ratio = FractionTrait::new(
+            numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
+        );
+        assert_with_byte_array(
+            order_base_to_quote_ratio <= actual_base_to_quote_ratio,
+            illegal_base_to_quote_ratio_err(position),
+        );
+
+        // Validating the fee-to-quote ratio enables increasing in both the user's quote and the
+        // operator's fee.
+        let actual_fee_to_quote_ratio = FractionTrait::new(
+            numerator: actual_fee.into(), denominator: actual_amount_quote.abs().into(),
+        );
+        let order_fee_to_quote_ratio = FractionTrait::new(
+            numerator: (order_fee_amount).into(), denominator: (order_quote_amount).abs().into(),
+        );
+        assert_with_byte_array(
+            actual_fee_to_quote_ratio <= order_fee_to_quote_ratio,
+            illegal_fee_to_quote_ratio_err(position),
+        );
     }
 }
-
-
-pub const VERSION: u8 = 0;
 
 
 #[derive(Copy, Drop, Hash, Serde)]
@@ -133,27 +112,6 @@ pub impl LimitOrderValidationTraitImpl of ValidateableOrderTrait<LimitOrder> {
     }
     fn expiration(self: @LimitOrder) -> Timestamp {
         *self.expiration
-    }
-}
-
-
-#[generate_trait]
-pub impl LimitOrderImpl of LimitOrderTrait {
-    /// Validates order variables against actual amounts:
-    /// - Validate the order base-to-quote ratio does not exceed the actual base-to-quote ratio.
-    /// - Validate the actual fee-to-quote ratio does not exceed the ordered fee-to-quote ratio.
-    fn validate_against_actual_amounts(
-        self: @LimitOrder, actual_amount_base: i64, actual_amount_quote: i64, actual_fee: u64,
-    ) {
-        validate_against_actual_amounts(
-            base_amount: *self.base_amount,
-            quote_amount: *self.quote_amount,
-            fee_amount: *self.fee_amount,
-            :actual_amount_base,
-            :actual_amount_quote,
-            :actual_fee,
-            position: *self.source_position,
-        )
     }
 }
 

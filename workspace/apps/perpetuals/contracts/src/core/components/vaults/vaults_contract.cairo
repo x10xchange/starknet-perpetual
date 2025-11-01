@@ -1,5 +1,5 @@
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::order::{LimitOrder, LimitOrderTrait};
+use perpetuals::core::types::order::LimitOrder;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::vault::ConvertPositionToVault;
 use starkware_utils::signature::stark::Signature;
@@ -75,9 +75,10 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::order_expired_err;
+    use crate::core::types::order::ValidateableOrderTrait;
     use crate::core::types::position::PositionDiff;
     use crate::core::utils::{validate_signature, validate_trade};
-    use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, LimitOrderTrait, Signature};
+    use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, Signature};
 
 
     #[event]
