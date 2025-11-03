@@ -21,6 +21,7 @@ inlining-strategy = "avoid"
 
 [profile.release.cairo]
 inlining-strategy = "avoid"
+casm = true
 
 [workspace.tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]

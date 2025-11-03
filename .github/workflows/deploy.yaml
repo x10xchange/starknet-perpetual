@@ -7,8 +7,20 @@ jobs:
   CI:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
     - name: Install asdf & tools
-      uses: asdf-vm/actions/install@v4    
-    - name: starkup
+      uses: asdf-vm/actions/install@v4
+    - name: Import account into starknet-foundry
       run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh -s --yes
+        sncast account import --network mainnet --name account_deployer --address 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58  --private-key ${{ secrets.DEPLOYER_KEY }} --type oz --silent
+    - name: Deploy contracts
+      run: |
+        sncast --account account_deployer declare --network mainnet --contract-name Core
+    - name: Install Voyager Verifier
+      run: |
+          asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
+          asdf install voyager latest
+          asdf set -u voyager latest
+
+
