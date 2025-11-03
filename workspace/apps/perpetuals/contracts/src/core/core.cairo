@@ -61,7 +61,7 @@ pub mod Core {
     use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::math::abs::Abs;
-    use starkware_utils::math::utils::have_same_sign;
+    use starkware_utils::math::utils::{have_same_sign, mul_wide_and_floor_div};
     use starkware_utils::signature::stark::{
         HashType, PublicKey, Signature, validate_stark_signature,
     };
@@ -148,6 +148,8 @@ pub mod Core {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub positions: Positions::Storage,
+        pub time_vault_last_checked: u64,
+        pub max_transfer_out_of_vault: u64,
     }
 
     #[event]
@@ -302,6 +304,12 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            let vault_position = PositionId { value: 7_u32 };
+
+            if position_id == vault_position {
+                panic_with_felt252('VAULT_CANNOT_WITHDRAW');
+            }
+
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.assets.validate_assets_integrity();
@@ -441,7 +449,34 @@ pub mod Core {
             self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
+            let vault_position_id = PositionId { value: 7_u32 };
             let position = self.positions.get_position_snapshot(:position_id);
+            if (position_id == vault_position_id) {
+                let now = Time::now().seconds;
+                let one_day = 24 * 60 * 60;
+                if (now - self.time_vault_last_checked.read() > one_day) {
+                    self.time_vault_last_checked.write(now);
+                    let collateral_balance = position.collateral_balance.read();
+                    if (collateral_balance.into() < 0_i64) {
+                        panic_with_felt252('VAULT_TRANSFER_LIMIT_UNDERFLOW');
+                    }
+                    let new_limit = mul_wide_and_floor_div(
+                        collateral_balance.into(), 5_i64, 100_i64,
+                    )
+                        .unwrap()
+                        .abs();
+                    self.max_transfer_out_of_vault.write(new_limit.try_into().unwrap());
+                }
+                let max_transfer = self.max_transfer_out_of_vault.read();
+
+                assert_with_byte_array(
+                    amount.into() <= max_transfer,
+                    format!("VAULT_TRANSFER_LIMIT_EXCEEDED: {} > {}", amount, max_transfer),
+                );
+
+                self.max_transfer_out_of_vault.write(max_transfer - (amount.into()));
+            }
+
             let collateral_id = self.assets.get_collateral_id();
             let hash = self
                 .request_approvals
@@ -921,6 +956,10 @@ pub mod Core {
                         quote_amount_a,
                     },
                 )
+        }
+        fn increase_vault_allowance(ref self: ContractState, amount: u64) {
+            self.roles.only_app_governor();
+            self.max_transfer_out_of_vault.write(self.max_transfer_out_of_vault.read() + amount);
         }
     }
 

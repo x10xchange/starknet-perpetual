@@ -96,4 +96,6 @@ pub trait ICore<TContractState> {
         base_asset_id: AssetId,
         base_amount_a: i64,
     );
+
+    fn increase_vault_allowance(ref self: TContractState, amount: u64);
 }
