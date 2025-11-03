@@ -58,6 +58,7 @@ pub mod Core {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
+    use starkware_utils::constants::DAY;
     use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::math::abs::Abs;
@@ -112,6 +113,7 @@ pub mod Core {
 
     const NAME: felt252 = 'Perpetuals';
     const VERSION: felt252 = 'v0';
+    const VAULT_POSITION: PositionId = PositionId { value: 7_u32 };
 
     /// Required for hash computation.
     pub impl SNIP12MetadataImpl of SNIP12Metadata {
@@ -304,11 +306,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let vault_position = PositionId { value: 7_u32 };
-
-            if position_id == vault_position {
-                panic_with_felt252('VAULT_CANNOT_WITHDRAW');
-            }
+            assert(position_id != VAULT_POSITION, 'VAULT_CANNOT_WITHDRAW');
 
             self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
@@ -449,12 +447,10 @@ pub mod Core {
             self.assets.validate_assets_integrity();
             validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
-            let vault_position_id = PositionId { value: 7_u32 };
             let position = self.positions.get_position_snapshot(:position_id);
-            if (position_id == vault_position_id) {
+            if (position_id == VAULT_POSITION) {
                 let now = Time::now().seconds;
-                let one_day = 24 * 60 * 60;
-                if (now - self.time_vault_last_checked.read() > one_day) {
+                let max_transfer = if (now - self.time_vault_last_checked.read() > DAY) {
                     self.time_vault_last_checked.write(now);
                     let collateral_balance = position.collateral_balance.read();
                     if (collateral_balance.into() < 0_i64) {
@@ -465,15 +461,14 @@ pub mod Core {
                     )
                         .unwrap()
                         .abs();
-                    self.max_transfer_out_of_vault.write(new_limit.try_into().unwrap());
-                }
-                let max_transfer = self.max_transfer_out_of_vault.read();
-
+                    new_limit
+                } else {
+                    self.max_transfer_out_of_vault.read()
+                };
                 assert_with_byte_array(
                     amount.into() <= max_transfer,
                     format!("VAULT_TRANSFER_LIMIT_EXCEEDED: {} > {}", amount, max_transfer),
                 );
-
                 self.max_transfer_out_of_vault.write(max_transfer - (amount.into()));
             }
 
