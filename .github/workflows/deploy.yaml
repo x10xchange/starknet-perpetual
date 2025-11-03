@@ -1,0 +1,14 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install asdf & tools
+      uses: asdf-vm/actions/install@v4    
+    - name: starkup
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh -s --yes
