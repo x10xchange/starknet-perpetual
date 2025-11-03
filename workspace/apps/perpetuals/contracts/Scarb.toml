@@ -33,6 +33,7 @@ inlining-strategy = "avoid"
 
 [profile.release.cairo]
 inlining-strategy = "avoid"
+casm = true
 
 [[test]]
 name = "perpetuals_unittest"
