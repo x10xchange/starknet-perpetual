@@ -105,8 +105,6 @@ pub mod Core {
     #[abi(embed_v0)]
     impl PositionsImpl = Positions::PositionsImpl<ContractState>;
 
-    // impl FulfillmentImpl = FulfillmentComponent::FulfillmentImpl<ContractState>;
-
     #[abi(embed_v0)]
     impl ExternalComponentsImpl =
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;

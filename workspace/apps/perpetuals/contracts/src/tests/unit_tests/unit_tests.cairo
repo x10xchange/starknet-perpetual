@@ -2,7 +2,7 @@ use core::num::traits::{Pow, Zero};
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsDispatcher, IAssetsDispatcherTrait,
 };
-use perpetuals::core::components::deposit::Deposit::deposit_hash;
+use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
     DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait,
 };
@@ -4196,6 +4196,7 @@ fn test_successful_vault_token_deposit() {
     validate_balance(vault_share_state, test_address(), user_deposit_amount.try_into().unwrap());
     let status = state.deposits.get_deposit_status(:deposit_hash);
     if let DepositStatus::PENDING(timestamp) = status {
+        println!("Deposit timestamp: {:?}, expected: {:?}", timestamp, expected_time);
         assert!(timestamp == expected_time);
     } else {
         panic!("Deposit not found");

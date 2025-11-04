@@ -26,7 +26,7 @@ use perpetuals::tests::event_test_utils::{
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    cheat_caller_address, start_cheat_block_timestamp_global,
     stop_cheat_caller_address, test_address,
 };
 use starknet::ContractAddress;
@@ -44,7 +44,7 @@ use starkware_utils_testing::test_utils::{
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::components::external_components::interface::{
     EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
-    EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS, IExternalComponents,
+    EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS, IExternalComponents, EXTERNAL_COMPONENT_DEPOSITS,
     IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
 };
 
@@ -513,6 +513,10 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         .unwrap()
         .contract_class();
 
+    let deposit_external_component = snforge_std::declare("DepositManager")
+        .unwrap()
+        .contract_class();
+
     cheat_caller_address(
         contract_address: test_address(),
         caller_address: *cfg.governance_admin,
@@ -546,6 +550,11 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
             component_address: *deleverage_external_component.class_hash,
         );
 
+    state.register_external_component(
+        component_type: EXTERNAL_COMPONENT_DEPOSITS,
+        component_address: *deposit_external_component.class_hash,
+    );
+
     state
         .activate_external_component(
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
@@ -571,6 +580,12 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
             component_type: EXTERNAL_COMPONENT_WITHDRAWALS,
             component_address: *withdrawals_external_component.class_hash,
         );
+
+    state.activate_external_component(
+        component_type: EXTERNAL_COMPONENT_DEPOSITS,
+        component_address: *deposit_external_component.class_hash,
+    );
+    
     stop_cheat_caller_address(contract_address: test_address());
 
     state
@@ -802,6 +817,9 @@ pub fn register_external_components_by_dispatcher(
     let deleverage_external_component = snforge_std::declare("DeleverageManager")
         .unwrap()
         .contract_class();
+    let deposit_external_component = snforge_std::declare("DepositManager")
+        .unwrap()
+        .contract_class();
 
     cheat_caller_address(
         :contract_address, caller_address: GOVERNANCE_ADMIN(), span: CheatSpan::Indefinite,
@@ -832,6 +850,10 @@ pub fn register_external_components_by_dispatcher(
             component_type: EXTERNAL_COMPONENT_DELEVERAGES,
             component_address: *deleverage_external_component.class_hash,
         );
+    external_components_dispatcher.register_external_component(
+        component_type: EXTERNAL_COMPONENT_DEPOSITS,
+        component_address: *deposit_external_component.class_hash,
+    );
     start_cheat_block_timestamp_global(Time::now().add(Time::seconds(*cfg.upgrade_delay)).into());
     external_components_dispatcher
         .activate_external_component(
@@ -858,6 +880,10 @@ pub fn register_external_components_by_dispatcher(
             component_type: EXTERNAL_COMPONENT_VAULT,
             component_address: *vault_external_component.class_hash,
         );
+    external_components_dispatcher.activate_external_component(
+        component_type: EXTERNAL_COMPONENT_DEPOSITS,
+        component_address: *deposit_external_component.class_hash,
+    );
     stop_cheat_caller_address(:contract_address);
 }
 

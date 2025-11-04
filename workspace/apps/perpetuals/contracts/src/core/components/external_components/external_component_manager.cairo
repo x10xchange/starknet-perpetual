@@ -15,6 +15,7 @@ pub mod ExternalComponents {
     use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerLibraryDispatcher;
+    use crate::core::components::deposit::deposit_manager::IDepositExternalLibraryDispatcher;
     use crate::core::components::external_components::events;
     use crate::core::components::external_components::interface::{
         EXTERNAL_COMPONENT_DELEVERAGES, IExternalComponents,
@@ -25,8 +26,8 @@ pub mod ExternalComponents {
     use crate::core::components::vaults::vaults_contract::IVaultExternalLibraryDispatcher;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerLibraryDispatcher;
     use super::super::interface::{
-        EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
-        EXTERNAL_COMPONENT_WITHDRAWALS,
+        EXTERNAL_COMPONENT_DEPOSITS, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
+        EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
     };
     use super::super::named_component::ITypedComponentDispatcherTrait;
 
@@ -81,7 +82,6 @@ pub mod ExternalComponents {
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
-        impl Replaceability: ReplaceabilityComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn _get_vault_manager_dispatcher(
             ref self: ComponentState<TContractState>,
@@ -137,6 +137,17 @@ pub mod ExternalComponents {
             assert(class_hash.is_non_zero(), 'NO_DELEVERAGE_MANAGER');
             IDeleverageManagerLibraryDispatcher { class_hash: class_hash }
         }
+
+        fn _get_deposit_manager_dispatcher(
+            self: @ComponentState<TContractState>,
+        ) -> IDepositExternalLibraryDispatcher {
+            let class_hash = self
+                .external_component_implementations
+                .entry(EXTERNAL_COMPONENT_DEPOSITS)
+                .read();
+            assert(class_hash.is_non_zero(), 'NO_DEPOSIT_MANAGER');
+            IDepositExternalLibraryDispatcher { class_hash: class_hash }
+        }
     }
 
     #[generate_trait]
@@ -171,6 +182,7 @@ pub mod ExternalComponents {
             );
             if (component_type == EXTERNAL_COMPONENT_VAULT)
                 || (component_type == EXTERNAL_COMPONENT_WITHDRAWALS)
+                || (component_type == EXTERNAL_COMPONENT_DEPOSITS)
                 || (component_type == EXTERNAL_COMPONENT_TRANSFERS)
                 || (component_type == EXTERNAL_COMPONENT_LIQUIDATIONS)
                 || (component_type == EXTERNAL_COMPONENT_DELEVERAGES) {

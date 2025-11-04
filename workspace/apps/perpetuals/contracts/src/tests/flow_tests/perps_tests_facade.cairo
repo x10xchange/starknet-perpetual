@@ -4,15 +4,15 @@ use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
 use core::num::traits::WideMul;
 use external_components::interface::{
-    EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS,
-    EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+    EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS, EXTERNAL_COMPONENT_LIQUIDATIONS,
+    EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
 };
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
-use perpetuals::core::components::deposit::Deposit::deposit_hash;
+use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
     DepositStatus, IDepositDispatcher, IDepositDispatcherTrait,
 };
@@ -484,6 +484,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let deposit_external_component = snforge_std::declare("DepositManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -542,6 +546,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
             );
+
+        external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_DEPOSITS,
+                component_address: *deposit_external_component.class_hash,
+            );
+
         external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
@@ -567,6 +578,13 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 component_type: EXTERNAL_COMPONENT_VAULT,
                 component_address: *vault_external_component.class_hash,
             );
+
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_DEPOSITS,
+                component_address: *deposit_external_component.class_hash,
+            );
+
         stop_cheat_caller_address(contract_address: perpetuals_contract);
         perpetual_wrapper
     }

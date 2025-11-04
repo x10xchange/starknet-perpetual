@@ -67,6 +67,9 @@ pub(crate) mod VaultsManager {
     };
     use starkware_utils::time::time::Time;
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
+    use crate::core::components::deposit::deposit_manager::IDepositExternalDispatcherTrait;
+    use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
+    use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalImpl as ExternalComponentsInternal;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_VAULT;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::positions::interface::IPositions;
@@ -107,6 +110,8 @@ pub(crate) mod VaultsManager {
         RolesEvent: RolesComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        ExternalComponentsEvent: ExternalComponentsComponent::Event,
     }
 
     #[storage]
@@ -133,6 +138,8 @@ pub(crate) mod VaultsManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        pub external_components: ExternalComponentsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -149,6 +156,13 @@ pub(crate) mod VaultsManager {
     );
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+
+    component!(
+        path: ExternalComponentsComponent,
+        storage: external_components,
+        event: ExternalComponentsEvent,
+    );
+
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -303,12 +317,14 @@ pub(crate) mod VaultsManager {
                 );
 
             self
-                .deposits
-                ._deposit(
+                .external_components
+                ._get_deposit_manager_dispatcher()
+                .deposit(
                     caller_address: starknet::get_contract_address(),
                     asset_id: vault_config.asset_id,
                     position_id: receiving_position_id,
                     quantized_amount: quantised_minted_shares,
+                    now: now,
                     salt: salt,
                 );
         }
