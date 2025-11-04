@@ -43,4 +43,4 @@ jobs:
 
       - name: Verify on Voyager
         run: |
-          voyager verify --network mainnet --class-hash ${{ steps.deploy_contracts.outputs.CORE_HASH }} --contract-name Core --license Apache-2.0  --package perpetuals --watch
+          voyager verify --network mainnet --class-hash ${{ steps.deploy_contracts.outputs.CORE_HASH }} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file
