@@ -7,20 +7,40 @@ jobs:
   CI:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-    - name: Install asdf & tools
-      uses: asdf-vm/actions/install@v4
-    - name: Import account into starknet-foundry
-      run: |
-        sncast account import --network mainnet --name account_deployer --address 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58  --private-key ${{ secrets.DEPLOYER_KEY }} --type oz --silent
-    - name: Deploy contracts
-      run: |
-        sncast --account account_deployer declare --network mainnet --contract-name Core
-    - name: Install Voyager Verifier
-      run: |
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install starkli
+        run: |
+          curl https://get.starkli.sh | sh
+          . /home/runner/.config/.starkli/env
+          starkliup
+
+      - name: Retrieve account info
+        run: |
+          . /home/runner/.config/.starkli/env
+          starkli account fetch --rpc ${{ secrets.RPC }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
+
+      - name: Build contracts
+        run: |
+          scarb --release build
+
+      - name: Deploy contracts
+        id: deploy_contracts
+        run: |
+          . /home/runner/.config/.starkli/env
+          CORE_HASH=$(starkli declare -w target/release/perpetuals_Core.contract_class.json --account deployer_account.json --rpc ${{ secrets.RPC }} --private-key ${{ secrets.DEPLOYER_KEY }})
+          echo "CORE_HASH=$CORE_HASH" >> $GITHUB_OUTPUT
+          echo "Deployed Core contract with class hash: $CORE_HASH"
+
+      - name: Install Voyager Verifier
+        run: |
           asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
-          asdf install voyager latest
-          asdf set -u voyager latest
+          asdf install voyager 1.2.4
+          asdf set -u voyager 1.2.4
 
-
+      - name: Verify on Voyager
+        run: |
+          voyager verify --network mainnet --class-hash ${{ steps.deploy_contracts.outputs.CORE_HASH }} --contract-name Core --license Apache-2.0  --package perpetuals --watch
