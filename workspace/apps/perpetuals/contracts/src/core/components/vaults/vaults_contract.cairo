@@ -432,20 +432,6 @@ pub(crate) mod VaultsManager {
                 collateral_id: self.assets.get_collateral_id(),
             );
 
-            order
-                .validate_against_actual_amounts(
-                    actual_amount_base: actual_shares_user,
-                    actual_amount_quote: actual_collateral_user,
-                    actual_fee: 0_u64,
-                );
-
-            vault_approval
-                .validate_against_actual_amounts(
-                    actual_amount_base: -actual_shares_user,
-                    actual_amount_quote: -actual_collateral_user,
-                    actual_fee: 0_u64,
-                );
-
             let vault_position = self.positions.get_position_snapshot(vault_position_id);
             let redeeming_position = self.positions.get_position_snapshot(redeeming_position_id);
 
