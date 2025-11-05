@@ -21,7 +21,7 @@ jobs:
       - name: Retrieve account info
         run: |
           . /home/runner/.config/.starkli/env
-          starkli account fetch --rpc ${{ secrets.TESTNET_RPC }} --output deployer_account.json ${{ secrets.TESTNET_DEPLOYER_ACCOUNT }}
+          echo "${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }}" > deployer_account.json
 
       - name: Build contracts
         run: |
