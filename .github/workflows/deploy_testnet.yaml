@@ -22,6 +22,7 @@ jobs:
         run: |
           . /home/runner/.config/.starkli/env
           echo ${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }} | base64 --decode > deployer_account.json
+          cat deployer_account.json
 
       - name: Build contracts
         run: |
