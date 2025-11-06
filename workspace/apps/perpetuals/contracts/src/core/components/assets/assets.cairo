@@ -283,6 +283,12 @@ pub mod AssetsComponent {
             }
 
             let mut old_synthetic_config = self._get_asset_config(asset_id);
+
+            if (old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL
+                || old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
+                assert(risk_factor_tiers.len() == 1, 'CANNOT_INCREASE_TIERS_LEN');
+            }
+
             let mut bound = risk_factor_first_tier_boundary;
 
             for i in 0..risk_factor_tiers.len() {
