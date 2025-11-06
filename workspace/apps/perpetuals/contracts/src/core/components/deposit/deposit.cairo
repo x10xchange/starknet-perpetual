@@ -109,7 +109,7 @@ pub(crate) mod Deposit {
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_deposit_manager_dispatcher()
-                .reject_deposit(
+                .cancel_deposit(
                     depositor: depositor,
                     asset_id: asset_id,
                     position_id: position_id,

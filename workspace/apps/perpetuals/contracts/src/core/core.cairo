@@ -619,6 +619,9 @@ pub mod Core {
             actual_shares_user: i64,
             actual_collateral_user: i64,
         ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
