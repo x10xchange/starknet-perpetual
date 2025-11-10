@@ -111,12 +111,14 @@ pub fn deploy_protocol_vault_with_dispatcher(
     let mut calldata = ArrayTrait::new();
     let name: ByteArray = "Perpetuals Protocol Vault";
     let symbol: ByteArray = "PPV";
+    let initial_price = 1_000_000_u64; // 1 USDC with 6 decimals
     name.serialize(ref calldata);
     symbol.serialize(ref calldata);
     usdc_token_state.address.serialize(ref calldata);
     perps_address.serialize(ref calldata);
     vault_position_id.value.serialize(ref calldata);
     owning_account_address.serialize(ref calldata);
+    initial_price.serialize(ref calldata);
     let contract = snforge_std::declare("ProtocolVault").unwrap().contract_class();
     let output = contract.deploy(@calldata);
     if output.is_err() {

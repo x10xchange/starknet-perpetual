@@ -1,5 +1,7 @@
 use vault::interface::IProtocolVault;
 
+const SCALE: u64 = 1000000_u64;
+
 #[starknet::contract]
 pub mod ProtocolVault {
     use ERC4626Component::Fee;
@@ -14,7 +16,7 @@ pub mod ProtocolVault {
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starkware_utils::math::abs::Abs;
-    use super::IProtocolVault;
+    use super::{IProtocolVault, SCALE};
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
@@ -58,6 +60,7 @@ pub mod ProtocolVault {
         perps_contract: ContractAddress,
         owning_position_id: u32,
         recipient: ContractAddress,
+        initial_price: u64,
     ) -> u256 {
         self.perps_contract.write(perps_contract);
         self.owning_position_id.write(owning_position_id);
@@ -66,7 +69,8 @@ pub mod ProtocolVault {
         let total_assets = self.erc4626.get_total_assets();
         assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
         assert(recipient != perps_contract, 'RECIPIENT_CANNOT_BE_PERPS');
-        self.erc20.mint(recipient, total_assets);
+        let amount_to_mint = total_assets * initial_price.into() / SCALE.into();
+        self.erc20.mint(recipient, amount_to_mint);
         return total_assets;
     }
 
