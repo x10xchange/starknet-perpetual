@@ -42,6 +42,7 @@ pub mod Core {
     use starkware_utils::time::time::{TimeDelta, Timestamp};
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
+    use crate::core::components::deposit::events as deposit_events;
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
     use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
@@ -49,6 +50,7 @@ pub mod Core {
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
+    use crate::core::components::vaults::events as vault_events;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
@@ -176,6 +178,11 @@ pub mod Core {
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        //duplicated for ABI
+        Deposit: deposit_events::Deposit,
+        DepositCanceled: deposit_events::DepositCanceled,
+        DepositProcessed: deposit_events::DepositProcessed,
+        InvestInVault: vault_events::InvestInVault,
     }
 
     #[constructor]
