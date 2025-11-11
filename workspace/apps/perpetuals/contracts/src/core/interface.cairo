@@ -19,6 +19,7 @@ pub struct Settlement {
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
+    fn migrate_tvl(ref self: TContractState, amount: u256);
     fn withdraw_request(
         ref self: TContractState,
         signature: Signature,

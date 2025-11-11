@@ -66,7 +66,7 @@ pub mod AssetsComponent {
         last_price_validation: Timestamp,
         // Updates every funding tick.
         last_funding_tick: Timestamp,
-        collateral_token_contract: IERC20Dispatcher,
+        pub collateral_token_contract: IERC20Dispatcher,
         collateral_quantum: u64,
         num_of_active_synthetic_assets: usize,
         pub synthetic_config: Map<AssetId, Option<SyntheticConfig>>,

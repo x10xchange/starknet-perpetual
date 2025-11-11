@@ -9,6 +9,7 @@ openzeppelin_testing = "4.6.0"
 snforge_std = "0.48.1"
 starkware_utils = { git = "https://github.com/starkware-libs/starkware-starknet-utils", branch = "main" }
 starkware_utils_testing = { git = "https://github.com/starkware-libs/starkware-starknet-utils", branch = "main" }
+token_migration = { git = "https://github.com/starkware-libs/usdc-migration"}
 
 [scripts]
 test = "snforge test"
