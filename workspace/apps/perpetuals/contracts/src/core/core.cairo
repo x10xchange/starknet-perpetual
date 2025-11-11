@@ -44,12 +44,12 @@ pub mod Core {
         calculate_position_tvtr_change, deleveraged_position_validations,
         liquidated_position_validations,
     };
-    use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
+    use starknet::{ContractAddress, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -70,6 +70,9 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp, validate_expiration};
+    use token_migration::interface::{
+        ITokenMigration, ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait,
+    };
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
@@ -152,6 +155,10 @@ pub mod Core {
         pub positions: Positions::Storage,
         pub time_vault_last_checked: u64,
         pub max_transfer_out_of_vault: u64,
+        // --- Migration USDC ---
+        migration_contract: ITokenMigrationDispatcher,
+        usdc_e_contract: IERC20Dispatcher,
+        usdc_contract: IERC20Dispatcher,
     }
 
     #[event]
@@ -226,6 +233,35 @@ pub mod Core {
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
+        fn migrate_tvl(ref self: ContractState, amount: u256) {
+            self.pausable.assert_not_paused();
+            self.roles.only_app_governor();
+
+            let perps_contract = get_contract_address();
+            let migration_contract = self.migration_contract.read();
+            let usdc_e = self.usdc_e_contract.read();
+            let usdc = self.usdc_contract.read();
+            assert!(migration_contract.get_legacy_token() == usdc_e.contract_address);
+            assert!(migration_contract.get_new_token() == usdc.contract_address);
+
+            assert!(
+                usdc_e.approve(spender: migration_contract.contract_address, amount: amount),
+                "Failed to approve migration contract",
+            );
+            let usdc_e_balance_before = usdc_e.balance_of(account: perps_contract);
+            let usdc_balance_before = usdc.balance_of(account: perps_contract);
+
+            migration_contract.swap_to_new(:amount);
+
+            let usdc_e_balance_after = usdc_e.balance_of(account: perps_contract);
+            let usdc_balance_after = usdc.balance_of(account: perps_contract);
+            assert!(
+                usdc_e_balance_after == usdc_e_balance_before - amount, "Failed to migrate TVL",
+            );
+            assert!(usdc_balance_after == usdc_balance_before + amount, "Failed to migrate TVL");
+        }
+
+
         /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
         ///
         /// Validations:
