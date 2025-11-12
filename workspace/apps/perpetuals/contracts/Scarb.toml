@@ -20,7 +20,7 @@ sierra = true
 casm = true
 
 [scripts]
-test = "SNFORGE_BACKTRACE=1 snforge test"
+test = "SNFORGE_BACKTRACE=1 snforge test -- --run-native"
 
 [tool.fmt]
 sort-module-level-items = true
