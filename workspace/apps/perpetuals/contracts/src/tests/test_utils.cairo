@@ -192,6 +192,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
             initial_supply: 10_u256.pow(24),
             owner: COLLATERAL_OWNER(),
+            decimals: 18,
         };
 
         let vault_share_state = deploy_vault_share(@vault_share_cfg);
@@ -221,6 +222,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
                     symbol: COLLATERAL_SYMBOL(),
                     initial_supply: INITIAL_SUPPLY,
                     owner: COLLATERAL_OWNER(),
+                    decimals: 18,
                 },
                 collateral_id: COLLATERAL_ASSET_ID(),
                 quantum: COLLATERAL_QUANTUM,
@@ -599,6 +601,7 @@ pub fn create_token_state() -> TokenState {
         symbol: COLLATERAL_SYMBOL(),
         initial_supply: INITIAL_SUPPLY,
         owner: COLLATERAL_OWNER(),
+        decimals: 18,
     };
     Deployable::deploy(@token_config)
 }
@@ -609,6 +612,7 @@ pub fn create_vault_share_1_token_state() -> TokenState {
         symbol: VAULT_SHARE_COLLATERAL_1_SYMBOL(),
         initial_supply: INITIAL_SUPPLY,
         owner: COLLATERAL_OWNER(),
+        decimals: 18,
     };
     Deployable::deploy(@token_config)
 }
