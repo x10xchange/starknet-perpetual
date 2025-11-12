@@ -67,3 +67,7 @@ jobs:
           echo  "Deployed LiquidationManager component with class hash: $LIQUIDATION_COMPONENT_HASH"
           echo  "Deployed DeleverageManager component with class hash: $DELEVERAGE_COMPONENT_HASH"
           echo  "Deployed DepositManager component with class hash: ${DEPOSIT_COMPONENT_HASH}"
+
+          VAULT_CLASS_HASH=$(starkli declare -w target/release/vault_ProtocolVault.contract_class.json --casm-file target/release/vault_ProtocolVault.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
+          echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
+
