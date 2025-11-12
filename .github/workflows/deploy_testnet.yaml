@@ -59,5 +59,11 @@ jobs:
           starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
           starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:DEPOSITS "${DEPOSIT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
 
-          echo "CORE_HASH=$CORE_HASH" >> $GITHUB_OUTPUT
           echo "Deployed Core contract with class hash: $CORE_HASH"
+
+          echo  "Deployed VaultsManager component with class hash: $VAULT_COMPONENT_HASH"
+          echo  "Deployed TransferManager component with class hash: $TRANSFER_COMPONENT_HASH"
+          echo  "Deployed WithdrawalManager component with class hash: $WITHDRAWAL_COMPONENT_HASH"
+          echo  "Deployed LiquidationManager component with class hash: $LIQUIDATION_COMPONENT_HASH"
+          echo  "Deployed DeleverageManager component with class hash: $DELEVERAGE_COMPONENT_HASH"
+          echo  "Deployed DepositManager component with class hash: ${DEPOSIT_COMPONENT_HASH}"
