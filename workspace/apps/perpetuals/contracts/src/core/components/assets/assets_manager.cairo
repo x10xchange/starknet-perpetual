@@ -137,6 +137,7 @@ pub(crate) mod AssetsManager {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         #[substorage(v0)]
+        #[allow(starknet::colliding_storage_paths)]
         pub assets: AssetsComponent::Storage,
     }
 
