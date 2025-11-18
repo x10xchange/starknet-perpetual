@@ -14,7 +14,7 @@ pub trait IVaultExternal<TContractState> {
         signature: Signature,
     );
     fn invest_in_vault(
-        ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
+        ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder, correlation_id: felt252,
     );
     fn redeem_from_vault(
         ref self: TContractState,
@@ -185,7 +185,7 @@ pub(crate) mod VaultsManager {
         }
 
         fn invest_in_vault(
-            ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
+            ref self: ContractState, operator_nonce: u64, signature: Signature, order: LimitOrder, correlation_id: felt252,
         ) {
             let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
             let from_position_id = order.source_position;
@@ -313,6 +313,7 @@ pub(crate) mod VaultsManager {
                         user_investment: order.quote_amount.abs(),
                         vault_asset_id: vault_config.asset_id,
                         invested_asset_id: self.assets.get_collateral_id(),
+                        correlation_id: correlation_id,
                     },
                 );
 

@@ -107,7 +107,7 @@ pub trait ICore<TContractState> {
         signature: Signature,
     );
     fn invest_in_vault(
-        ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder,
+        ref self: TContractState, operator_nonce: u64, signature: Signature, order: LimitOrder, correlation_id: felt252,
     );
     fn redeem_from_vault(
         ref self: TContractState,

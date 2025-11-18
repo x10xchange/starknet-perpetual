@@ -659,6 +659,7 @@ pub mod Core {
             operator_nonce: u64,
             signature: Span<felt252>,
             order: LimitOrder,
+            correlation_id: felt252,
         ) {
             self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
@@ -666,7 +667,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .invest_in_vault(operator_nonce: operator_nonce, :signature, :order)
+                .invest_in_vault(operator_nonce: operator_nonce, :signature, :order, :correlation_id)
         }
     }
 

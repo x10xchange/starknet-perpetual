@@ -1833,7 +1833,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let signature = depositing_user.account.sign_message(order_hash);
 
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .invest_in_vault(:operator_nonce, signature: signature, order: order);
+            .invest_in_vault(:operator_nonce, signature: signature, order: order, 1);
 
         let last_event = self.get_last_event(contract_address: self.perpetuals_contract);
         let deposit_event: deposit_events::Deposit = event_as::<
