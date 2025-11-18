@@ -6,7 +6,7 @@ pub mod Core {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
-    use perpetuals::core::components::assets::errors::NOT_SYNTHETIC;
+    use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -15,10 +15,9 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
-    use perpetuals::core::errors::SYNTHETIC_IS_ACTIVE;
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
-    use perpetuals::core::types::asset::{AssetId, AssetStatus};
+    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::order::{LimitOrder, Order};
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
@@ -167,7 +166,7 @@ pub mod Core {
         #[flat]
         PositionsEvent: Positions::Event,
         Deleverage: events::Deleverage,
-        InactiveAssetPositionReduced: events::InactiveAssetPositionReduced,
+        AssetPositionReduced: events::AssetPositionReduced,
         Liquidate: events::Liquidate,
         Trade: events::Trade,
         Withdraw: events::Withdraw,
@@ -518,7 +517,7 @@ pub mod Core {
         /// Execution:
         /// - Update the position, based on `base_asset`.
         /// - Adjust collateral balances based on `quote_amount`.
-        fn reduce_inactive_asset_position(
+        fn reduce_asset_position(
             ref self: ContractState,
             operator_nonce: u64,
             position_id_a: PositionId,
@@ -534,11 +533,10 @@ pub mod Core {
             let position_a = self.positions.get_position_snapshot(position_id: position_id_a);
             let position_b = self.positions.get_position_snapshot(position_id: position_id_b);
 
-            // Validate base asset is inactive synthetic.
             if let Option::Some(config) = self.assets.asset_config.read(base_asset_id) {
-                assert(config.status == AssetStatus::INACTIVE, SYNTHETIC_IS_ACTIVE);
+                assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
             } else {
-                panic_with_felt252(NOT_SYNTHETIC);
+                panic_with_felt252(NO_SUCH_ASSET);
             }
             let base_balance: Balance = base_amount_a.into();
             let quote_amount_a: i64 = -1
@@ -577,7 +575,7 @@ pub mod Core {
 
             self
                 .emit(
-                    events::InactiveAssetPositionReduced {
+                    events::AssetPositionReduced {
                         position_id_a,
                         position_id_b,
                         base_asset_id,

@@ -91,7 +91,7 @@ pub trait ICore<TContractState> {
         deleveraged_base_amount: i64,
         deleveraged_quote_amount: i64,
     );
-    fn reduce_inactive_asset_position(
+    fn reduce_asset_position(
         ref self: TContractState,
         operator_nonce: u64,
         position_id_a: PositionId,

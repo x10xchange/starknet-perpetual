@@ -1626,7 +1626,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         assert_eq!(dispatcher.get_asset_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
-    fn reduce_inactive_asset_position(
+    fn reduce_asset_position(
         ref self: PerpsTestsFacade,
         position_id_a: PositionId,
         position_id_b: PositionId,
@@ -1636,7 +1636,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .reduce_inactive_asset_position(
+            .reduce_asset_position(
                 :operator_nonce, :position_id_a, :position_id_b, :base_asset_id, :base_amount_a,
             );
     }
