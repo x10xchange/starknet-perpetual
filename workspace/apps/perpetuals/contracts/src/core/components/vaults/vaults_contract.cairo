@@ -45,6 +45,7 @@ pub trait IVaultExternal<TContractState> {
 
 #[starknet::contract]
 pub(crate) mod VaultsManager {
+    use AssetsComponent::InternalTrait;
     use core::num::traits::{WideMul, Zero};
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -61,6 +62,8 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
+    use perpetuals::core::types::price::{PriceMulTrait};
+    use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -567,16 +570,46 @@ pub(crate) mod VaultsManager {
                 .validate_asset_balance_is_not_negative(
                     position: redeeming_position, asset_id: order.base_asset_id,
                 );
-            // user health checks
 
-            self
-                .positions
-                .validate_healthy_or_healthier_position(
-                    position_id: redeeming_position_id,
-                    position: redeeming_position,
-                    position_diff: redeeming_position_diff,
-                    tvtr_before: Default::default(),
+            // user health checks
+            if (self.positions.is_deleveragable(redeeming_position_id)) {
+                //if deleveragable then allow any improvement in TV/TR ratio
+                //if deleveragable then user MUST be selling shares for collateral
+                assert(actual_collateral_user > 0, 'DELEVERABLE_NOT_RECEIVE_QUOTE');
+                assert(actual_shares_user < 0, 'DELEVERABLE_NOT_SELL_BASE');
+                let (asset_id, qty) = redeeming_position_diff.asset_diff.unwrap();
+                let price = self.assets.get_asset_price(asset_id);
+                //spot have constant risk factors
+                let risk_factor = self.assets.get_asset_risk_factor(asset_id, 1_i64.into(), price);
+
+                let value_of_shares_sold: u128 = price
+                    .mul(qty)
+                    .abs()
+                    .try_into()
+                    .expect('REDEEM_VAULT_SHARES_OVERFLOW');
+
+                let risk_of_shares_sold: u128 = risk_factor.mul(value_of_shares_sold);
+                let collateral_received: u128 = actual_collateral_user.abs().try_into().unwrap();
+
+                assert_with_byte_array(
+                    collateral_received >= value_of_shares_sold - risk_of_shares_sold,
+                    format!(
+                        "Illegal transition value_of_shares_sold={}, risk_of_shares_sold={}, collateral_received={}",
+                        value_of_shares_sold,
+                        risk_of_shares_sold,
+                        collateral_received,
+                    ),
                 );
+            } else {
+                self
+                    .positions
+                    .validate_healthy_or_healthier_position(
+                        position_id: redeeming_position_id,
+                        position: redeeming_position,
+                        position_diff: redeeming_position_diff,
+                        tvtr_before: Default::default(),
+                    );
+            }
 
             self
                 .positions
