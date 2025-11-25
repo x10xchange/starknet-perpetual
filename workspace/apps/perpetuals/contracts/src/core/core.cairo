@@ -667,7 +667,9 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .invest_in_vault(operator_nonce: operator_nonce, :signature, :order, :correlation_id)
+                .invest_in_vault(
+                    operator_nonce: operator_nonce, :signature, :order, :correlation_id,
+                )
         }
     }
 

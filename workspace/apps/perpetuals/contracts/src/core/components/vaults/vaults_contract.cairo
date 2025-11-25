@@ -62,7 +62,7 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
-    use perpetuals::core::types::price::{PriceMulTrait};
+    use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
