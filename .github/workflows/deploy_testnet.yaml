@@ -12,62 +12,64 @@ jobs:
       - name: Install asdf & tools
         uses: asdf-vm/actions/install@v4
 
-      - name: install starkli
+
+      - name: ls pwd
         run: |
-          curl https://get.starkli.sh | sh
-          . /home/runner/.config/.starkli/env
-          starkliup
+          pwd
+          ls -lah
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.53.0-rc.0
+          
+
+#      - name: install starkli
+#        run: |
+#          curl https://get.starkli.sh | sh
+#          . /home/runner/.config/.starkli/env
+#          starkliup
 
       - name: Retrieve account info
         run: |
-          . /home/runner/.config/.starkli/env
           echo ${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }} | base64 --decode > deployer_account.json
           cat deployer_account.json
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name testnet --address $address --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }} --type oz -u ${{ secrets.TEST_RPC_09_ADDRESS }}
 
-      - name: Build contracts
-        run: |
-          scarb --release build
+#      - name: Build contracts
+#        run: |
+#          scarb --release build
 
       - name: Deploy contracts
         id: deploy_contracts
         run: |
-          . /home/runner/.config/.starkli/env
-
-          CORE_HASH=$(starkli declare -w target/release/perpetuals_Core.contract_class.json  --casm-file target/release/perpetuals_Core.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          VAULT_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_VaultsManager.contract_class.json --casm-file target/release/perpetuals_VaultsManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          TRANSFER_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_TransferManager.contract_class.json --casm-file target/release/perpetuals_TransferManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          WITHDRAWAL_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_WithdrawalManager.contract_class.json --casm-file target/release/perpetuals_WithdrawalManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          LIQUIDATION_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_LiquidationManager.contract_class.json --casm-file target/release/perpetuals_LiquidationManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          DELEVERAGE_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_DeleverageManager.contract_class.json --casm-file target/release/perpetuals_DeleverageManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          DEPOSIT_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_DepositManager.contract_class.json --casm-file target/release/perpetuals_DepositManager.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 add_new_implementation "${CORE_HASH}" 1 0 --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 replace_to "${CORE_HASH}" 1 0 --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-
-
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:WITHDRAWALS "${WITHDRAWAL_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:LIQUIDATIONS "${LIQUIDATION_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 register_external_component str:DEPOSITS "${DEPOSIT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:WITHDRAWALS "${WITHDRAWAL_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:LIQUIDATIONS "${LIQUIDATION_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 activate_external_component str:DEPOSITS "${DEPOSIT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-
-          echo "Deployed Core contract with class hash: $CORE_HASH"
-
-          echo  "Deployed VaultsManager component with class hash: $VAULT_COMPONENT_HASH"
-          echo  "Deployed TransferManager component with class hash: $TRANSFER_COMPONENT_HASH"
-          echo  "Deployed WithdrawalManager component with class hash: $WITHDRAWAL_COMPONENT_HASH"
-          echo  "Deployed LiquidationManager component with class hash: $LIQUIDATION_COMPONENT_HASH"
-          echo  "Deployed DeleverageManager component with class hash: $DELEVERAGE_COMPONENT_HASH"
-          echo  "Deployed DepositManager component with class hash: ${DEPOSIT_COMPONENT_HASH}"
-
-          VAULT_CLASS_HASH=$(starkli declare -w target/release/vault_ProtocolVault.contract_class.json --casm-file target/release/vault_ProtocolVault.compiled_contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
+          CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
+          VAULT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c VaultsManager -p perpetuals)
+          echo "vault hash $VAULT_COMPONENT_HASH"
+          TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c TransferManager -p perpetuals)
+          echo "transfer hash $TRANSFER_COMPONENT_HASH"
+          WITHDRAWAL_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c WithdrawalManager -p perpetuals)
+          echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+          LIQUIDATION_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c LiquidationManager -p perpetuals)
+          echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+          DELEVERAGE_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c DeleverageManager -p perpetuals)
+          echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+          DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c DepositManager -p perpetuals)
+          echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+          sleep 10s
+          VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
           echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
-
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          sleep 10s
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          

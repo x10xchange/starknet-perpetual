@@ -649,8 +649,8 @@ pub mod Core {
             order: ConvertPositionToVault,
             signature: Signature,
         ) {
-            self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
+            self.pausable.assert_not_paused();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
