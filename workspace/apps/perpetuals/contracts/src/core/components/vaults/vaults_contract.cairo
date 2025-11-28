@@ -572,11 +572,7 @@ pub(crate) mod VaultsManager {
                 );
 
             // user health checks
-            if (self.positions.is_deleveragable(redeeming_position_id)) {
-                //if deleveragable then allow any improvement in TV/TR ratio
-                //if deleveragable then user MUST be selling shares for collateral
-                assert(actual_collateral_user > 0, 'DELEVERABLE_NOT_RECEIVE_QUOTE');
-                assert(actual_shares_user < 0, 'DELEVERABLE_NOT_SELL_BASE');
+            if (self.positions.is_liquidatable(redeeming_position_id)) {
                 let (asset_id, qty) = redeeming_position_diff.asset_diff.unwrap();
                 let price = self.assets.get_asset_price(asset_id);
                 //spot have constant risk factors
