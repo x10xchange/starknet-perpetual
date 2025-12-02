@@ -12,11 +12,6 @@ jobs:
       - name: Install asdf & tools
         uses: asdf-vm/actions/install@v4
 
-
-      - name: ls pwd
-        run: |
-          pwd
-          ls -lah
       - name: install sncast
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
