@@ -1,0 +1,33 @@
+name: Deploy TESTNET
+
+on:
+  workflow_dispatch:
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.53.0-rc.0
+
+      - name: Retrieve account info
+        run: |
+          echo ${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }} | base64 --decode > deployer_account.json
+          cat deployer_account.json
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name testnet --address $address --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }} --type oz -u ${{ secrets.TEST_RPC_09_ADDRESS }}
+
+      - name: Deploy contracts
+        id: deploy_contracts
+        run: |
+          ./onchain_deploy/deploy_contract.sh

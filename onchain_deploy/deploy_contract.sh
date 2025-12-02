@@ -48,8 +48,9 @@ echo "RPC: ${RPC}"
 # fee_position_owner_public_key: PublicKey,
 # insurance_fund_position_owner_public_key: PublicKey,
 
-HASH=$(starkli declare --rpc "$RPC" -w target/dev/perpetuals_Core.contract_class.json  --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5)
-ADDRESS=$(starkli deploy --rpc "$RPC" -w "$HASH" ${GOVERNANCE_ADMIN_ADDRESS} ${UPDATE_DELAY_SECONDS} ${COLLATERAL_ID} ${COLLATERAL_CONTRACT_ADDRESS} ${COLLATERAL_QUANTUM} ${MAX_PRICE_INTERVAL} ${MAX_ORACLE_PRICE_VALIDITY} ${MAX_FUNDING_INTERVAL} ${MAX_FUNDING_RATE} ${CANCEL_DELAY} ${FEE_POSITION_PUBLIC_KEY} ${LIQUIDATION_FUND_PUBLIC_KEY} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5)
+HASH=$(./declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
+echo Hash is $HASH
+ADDRESS=$(sncast --account=testnet  deploy -u ${{ secrets.TEST_RPC_09_ADDRESS }} --class-hash=$HASH  --constructor-calldata ${GOVERNANCE_ADMIN_ADDRESS} ${UPDATE_DELAY_SECONDS} ${COLLATERAL_ID} ${COLLATERAL_CONTRACT_ADDRESS} ${COLLATERAL_QUANTUM} ${MAX_PRICE_INTERVAL} ${MAX_ORACLE_PRICE_VALIDITY} ${MAX_FUNDING_INTERVAL} ${MAX_FUNDING_RATE} ${CANCEL_DELAY} ${FEE_POSITION_PUBLIC_KEY} ${LIQUIDATION_FUND_PUBLIC_KEY} | grep -oE '0x[0-9a-f]{64}'| sed -n '1p')
 echo Contract deployed at $ADDRESS
 
 APP_ROLE_ADMIN_ADDRESS="0x019ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b921ff48aa5da"
@@ -60,14 +61,14 @@ SECURITY_AGENT_ADDRESS="0x019ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b92
 APP_GOVERNOR_ADDRESS="0x019ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b921ff48aa5da"
 echo "Registering roles..."
 
+sncast --account=$account invoke -u $url --contract-address $contract --function register_app_role_admin --calldata  ${APP_ROLE_ADMIN_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_operator --calldata  ${OPERATOR_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_governance_admin --calldata  ${GOVERNANCE_ADMIN_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_upgrade_governor --calldata  ${UPGRADE_GOVERNOR_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_security_admin --calldata  ${SECURITY_ADMIN_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_security_agent --calldata  ${SECURITY_AGENT_ADDRESS}
+sncast --account=$account invoke -u $url --contract-address $contract --function register_app_governor --calldata  ${APP_GOVERNOR_ADDRESS}
 
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_app_role_admin ${APP_ROLE_ADMIN_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_operator ${OPERATOR_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_governance_admin ${GOVERNANCE_ADMIN_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_upgrade_governor ${UPGRADE_GOVERNOR_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_security_admin ${SECURITY_ADMIN_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_security_agent ${SECURITY_AGENT_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
-starkli invoke --rpc "$RPC" -w "$ADDRESS" register_app_governor ${APP_GOVERNOR_ADDRESS} --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5
 
 # echo "Contract deployed and initialised at address: ${ADDRESS}"
 
