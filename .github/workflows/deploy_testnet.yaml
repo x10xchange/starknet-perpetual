@@ -30,4 +30,5 @@ jobs:
       - name: Deploy contracts
         id: deploy_contracts
         run: |
+          TEST_RPC_09_ADDRESS=${{ secrets.TEST_RPC_09_ADDRESS }}
           ./onchain_deploy/deploy_contract.sh
