@@ -12,48 +12,22 @@ jobs:
       - name: Install asdf & tools
         uses: asdf-vm/actions/install@v4
 
-      - name: install starkli
+      - name: install sncast
         run: |
-          curl https://get.starkli.sh | sh
-          . /home/runner/.config/.starkli/env
-          starkliup
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.53.0-rc.0
 
       - name: Retrieve account info
         run: |
-          . /home/runner/.config/.starkli/env
-          starkli account fetch --rpc ${{ secrets.TESTNET_RPC }} --output deployer_account.json ${{ secrets.TESTNET_DEPLOYER_ACCOUNT }}
-
-      - name: Build contracts
-        run: |
-          scarb --release build
+          echo ${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }} | base64 --decode > deployer_account.json
+          cat deployer_account.json
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name testnet --address $address --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }} --type oz -u ${{ secrets.TEST_RPC_09_ADDRESS }}
 
       - name: Deploy contracts
         id: deploy_contracts
         run: |
-          . /home/runner/.config/.starkli/env
-        
-          CORE_HASH=$(starkli declare -w target/release/perpetuals_Core.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          VAULT_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_VaultsManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          TRANSFER_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_TransferManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          WITHDRAWAL_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_WithdrawalManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          LIQUIDATION_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_LiquidationManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          DELEVERAGE_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_DeleverageManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-          DEPOSIT_COMPONENT_HASH=$(starkli declare -w target/release/perpetuals_DepositManager.contract_class.json --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }})
-
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:WITHDRAWALS "${WITHDRAWAL_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:LIQUIDATIONS "${LIQUIDATION_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" register_external_component str:DEPOSITS "${DEPOSIT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:VAULTS "${VAULT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:TRANSFERS "${TRANSFER_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:WITHDRAWALS "${WITHDRAWAL_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:LIQUIDATIONS "${LIQUIDATION_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:DELEVERAGES "${DELEVERAGE_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-          starkli invoke -w "{{ secrets.TESTNET_PERPS_ADDRESS }}" activate_external_component str:DEPOSITS "${DEPOSIT_COMPONENT_HASH}" --account deployer_account.json --rpc ${{ secrets.TESTNET_RPC }} --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }}
-
-          echo "CORE_HASH=$CORE_HASH" >> $GITHUB_OUTPUT
-          echo "Deployed Core contract with class hash: $CORE_HASH"
-
+          ./onchain_deploy/deploy_contract.sh
