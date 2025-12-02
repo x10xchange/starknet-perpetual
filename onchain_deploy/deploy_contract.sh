@@ -87,8 +87,22 @@ sncast --account $account invoke -u $url --contract-address $ADDRESS --function 
 sncast --account $account invoke -u $url --contract-address $ADDRESS --function register_security_agent --calldata  ${SECURITY_AGENT_ADDRESS}
 sncast --account $account invoke -u $url --contract-address $ADDRESS --function register_app_governor --calldata  ${APP_GOVERNOR_ADDRESS}
 
-
-# echo "Contract deployed and initialised at address: ${ADDRESS}"
+TRANSFER_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c TransferManager -p perpetuals)
+echo "transfer hash $TRANSFER_COMPONENT_HASH"
+WITHDRAWAL_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c WithdrawalManager -p perpetuals)
+echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+LIQUIDATION_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c LiquidationManager -p perpetuals)
+echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+DELEVERAGE_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DeleverageManager -p perpetuals)
+echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+DEPOSIT_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DepositManager -p perpetuals)
+echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          
 
 
 # HASH=$(starkli declare -w target/dev/perpetuals_Core.contract_class.json  --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5)
