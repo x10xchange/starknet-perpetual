@@ -70,6 +70,7 @@ HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c Core -p perpetuals)
 echo Hash is $HASH
 ADDRESS=$(sncast --account $account  deploy -u $url --class-hash=$HASH  --constructor-calldata ${GOVERNANCE_ADMIN_ADDRESS} ${UPDATE_DELAY_SECONDS} ${COLLATERAL_ID} ${COLLATERAL_CONTRACT_ADDRESS} ${COLLATERAL_QUANTUM} ${MAX_PRICE_INTERVAL} ${MAX_ORACLE_PRICE_VALIDITY} ${MAX_FUNDING_INTERVAL} ${MAX_FUNDING_RATE} ${CANCEL_DELAY} ${FEE_POSITION_PUBLIC_KEY} ${LIQUIDATION_FUND_PUBLIC_KEY} | grep -oE '0x[0-9a-f]{64}'| sed -n '1p')
 echo Contract deployed at $ADDRESS
+sleep 10
 
 APP_ROLE_ADMIN_ADDRESS="0x019ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b921ff48aa5da"
 OPERATOR_ADDRESS="0x019ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b921ff48aa5da"
@@ -87,22 +88,22 @@ sncast --account $account invoke -u $url --contract-address $ADDRESS --function 
 sncast --account $account invoke -u $url --contract-address $ADDRESS --function register_security_agent --calldata  ${SECURITY_AGENT_ADDRESS}
 sncast --account $account invoke -u $url --contract-address $ADDRESS --function register_app_governor --calldata  ${APP_GOVERNOR_ADDRESS}
 
-TRANSFER_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c TransferManager -p perpetuals)
-echo "transfer hash $TRANSFER_COMPONENT_HASH"
-WITHDRAWAL_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c WithdrawalManager -p perpetuals)
-echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
-LIQUIDATION_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c LiquidationManager -p perpetuals)
-echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
-DELEVERAGE_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DeleverageManager -p perpetuals)
-echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
-DEPOSIT_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DepositManager -p perpetuals)
-echo "deposit hash $DEPOSIT_COMPONENT_HASH"
-./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
-./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
-./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
-./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
-./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
-          
+#TRANSFER_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c TransferManager -p perpetuals)
+#echo "transfer hash $TRANSFER_COMPONENT_HASH"
+#WITHDRAWAL_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c WithdrawalManager -p perpetuals)
+#echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+#LIQUIDATION_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c LiquidationManager -p perpetuals)
+#echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+#DELEVERAGE_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DeleverageManager -p perpetuals)
+#echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+#DEPOSIT_COMPONENT_HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c DepositManager -p perpetuals)
+#echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+#./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+#./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+#./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+#./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+#./onchain_deploy/register.sh -a $account -u $url -c $ADDRESS -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+#
 
 
 # HASH=$(starkli declare -w target/dev/perpetuals_Core.contract_class.json  --account onchain_deploy/testnet_keys/account.json --private-key 0x06c73b5813f1cdb4051eedfcf49f28285d062bf59d9f03a88cab147a1a856ce5)
