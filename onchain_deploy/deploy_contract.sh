@@ -65,7 +65,7 @@ echo "RPC: ${RPC}"
 # cancel_delay: TimeDelta,
 # fee_position_owner_public_key: PublicKey,
 # insurance_fund_position_owner_public_key: PublicKey,
-
+pwd
 HASH=$(./onchain_deploy/declare.sh -a $account -u $url -c Core -p perpetuals)
 echo Hash is $HASH
 ADDRESS=$(sncast --account $account  deploy -u $url --class-hash=$HASH  --constructor-calldata ${GOVERNANCE_ADMIN_ADDRESS} ${UPDATE_DELAY_SECONDS} ${COLLATERAL_ID} ${COLLATERAL_CONTRACT_ADDRESS} ${COLLATERAL_QUANTUM} ${MAX_PRICE_INTERVAL} ${MAX_ORACLE_PRICE_VALIDITY} ${MAX_FUNDING_INTERVAL} ${MAX_FUNDING_RATE} ${CANCEL_DELAY} ${FEE_POSITION_PUBLIC_KEY} ${LIQUIDATION_FUND_PUBLIC_KEY} | grep -oE '0x[0-9a-f]{64}'| sed -n '1p')
