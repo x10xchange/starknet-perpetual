@@ -4,13 +4,17 @@ use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
 use core::num::traits::WideMul;
 use external_components::interface::{
-    EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS, EXTERNAL_COMPONENT_LIQUIDATIONS,
-    EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+    EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
+    EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
+    EXTERNAL_COMPONENT_WITHDRAWALS,
 };
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use openzeppelin_testing::deployment::declare_and_deploy;
 use openzeppelin_testing::signing::StarkKeyPair;
+use perpetuals::core::components::assets::assets_manager::{
+    IAssetsExternalDispatcher, IAssetsExternalDispatcherTrait,
+};
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
 use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
@@ -490,6 +494,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let assets_external_component = snforge_std::declare("AssetsManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -556,6 +564,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
 
         external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_ASSETS,
+                component_address: *assets_external_component.class_hash,
+            );
+
+        external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
@@ -585,6 +599,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DEPOSITS,
                 component_address: *deposit_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_ASSETS,
+                component_address: *assets_external_component.class_hash,
             );
 
         stop_cheat_caller_address(contract_address: perpetuals_contract);
@@ -630,10 +650,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         let asset_id = asset_info.asset_id;
-        let assets_dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+        let assets_external_dispatcher = IAssetsExternalDispatcher {
+            contract_address: self.perpetuals_contract,
+        };
 
         self.set_app_governor_as_caller();
-        assets_dispatcher
+        assets_external_dispatcher
             .add_vault_collateral_asset(
                 asset_id,
                 erc20_contract_address: vault.contract_address,
@@ -658,7 +680,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         for oracle in asset_info.oracles {
             self.set_app_governor_as_caller();
-            assets_dispatcher
+            assets_external_dispatcher
                 .add_oracle_to_asset(
                     asset_info.asset_id,
                     *oracle.key_pair.public_key,
@@ -1573,8 +1595,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ref self: PerpsTestsFacade, synthetic_info: @SyntheticInfo, initial_price: u128,
     ) {
         let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+        let asset_external_dispatcher = IAssetsExternalDispatcher {
+            contract_address: self.perpetuals_contract,
+        };
         self.set_app_governor_as_caller();
-        dispatcher
+        asset_external_dispatcher
             .add_synthetic_asset(
                 *synthetic_info.asset_id,
                 risk_factor_tiers: *synthetic_info.risk_factor_data.tiers,
@@ -1603,7 +1628,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         for oracle in synthetic_info.oracles {
             self.set_app_governor_as_caller();
-            dispatcher
+            asset_external_dispatcher
                 .add_oracle_to_asset(
                     *synthetic_info.asset_id,
                     *oracle.key_pair.public_key,
@@ -1617,13 +1642,16 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
     fn deactivate_synthetic(ref self: PerpsTestsFacade, synthetic_id: AssetId) {
         self.set_app_governor_as_caller();
-        let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
-        dispatcher.deactivate_synthetic(:synthetic_id);
+        let assets_dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
+        let asset_external_dispatcher = IAssetsExternalDispatcher {
+            contract_address: self.perpetuals_contract,
+        };
+        asset_external_dispatcher.deactivate_synthetic(:synthetic_id);
         assert_deactivate_synthetic_asset_event_with_expected(
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             asset_id: synthetic_id,
         );
-        assert_eq!(dispatcher.get_asset_config(:synthetic_id).status, AssetStatus::INACTIVE);
+        assert_eq!(assets_dispatcher.get_asset_config(:synthetic_id).status, AssetStatus::INACTIVE);
     }
 
     fn reduce_asset_position(
