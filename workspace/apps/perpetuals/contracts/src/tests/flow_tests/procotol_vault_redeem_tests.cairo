@@ -466,7 +466,7 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
 
 #[test]
 #[should_panic(
-    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before 0, TR before 400, TV after -100, TR after 360",
+    expected: "Illegal transition value_of_shares_sold=400, risk_of_shares_sold=40, collateral_received=300",
 )]
 fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
@@ -962,7 +962,7 @@ fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_nega
 
 #[test]
 #[should_panic(
-    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before 0, TR before 400, TV after -100, TR after 360",
+    expected: "llegal transition value_of_shares_sold=400, risk_of_shares_sold=40, collateral_received=300",
 )]
 fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
