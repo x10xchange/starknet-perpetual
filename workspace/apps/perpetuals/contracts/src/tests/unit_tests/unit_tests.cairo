@@ -72,7 +72,7 @@ fn test_constructor() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = initialized_contract_state(cfg: @cfg, token_state: @token_state);
 
-        // Setup:
+    // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
 
@@ -4049,9 +4049,7 @@ fn test_unsuccessful_add_vault_share_asset_zero_quantum() {
 }
 
 #[test]
-#[should_panic(
-    expected: 'ENTRYPOINT_NOT_FOUND',
-)]
+#[should_panic(expected: 'ENTRYPOINT_NOT_FOUND')]
 fn test_unsuccessful_add_vault_share_asset_not_erc20() {
     // Setup state, token:
     let cfg: PerpetualsInitConfig = Default::default();

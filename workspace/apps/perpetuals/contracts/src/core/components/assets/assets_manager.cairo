@@ -174,7 +174,6 @@ pub(crate) mod AssetsManager {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
-
             let asset_config = self.asset_config.read(asset_id).expect(SYNTHETIC_NOT_EXISTS);
             assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
 
