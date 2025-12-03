@@ -94,6 +94,9 @@ pub mod Core {
     impl AssetsImpl = AssetsComponent::AssetsImpl<ContractState>;
 
     #[abi(embed_v0)]
+    impl AssetsManagerImpl = AssetsComponent::AssetsManagerImpl<ContractState>;
+
+    #[abi(embed_v0)]
     impl ReplaceabilityImpl =
         ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
 
