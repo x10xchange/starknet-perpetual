@@ -1,5 +1,6 @@
 #[starknet::component]
 pub mod AssetsComponent {
+    use RolesComponent::InternalTrait as RolesInternalTrait;
     use core::cmp::min;
     use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
@@ -255,6 +256,7 @@ pub mod AssetsComponent {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -275,6 +277,7 @@ pub mod AssetsComponent {
             quorum: u8,
             resolution_factor: u64,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -299,6 +302,7 @@ pub mod AssetsComponent {
             risk_factor_tier_size: u128,
             quorum: u8,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -322,6 +326,10 @@ pub mod AssetsComponent {
             risk_factor_first_tier_boundary: u128,
             risk_factor_tier_size: u128,
         ) {
+            // Validations:
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            let mut nonce = get_dep_component_mut!(ref self, OperatorNonce);
+            nonce.use_checked_nonce(:operator_nonce);
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -335,6 +343,7 @@ pub mod AssetsComponent {
         }
 
         fn deactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -346,6 +355,7 @@ pub mod AssetsComponent {
             asset_id: AssetId,
             oracle_public_key: PublicKey,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()
@@ -355,6 +365,7 @@ pub mod AssetsComponent {
         fn update_synthetic_quorum(
             ref self: ComponentState<TContractState>, synthetic_id: AssetId, quorum: u8,
         ) {
+            get_dep_component!(@self, Roles).only_app_governor();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_assets_manager_dispatcher()

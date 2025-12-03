@@ -66,7 +66,6 @@ pub(crate) mod AssetsManager {
     use openzeppelin::interfaces::erc20::{IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
-    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::types::asset::synthetic::{
         AssetConfig, AssetType, SyntheticTrait, TimelyData,
     };
@@ -78,9 +77,7 @@ pub(crate) mod AssetsManager {
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
     use starkware_utils::components::pausable::PausableComponent;
-    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::constants::{TWO_POW_128, TWO_POW_40};
     use starkware_utils::signature::stark::PublicKey;
     use starkware_utils::storage::iterable_map::{
@@ -174,8 +171,6 @@ pub(crate) mod AssetsManager {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
-            self.roles.only_app_governor();
-
             let asset_config = self.asset_config.read(asset_id).expect(SYNTHETIC_NOT_EXISTS);
             assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
 
@@ -214,7 +209,6 @@ pub(crate) mod AssetsManager {
             quorum: u8,
             resolution_factor: u64,
         ) {
-            self.roles.only_app_governor();
             assert(self.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
             if let Option::Some(collateral_id) = self.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
@@ -273,8 +267,6 @@ pub(crate) mod AssetsManager {
             risk_factor_tier_size: u128,
             quorum: u8,
         ) {
-            self.roles.only_app_governor();
-
             assert(quantum == 1, 'INVALID_SHARE_QUANTUM');
             let erc20Contract = IERC20MetadataDispatcher {
                 contract_address: erc20_contract_address,
@@ -348,10 +340,6 @@ pub(crate) mod AssetsManager {
             risk_factor_first_tier_boundary: u128,
             risk_factor_tier_size: u128,
         ) {
-            // Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-
             assert(asset_id.is_non_zero(), INVALID_ZERO_ASSET_ID);
             assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
             assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
@@ -444,7 +432,6 @@ pub(crate) mod AssetsManager {
         }
 
         fn deactivate_synthetic(ref self: ContractState, synthetic_id: AssetId) {
-            self.roles.only_app_governor();
             let mut config = self.asset_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
             assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
@@ -458,8 +445,6 @@ pub(crate) mod AssetsManager {
         fn remove_oracle_from_asset(
             ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
         ) {
-            self.roles.only_app_governor();
-
             // Validate the oracle exists.
             let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
             assert(asset_oracle_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
@@ -468,7 +453,6 @@ pub(crate) mod AssetsManager {
         }
 
         fn update_synthetic_quorum(ref self: ContractState, synthetic_id: AssetId, quorum: u8) {
-            self.roles.only_app_governor();
             let mut asset_config = self
                 .asset_config
                 .read(synthetic_id)

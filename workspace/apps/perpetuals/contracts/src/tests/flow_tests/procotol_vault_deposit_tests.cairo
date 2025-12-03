@@ -7,7 +7,6 @@ use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use perpetuals::tests::test_utils::assert_with_error;
 use starkware_utils_testing::test_utils::{TokenTrait, cheat_caller_address_once};
-use crate::core::components::assets::interface::IAssetsDispatcherTrait;
 
 #[test]
 #[should_panic(expected: 'INVALID_VAULT_RF_TIERS')]
