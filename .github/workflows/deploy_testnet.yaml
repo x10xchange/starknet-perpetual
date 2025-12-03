@@ -55,16 +55,22 @@ jobs:
           echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
           DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c DepositManager -p perpetuals)
           echo "deposit hash $DEPOSIT_COMPONENT_HASH"
-          sleep 10s
+          ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c AssetsManager -p perpetuals)
+          echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
+
+
+
+          sleep sleep 30s
           VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
           echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
-          sleep 10s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796  --function replace_to             --calldata  ${CORE_HASH} 1 0
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n VAULTS -h ${VAULT_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x01227f8e185ade13021f179e1cf0c08dac7f02e27d54addfdd93d9087108f796 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          sleep 30s
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
           
