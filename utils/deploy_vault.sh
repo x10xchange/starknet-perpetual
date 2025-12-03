@@ -50,3 +50,4 @@ INITIAL_PRICE=$(decimal_to_hex 1000000)
 HASH=$(./utils/declare.sh -a $account -u $url -c ProtocolVault -p vault)
 echo Hash is $HASH
 ADDRESS=$(sncast --account $account  deploy -u $url --class-hash=$HASH  --constructor-calldata $NAME $SYMBOL $COLLATERAL_CONTRACT_ADDRESS $PERPS_CONTRACT $OWNING_POSITION $RECIPIENT $INITIAL_PRICE | grep -oE '0x[0-9a-f]{64}'| sed -n '1p')
+echo $ADDRESS
