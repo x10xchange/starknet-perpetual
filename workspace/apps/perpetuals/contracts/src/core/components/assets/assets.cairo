@@ -48,8 +48,6 @@ pub mod AssetsComponent {
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
     use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
-    use super::super::assets_manager::IAssetsExternalSafeDispatcherTrait;
-
 
     const MAX_TIME: u64 = 2_u64.pow(56);
 

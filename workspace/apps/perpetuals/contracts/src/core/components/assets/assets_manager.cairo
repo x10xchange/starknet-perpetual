@@ -66,7 +66,6 @@ pub(crate) mod AssetsManager {
     use openzeppelin::interfaces::erc20::{IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
-    use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::types::asset::synthetic::{
         AssetConfig, AssetType, SyntheticTrait, TimelyData,
     };
@@ -78,9 +77,7 @@ pub(crate) mod AssetsManager {
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
     use starkware_utils::components::pausable::PausableComponent;
-    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::constants::{TWO_POW_128, TWO_POW_40};
     use starkware_utils::signature::stark::PublicKey;
     use starkware_utils::storage::iterable_map::{

@@ -46,7 +46,7 @@ use perpetuals::tests::event_test_utils::{
 use perpetuals::tests::test_utils::{
     Oracle, OracleTrait, PerpetualsInitConfig, User, UserTrait, add_synthetic_to_position,
     check_synthetic_asset, init_by_dispatcher, init_position, init_position_with_owner,
-    initialized_contract_state, setup_state_with_active_asset, setup_state_with_pending_asset,
+    setup_state_with_active_asset, setup_state_with_pending_asset,
     setup_state_with_pending_vault_share, validate_asset_balance, validate_balance,
 };
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
@@ -64,31 +64,22 @@ use starkware_utils_testing::test_utils::{
     Deployable, TokenTrait, assert_panic_with_felt_error, cheat_caller_address_once,
 };
 use crate::tests::event_test_utils::assert_add_spot_event_with_expected;
-
+use crate::tests::test_utils::init_state;
 
 #[test]
 fn test_constructor() {
     let cfg: PerpetualsInitConfig = Default::default();
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = initialized_contract_state(cfg: @cfg, token_state: @token_state);
-
-    // Setup:
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-
-    let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
-    let asset_manager_dispatcher = IAssetsManagerDispatcher { contract_address };
-    let assets_dispatcher = IAssetsDispatcher { contract_address };
-
+    let mut state = init_state(cfg: @cfg, token_state: @token_state);
     assert!(state.roles.is_governance_admin(GOVERNANCE_ADMIN()));
     assert!(state.replaceability.get_upgrade_delay() == UPGRADE_DELAY);
-    assert!(asset_manager_dispatcher.get_max_price_interval() == MAX_PRICE_INTERVAL);
-    assert!(asset_manager_dispatcher.get_max_funding_interval() == MAX_FUNDING_INTERVAL);
-    assert!(asset_manager_dispatcher.get_max_funding_rate() == MAX_FUNDING_RATE);
-    assert!(asset_manager_dispatcher.get_max_oracle_price_validity() == MAX_ORACLE_PRICE_VALIDITY);
+    assert!(state.assets.get_max_price_interval() == MAX_PRICE_INTERVAL);
+    assert!(state.assets.get_max_funding_interval() == MAX_FUNDING_INTERVAL);
+    assert!(state.assets.get_max_funding_rate() == MAX_FUNDING_RATE);
+    assert!(state.assets.get_max_oracle_price_validity() == MAX_ORACLE_PRICE_VALIDITY);
     assert!(state.deposits.get_cancel_delay() == CANCEL_DELAY);
-    assert!(assets_dispatcher.get_last_funding_tick() == Time::now());
-    assert!(assets_dispatcher.get_last_price_validation() == Time::now());
+    assert!(state.assets.get_last_funding_tick() == Time::now());
+    assert!(state.assets.get_last_price_validation() == Time::now());
 
     assert!(
         state
