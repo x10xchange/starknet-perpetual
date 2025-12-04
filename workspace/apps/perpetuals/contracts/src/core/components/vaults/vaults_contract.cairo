@@ -482,6 +482,10 @@ pub(crate) mod VaultsManager {
                 contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
             };
 
+            let vault_erc4626_dispatcher = IERC4626Dispatcher {
+                contract_address: vault_asset.token_contract.expect('NOT_ERC4626'),
+            };
+
             let vault_erc20Dispatcher = IERC20Dispatcher {
                 contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
             };
@@ -507,6 +511,17 @@ pub(crate) mod VaultsManager {
                     amount: unquantized_amount_to_burn.into(),
                 );
 
+            let value_of_shares_from_er4626 = vault_erc4626_dispatcher.preview_redeem(unquantized_amount_to_burn.into());
+            let max_value = ((value_of_shares_from_er4626 * 1100) / 1000);
+            assert_with_byte_array(
+                value_to_receive.abs().into() <= max_value,
+                format!(
+                    "Redeem value too high. requested={}, actual={}, number_of_shares={}",
+                    value_to_receive.abs(),
+                    value_of_shares_from_er4626,
+                    unquantized_amount_to_burn,
+                ),
+            );
             let burn_result = vault_dispatcher
                 .redeem_with_price(
                     shares: unquantized_amount_to_burn.into(),

@@ -79,17 +79,6 @@ pub mod ProtocolVault {
     pub impl Impl of IProtocolVault<ContractState> {
         fn redeem_with_price(ref self: ContractState, shares: u256, value_of_shares: u256) -> u256 {
             let perps = self.perps_contract.read();
-            let value_vs_actual_price = self.erc4626.preview_redeem(shares);
-            let max_value = ((value_vs_actual_price * 1100) / 1000);
-            assert_with_byte_array(
-                value_of_shares <= max_value,
-                format!(
-                    "Redeem value too high. requested={}, actual={}, number_of_shares={}",
-                    value_of_shares,
-                    value_vs_actual_price,
-                    shares,
-                ),
-            );
             self.erc4626._withdraw(perps, perps, perps, value_of_shares, shares, Option::None);
             value_of_shares
         }
