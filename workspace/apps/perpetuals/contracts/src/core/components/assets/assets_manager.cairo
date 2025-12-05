@@ -65,23 +65,24 @@ pub(crate) mod AssetsManager {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
+    use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::types::asset::synthetic::{
-        AssetConfig, AssetType, SyntheticTrait, TimelyData,
+         AssetType, SyntheticTrait,
     };
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::risk_factor::{RiskFactor, RiskFactorTrait};
+    use perpetuals::core::types::risk_factor::{ RiskFactorTrait};
     use starknet::ContractAddress;
     use starknet::storage::{
-        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
-        StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
+        MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
+        StoragePointerReadAccess, StoragePointerWriteAccess,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::{TWO_POW_128, TWO_POW_40};
     use starkware_utils::signature::stark::PublicKey;
     use starkware_utils::storage::iterable_map::{
-        IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
+        IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::storage::utils::SubFromStorage;
     use starkware_utils::time::time::TimeDelta;
@@ -112,17 +113,18 @@ pub(crate) mod AssetsManager {
         SRC5Event: SRC5Component::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        AssetsEvent: AssetsComponent::Event,
         OracleAdded: events::OracleAdded,
         SyntheticAdded: events::SyntheticAdded,
         SyntheticChanged: events::SyntheticChanged,
         SpotAssetAdded: events::SpotAssetAdded,
-        SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         OracleRemoved: events::OracleRemoved,
         AssetQuorumUpdated: events::AssetQuorumUpdated,
+        SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
     }
 
     #[storage]
-    #[allow(starknet::colliding_storage_paths)]
     pub struct Storage {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
@@ -134,18 +136,8 @@ pub(crate) mod AssetsManager {
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        num_of_active_synthetic_assets: usize,
-        #[rename("synthetic_config")]
-        asset_config: Map<AssetId, Option<AssetConfig>>,
-        #[rename("synthetic_timely_data")]
-        timely_data: IterableMap<AssetId, TimelyData>,
-        risk_factor_tiers: Map<AssetId, Vec<RiskFactor>>,
-        asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
-        max_oracle_price_validity: TimeDelta,
-        collateral_id: Option<AssetId>,
-        max_price_interval: TimeDelta,
-        max_funding_interval: TimeDelta,
-        max_funding_rate: u32,
+        #[substorage(v0)]
+        pub assets: AssetsComponent::Storage,
     }
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -153,6 +145,8 @@ pub(crate) mod AssetsManager {
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
+
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -171,11 +165,15 @@ pub(crate) mod AssetsManager {
             oracle_name: felt252,
             asset_name: felt252,
         ) {
-            let asset_config = self.asset_config.read(asset_id).expect(SYNTHETIC_NOT_EXISTS);
+            let asset_config = self.assets.asset_config.read(asset_id).expect(SYNTHETIC_NOT_EXISTS);
             assert(asset_config.status != AssetStatus::INACTIVE, INACTIVE_ASSET);
 
             // Validate the oracle does not exist.
-            let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
+            let asset_oracle_entry = self
+                .assets
+                .asset_oracle
+                .entry(asset_id)
+                .entry(oracle_public_key);
             let asset_oracle_data = asset_oracle_entry.read();
             assert(asset_oracle_data.is_zero(), ORACLE_ALREADY_EXISTS);
 
@@ -209,8 +207,8 @@ pub(crate) mod AssetsManager {
             quorum: u8,
             resolution_factor: u64,
         ) {
-            assert(self.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
-            if let Option::Some(collateral_id) = self.collateral_id.read() {
+            assert(self.assets.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
+            if let Option::Some(collateral_id) = self.assets.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
 
@@ -229,17 +227,21 @@ pub(crate) mod AssetsManager {
                 resolution_factor,
             );
 
-            self.asset_config.write(asset_id, Option::Some(asset_config));
+            self.assets.asset_config.write(asset_id, Option::Some(asset_config));
 
             let timely_data = SyntheticTrait::timely_data(
                 price: Zero::zero(), last_price_update: Zero::zero(), funding_index: Zero::zero(),
             );
-            self.timely_data.write(asset_id, timely_data);
+            self.assets.timely_data.write(asset_id, timely_data);
 
             let mut prev_risk_factor = 0_u16;
             for risk_factor in risk_factor_tiers {
                 assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
-                self.risk_factor_tiers.entry(asset_id).push(RiskFactorTrait::new(*risk_factor));
+                self
+                    .assets
+                    .risk_factor_tiers
+                    .entry(asset_id)
+                    .push(RiskFactorTrait::new(*risk_factor));
                 prev_risk_factor = *risk_factor;
             }
 
@@ -284,8 +286,8 @@ pub(crate) mod AssetsManager {
             );
             assert(risk_factor_tiers.len() == 1, 'INVALID_VAULT_RF_TIERS');
 
-            assert(self.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
-            if let Option::Some(collateral_id) = self.collateral_id.read() {
+            assert(self.assets.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
+            if let Option::Some(collateral_id) = self.assets.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
 
@@ -304,17 +306,21 @@ pub(crate) mod AssetsManager {
                 erc20_contract_address,
             );
 
-            self.asset_config.write(asset_id, Option::Some(asset_config));
+            self.assets.asset_config.write(asset_id, Option::Some(asset_config));
 
             let timely_data = SyntheticTrait::timely_data(
                 price: Zero::zero(), last_price_update: Zero::zero(), funding_index: Zero::zero(),
             );
-            self.timely_data.write(asset_id, timely_data);
+            self.assets.timely_data.write(asset_id, timely_data);
 
             let mut prev_risk_factor = 0_u16;
             for risk_factor in risk_factor_tiers {
                 assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
-                self.risk_factor_tiers.entry(asset_id).push(RiskFactorTrait::new(*risk_factor));
+                self
+                    .assets
+                    .risk_factor_tiers
+                    .entry(asset_id)
+                    .push(RiskFactorTrait::new(*risk_factor));
                 prev_risk_factor = *risk_factor;
             }
 
@@ -344,11 +350,12 @@ pub(crate) mod AssetsManager {
             assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
             assert(risk_factor_first_tier_boundary.is_non_zero(), INVALID_ZERO_RF_FIRST_BOUNDRY);
             assert(risk_factor_tier_size.is_non_zero(), INVALID_ZERO_RF_TIER_SIZE);
-            if let Option::Some(collateral_id) = self.collateral_id.read() {
+            if let Option::Some(collateral_id) = self.assets.collateral_id.read() {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
 
             let mut old_synthetic_config = self
+                .assets
                 .asset_config
                 .read(asset_id)
                 .expect(SYNTHETIC_NOT_EXISTS);
@@ -362,7 +369,7 @@ pub(crate) mod AssetsManager {
 
             for i in 0..risk_factor_tiers.len() {
                 // Calculate risk factor for bound - 1
-                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
+                let asset_risk_factor_tiers = self.assets.risk_factor_tiers.entry(asset_id);
                 let index_minus = if (bound - 1) < old_synthetic_config
                     .risk_factor_first_tier_boundary {
                     0_u128
@@ -404,10 +411,10 @@ pub(crate) mod AssetsManager {
 
             old_synthetic_config.risk_factor_tier_size = risk_factor_tier_size;
             old_synthetic_config.risk_factor_first_tier_boundary = risk_factor_first_tier_boundary;
-            self.asset_config.write(asset_id, Option::Some(old_synthetic_config));
+            self.assets.asset_config.write(asset_id, Option::Some(old_synthetic_config));
 
             let mut prev_risk_factor = 0_u16;
-            let entry = self.risk_factor_tiers.entry(asset_id);
+            let entry = self.assets.risk_factor_tiers.entry(asset_id);
             while true {
                 if entry.pop().is_none() {
                     break;
@@ -415,7 +422,11 @@ pub(crate) mod AssetsManager {
             }
             for risk_factor in risk_factor_tiers {
                 assert(prev_risk_factor < *risk_factor, UNSORTED_RISK_FACTOR_TIERS);
-                self.risk_factor_tiers.entry(asset_id).push(RiskFactorTrait::new(*risk_factor));
+                self
+                    .assets
+                    .risk_factor_tiers
+                    .entry(asset_id)
+                    .push(RiskFactorTrait::new(*risk_factor));
                 prev_risk_factor = *risk_factor;
             }
             self
@@ -432,12 +443,16 @@ pub(crate) mod AssetsManager {
         }
 
         fn deactivate_synthetic(ref self: ContractState, synthetic_id: AssetId) {
-            let mut config = self.asset_config.read(synthetic_id).expect(SYNTHETIC_NOT_EXISTS);
+            let mut config = self
+                .assets
+                .asset_config
+                .read(synthetic_id)
+                .expect(SYNTHETIC_NOT_EXISTS);
             assert(config.status == AssetStatus::ACTIVE, SYNTHETIC_NOT_ACTIVE);
             assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
             config.status = AssetStatus::INACTIVE;
-            self.asset_config.write(synthetic_id, Option::Some(config));
-            self.num_of_active_synthetic_assets.sub_and_write(1);
+            self.assets.asset_config.write(synthetic_id, Option::Some(config));
+            self.assets.num_of_active_synthetic_assets.sub_and_write(1);
 
             self.emit(events::SyntheticAssetDeactivated { asset_id: synthetic_id });
         }
@@ -446,7 +461,11 @@ pub(crate) mod AssetsManager {
             ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
         ) {
             // Validate the oracle exists.
-            let asset_oracle_entry = self.asset_oracle.entry(asset_id).entry(oracle_public_key);
+            let asset_oracle_entry = self
+                .assets
+                .asset_oracle
+                .entry(asset_id)
+                .entry(oracle_public_key);
             assert(asset_oracle_entry.read().is_non_zero(), ORACLE_NOT_EXISTS);
             asset_oracle_entry.write(Zero::zero());
             self.emit(events::OracleRemoved { asset_id, oracle_public_key });
@@ -454,6 +473,7 @@ pub(crate) mod AssetsManager {
 
         fn update_synthetic_quorum(ref self: ContractState, synthetic_id: AssetId, quorum: u8) {
             let mut asset_config = self
+                .assets
                 .asset_config
                 .read(synthetic_id)
                 .expect(SYNTHETIC_NOT_EXISTS);
@@ -462,7 +482,7 @@ pub(crate) mod AssetsManager {
             let old_quorum = asset_config.quorum;
             assert(old_quorum != quorum, INVALID_SAME_QUORUM);
             asset_config.quorum = quorum;
-            self.asset_config.write(synthetic_id, Option::Some(asset_config));
+            self.assets.asset_config.write(synthetic_id, Option::Some(asset_config));
             self
                 .emit(
                     events::AssetQuorumUpdated {
@@ -472,19 +492,19 @@ pub(crate) mod AssetsManager {
         }
 
         fn get_max_price_interval(self: @ContractState) -> TimeDelta {
-            self.max_price_interval.read()
+            self.assets.max_price_interval.read()
         }
 
         fn get_max_funding_interval(self: @ContractState) -> TimeDelta {
-            self.max_funding_interval.read()
+            self.assets.max_funding_interval.read()
         }
 
         fn get_max_oracle_price_validity(self: @ContractState) -> TimeDelta {
-            self.max_oracle_price_validity.read()
+            self.assets.max_oracle_price_validity.read()
         }
 
         fn get_max_funding_rate(self: @ContractState) -> u32 {
-            self.max_funding_rate.read()
+            self.assets.max_funding_rate.read()
         }
     }
 }

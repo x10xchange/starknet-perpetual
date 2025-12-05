@@ -54,39 +54,32 @@ pub mod AssetsComponent {
     #[storage]
     pub struct Storage {
         /// 32-bit fixed-point number with a 32-bit fractional part.
-        max_funding_rate: u32,
-        max_price_interval: TimeDelta,
-        max_funding_interval: TimeDelta,
+        pub max_funding_rate: u32,
+        pub max_price_interval: TimeDelta,
+        pub max_funding_interval: TimeDelta,
         // Updates each price validation.
-        last_price_validation: Timestamp,
+        pub last_price_validation: Timestamp,
         // Updates every funding tick.
-        last_funding_tick: Timestamp,
-        collateral_token_contract: IERC20Dispatcher,
-        collateral_quantum: u64,
-        num_of_active_synthetic_assets: usize,
+        pub last_funding_tick: Timestamp,
+        pub collateral_token_contract: IERC20Dispatcher,
+        pub collateral_quantum: u64,
+        pub num_of_active_synthetic_assets: usize,
         #[rename("synthetic_config")]
         pub asset_config: Map<AssetId, Option<AssetConfig>>,
         #[rename("synthetic_timely_data")]
         pub timely_data: IterableMap<AssetId, TimelyData>,
         pub risk_factor_tiers: Map<AssetId, Vec<RiskFactor>>,
-        asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
-        max_oracle_price_validity: TimeDelta,
-        collateral_id: Option<AssetId>,
+        pub asset_oracle: Map<AssetId, Map<PublicKey, felt252>>,
+        pub max_oracle_price_validity: TimeDelta,
+        pub collateral_id: Option<AssetId>,
     }
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
-        OracleAdded: events::OracleAdded,
-        SyntheticAdded: events::SyntheticAdded,
-        SyntheticChanged: events::SyntheticChanged,
-        SpotAssetAdded: events::SpotAssetAdded,
         AssetActivated: events::AssetActivated,
-        SyntheticAssetDeactivated: events::SyntheticAssetDeactivated,
         FundingTick: events::FundingTick,
         PriceTick: events::PriceTick,
-        OracleRemoved: events::OracleRemoved,
-        AssetQuorumUpdated: events::AssetQuorumUpdated,
     }
 
     #[embeddable_as(AssetsImpl)]
