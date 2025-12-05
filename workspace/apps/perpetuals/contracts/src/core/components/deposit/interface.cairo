@@ -6,13 +6,9 @@ use starkware_utils::time::time::{TimeDelta, Timestamp};
 
 #[starknet::interface]
 pub trait IDeposit<TContractState> {
-
     fn deposit(
-        ref self: TContractState,
-        position_id: PositionId,
-        quantized_amount: u64,
-        salt: felt252,
-    );    
+        ref self: TContractState, position_id: PositionId, quantized_amount: u64, salt: felt252,
+    );
 
     fn deposit_asset(
         ref self: TContractState,

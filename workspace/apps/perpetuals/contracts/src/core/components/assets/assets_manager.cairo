@@ -67,11 +67,9 @@ pub(crate) mod AssetsManager {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
-    use perpetuals::core::types::asset::synthetic::{
-         AssetType, SyntheticTrait,
-    };
+    use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticTrait};
     use perpetuals::core::types::asset::{AssetId, AssetStatus};
-    use perpetuals::core::types::risk_factor::{ RiskFactorTrait};
+    use perpetuals::core::types::risk_factor::RiskFactorTrait;
     use starknet::ContractAddress;
     use starknet::storage::{
         MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,

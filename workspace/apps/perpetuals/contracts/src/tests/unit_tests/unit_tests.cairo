@@ -131,12 +131,7 @@ fn test_expiration_validation() {
         );
 
     cheat_caller_address_once(:contract_address, caller_address: user.address);
-    deposit_dispatcher
-        .deposit(
-            :position_id,
-            quantized_amount: amount,
-            salt: user.salt_counter,
-        );
+    deposit_dispatcher.deposit(:position_id, quantized_amount: amount, salt: user.salt_counter);
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
     deposit_dispatcher
@@ -363,9 +358,7 @@ fn test_signature_validation() {
     cheat_caller_address_once(:contract_address, caller_address: user_a.address);
     deposit_dispatcher
         .deposit(
-            position_id: user_a.position_id,
-            quantized_amount: amount,
-            salt: user_a.salt_counter,
+            position_id: user_a.position_id, quantized_amount: amount, salt: user_a.salt_counter,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
@@ -382,9 +375,7 @@ fn test_signature_validation() {
     cheat_caller_address_once(:contract_address, caller_address: user_b.address);
     deposit_dispatcher
         .deposit(
-            position_id: user_b.position_id,
-            quantized_amount: amount,
-            salt: user_b.salt_counter,
+            position_id: user_b.position_id, quantized_amount: amount, salt: user_b.salt_counter,
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);

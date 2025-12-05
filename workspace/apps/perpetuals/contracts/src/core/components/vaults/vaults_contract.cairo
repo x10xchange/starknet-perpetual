@@ -511,7 +511,8 @@ pub(crate) mod VaultsManager {
                     amount: unquantized_amount_to_burn.into(),
                 );
 
-            let value_of_shares_from_er4626 = vault_erc4626_dispatcher.preview_redeem(unquantized_amount_to_burn.into());
+            let value_of_shares_from_er4626 = vault_erc4626_dispatcher
+                .preview_redeem(unquantized_amount_to_burn.into());
             let max_value = ((value_of_shares_from_er4626 * 1100) / 1000);
             assert_with_byte_array(
                 value_to_receive.abs().into() <= max_value,
