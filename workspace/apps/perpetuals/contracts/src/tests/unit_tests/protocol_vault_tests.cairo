@@ -126,7 +126,7 @@ fn test_protocol_vault_initialisation_logic() {
         contract_address: perps_contract_address, caller_address: vault_user.address,
     );
     deposit_dispatcher
-        .deposit(
+        .deposit_asset(
             asset_id: cfg.collateral_cfg.collateral_id,
             position_id: vault_user.position_id,
             quantized_amount: VAULT_DEPOSIT_AMOUNT,
@@ -150,7 +150,7 @@ fn test_protocol_vault_initialisation_logic() {
         contract_address: perps_contract_address, caller_address: depositing_user.address,
     );
     deposit_dispatcher
-        .deposit(
+        .deposit_asset(
             asset_id: cfg.collateral_cfg.collateral_id,
             position_id: depositing_user.position_id,
             quantized_amount: VAULT_DEPOSIT_AMOUNT,

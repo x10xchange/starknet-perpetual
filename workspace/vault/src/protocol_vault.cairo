@@ -15,7 +15,6 @@ pub mod ProtocolVault {
     };
     use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::math::abs::Abs;
     use super::{IProtocolVault, SCALE};
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);

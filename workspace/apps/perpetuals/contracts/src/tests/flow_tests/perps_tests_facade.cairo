@@ -794,8 +794,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let salt = self.generate_salt();
 
         depositor.set_as_caller(self.perpetuals_contract);
-        IDepositDispatcher { contract_address: self.perpetuals_contract }
-            .deposit(asset_id: asset_id, :position_id, :quantized_amount, :salt);
+
+        if (asset_id == self.collateral_id) {
+            IDepositDispatcher { contract_address: self.perpetuals_contract }
+                .deposit(:position_id, :quantized_amount, :salt);
+        } else {
+            IDepositDispatcher { contract_address: self.perpetuals_contract }
+                .deposit_asset(asset_id: asset_id, :position_id, :quantized_amount, :salt);
+        }
 
         validate_balance(
             token_state: token_state,

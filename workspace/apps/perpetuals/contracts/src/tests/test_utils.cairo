@@ -472,7 +472,7 @@ pub fn deposit_vault_share(
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
     state
-        .deposit(
+        .deposit_asset(
             asset_id: *cfg.vault_share_cfg.collateral_id,
             position_id: user.position_id,
             quantized_amount: quantized_amount,
