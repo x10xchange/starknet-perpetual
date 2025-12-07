@@ -1721,7 +1721,7 @@ fn test_successful_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: token_state.address,
+        asset_id: cfg.collateral_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -1823,7 +1823,7 @@ fn test_successful_process_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: token_state.address,
+        asset_id: cfg.collateral_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -1888,7 +1888,7 @@ fn test_successful_cancel_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: token_state.address,
+        asset_id: cfg.collateral_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -1963,7 +1963,7 @@ fn test_successful_reject_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: token_state.address,
+        asset_id: cfg.collateral_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -4173,7 +4173,7 @@ fn test_successful_vault_token_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: vault_share_state.address,
+        asset_id: cfg.vault_share_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -4316,7 +4316,7 @@ fn test_successful_vault_token_cancel_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: vault_share_state.address,
+        asset_id: cfg.vault_share_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,
@@ -4416,7 +4416,7 @@ fn test_successful_vault_share_process_deposit() {
             salt: user.salt_counter,
         );
     let deposit_hash = deposit_hash(
-        token_address: vault_share_state.address,
+        asset_id: cfg.vault_share_cfg.collateral_id,
         depositor: user.address,
         position_id: user.position_id,
         quantized_amount: DEPOSIT_AMOUNT,

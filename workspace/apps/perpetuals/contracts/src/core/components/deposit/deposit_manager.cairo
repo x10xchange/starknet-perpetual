@@ -227,35 +227,25 @@ pub(crate) mod DepositManager {
             quantized_amount: u64,
             salt: felt252,
         ) {
-            let (token_contract, quantum, position_diff) = if (self
-                .assets
-                .get_collateral_id() == asset_id) {
-                let token_contract = self.assets.get_collateral_token_contract();
+            let (quantum, position_diff) = if (self.assets.get_collateral_id() == asset_id) {
                 let quantum = self.assets.get_collateral_quantum();
                 let position_diff = PositionDiff {
                     collateral_diff: quantized_amount.into(), asset_diff: Option::None,
                 };
-                (token_contract, quantum, position_diff)
+                (quantum, position_diff)
             } else {
                 let asset_config = self.assets.get_asset_config(asset_id);
                 assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
-                let token_contract = IERC20Dispatcher {
-                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
-                };
                 let position_diff = PositionDiff {
                     collateral_diff: 0_i64.into(),
                     asset_diff: Option::Some((asset_id, quantized_amount.into())),
                 };
-                (token_contract, asset_config.quantum, position_diff)
+                (asset_config.quantum, position_diff)
             };
 
             let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
             let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
+                :asset_id, :depositor, :position_id, :quantized_amount, :salt,
             );
             let deposit_status = self.get_deposit_status(:deposit_hash);
             match deposit_status {
@@ -331,11 +321,7 @@ pub(crate) mod DepositManager {
             };
 
             let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                depositor: caller_address,
-                :position_id,
-                :quantized_amount,
-                :salt,
+                :asset_id, depositor: caller_address, :position_id, :quantized_amount, :salt,
             );
             assert(
                 self.get_deposit_status(:deposit_hash) == DepositStatus::NOT_REGISTERED,
@@ -394,11 +380,7 @@ pub(crate) mod DepositManager {
             let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
 
             let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
+                :asset_id, :depositor, :position_id, :quantized_amount, :salt,
             );
             match self._get_deposit_status(:deposit_hash) {
                 DepositStatus::PENDING(deposit_timestamp) => assert(
@@ -431,13 +413,13 @@ pub(crate) mod DepositManager {
 }
 
 pub fn deposit_hash(
-    token_address: ContractAddress,
+    asset_id: AssetId,
     depositor: ContractAddress,
     position_id: PositionId,
     quantized_amount: u64,
     salt: felt252,
 ) -> HashType {
-    PedersenTrait::new(base: token_address.into())
+    PedersenTrait::new(base: asset_id.into())
         .update_with(value: depositor)
         .update_with(value: position_id)
         .update_with(value: quantized_amount)

@@ -809,11 +809,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         let deposit_hash = deposit_hash(
-            token_address: token_state.address,
-            depositor: address,
-            :position_id,
-            :quantized_amount,
-            :salt,
+            :asset_id, depositor: address, :position_id, :quantized_amount, :salt,
         );
         self.validate_deposit_status(:deposit_hash, expected_status: DepositStatus::PENDING(now));
 
@@ -841,11 +837,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IDepositDispatcher { contract_address: self.perpetuals_contract }
             .cancel_deposit(asset_id: asset_id, :position_id, :quantized_amount, :salt);
         let deposit_hash = deposit_hash(
-            token_address: token_state.address,
-            depositor: depositor.address,
-            :position_id,
-            :quantized_amount,
-            :salt,
+            :asset_id, depositor: depositor.address, :position_id, :quantized_amount, :salt,
         );
 
         let unquantized_amount = quantized_amount * self.collateral_quantum;
@@ -911,11 +903,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         }
 
         let deposit_hash = deposit_hash(
-            token_address: token_state.address,
-            depositor: depositor.address,
-            :position_id,
-            :quantized_amount,
-            :salt,
+            :asset_id, depositor: depositor.address, :position_id, :quantized_amount, :salt,
         );
 
         self.validate_deposit_status(:deposit_hash, expected_status: DepositStatus::PROCESSED);
