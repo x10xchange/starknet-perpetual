@@ -74,7 +74,7 @@ pub(crate) mod AssetsManager {
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
-        StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
+        StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -282,7 +282,6 @@ pub(crate) mod AssetsManager {
                 calculated_resolution == SN_PERPS_SCALE.try_into().unwrap(),
                 'INVALID_SHARE_RESOLUTION',
             );
-            assert(risk_factor_tiers.len() == 1, 'INVALID_VAULT_RF_TIERS');
 
             assert(self.asset_config.read(asset_id).is_none(), 'SYNTHETIC_ALREADY_EXISTS');
             if let Option::Some(collateral_id) = self.collateral_id.read() {
@@ -290,6 +289,7 @@ pub(crate) mod AssetsManager {
             }
 
             assert(asset_id.is_non_zero(), 'INVALID_ZERO_ASSET_ID');
+            assert(risk_factor_tiers.len().is_non_zero(), INVALID_ZERO_RF_TIERS_LEN);
             assert(risk_factor_first_tier_boundary.is_non_zero(), 'INVALID_ZERO_RF_FIRST_BOUNDRY');
             assert(risk_factor_tier_size.is_non_zero(), 'INVALID_ZERO_RF_TIER_SIZE');
             assert(quorum.is_non_zero(), 'INVALID_ZERO_QUORUM');
@@ -353,48 +353,18 @@ pub(crate) mod AssetsManager {
                 .read(asset_id)
                 .expect(SYNTHETIC_NOT_EXISTS);
 
-            if (old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL
-                || old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
-                assert(risk_factor_tiers.len() == 1, 'CANNOT_INCREASE_TIERS_LEN');
-            }
-
             let mut bound = risk_factor_first_tier_boundary;
 
             for i in 0..risk_factor_tiers.len() {
-                // Calculate risk factor for bound - 1
-                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(asset_id);
-                let index_minus = if (bound - 1) < old_synthetic_config
-                    .risk_factor_first_tier_boundary {
-                    0_u128
-                } else {
-                    let tier_size = old_synthetic_config.risk_factor_tier_size;
-                    let first_tier_offset = (bound - 1)
-                        - old_synthetic_config.risk_factor_first_tier_boundary;
-                    min(
-                        1_u128 + (first_tier_offset / tier_size),
-                        asset_risk_factor_tiers.len().into() - 1,
-                    )
-                };
-                let mut old_factor = asset_risk_factor_tiers
-                    .at(index_minus.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
-                    .read();
+                let mut old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound - 1,
+                    );
                 assert(old_factor.value >= *risk_factor_tiers.at(i), INVALID_RF_VALUE);
-
-                // Calculate risk factor for bound
-                let index = if bound < old_synthetic_config.risk_factor_first_tier_boundary {
-                    0_u128
-                } else {
-                    let tier_size = old_synthetic_config.risk_factor_tier_size;
-                    let first_tier_offset = bound
-                        - old_synthetic_config.risk_factor_first_tier_boundary;
-                    min(
-                        1_u128 + (first_tier_offset / tier_size),
-                        asset_risk_factor_tiers.len().into() - 1,
-                    )
-                };
-                old_factor = asset_risk_factor_tiers
-                    .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
-                    .read();
+                old_factor = self
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound,
+                    );
                 if i + 1 < risk_factor_tiers.len() {
                     assert(old_factor.value >= *risk_factor_tiers.at(i + 1), INVALID_RF_VALUE);
                 }
@@ -485,6 +455,41 @@ pub(crate) mod AssetsManager {
 
         fn get_max_funding_rate(self: @ContractState) -> u32 {
             self.max_funding_rate.read()
+        }
+    }
+
+    #[generate_trait]
+    pub impl InternalImpl of InternalTrait {
+        /// Get the risk factor of a synthetic asset.
+        ///   - synthetic_value = |price * balance|
+        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   first risk factor.
+        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
+        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - If the index is out of bounds, return the last risk factor.
+        /// - If the asset is not synthetic, panic.
+        fn get_synthetic_risk_factor_for_value(
+            self: @ContractState, synthetic_id: AssetId, synthetic_value: u128,
+        ) -> RiskFactor {
+            if let Option::Some(asset_config) = self.asset_config.read(synthetic_id) {
+                let asset_risk_factor_tiers = self.risk_factor_tiers.entry(synthetic_id);
+                let index = if synthetic_value < asset_config.risk_factor_first_tier_boundary {
+                    0_u128
+                } else {
+                    let tier_size = asset_config.risk_factor_tier_size;
+                    let first_tier_offset = synthetic_value
+                        - asset_config.risk_factor_first_tier_boundary;
+                    min(
+                        1_u128 + (first_tier_offset / tier_size),
+                        asset_risk_factor_tiers.len().into() - 1,
+                    )
+                };
+                asset_risk_factor_tiers
+                    .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
+                    .read()
+            } else {
+                panic_with_felt252(NOT_SYNTHETIC)
+            }
         }
     }
 }
