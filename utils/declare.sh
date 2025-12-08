@@ -40,5 +40,5 @@ then
 fi
 
 CLASS_HASH=$(sncast --account $account utils class-hash  -c $contract --package $package | grep -oE '0x[0-9a-f]{64}'| sed -n '1p')
-sncast --account $account declare -u $url -c $contract --package $package >> log.txt 2>&1
+sncast --account $account declare -u $url -c $contract --package $package
 echo $CLASS_HASH

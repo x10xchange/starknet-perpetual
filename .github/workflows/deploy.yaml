@@ -12,6 +12,23 @@ jobs:
       - name: Install asdf & tools
         uses: asdf-vm/actions/install@v4
 
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.53.0-rc.0  
+    
+      - name: Install Voyager Verifier
+        run: |
+          asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
+          asdf install voyager 1.2.4
+          asdf set -u voyager 1.2.4  
+
       - name: install starkli
         run: |
           curl https://get.starkli.sh | sh
@@ -21,26 +38,66 @@ jobs:
       - name: Retrieve account info
         run: |
           . /home/runner/.config/.starkli/env
-          starkli account fetch --rpc ${{ secrets.RPC }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
-
-      - name: Build contracts
-        run: |
-          scarb --release build
+          starkli account fetch --rpc ${{ secrets. RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}          
 
       - name: Deploy contracts
         id: deploy_contracts
         run: |
-          . /home/runner/.config/.starkli/env
-          CORE_HASH=$(starkli declare -w target/release/perpetuals_Core.contract_class.json --account deployer_account.json --rpc ${{ secrets.RPC }} --private-key ${{ secrets.DEPLOYER_KEY }})
-          echo "CORE_HASH=$CORE_HASH" >> $GITHUB_OUTPUT
-          echo "Deployed Core contract with class hash: $CORE_HASH"
+          CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
+          VAULT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c VaultsManager -p perpetuals)
+          echo "vault hash $VAULT_COMPONENT_HASH"
+          TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TransferManager -p perpetuals)
+          echo "transfer hash $TRANSFER_COMPONENT_HASH"
+          WITHDRAWAL_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c WithdrawalManager -p perpetuals)
+          echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+          LIQUIDATION_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c LiquidationManager -p perpetuals)
+          echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+          DELEVERAGE_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DeleverageManager -p perpetuals)
+          echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+          DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DepositManager -p perpetuals)
+          echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+          ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c AssetsManager -p perpetuals)
+          echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
+          sleep 30s
 
-      - name: Install Voyager Verifier
-        run: |
-          asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
-          asdf install voyager 1.2.4
-          asdf set -u voyager 1.2.4
+          VAULT_CLASS_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolVault -p vault)
+          echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
 
-      - name: Verify on Voyager
-        run: |
-          voyager verify --network mainnet --class-hash ${{ steps.deploy_contracts.outputs.CORE_HASH }} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file
+          echo "verifying core hash ${CORE_HASH}"
+          voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  
+          echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
+          voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file
+          echo "verifying transfer component hash ${TRANSFER_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file
+          echo "verifying withdrawal component hash ${WITHDRAWAL_COMPONENT_HASH}"      
+          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file
+          echo "verifying liquidation component hash ${LIQUIDATION_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+          echo "verifying deleverage component hash ${DELEVERAGE_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DELEVERAGE_COMPONENT_HASH} --contract-name DeleverageManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+          echo "verifying deposit component hash ${DEPOSIT_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DEPOSIT_COMPONENT_HASH} --contract-name DepositManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+          echo "verifying asset manager component hash ${ASSET_MANAGER_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${ASSET_MANAGER_COMPONENT_HASH} --contract-name AssetsManager --license Apache-2.0  --package perpetuals --watch --lock-file
+          echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
+          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file     
+          echo "verifying vault hash ${VAULT_CLASS_HASH}"          
+          voyager verify --network mainnet --class-hash ${VAULT_CLASS_HASH} --contract-name ProtocolVault --license Apache-2.0  --package perpetuals --watch --lock-file          
+
+
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
+
+
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}          
+
