@@ -84,6 +84,7 @@ pub(crate) mod AssetsManager {
     };
     use starkware_utils::storage::utils::SubFromStorage;
     use starkware_utils::time::time::TimeDelta;
+    use crate::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
     use crate::core::components::assets::errors::{
         ASSET_NAME_TOO_LONG, ASSET_REGISTERED_AS_COLLATERAL, INACTIVE_ASSET, INVALID_RF_VALUE,
         INVALID_SAME_QUORUM, INVALID_ZERO_ASSET_ID, INVALID_ZERO_ASSET_NAME,
@@ -97,6 +98,7 @@ pub(crate) mod AssetsManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::types::price::SN_PERPS_SCALE;
     use super::IAssetsExternal;
+    use super::super::interface::IAssets;
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -336,6 +338,14 @@ pub(crate) mod AssetsManager {
                 );
         }
 
+        /// Update synthetic asset risk factors.
+        /// Validations:
+        /// - Only the operator can call this function, cause it must be sequenced.
+        /// (Liqudation may fail if submitted out of order)
+        /// - Each risk factor in risk_factor_tiers is less or equal to 1000.
+        /// - After update postitions risk must be the same or lower.
+        ///
+        /// Execution:
         fn update_synthetic_asset_risk_factor(
             ref self: ContractState,
             operator_nonce: u64,
@@ -352,54 +362,21 @@ pub(crate) mod AssetsManager {
                 assert(collateral_id != asset_id, ASSET_REGISTERED_AS_COLLATERAL);
             }
 
-            let mut old_synthetic_config = self
-                .assets
-                .asset_config
-                .read(asset_id)
-                .expect(SYNTHETIC_NOT_EXISTS);
-
-            if (old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL
-                || old_synthetic_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
-                assert(risk_factor_tiers.len() == 1, 'CANNOT_INCREASE_TIERS_LEN');
-            }
-
+            let mut old_synthetic_config = self.assets.get_asset_config(asset_id);
             let mut bound = risk_factor_first_tier_boundary;
 
             for i in 0..risk_factor_tiers.len() {
-                // Calculate risk factor for bound - 1
-                let asset_risk_factor_tiers = self.assets.risk_factor_tiers.entry(asset_id);
-                let index_minus = if (bound - 1) < old_synthetic_config
-                    .risk_factor_first_tier_boundary {
-                    0_u128
-                } else {
-                    let tier_size = old_synthetic_config.risk_factor_tier_size;
-                    let first_tier_offset = (bound - 1)
-                        - old_synthetic_config.risk_factor_first_tier_boundary;
-                    min(
-                        1_u128 + (first_tier_offset / tier_size),
-                        asset_risk_factor_tiers.len().into() - 1,
-                    )
-                };
-                let mut old_factor = asset_risk_factor_tiers
-                    .at(index_minus.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
-                    .read();
+                let mut old_factor = self
+                    .assets
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound - 1,
+                    );
                 assert(old_factor.value >= *risk_factor_tiers.at(i), INVALID_RF_VALUE);
-
-                // Calculate risk factor for bound
-                let index = if bound < old_synthetic_config.risk_factor_first_tier_boundary {
-                    0_u128
-                } else {
-                    let tier_size = old_synthetic_config.risk_factor_tier_size;
-                    let first_tier_offset = bound
-                        - old_synthetic_config.risk_factor_first_tier_boundary;
-                    min(
-                        1_u128 + (first_tier_offset / tier_size),
-                        asset_risk_factor_tiers.len().into() - 1,
-                    )
-                };
-                old_factor = asset_risk_factor_tiers
-                    .at(index.try_into().expect('INDEX_SHOULD_NEVER_OVERFLOW'))
-                    .read();
+                old_factor = self
+                    .assets
+                    .get_synthetic_risk_factor_for_value(
+                        synthetic_id: asset_id, synthetic_value: bound,
+                    );
                 if i + 1 < risk_factor_tiers.len() {
                     assert(old_factor.value >= *risk_factor_tiers.at(i + 1), INVALID_RF_VALUE);
                 }
@@ -409,7 +386,8 @@ pub(crate) mod AssetsManager {
 
             old_synthetic_config.risk_factor_tier_size = risk_factor_tier_size;
             old_synthetic_config.risk_factor_first_tier_boundary = risk_factor_first_tier_boundary;
-            self.assets.asset_config.write(asset_id, Option::Some(old_synthetic_config));
+            let synthetic_entry = self.assets.asset_config.entry(asset_id);
+            synthetic_entry.write(Option::Some(old_synthetic_config));
 
             let mut prev_risk_factor = 0_u16;
             let entry = self.assets.risk_factor_tiers.entry(asset_id);
@@ -423,7 +401,7 @@ pub(crate) mod AssetsManager {
                 self
                     .assets
                     .risk_factor_tiers
-                    .entry(asset_id)
+                    .entry(asset_id) // New function checks that `risk_factor` is lower than 100.
                     .push(RiskFactorTrait::new(*risk_factor));
                 prev_risk_factor = *risk_factor;
             }
