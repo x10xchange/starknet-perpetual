@@ -69,25 +69,30 @@ jobs:
 
           echo "verifying core hash ${CORE_HASH}"
           voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  
+
           echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
           voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file
+
           echo "verifying transfer component hash ${TRANSFER_COMPONENT_HASH}"       
-          voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file
-          echo "verifying withdrawal component hash ${WITHDRAWAL_COMPONENT_HASH}"      
-          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file
+          voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file
+
           echo "verifying liquidation component hash ${LIQUIDATION_COMPONENT_HASH}"       
-          voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+          voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file
+
           echo "verifying deleverage component hash ${DELEVERAGE_COMPONENT_HASH}"         
           voyager verify --network mainnet --class-hash ${DELEVERAGE_COMPONENT_HASH} --contract-name DeleverageManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+
           echo "verifying deposit component hash ${DEPOSIT_COMPONENT_HASH}"         
           voyager verify --network mainnet --class-hash ${DEPOSIT_COMPONENT_HASH} --contract-name DepositManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+
           echo "verifying asset manager component hash ${ASSET_MANAGER_COMPONENT_HASH}"         
           voyager verify --network mainnet --class-hash ${ASSET_MANAGER_COMPONENT_HASH} --contract-name AssetsManager --license Apache-2.0  --package perpetuals --watch --lock-file
+
           echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
-          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file     
+          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file 
+
           echo "verifying vault hash ${VAULT_CLASS_HASH}"          
           voyager verify --network mainnet --class-hash ${VAULT_CLASS_HASH} --contract-name ProtocolVault --license Apache-2.0  --package perpetuals --watch --lock-file          
-
 
           echo add_new_implementation ${CORE_HASH} 1 0
           echo replace_to             ${CORE_HASH} 1 0
