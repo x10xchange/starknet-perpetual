@@ -46,9 +46,10 @@ then
 fi
 
 NAME_HASH=$(echo 0x$(echo -n $name | xxd -p ))
-echo register $name
-sleep 10
-sncast --account=$account invoke -u $url --contract-address $contract --function register_external_component --calldata  $NAME_HASH $hash
-echo activate $name
-sleep 10
-sncast --account=$account invoke -u $url --contract-address $contract --function activate_external_component --calldata  $NAME_HASH $hash
+echo $name
+echo $NAME_HASH $hash
+# sleep 10
+# sncast --account=$account invoke -u $url --contract-address $contract --function register_external_component --calldata  $NAME_HASH $hash
+# echo activate $name
+# sleep 10
+# sncast --account=$account invoke -u $url --contract-address $contract --function activate_external_component --calldata  $NAME_HASH $hash

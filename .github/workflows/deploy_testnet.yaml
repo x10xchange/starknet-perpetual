@@ -61,10 +61,14 @@ jobs:
           sleep 30s
           VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
           echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
-          sleep 30s
+
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
+
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          # sleep 30s
           ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
           ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
           ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
