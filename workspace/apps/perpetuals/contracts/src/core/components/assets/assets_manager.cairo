@@ -59,7 +59,6 @@ pub trait IAssetsExternal<TContractState> {
 
 #[starknet::contract]
 pub(crate) mod AssetsManager {
-    use core::cmp::min;
     use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -94,11 +93,11 @@ pub(crate) mod AssetsManager {
         SYNTHETIC_NOT_ACTIVE, SYNTHETIC_NOT_EXISTS, UNSORTED_RISK_FACTOR_TIERS,
     };
     use crate::core::components::assets::events;
+    use crate::core::components::assets::interface::IAssets;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_ASSETS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::types::price::SN_PERPS_SCALE;
     use super::IAssetsExternal;
-    use super::super::interface::IAssets;
 
     #[event]
     #[derive(Drop, starknet::Event)]

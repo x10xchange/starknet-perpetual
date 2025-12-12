@@ -32,8 +32,8 @@ pub mod AssetsComponent {
     use perpetuals::core::types::risk_factor::RiskFactor;
     use starknet::ContractAddress;
     use starknet::storage::{
-        Map, MutableVecTrait, StorageAsPointer, StorageMapReadAccess, StoragePathEntry,
-        StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
+        Map, StorageAsPointer, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, VecTrait,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
