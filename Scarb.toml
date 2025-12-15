@@ -10,7 +10,6 @@ starkware_utils = { git = "https://github.com/starkware-libs/starkware-starknet-
 starkware_utils_testing = { git = "https://github.com/starkware-libs/starkware-starknet-utils", branch = "oz-3.0.0-alpha.2" }
 openzeppelin_testing = "4.7.0"
 
-
 [scripts]
 test = "snforge test --run-native"
 
