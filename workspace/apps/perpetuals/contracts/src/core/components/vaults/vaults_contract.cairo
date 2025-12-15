@@ -68,6 +68,7 @@ pub(crate) mod VaultsManager {
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
