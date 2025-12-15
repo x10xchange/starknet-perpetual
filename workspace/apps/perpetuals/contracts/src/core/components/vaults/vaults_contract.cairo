@@ -68,7 +68,6 @@ pub(crate) mod VaultsManager {
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::errors::assert_with_byte_array;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
@@ -520,15 +519,17 @@ pub(crate) mod VaultsManager {
             let value_of_shares_from_er4626 = vault_erc4626_dispatcher
                 .preview_redeem(unquantized_amount_to_burn.into());
             let max_value = ((value_of_shares_from_er4626 * 1100) / 1000);
-            assert_with_byte_array(
-                value_to_receive.abs().into() <= max_value,
-                format!(
+
+            let valid_redeem_amount = value_to_receive.abs().into() <= max_value;
+            if (!valid_redeem_amount) {
+                let err = format!(
                     "Redeem value too high. requested={}, actual={}, number_of_shares={}",
                     value_to_receive.abs(),
                     value_of_shares_from_er4626,
                     unquantized_amount_to_burn,
-                ),
-            );
+                );
+                panic_with_byte_array(err: @err);
+            }
             let burn_result = vault_dispatcher
                 .redeem_with_price(
                     shares: unquantized_amount_to_burn.into(),
@@ -611,15 +612,18 @@ pub(crate) mod VaultsManager {
                 let risk_of_shares_sold: u128 = risk_factor.mul(value_of_shares_sold);
                 let collateral_received: u128 = actual_collateral_user.abs().try_into().unwrap();
 
-                assert_with_byte_array(
-                    collateral_received >= value_of_shares_sold - risk_of_shares_sold,
-                    format!(
+                let valid_liquidation_collateral = collateral_received >= value_of_shares_sold
+                    - risk_of_shares_sold;
+
+                if (!valid_liquidation_collateral) {
+                    let err = format!(
                         "Illegal transition value_of_shares_sold={}, risk_of_shares_sold={}, collateral_received={}",
                         value_of_shares_sold,
                         risk_of_shares_sold,
                         collateral_received,
-                    ),
-                );
+                    );
+                    panic_with_byte_array(err: @err);
+                }
             } else {
                 self
                     .positions
