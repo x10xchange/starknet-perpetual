@@ -17,15 +17,8 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
       - name: install foundry
         run: |
-          asdf install starknet-foundry 0.53.0-rc.0
+          asdf install starknet-foundry 0.53.0
           
-
-#      - name: install starkli
-#        run: |
-#          curl https://get.starkli.sh | sh
-#          . /home/runner/.config/.starkli/env
-#          starkliup
-
       - name: Retrieve account info
         run: |
           echo ${{ secrets.TESTNET_DEPLOYER_ACCOUNT_JSON }} | base64 --decode > deployer_account.json
@@ -33,10 +26,6 @@ jobs:
           address=$(cat deployer_account.json | jq -r .deployment.address)
           echo address=$address
           sncast account import --name testnet --address $address --private-key ${{ secrets.TESTNET_DEPLOYER_KEY }} --type oz -u ${{ secrets.TEST_RPC_09_ADDRESS }}
-
-#      - name: Build contracts
-#        run: |
-#          scarb --release build
 
       - name: Deploy contracts
         id: deploy_contracts
