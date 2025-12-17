@@ -1,11 +1,8 @@
 use vault::interface::IProtocolVault;
 
-const SCALE: u64 = 1000000_u64;
-
 #[starknet::contract]
-pub mod ProtocolVault {
+pub mod TempProtocolVault {
     use ERC4626Component::Fee;
-    use core::num::traits::Zero;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
@@ -23,7 +20,7 @@ pub mod ProtocolVault {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::abs::Abs;
-    use super::{IProtocolVault, SCALE};
+    use super::IProtocolVault;
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
@@ -99,9 +96,9 @@ pub mod ProtocolVault {
         pnl_collateral_contract: ContractAddress,
         perps_contract: ContractAddress,
         owning_position_id: u32,
+        old_vault_address: ContractAddress,
         recipient: ContractAddress,
-        initial_price: u64,
-    ) -> u256 {
+    ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.initialize(:upgrade_delay);
 
@@ -110,13 +107,9 @@ pub mod ProtocolVault {
         self.erc20.initializer(name, symbol);
         self.erc4626.initializer(pnl_collateral_contract);
 
-        let total_assets = self.erc4626.get_total_assets();
-        assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
-        assert(recipient != perps_contract, 'RECIPIENT_CANNOT_BE_PERPS');
-        assert(initial_price.is_non_zero(), 'INVALID_ZERO_INIT_PRICE');
-        let amount_to_mint = (total_assets * SCALE.into()) / initial_price.into();
-        self.erc20.mint(recipient, amount_to_mint);
-        return total_assets;
+        let old_vault_dispatcher = IERC20Dispatcher { contract_address: old_vault_address };
+        self.erc20.mint(perps_contract, old_vault_dispatcher.balance_of(perps_contract));
+        self.erc20.mint(recipient, old_vault_dispatcher.balance_of(recipient));
     }
 
     #[abi(embed_v0)]
