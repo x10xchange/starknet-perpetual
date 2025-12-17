@@ -17,7 +17,7 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
       - name: install foundry
         run: |
-          asdf install starknet-foundry 0.53.0
+          asdf install starknet-foundry 0.54.0
           
       - name: Retrieve account info
         run: |
