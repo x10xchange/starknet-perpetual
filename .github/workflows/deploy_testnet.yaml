@@ -65,15 +65,15 @@ jobs:
           echo add_new_implementation ${CORE_HASH} 1 0
           echo replace_to             ${CORE_HASH} 1 0
 
-          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
           # sleep 30s
-          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
           # sleep 30s
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
-          ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          # ./utils/register.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
           
