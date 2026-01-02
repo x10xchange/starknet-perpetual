@@ -55,6 +55,7 @@ pub trait IAssetsExternal<TContractState> {
         self: @TContractState,
     ) -> starkware_utils::time::time::TimeDelta;
     fn get_max_funding_rate(self: @TContractState) -> u32;
+    fn reactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
 }
 
 #[starknet::contract]
@@ -431,6 +432,18 @@ pub(crate) mod AssetsManager {
             self.assets.num_of_active_synthetic_assets.sub_and_write(1);
 
             self.emit(events::SyntheticAssetDeactivated { asset_id: synthetic_id });
+        }
+
+        fn reactivate_synthetic(ref self: ContractState, synthetic_id: AssetId) {
+            let mut config = self
+                .assets
+                .asset_config
+                .read(synthetic_id)
+                .expect(SYNTHETIC_NOT_EXISTS);
+            assert(config.status != AssetStatus::ACTIVE, 'SYNTHETIC_ALREADY_ACTIVE');
+            assert(config.asset_type == AssetType::SYNTHETIC, NOT_SYNTHETIC);
+            config.status = AssetStatus::PENDING;
+            self.assets.asset_config.write(synthetic_id, Option::Some(config));
         }
 
         fn remove_oracle_from_asset(
