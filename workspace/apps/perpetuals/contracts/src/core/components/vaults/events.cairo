@@ -27,3 +27,34 @@ pub struct InvestInVault {
     pub user_investment: u64,
     pub correlation_id: felt252,
 }
+
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct LiquidateVaultShares {
+    #[key]
+    pub vault_position_id: PositionId,
+    #[key]
+    pub liquidated_position_id: PositionId,
+    #[key]
+    pub vault_asset_id: AssetId,
+    #[key]
+    pub shares_liquidated: u64,
+    pub collateral_received: u64,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct RedeemVaultShares {
+    #[key]
+    pub vault_position_id: PositionId,
+    #[key]
+    pub redeeming_position_id: PositionId,
+    #[key]
+    pub receiving_position_id: PositionId,
+    #[key]
+    pub vault_asset_id: AssetId,
+    #[key]
+    pub invested_asset_id: AssetId,
+    pub shares_redeemed: u64,
+    pub collateral_received: u64,
+    pub collateral_requested: u64,
+}
