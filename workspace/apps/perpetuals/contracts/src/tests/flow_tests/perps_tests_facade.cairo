@@ -1888,6 +1888,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             asset_id: vault.asset_id,
         }
     }
+
+    fn advance_time(ref self: PerpsTestsFacade, seconds: u64) {
+        advance_time(seconds);
+    }
 }
 
 
