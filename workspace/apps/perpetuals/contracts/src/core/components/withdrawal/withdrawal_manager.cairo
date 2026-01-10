@@ -84,6 +84,7 @@ pub(crate) mod WithdrawalManager {
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::{INVALID_ZERO_AMOUNT, WITHDRAW_EXPIRED};
     use crate::core::types::position::PositionDiff;
     use crate::core::types::withdraw::WithdrawArgs;
@@ -114,6 +115,8 @@ pub(crate) mod WithdrawalManager {
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[storage]
@@ -137,6 +140,8 @@ pub(crate) mod WithdrawalManager {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -150,6 +155,8 @@ pub(crate) mod WithdrawalManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -210,6 +217,7 @@ pub(crate) mod WithdrawalManager {
             expiration: super::Timestamp,
             salt: felt252,
         ) {
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: WITHDRAW_EXPIRED);
             let collateral_id = self.assets.get_collateral_id();
             let position = self.positions.get_position_snapshot(:position_id);
@@ -230,7 +238,11 @@ pub(crate) mod WithdrawalManager {
             self
                 .positions
                 .validate_healthy_or_healthier_position(
-                    :position_id, :position, :position_diff, tvtr_before: Default::default(),
+                    :position_id,
+                    :position,
+                    :position_diff,
+                    tvtr_before: Default::default(),
+                    vault_protection_config: Option::None,
                 );
 
             self.positions.apply_diff(:position_id, :position_diff);
