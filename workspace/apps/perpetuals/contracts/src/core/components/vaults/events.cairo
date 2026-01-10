@@ -58,3 +58,14 @@ pub struct RedeemVaultShares {
     pub collateral_received: u64,
     pub collateral_requested: u64,
 }
+
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct VaultProtectionReset {
+    #[key]
+    pub vault_position_id: PositionId,
+    pub old_tv_at_check: i128,
+    pub old_max_tv_loss: u128,
+    pub new_tv_at_check: i128,
+    pub new_max_tv_loss: u128,
+}

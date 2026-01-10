@@ -411,3 +411,71 @@ fn test_profit_then_redeem_over_limit_fails() {
             actual_collateral_user: 13500,
         );
 }
+
+#[test]
+fn test_force_reset_protection_limit_allows_redemption() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    // Initial deposit to vault: 50,000 USDC
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 50000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 10000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 10000,
+                    min_shares_to_receive: 5000,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // trigger loading of TV and setting the limit (5% of 60000 = 3000)
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: 1,
+            value_of_shares_user: 1,
+            shares_to_burn_vault: 1,
+            value_of_shares_vault: 1,
+            actual_shares_user: 1,
+            actual_collateral_user: 1,
+        );
+
+    // Force reset to 10% (6000)
+    state.facade.force_reset_protection_limit(vault_config.position_id, 10);
+
+    // Now redeem 4000, should succeed.
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: 4000,
+            value_of_shares_user: 4000,
+            shares_to_burn_vault: 4000,
+            value_of_shares_vault: 4000,
+            actual_shares_user: 4000,
+            actual_collateral_user: 4000,
+        );
+}

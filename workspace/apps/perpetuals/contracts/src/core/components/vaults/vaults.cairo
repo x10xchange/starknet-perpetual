@@ -14,7 +14,8 @@ pub trait IVaults<TContractState> {
 
 #[starknet::component]
 pub mod Vaults {
-    use core::num::traits::{WideMul, Zero};
+    use RolesComponent::InternalTrait as RolesInternalTrait;
+    use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
@@ -39,6 +40,7 @@ pub mod Vaults {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::math::abs::Abs;
+    use starkware_utils::math::utils::mul_wide_and_floor_div;
     use starkware_utils::signature::stark::Signature;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
@@ -51,13 +53,13 @@ pub mod Vaults {
     use crate::core::types::vault::ConvertPositionToVault;
     use crate::core::utils::validate_signature;
     use super::{CHECK_FREQUENCY, IVaults, STORAGE_VERSION, VaultProtectionParams};
-    
 
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
         VaultOpened: events::VaultOpened,
+        VaultProtectionReset: events::VaultProtectionReset,
     }
 
 
@@ -128,13 +130,12 @@ pub mod Vaults {
 
             let current_config = self.registered_vaults_by_position.read(vault_position);
             let current_time = starknet::get_block_timestamp();
-            let last_check = current_config.last_tv_check;
-            if (current_time - last_check >= CHECK_FREQUENCY) {
+            let last_check_time = current_config.last_tv_check;
+            if (current_time - last_check_time >= CHECK_FREQUENCY) {
                 let positions = get_dep_component!(@self, Positions);
                 let position_tv_tr = positions.get_position_tv_tr(vault_position);
                 let tv_at_check = position_tv_tr.total_value;
-                let scaled_tv: u256 = tv_at_check.abs().wide_mul(50);
-                let max_tv_loss: u128 = (scaled_tv / 1000).try_into().unwrap();
+                let max_tv_loss = mul_wide_and_floor_div(tv_at_check.abs(), 50, 1000).unwrap();
                 let updated_config = VaultConfig {
                     version: current_config.version,
                     asset_id: current_config.asset_id,
@@ -266,6 +267,46 @@ pub mod Vaults {
                         },
                     ),
                 )
+        }
+
+        fn force_reset_protection_limit(
+            ref self: ComponentState<TContractState>,
+            vault_position: PositionId,
+            percentage_basis_points: u32,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+
+            let current_config = self.get_vault_config_for_position(:vault_position);
+            let positions = get_dep_component!(@self, Positions);
+            let position_tv_tr = positions.get_position_tv_tr(vault_position);
+            let tv_at_check = position_tv_tr.total_value;
+            let max_tv_loss = mul_wide_and_floor_div(
+                tv_at_check.abs(), percentage_basis_points.into() * 10, 1000,
+            )
+                .unwrap();
+
+            let updated_config = VaultConfig {
+                version: current_config.version,
+                asset_id: current_config.asset_id,
+                position_id: current_config.position_id,
+                last_tv_check: starknet::get_block_timestamp(),
+                tv_at_check: tv_at_check,
+                max_tv_loss: max_tv_loss,
+            };
+
+            self.registered_vaults_by_position.write(vault_position, updated_config);
+            self.registered_vaults_by_asset.write(current_config.asset_id, updated_config);
+
+            self
+                .emit(
+                    events::VaultProtectionReset {
+                        vault_position_id: vault_position,
+                        old_tv_at_check: current_config.tv_at_check,
+                        old_max_tv_loss: current_config.max_tv_loss,
+                        new_tv_at_check: updated_config.tv_at_check,
+                        new_max_tv_loss: updated_config.max_tv_loss,
+                    },
+                );
         }
     }
 }

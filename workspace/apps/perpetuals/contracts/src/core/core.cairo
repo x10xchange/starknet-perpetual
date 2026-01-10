@@ -676,6 +676,12 @@ pub mod Core {
                     operator_nonce: operator_nonce, :signature, :order, :correlation_id,
                 )
         }
+
+        fn force_reset_protection_limit(
+            ref self: ContractState, vault_position: PositionId, percentage_basis_points: u32,
+        ) {
+            self.vaults.force_reset_protection_limit(:vault_position, :percentage_basis_points);
+        }
     }
 
     #[generate_trait]

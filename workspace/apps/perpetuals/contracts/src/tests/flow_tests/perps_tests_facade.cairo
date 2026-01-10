@@ -1892,6 +1892,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn advance_time(ref self: PerpsTestsFacade, seconds: u64) {
         advance_time(seconds);
     }
+
+    fn force_reset_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, percentage_basis_points: u32,
+    ) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .force_reset_protection_limit(:vault_position, :percentage_basis_points);
+    }
 }
 
 
