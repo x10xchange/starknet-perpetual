@@ -1,4 +1,4 @@
-FROM node:slim
+FROM ubuntu:24.04
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
@@ -8,15 +8,16 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     vim \
     bash \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN useradd -m -s /bin/bash vscode && \
     chown -R vscode:vscode /home/vscode
 
-# Update npm and install corepack as root
-RUN npm install -g npm corepack && \
-    chown -R vscode:vscode /usr/local/lib/node_modules
+# # Update npm and install corepack as root
+# RUN npm install -g npm corepack && \
+#     chown -R vscode:vscode /usr/local/lib/node_modules
 
 # Switch to non-root user
 USER vscode
