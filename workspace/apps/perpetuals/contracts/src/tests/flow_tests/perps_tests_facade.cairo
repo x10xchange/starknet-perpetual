@@ -1900,6 +1900,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .force_reset_protection_limit(:vault_position, :percentage_basis_points);
     }
+
+    fn update_vault_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId, limit: u32) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.update_vault_protection_limit(:vault_position, :limit);
+    }
 }
 
 

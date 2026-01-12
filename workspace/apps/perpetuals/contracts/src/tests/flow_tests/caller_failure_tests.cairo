@@ -334,5 +334,13 @@ fn test_activate_new_component_only_upgrade_governor() {
 fn test_force_reset_protection_limit_only_app_governor() {
     let (_, contract_address) = setup();
     let dispatcher = ICoreDispatcher { contract_address };
-    dispatcher.force_reset_protection_limit(vault_position: POSITION_ID_1, percentage_basis_points: 0);
+    dispatcher
+        .force_reset_protection_limit(vault_position: POSITION_ID_1, percentage_basis_points: 0);
+}
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_update_vault_protection_limit_only_app_governor() {
+    let (_, contract_address) = setup();
+    let dispatcher = ICoreDispatcher { contract_address };
+    dispatcher.update_vault_protection_limit(vault_position: POSITION_ID_1, limit: 0);
 }

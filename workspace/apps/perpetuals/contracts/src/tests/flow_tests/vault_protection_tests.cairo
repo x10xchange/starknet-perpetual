@@ -479,3 +479,78 @@ fn test_force_reset_protection_limit_allows_redemption() {
             actual_collateral_user: 4000,
         );
 }
+
+#[test]
+fn test_per_vault_protection_limit_override() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    // Initial deposit: 50,000 USDC
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(vault_user.account, vault_user.position_id, 50000_u64),
+        );
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 20000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 20000,
+                    min_shares_to_receive: 10000,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Initial baseline (5% of 70000 = 3500)
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: 1,
+            value_of_shares_user: 1,
+            shares_to_burn_vault: 1,
+            value_of_shares_vault: 1,
+            actual_shares_user: 1,
+            actual_collateral_user: 1,
+        );
+
+    // Update per-vault override to 20%
+    state.facade.update_vault_protection_limit(vault_config.position_id, 20);
+
+    // Wait 24h
+    state.facade.advance_time(86401);
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.funding_tick(array![].span());
+
+    // New baseline should be (70000 - 1) = 69999.
+    // New max loss (with override) = 69999 * 200 / 1000 = 13999.
+    // Redeeming 10000 should now succeed (would have failed with default 5% limit)
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: 10000,
+            value_of_shares_user: 10000,
+            shares_to_burn_vault: 10000,
+            value_of_shares_vault: 10000,
+            actual_shares_user: 10000,
+            actual_collateral_user: 10000,
+        );
+}

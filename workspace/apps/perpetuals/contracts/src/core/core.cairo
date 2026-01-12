@@ -682,6 +682,12 @@ pub mod Core {
         ) {
             self.vaults.force_reset_protection_limit(:vault_position, :percentage_basis_points);
         }
+
+        fn update_vault_protection_limit(
+            ref self: ContractState, vault_position: PositionId, limit: u32,
+        ) {
+            self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
     }
 
     #[generate_trait]

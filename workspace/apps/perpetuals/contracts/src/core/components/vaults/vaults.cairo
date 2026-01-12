@@ -60,6 +60,7 @@ pub mod Vaults {
     pub enum Event {
         VaultOpened: events::VaultOpened,
         VaultProtectionReset: events::VaultProtectionReset,
+        PerVaultProtectionLimitUpdated: events::PerVaultProtectionLimitUpdated,
     }
 
 
@@ -67,6 +68,7 @@ pub mod Vaults {
     pub struct Storage {
         registered_vaults_by_asset: Map<AssetId, VaultConfig>,
         registered_vaults_by_position: Map<PositionId, VaultConfig>,
+        vault_protection_limit_overrides: Map<PositionId, u32>,
     }
 
     #[embeddable_as(VaultsImpl)]
@@ -135,7 +137,16 @@ pub mod Vaults {
                 let positions = get_dep_component!(@self, Positions);
                 let position_tv_tr = positions.get_position_tv_tr(vault_position);
                 let tv_at_check = position_tv_tr.total_value;
-                let max_tv_loss = mul_wide_and_floor_div(tv_at_check.abs(), 50, 1000).unwrap();
+
+                let limit_from_storage = self.vault_protection_limit_overrides.read(vault_position);
+                let limit = if limit_from_storage == 0 {
+                    5
+                } else {
+                    limit_from_storage
+                };
+
+                let max_tv_loss = mul_wide_and_floor_div(tv_at_check.abs(), limit.into() * 10, 1000)
+                    .unwrap();
                 let updated_config = VaultConfig {
                     version: current_config.version,
                     asset_id: current_config.asset_id,
@@ -305,6 +316,26 @@ pub mod Vaults {
                         old_max_tv_loss: current_config.max_tv_loss,
                         new_tv_at_check: updated_config.tv_at_check,
                         new_max_tv_loss: updated_config.max_tv_loss,
+                    },
+                );
+        }
+
+        fn update_vault_protection_limit(
+            ref self: ComponentState<TContractState>, vault_position: PositionId, limit: u32,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+            let old_limit = self.vault_protection_limit_overrides.read(vault_position);
+            self.vault_protection_limit_overrides.write(vault_position, limit);
+            self
+                .emit(
+                    events::PerVaultProtectionLimitUpdated {
+                        vault_position_id: vault_position,
+                        old_limit: if old_limit == 0 {
+                            5
+                        } else {
+                            old_limit
+                        },
+                        new_limit: limit,
                     },
                 );
         }
