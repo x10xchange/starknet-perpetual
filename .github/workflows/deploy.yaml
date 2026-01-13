@@ -23,6 +23,8 @@ jobs:
         run: |
           asdf install starknet-foundry 0.54.0
           asdf set -u starknet-foundry 0.54.0 
+          sed -i 's/^starknet-foundry .*/starknet-foundry 0.54.0/' .tool-versions
+          cat .tool-versions
     
       - name: Install Voyager Verifier
         run: |
