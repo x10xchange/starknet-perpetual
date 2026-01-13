@@ -13,8 +13,8 @@ pub mod AssetsComponent {
         ALREADY_INITIALIZED, ASSET_NOT_EXISTS, COLLATERAL_NOT_REGISTERED, FUNDING_EXPIRED,
         FUNDING_TICKS_NOT_SORTED, INACTIVE_ASSET, INVALID_FUNDING_TICK_LEN, INVALID_MEDIAN,
         INVALID_PRICE_TIMESTAMP, INVALID_TIMESTAMP, INVALID_ZERO_ASSET_ID, INVALID_ZERO_QUANTUM,
-        INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL, NOT_SYNTHETIC, QUORUM_NOT_REACHED,
-        SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
+        INVALID_ZERO_TOKEN_ADDRESS, NOT_COLLATERAL, NOT_SYNTHETIC, NO_SUCH_ASSET,
+        QUORUM_NOT_REACHED, SIGNED_PRICES_UNSORTED, SYNTHETIC_EXPIRED_PRICE, SYNTHETIC_NOT_ACTIVE,
         ZERO_MAX_FUNDING_INTERVAL, ZERO_MAX_FUNDING_RATE, ZERO_MAX_ORACLE_PRICE,
         ZERO_MAX_PRICE_INTERVAL, oracle_public_key_not_registered,
     };
@@ -242,6 +242,14 @@ pub mod AssetsComponent {
                 tiers.append(risk_factor_tiers.at(i).read());
             }
             tiers.span()
+        }
+
+        fn get_asset_type(self: @ComponentState<TContractState>, asset_id: AssetId) -> AssetType {
+            let entry = self.asset_config.entry(asset_id).as_ptr();
+            if (!SyntheticTrait::is_some_config(entry)) {
+                panic_with_felt252(NO_SUCH_ASSET)
+            }
+            SyntheticTrait::at_asset_type(entry)
         }
     }
 

@@ -1,6 +1,6 @@
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use perpetuals::core::types::asset::AssetId;
-use perpetuals::core::types::asset::synthetic::{AssetConfig, TimelyData};
+use perpetuals::core::types::asset::synthetic::{AssetConfig, AssetType, TimelyData};
 use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
@@ -39,6 +39,7 @@ pub trait IAssets<TContractState> {
     fn get_asset_config(self: @TContractState, asset_id: AssetId) -> AssetConfig;
     fn get_timely_data(self: @TContractState, asset_id: AssetId) -> TimelyData;
     fn get_risk_factor_tiers(self: @TContractState, asset_id: AssetId) -> Span<RiskFactor>;
+    fn get_asset_type(self: @TContractState, asset_id: AssetId) -> AssetType;
 }
 
 
