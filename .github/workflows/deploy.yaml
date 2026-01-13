@@ -21,7 +21,8 @@ jobs:
 
       - name: install foundry
         run: |
-          asdf install starknet-foundry 0.53.0-rc.0  
+          asdf install starknet-foundry 0.54.0
+          asdf set -u starknet-foundry 0.54.0 
     
       - name: Install Voyager Verifier
         run: |
