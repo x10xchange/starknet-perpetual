@@ -73,6 +73,7 @@ pub(crate) mod LiquidationManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::errors::CANT_LIQUIDATE_IF_POSITION;
     use crate::core::types::asset::synthetic::AssetType;
+    use crate::core::types::order::ValidateableOrderTrait;
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::utils::{validate_signature, validate_trade};
     use crate::core::value_risk_calculator::liquidated_position_validations;
@@ -203,8 +204,8 @@ pub(crate) mod LiquidationManager {
             /// Validations:
             self
                 ._validate_liquidate(
-                    liquidated_order: liquidated_order.into(),
-                    liquidator_order: liquidator_order.into(),
+                    liquidated_order: liquidated_order,
+                    liquidator_order: liquidator_order,
                     :liquidator_signature,
                     :actual_liquidator_fee,
                 );
@@ -316,38 +317,40 @@ pub(crate) mod LiquidationManager {
             );
         }
 
-        fn _validate_liquidate(
+        fn _validate_liquidate<
+            T, impl TValidateableOrder: ValidateableOrderTrait<T>, +Drop<T>, +Copy<T>,
+        >(
             ref self: ContractState,
-            liquidated_order: LimitOrder,
-            liquidator_order: LimitOrder,
+            liquidated_order: T,
+            liquidator_order: T,
             liquidator_signature: Signature,
             actual_liquidator_fee: u64,
         ) {
-            let liquidated_position_id = liquidated_order.source_position;
+            let liquidated_position_id = liquidated_order.position_id();
             assert(liquidated_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
-            let liquidator_position_id = liquidator_order.source_position;
+            let liquidator_position_id = liquidator_order.position_id();
             assert(liquidator_position_id != INSURANCE_FUND_POSITION, CANT_LIQUIDATE_IF_POSITION);
 
             assert(
-                liquidated_order.receive_position != INSURANCE_FUND_POSITION,
+                liquidated_order.position_id() != INSURANCE_FUND_POSITION,
                 CANT_LIQUIDATE_IF_POSITION,
             );
             assert(
-                liquidator_order.receive_position != INSURANCE_FUND_POSITION,
+                liquidator_order.position_id() != INSURANCE_FUND_POSITION,
                 CANT_LIQUIDATE_IF_POSITION,
             );
 
-            let liquidated_asset = self.assets.get_asset_config(liquidated_order.base_asset_id);
+            let liquidated_asset = self.assets.get_asset_config(liquidated_order.base_asset_id());
 
             validate_trade(
                 order_a: liquidated_order,
                 order_b: liquidator_order,
-                actual_amount_base_a: liquidated_order.base_amount,
-                actual_amount_quote_a: liquidated_order.quote_amount,
-                actual_fee_a: liquidated_order.fee_amount,
+                actual_amount_base_a: liquidated_order.base_amount(),
+                actual_amount_quote_a: liquidated_order.quote_amount(),
+                actual_fee_a: liquidated_order.fee_amount(),
                 actual_fee_b: actual_liquidator_fee,
                 asset: Some(liquidated_asset),
-                collateral_id: liquidated_order.quote_asset_id,
+                collateral_id: liquidated_order.quote_asset_id(),
             );
         }
 
