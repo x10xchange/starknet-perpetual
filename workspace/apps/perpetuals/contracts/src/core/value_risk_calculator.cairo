@@ -99,8 +99,8 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     /// is equal or higher after the change and the total_risk is lower.
     /// Formal definition:
     /// total_value_after / total_risk_after >= total_value_before / total_risk_before
-    /// AND total_risk_after < total_risk_before.
-    if tvtr.after.total_risk >= tvtr.before.total_risk {
+    /// AND total_risk_after <= total_risk_before.
+    if tvtr.after.total_risk > tvtr.before.total_risk {
         panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
     }
     let before_ratio = FractionTrait::new(tvtr.before.total_value, tvtr.before.total_risk);
@@ -230,6 +230,7 @@ pub fn calculate_asset_value_and_risk(
     if asset_type == AssetType::SYNTHETIC {
         return (asset_value, asset_risk);
     } else {
+        // spot and vault share are always postive
         return (asset_value - asset_risk.try_into().unwrap(), 0);
     }
 }

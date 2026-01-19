@@ -721,8 +721,10 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
 }
 
 #[test]
-#[should_panic(expected: "Illegal transition value_of_shares_sold=360, collateral_received=300")]
-fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before 100, TR before 360, TV after 40, TR after 360",
+)]
+fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr_of_unhealthy_position() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position_id(333_u32.into());
     let trade_user = state.new_user_with_position();
@@ -1090,7 +1092,9 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr_starting_with_negat
 }
 
 #[test]
-#[should_panic(expected: "Illegal transition value_of_shares_sold=360, collateral_received=359")]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before -200, TR before 270, TV after -201, TR after 270",
+)]
 fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_negative_tv() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position_id(333_u32.into());
@@ -1213,7 +1217,9 @@ fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_nega
 
 
 #[test]
-#[should_panic(expected: "Illegal transition value_of_shares_sold=360, collateral_received=300")]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 } TV before 100, TR before 360, TV after 40, TR after 360",
+)]
 fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position_id(333_u32.into());
