@@ -91,7 +91,38 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     }
 
     if tvtr.before.total_risk.is_zero() || tvtr.after.total_risk.is_zero() {
-        panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+        if tvtr.before.total_risk.is_zero() && tvtr.after.total_risk.is_zero() {
+            // position only had spot and collateral assets (no synthetic assets)
+            // collateral must be negative
+            // spot must have been sold for collateral
+            // TV must increase
+            if tvtr.after.total_value <= tvtr.before.total_value {
+                panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+            }
+        }
+
+        if tvtr.before.total_risk.is_zero() && !tvtr.after.total_risk.is_zero() {
+            // position didn't have synthetic assets and now it does
+            // not allowed when final state is unhealthy
+            panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+        }
+
+        if !tvtr.before.total_risk.is_zero() && tvtr.after.total_risk.is_zero() {
+            // position had synthetic assets and now it doesn't
+            // As all synthetic risk has been removed.
+            // position must have negative collateral and positive spots resulting in a negative TV
+
+            // we can allow a TV drop up to the value of TR as this still constitutes
+            //a healthier transition for a position ending with TR = 0
+            let minimum_value_after_transition = tvtr.before.total_value
+                - tvtr.before.total_risk.try_into().unwrap();
+
+            if (tvtr.after.total_value < minimum_value_after_transition) {
+                panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+            }
+        }
+        // all possible states when total_risk is zero are checked
+        return;
     }
 
     /// This is checked only when the after is not healthy:
