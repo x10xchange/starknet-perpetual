@@ -51,7 +51,7 @@ jobs:
           # ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c AssetsManager -p perpetuals)
           # echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
           # sleep 30s
-          VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c UpgradeableProtocolVault -p vault)
+          # VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c UpgradeableProtocolVault -p vault)
           echo "Deployed UpgradeableProtocolVault contract with class hash: $VAULT_CLASS_HASH"
           sleep 30s
 
@@ -70,3 +70,4 @@ jobs:
           # ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
           # ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
           
+          ./utils/deploy_vault_upgradeable.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }}
