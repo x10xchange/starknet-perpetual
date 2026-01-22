@@ -77,6 +77,7 @@ pub trait IAssetsManager<TContractState> {
         quorum: u8,
     );
     fn deactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
+    fn reactivate_synthetic(ref self: TContractState, synthetic_id: AssetId);
     fn remove_oracle_from_asset(
         ref self: TContractState, asset_id: AssetId, oracle_public_key: PublicKey,
     );

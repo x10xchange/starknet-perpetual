@@ -390,6 +390,14 @@ pub mod AssetsComponent {
             let external_components = get_dep_component!(self, ExternalComponents);
             external_components._get_assets_manager_dispatcher().get_max_funding_rate()
         }
+
+        fn reactivate_synthetic(ref self: ComponentState<TContractState>, synthetic_id: AssetId) {
+            get_dep_component!(@self, Roles).only_app_governor();
+            let external_components = get_dep_component!(@self, ExternalComponents);
+            external_components
+                ._get_assets_manager_dispatcher()
+                .reactivate_synthetic(synthetic_id: synthetic_id);
+        }
     }
 
     #[generate_trait]
