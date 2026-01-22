@@ -298,8 +298,7 @@ pub(crate) mod TransferManager {
             collateral_id: AssetId,
             amount: u64,
         ) {
-            // Parameters
-
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_TRANSFER");
             let (position_diff_sender, position_diff_recipient) = if (collateral_id == self
                 .assets
                 .get_collateral_id()) {
@@ -333,6 +332,7 @@ pub(crate) mod TransferManager {
                     position: sender_position,
                     position_diff: position_diff_sender,
                     tvtr_before: Default::default(),
+                    vault_protection_config: Option::None,
                 );
 
             // Execute transfer
