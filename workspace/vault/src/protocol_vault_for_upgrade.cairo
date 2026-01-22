@@ -1,7 +1,7 @@
 use vault::interface::IProtocolVault;
 
 #[starknet::contract]
-pub mod TempProtocolVault {
+pub mod UpgradeableProtocolVault {
     use ERC4626Component::Fee;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
