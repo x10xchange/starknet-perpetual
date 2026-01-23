@@ -4,6 +4,7 @@ pub mod core;
 pub mod errors;
 pub mod events;
 pub mod interface;
+pub mod replace_vault_address_eic;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
