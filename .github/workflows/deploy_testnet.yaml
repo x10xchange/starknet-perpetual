@@ -34,9 +34,9 @@ jobs:
         id: deploy_contracts
         run: |
 
-          ./utils/deploy_vault_upgradeable.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} 
-          # CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
-          # echo "core hash $CORE_HASH"
+          # ./utils/deploy_vault_upgradeable.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} 
+          CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
           # VAULT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c VaultsManager -p perpetuals)
           # echo "vault hash $VAULT_COMPONENT_HASH"
           # TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c TransferManager -p perpetuals)
@@ -53,8 +53,8 @@ jobs:
           # echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
           # sleep 30s
 
-          # EIC_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ReplaceCollateralEIC -p perpetuals)
-          # echo "eic declared at hash $EIC_HASH"
+          EIC_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c MigrateTVLEIC -p perpetuals)
+          echo "eic declared at hash $EIC_HASH"
 
           # echo add_new_implementation ${CORE_HASH} 1 0
           # echo replace_to             ${CORE_HASH} 1 0
