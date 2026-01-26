@@ -76,7 +76,6 @@ use crate::core::components::external_components::interface::{
     IExternalComponentsDispatcher, IExternalComponentsDispatcherTrait,
 };
 use crate::core::types::funding::FundingIndex;
-use crate::tests::constants::KEY_PAIR_1;
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
@@ -113,9 +112,13 @@ pub fn deploy_protocol_vault_with_dispatcher(
     let owning_account_address = deploy_account(stark_key_pair);
     let owning_account = Account { address: owning_account_address, key_pair: stark_key_pair };
     let mut calldata = ArrayTrait::new();
+    let governance_admin = GOVERNANCE_ADMIN();
+    let upgrade_delay = UPGRADE_DELAY;
     let name: ByteArray = "Perpetuals Protocol Vault";
     let symbol: ByteArray = "PPV";
     let initial_price = 1_000_000_u64; // 1 USDC with 6 decimals
+    governance_admin.serialize(ref calldata);
+    upgrade_delay.serialize(ref calldata);
     name.serialize(ref calldata);
     symbol.serialize(ref calldata);
     usdc_token_state.address.serialize(ref calldata);
@@ -1887,6 +1890,23 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             salt,
             asset_id: vault.asset_id,
         }
+    }
+
+    fn advance_time(ref self: PerpsTestsFacade, seconds: u64) {
+        advance_time(seconds);
+    }
+
+    fn force_reset_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, percentage_basis_points: u32,
+    ) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .force_reset_protection_limit(:vault_position, :percentage_basis_points);
+    }
+
+    fn update_vault_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId, limit: u32) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.update_vault_protection_limit(:vault_position, :limit);
     }
 }
 

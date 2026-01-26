@@ -75,6 +75,7 @@ pub mod Core {
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::transfer::transfer_manager::ITransferManagerDispatcherTrait;
     use crate::core::components::vaults::events as vault_events;
+    use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
@@ -784,6 +785,18 @@ pub mod Core {
                     operator_nonce: operator_nonce, :signature, :order, :correlation_id,
                 )
         }
+
+        fn force_reset_protection_limit(
+            ref self: ContractState, vault_position: PositionId, percentage_basis_points: u32,
+        ) {
+            self.vaults.force_reset_protection_limit(:vault_position, :percentage_basis_points);
+        }
+
+        fn update_vault_protection_limit(
+            ref self: ContractState, vault_position: PositionId, limit: u32,
+        ) {
+            self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
     }
 
     #[generate_trait]
@@ -876,6 +889,9 @@ pub mod Core {
                     position: position_a,
                     position_diff: position_diff_a,
                     tvtr_before: tvtr_a_before,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(order_a.position_id),
                 );
             let tvtr_b_after = self
                 .positions
@@ -884,6 +900,9 @@ pub mod Core {
                     position: position_b,
                     position_diff: position_diff_b,
                     tvtr_before: tvtr_b_before,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(order_b.position_id),
                 );
 
             // Apply Diffs.

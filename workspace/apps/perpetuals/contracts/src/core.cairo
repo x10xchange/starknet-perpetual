@@ -5,6 +5,7 @@ pub mod errors;
 pub mod events;
 pub mod interface;
 pub mod migrate_usdc_eic;
+pub mod replace_vault_address_eic;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
