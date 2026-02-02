@@ -22,6 +22,9 @@ pub const SAME_BASE_QUOTE_ASSET_IDS: felt252 = 'SAME_BASE_QUOTE_ASSET_IDS';
 pub const SYNTHETIC_IS_ACTIVE: felt252 = 'SYNTHETIC_IS_ACTIVE';
 pub const TRANSFER_EXPIRED: felt252 = 'TRANSFER_EXPIRED';
 pub const WITHDRAW_EXPIRED: felt252 = 'WITHDRAW_EXPIRED';
+pub const NON_MONOTONIC_TIME: felt252 = 'NON_MONOTONIC_TIME';
+pub const STALE_TIME: felt252 = 'STALE_TIME';
+
 
 pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)

@@ -15,6 +15,9 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::core::errors::{
+        NON_MONOTONIC_TIME, STALE_TIME,
+    };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::AssetId;
@@ -26,7 +29,9 @@ pub mod Core {
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::StorageMapReadAccess;
+    use starknet::storage::{
+        StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -38,7 +43,7 @@ pub mod Core {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::time::time::{TimeDelta, Timestamp};
+    use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -145,6 +150,7 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        system_time: Timestamp,
     }
 
     #[event]
@@ -687,6 +693,41 @@ pub mod Core {
             ref self: ContractState, vault_position: PositionId, limit: u32,
         ) {
             self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
+
+        /// Updates the system time stored in the contract.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - Only the operator can call this function.
+        /// - The operator_nonce must be valid.
+        /// - The new system time must be strictly greater than the current system time.
+        /// - The new system time must not exceed the current Starknet block timestamp.
+        ///
+        /// Execution:
+        /// - Updates the system time.
+        /// - Emits no events.
+        fn update_system_time(
+            ref self: ContractState, operator_nonce: u64, new_timestamp: Timestamp,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+
+            // The new system time must be strictly greater than the current system time.
+            let current_system_time = self.system_time.read();
+            assert(new_timestamp > current_system_time, NON_MONOTONIC_TIME);
+
+            // The new system time must not exceed the current Starknet block timestamp.
+            let now = Time::now();
+            assert(new_timestamp <= now, STALE_TIME);
+
+            // Update the system time.
+            self.system_time.write(new_timestamp);
+        }
+
+        /// Returns the current system time stored in the contract.
+        fn get_system_time(self: @ContractState) -> Timestamp {
+            self.system_time.read()
         }
     }
 

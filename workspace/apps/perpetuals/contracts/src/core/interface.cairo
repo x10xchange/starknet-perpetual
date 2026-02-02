@@ -142,4 +142,6 @@ pub trait ICore<TContractState> {
     fn update_vault_protection_limit(
         ref self: TContractState, vault_position: PositionId, limit: u32,
     );
+    fn update_system_time(ref self: TContractState, operator_nonce: u64, new_timestamp: Timestamp);
+    fn get_system_time(self: @TContractState) -> Timestamp;
 }
