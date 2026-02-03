@@ -18,6 +18,7 @@ pub mod Core {
     use perpetuals::core::errors::{
         NON_MONOTONIC_TIME, STALE_TIME,
     };
+    use perpetuals::core::constants::MAX_TIME_DRIFT;
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::AssetId;
@@ -719,7 +720,8 @@ pub mod Core {
 
             // The new system time must not exceed the current Starknet block timestamp.
             let now = Time::now();
-            assert(new_timestamp <= now, STALE_TIME);
+            let acceptable_time = now.add(Time::seconds(MAX_TIME_DRIFT));
+            assert(new_timestamp <= acceptable_time, STALE_TIME);
 
             // Update the system time.
             self.system_time.write(new_timestamp);
