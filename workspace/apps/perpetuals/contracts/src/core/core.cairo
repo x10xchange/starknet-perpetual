@@ -16,10 +16,6 @@ pub mod Core {
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::components::system_time::SystemTimeComponent;
-    use perpetuals::core::errors::{
-        NON_MONOTONIC_TIME, STALE_TIME,
-    };
-    use perpetuals::core::constants::MAX_TIME_DRIFT;
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::AssetId;
@@ -32,7 +28,7 @@ pub mod Core {
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
+        StorageMapReadAccess
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
