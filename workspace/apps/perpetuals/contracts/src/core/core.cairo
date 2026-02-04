@@ -1,7 +1,7 @@
 #[starknet::contract]
 pub mod Core {
     use core::dict::{Felt252Dict, Felt252DictTrait};
-    use core::num::traits::Zero;
+    use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
@@ -17,14 +17,15 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
-        NON_MONOTONIC_TIME, ORDER_IS_NOT_EXPIRED, STALE_TIME, TRADE_ASSET_NOT_SYNTHETIC,
-        TRANSFER_FAILED,
+        ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC, TRANSFER_FAILED, ZERO_MAX_INTEREST_RATE,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
     use perpetuals::core::types::asset::AssetId;
+    use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::order::{ForcedTrade, LimitOrder, Order};
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
@@ -65,13 +66,13 @@ pub mod Core {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
-    use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -94,6 +95,9 @@ pub mod Core {
     #[abi(embed_v0)]
     impl OperatorNonceImpl =
         OperatorNonceComponent::OperatorNonceImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl SystemTimeImpl = SystemTimeComponent::SystemTimeImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl DepositImpl = Deposit::DepositImpl<ContractState>;
@@ -136,6 +140,8 @@ pub mod Core {
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
+        system_time: SystemTimeComponent::Storage,
+        #[substorage(v0)]
         pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
@@ -162,7 +168,10 @@ pub mod Core {
         forced_action_timelock: TimeDelta,
         // Cost for executing forced actions.
         premium_cost: u64,
-        system_time: Timestamp,
+        // Maximum interest rate per second (32-bit fixed-point with 32-bit fractional part).
+        // Example: max_interest_rate_per_sec = 10 means the rate is 10 / 2^32 ≈ 0.000000232 per
+        // second, which is approximately 7.4% per year.
+        max_interest_rate_per_sec: u32,
     }
 
     #[event]
@@ -174,6 +183,8 @@ pub mod Core {
         OperatorNonceEvent: OperatorNonceComponent::Event,
         #[flat]
         PausableEvent: PausableComponent::Event,
+        #[flat]
+        SystemTimeEvent: SystemTimeComponent::Event,
         #[flat]
         ReplaceabilityEvent: ReplaceabilityComponent::Event,
         #[flat]
@@ -228,6 +239,7 @@ pub mod Core {
         insurance_fund_position_owner_public_key: PublicKey,
         forced_action_timelock: u64,
         premium_cost: u64,
+        max_interest_rate_per_sec: u32,
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.initialize(:upgrade_delay);
@@ -250,6 +262,8 @@ pub mod Core {
         assert(forced_action_timelock.is_non_zero(), INVALID_ZERO_TIMEOUT);
         self.forced_action_timelock.write(TimeDelta { seconds: forced_action_timelock });
         self.premium_cost.write(premium_cost);
+        assert(max_interest_rate_per_sec.is_non_zero(), ZERO_MAX_INTEREST_RATE);
+        self.max_interest_rate_per_sec.write(max_interest_rate_per_sec);
     }
 
     #[abi(embed_v0)]
@@ -506,7 +520,6 @@ pub mod Core {
                 .external_components
                 ._get_liquidation_manager_dispatcher()
                 .liquidate(
-                    :operator_nonce,
                     :liquidator_signature,
                     :liquidated_position_id,
                     :liquidator_order,
@@ -551,12 +564,52 @@ pub mod Core {
                 .external_components
                 ._get_deleverage_manager_dispatcher()
                 .deleverage(
-                    :operator_nonce,
                     :deleveraged_position_id,
                     :deleverager_position_id,
                     :base_asset_id,
                     :deleveraged_base_amount,
                     :deleveraged_quote_amount,
+                )
+        }
+
+        /// Executes a spot asset deleverage of a user position with a deleverager position.
+        ///
+        /// Validations:
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The prices of all assets in the system are valid.
+        /// - Verifies the signs of amounts:
+        ///   - Ensures the opposite sign of amounts in spot and base collateral.
+        ///   - Ensures the sign of amounts in each position is consistent.
+        /// - Verifies that the spot asset is active.
+        /// - validates the deleveraged position is deleveragable.
+        ///
+        /// Execution:
+        /// - Update the position, based on `delevereged_spot_asset`.
+        /// - Adjust collateral balances based on `delevereged_base_collateral_amount`.
+        /// - Perform fundamental validation for both positions after the execution.
+        fn deleverage_spot_asset(
+            ref self: ContractState,
+            operator_nonce: u64,
+            deleveraged_position_id: PositionId,
+            deleverager_position_id: PositionId,
+            asset_id: AssetId,
+            deleveraged_amount: i64,
+            deleveraged_base_collateral_amount: i64,
+        ) {
+            /// Validations:
+            self.pausable.assert_not_paused();
+            self.assets.validate_price_interval_integrity(Time::now());
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self
+                .external_components
+                ._get_deleverage_manager_dispatcher()
+                .deleverage_spot_asset(
+                    :deleveraged_position_id,
+                    :deleverager_position_id,
+                    :asset_id,
+                    :deleveraged_amount,
+                    :deleveraged_base_collateral_amount,
                 )
         }
 
@@ -662,7 +715,6 @@ pub mod Core {
                 .external_components
                 ._get_vault_manager_dispatcher()
                 .redeem_from_vault(
-                    :operator_nonce,
                     :signature,
                     :order,
                     :vault_approval,
@@ -689,7 +741,6 @@ pub mod Core {
                 .external_components
                 ._get_vault_manager_dispatcher()
                 .liquidate_vault_shares(
-                    :operator_nonce,
                     :liquidated_position_id,
                     :vault_approval,
                     :vault_signature,
@@ -710,7 +761,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .activate_vault(operator_nonce: operator_nonce, :order, :signature)
+                .activate_vault(:order, :signature)
         }
         fn invest_in_vault(
             ref self: ContractState,
@@ -725,9 +776,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .invest_in_vault(
-                    operator_nonce: operator_nonce, :signature, :order, :correlation_id,
-                )
+                .invest_in_vault(:signature, :order, :correlation_id)
         }
 
         // Forced actions.
@@ -960,39 +1009,66 @@ pub mod Core {
                 );
         }
 
-        /// Updates the system time stored in the contract.
-        ///
-        /// Validations:
-        /// - The contract must not be paused.
-        /// - Only the operator can call this function.
-        /// - The operator_nonce must be valid.
-        /// - The new system time must be strictly greater than the current system time.
-        /// - The new system time must not exceed the current Starknet block timestamp.
-        ///
-        /// Execution:
-        /// - Updates the system time.
-        /// - Emits no events.
-        fn update_system_time(
-            ref self: ContractState, operator_nonce: u64, new_timestamp: Timestamp,
+
+        fn apply_interests(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_ids: Span<PositionId>,
+            interest_amounts: Span<i64>,
         ) {
+            assert(position_ids.len() == interest_amounts.len(), LENGTH_MISMATCH);
             self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
             self.operator_nonce.use_checked_nonce(:operator_nonce);
 
-            // The new system time must be strictly greater than the current system time.
-            let current_system_time = self.system_time.read();
-            assert(new_timestamp > current_system_time, NON_MONOTONIC_TIME);
+            // Read once and pass as arguments to avoid redundant storage reads
+            let current_time = self.get_system_time();
+            let max_interest_rate_per_sec = self.max_interest_rate_per_sec.read();
+            let interest_rate_scale: u64 = 2_u64.pow(32);
 
-            // The new system time must not exceed the current Starknet block timestamp.
-            let now = Time::now();
-            assert(new_timestamp <= now, STALE_TIME);
-
-            // Update the system time.
-            self.system_time.write(new_timestamp);
+            let mut i: usize = 0;
+            for position_id in position_ids {
+                let interest_amount = *interest_amounts[i];
+                self
+                    .positions
+                    .apply_interest_to_position(
+                        position_id: *position_id,
+                        :interest_amount,
+                        :current_time,
+                        :max_interest_rate_per_sec,
+                        :interest_rate_scale,
+                    );
+                i += 1;
+            }
         }
 
-        /// Returns the current system time stored in the contract.
-        fn get_system_time(self: @ContractState) -> Timestamp {
-            self.system_time.read()
+        fn liquidate_spot_asset(
+            ref self: ContractState,
+            operator_nonce: u64,
+            liquidated_position_id: PositionId,
+            liquidator_order: LimitOrder,
+            liquidator_signature: Signature,
+            actual_amount_spot_collateral: i64,
+            actual_amount_base_collateral: i64,
+            actual_liquidator_fee: u64,
+            liquidated_fee_amount: u64,
+        ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+
+            self
+                .external_components
+                ._get_liquidation_manager_dispatcher()
+                .liquidate_spot_asset(
+                    :liquidated_position_id,
+                    :liquidator_order,
+                    :liquidator_signature,
+                    :actual_amount_spot_collateral,
+                    :actual_amount_base_collateral,
+                    :actual_liquidator_fee,
+                    :liquidated_fee_amount,
+                );
         }
     }
 

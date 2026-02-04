@@ -26,6 +26,9 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
+use perpetuals::core::components::system_time::interface::{
+    ISystemTimeDispatcher, ISystemTimeDispatcherTrait,
+};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -167,6 +170,13 @@ pub struct OrderInfo {
     hash: felt252,
 }
 
+#[derive(Copy, Drop)]
+pub struct LimitOrderInfo {
+    pub order: LimitOrder,
+    pub signature: Signature,
+    pub hash: felt252,
+}
+
 /// Account is a representation of any user account that can interact with the contracts.
 #[derive(Copy, Drop)]
 pub struct Account {
@@ -264,6 +274,7 @@ struct PerpetualsConfig {
     insurance_fund_position_owner_public_key: PublicKey,
     forced_action_timelock: u64,
     premium_cost: u64,
+    max_interest_rate_per_sec: u32,
 }
 
 #[generate_trait]
@@ -290,6 +301,7 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
             insurance_fund_position_owner_public_key: operator.key_pair.public_key,
             forced_action_timelock: FORCED_ACTION_TIMELOCK,
             premium_cost: PREMIUM_COST,
+            max_interest_rate_per_sec: MAX_INTEREST_RATE_PER_SEC,
         }
     }
 }
@@ -311,6 +323,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
         self.insurance_fund_position_owner_public_key.serialize(ref calldata);
         self.forced_action_timelock.serialize(ref calldata);
         self.premium_cost.serialize(ref calldata);
+        self.max_interest_rate_per_sec.serialize(ref calldata);
 
         let perpetuals_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (address, _) = perpetuals_contract.deploy(@calldata).unwrap();
@@ -579,6 +592,19 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             registered_spots: array![(COLLATERAL_ASSET_ID(), token_state.address)],
         };
         perpetual_wrapper.set_roles();
+
+        // Initialize system time to BEGINNING_OF_TIME
+        let initial_timestamp = Timestamp { seconds: BEGINNING_OF_TIME };
+        let operator_nonce = IOperatorNonceDispatcher {
+            contract_address: perpetual_wrapper.perpetuals_contract,
+        }
+            .get_operator_nonce();
+        perpetual_wrapper.operator.set_as_caller(perpetual_wrapper.perpetuals_contract);
+        let system_time_dispatcher = ISystemTimeDispatcher {
+            contract_address: perpetual_wrapper.perpetuals_contract,
+        };
+        system_time_dispatcher
+            .update_system_time(:operator_nonce, new_timestamp: initial_timestamp);
 
         cheat_caller_address(
             contract_address: perpetuals_contract,
@@ -1682,6 +1708,189 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
     }
 
+    fn create_limit_order(
+        ref self: PerpsTestsFacade,
+        user: User,
+        base_asset_id: AssetId,
+        base_amount: i64,
+        quote_amount: i64,
+        fee_amount: u64,
+        receive_position_id: Option<PositionId>,
+    ) -> LimitOrderInfo {
+        let expiration = Time::now().add(delta: Time::weeks(1));
+        let salt = self.generate_salt();
+
+        let receive_position_id = match receive_position_id {
+            Some(id) => id,
+            None => user.position_id,
+        };
+
+        let order = LimitOrder {
+            source_position: user.position_id,
+            receive_position: receive_position_id,
+            base_asset_id,
+            base_amount,
+            quote_asset_id: self.collateral_id,
+            quote_amount,
+            fee_asset_id: self.collateral_id,
+            fee_amount,
+            expiration,
+            salt,
+        };
+        let message = order.get_message_hash(user.account.key_pair.public_key);
+        let signature = user.account.sign_message(:message);
+        LimitOrderInfo { order: order, signature: signature, hash: message }
+    }
+
+    fn liquidate_spot_asset(
+        ref self: PerpsTestsFacade,
+        liquidated_user: User,
+        liquidator_order_info: LimitOrderInfo,
+        actual_amount_spot_collateral: i64,
+        actual_amount_base_collateral: i64,
+        actual_liquidator_fee: u64,
+        liquidated_fee_amount: u64,
+    ) {
+        let liquidated_asset_id = liquidator_order_info.order.base_asset_id;
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+
+        // Get balances before liquidation
+        let liquidated_balance_before = dispatcher
+            .get_position_assets(position_id: liquidated_user.position_id);
+        let liquidated_collateral_balance_before = liquidated_balance_before.collateral_balance;
+        let liquidated_spot_balance_before = get_synthetic_balance(
+            assets: liquidated_balance_before.assets, asset_id: liquidated_asset_id,
+        );
+
+        let liquidator_balance_before = dispatcher
+            .get_position_assets(position_id: liquidator_order_info.order.source_position);
+        let liquidator_collateral_balance_before = liquidator_balance_before.collateral_balance;
+        let liquidator_spot_balance_before = get_synthetic_balance(
+            assets: liquidator_balance_before.assets, asset_id: liquidated_asset_id,
+        );
+
+        // Get receive position balance before if different from source
+        let is_receive_position_different = liquidator_order_info
+            .order
+            .source_position != liquidator_order_info
+            .order
+            .receive_position;
+        let liquidator_receive_balance_before = if is_receive_position_different {
+            dispatcher
+                .get_position_assets(position_id: liquidator_order_info.order.receive_position)
+        } else {
+            liquidator_balance_before
+        };
+        let liquidator_receive_spot_balance_before = get_synthetic_balance(
+            assets: liquidator_receive_balance_before.assets, asset_id: liquidated_asset_id,
+        );
+
+        let fee_position_balance_before = dispatcher
+            .get_position_assets(position_id: FEE_POSITION)
+            .collateral_balance;
+        let insurance_fee_position_balance_before = dispatcher
+            .get_position_assets(position_id: INSURANCE_FUND_POSITION)
+            .collateral_balance;
+
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .liquidate_spot_asset(
+                :operator_nonce,
+                liquidated_position_id: liquidated_user.position_id,
+                liquidator_order: liquidator_order_info.order,
+                liquidator_signature: liquidator_order_info.signature,
+                :actual_amount_spot_collateral,
+                :actual_amount_base_collateral,
+                :actual_liquidator_fee,
+                :liquidated_fee_amount,
+            );
+
+        // Validate balances after liquidation
+        self
+            .validate_collateral_balance(
+                position_id: liquidated_user.position_id,
+                expected_balance: liquidated_collateral_balance_before
+                    - liquidated_fee_amount.into()
+                    + actual_amount_base_collateral.into(),
+            );
+
+        self
+            .validate_asset_balance(
+                position_id: liquidated_user.position_id,
+                asset_id: liquidated_asset_id,
+                expected_balance: liquidated_spot_balance_before
+                    + actual_amount_spot_collateral.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: liquidator_order_info.order.source_position,
+                expected_balance: liquidator_collateral_balance_before
+                    - actual_liquidator_fee.into()
+                    - actual_amount_base_collateral.into(),
+            );
+
+        // Validate asset balance based on whether source and receive positions are different
+        if !is_receive_position_different {
+            // Same position: receives assets and pays collateral
+            self
+                .validate_asset_balance(
+                    position_id: liquidator_order_info.order.source_position,
+                    asset_id: liquidated_asset_id,
+                    expected_balance: liquidator_spot_balance_before
+                        - actual_amount_spot_collateral.into(),
+                );
+        } else {
+            // Different positions: source keeps its assets unchanged, receive gets new assets
+            self
+                .validate_asset_balance(
+                    position_id: liquidator_order_info.order.source_position,
+                    asset_id: liquidated_asset_id,
+                    expected_balance: liquidator_spot_balance_before,
+                );
+            // Receive position gets the liquidated assets
+            self
+                .validate_asset_balance(
+                    position_id: liquidator_order_info.order.receive_position,
+                    asset_id: liquidated_asset_id,
+                    expected_balance: liquidator_receive_spot_balance_before
+                        - actual_amount_spot_collateral.into(),
+                );
+        }
+
+        self
+            .validate_collateral_balance(
+                position_id: FEE_POSITION,
+                expected_balance: fee_position_balance_before + actual_liquidator_fee.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: INSURANCE_FUND_POSITION,
+                expected_balance: insurance_fee_position_balance_before
+                    + liquidated_fee_amount.into(),
+            );
+
+        // Verify liquidation event was emitted
+        assert_liquidate_event_with_expected(
+            spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
+            liquidated_position_id: liquidated_user.position_id,
+            liquidator_order_position_id: liquidator_order_info.order.source_position,
+            liquidator_order_base_asset_id: liquidated_asset_id,
+            liquidator_order_base_amount: liquidator_order_info.order.base_amount,
+            collateral_id: self.collateral_id,
+            liquidator_order_quote_amount: liquidator_order_info.order.quote_amount,
+            liquidator_order_fee_amount: liquidator_order_info.order.fee_amount,
+            actual_amount_base_liquidated: actual_amount_spot_collateral,
+            actual_amount_quote_liquidated: actual_amount_base_collateral,
+            actual_liquidator_fee: actual_liquidator_fee,
+            insurance_fund_fee_amount: liquidated_fee_amount,
+            liquidator_order_hash: liquidator_order_info.hash,
+        );
+    }
+
     fn deleverage(
         ref self: PerpsTestsFacade,
         deleveraged_user: User,
@@ -1900,6 +2109,15 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .funding_tick(:operator_nonce, :funding_ticks, timestamp: Time::now());
     }
 
+    fn apply_interests(
+        ref self: PerpsTestsFacade, position_ids: Span<PositionId>, interest_amounts: Span<i64>,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .apply_interests(:operator_nonce, :position_ids, :interest_amounts);
+    }
+
     fn get_position_asset_balance(
         self: @PerpsTestsFacade, position_id: PositionId, synthetic_id: AssetId,
     ) -> Balance {
@@ -2106,6 +2324,18 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             asset_id: vault.asset_id,
         }
     }
+
+    fn advance_time(ref self: PerpsTestsFacade, seconds: u64) {
+        // Advance block timestamp
+        let new_timestamp = Time::now().add(Time::seconds(seconds));
+        start_cheat_block_timestamp_global(new_timestamp.into());
+
+        // Update system time in the contract
+        let operator_nonce = self.get_nonce();
+        let dispatcher = ISystemTimeDispatcher { contract_address: self.perpetuals_contract };
+        self.operator.set_as_caller(self.perpetuals_contract);
+        dispatcher.update_system_time(:operator_nonce, :new_timestamp);
+    }
 }
 
 
@@ -2171,10 +2401,6 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
         assert_eq!(total_risk, expected_total_risk);
     }
-}
-
-pub fn advance_time(seconds: u64) {
-    start_cheat_block_timestamp_global(Time::now().add(Time::seconds(seconds)).into());
 }
 
 fn get_synthetic_balance(assets: Span<AssetBalanceInfo>, asset_id: AssetId) -> Balance {

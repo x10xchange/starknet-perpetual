@@ -32,6 +32,8 @@ classDiagram
         invest_in_vault()
         redeem_from_vault()
         liquidate_vault_shares()
+        liquidate_spot_asset()
+        deleverage_spot_asset()
     }
     class Position{
         version: u8,
@@ -79,6 +81,7 @@ classDiagram
         add_synthetic_asset()
         add_vault_collateral_asset()
         update_asset_risk_factor()
+        update_asset_risk_factor_request()
         deactivate_synthetic()
         funding_tick()
         price_tick()
@@ -303,6 +306,8 @@ $$ ( \frac{TV}{TR})\_{new} \geq (\frac{TV}{TR})\_{old} $$
 $$ {TR}\_{new} \lt {TR\_{old}} $$
 
 #### Is Fair Deleverage
+
+TODO: add logic for spot asset deleverage.
 
 checks if the deleverage is fair.
 
@@ -1361,6 +1366,7 @@ pub enum Event {
     PriceTick: events::PriceTick,
     OracleRemoved: events::OracleRemoved,
     AssetQuorumUpdated: events::AssetQuorumUpdated,
+    RiskFactorIncreaseRequest: events::RiskFactorIncreaseRequest,
 }
 ```
 
@@ -1422,6 +1428,19 @@ pub struct AssetChanged {
     pub risk_factor_tier_size: u128,
     pub resolution_factor: u64,
     pub quorum: u8,
+}
+```
+
+###### RiskFactorIncreaseRequest
+
+```rust
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct RiskFactorIncreaseRequest {
+    #[key]
+    pub asset_id: AssetId,
+    pub risk_factor_tiers: Span<u16>,
+    pub risk_factor_first_tier_boundary: u128,
+    pub risk_factor_tier_size: u128,
 }
 ```
 
@@ -1845,6 +1864,8 @@ Only APP\_GOVERNOR can execute.
 
 Update asset risk factors. This function must be sequenced by the operator to prevent liquidation failures if submitted out of order.
 
+Risk factors can be decreased by the operator without any request. Risk factors can only be increased if there is a matching request from the app governor via `update_asset_risk_factor_request`.
+
 ```rust
 fn update_asset_risk_factor(
     ref self: ContractState,
@@ -1868,17 +1889,25 @@ Only the Operator can execute.
 4. `risk_factor_tiers` length is non zero.
 5. `risk_factor_first_tier_boundary` and `risk_factor_tier_size` are non zero.
 6. `asset_id` is not the collateral asset.
-7. For each tier boundary, the new risk factor must be less than or equal to the old risk factor (risk can only decrease).
+7. Non-synthetic assets must have exactly 1 risk factor tier.
 8. `risk_factor_tiers` is sorted.
+9. If any risk factor is increasing:
+   - A matching request must exist from `update_asset_risk_factor_request` for the same `asset_id`.
+   - The request parameters (`risk_factor_first_tier_boundary`, `risk_factor_tier_size`, `risk_factor_tiers`) must exactly match the provided parameters.
+10. If no risk factors are increasing, all new risk factors must be less than or equal to the old risk factors (risk can only decrease or stay the same).
 
 **Logic:**
 
 1. Run validations.
-2. For each tier boundary, validate that the new risk factor is <= old risk factor.
-3. Update `risk_factor_first_tier_boundary` and `risk_factor_tier_size` in asset config.
-4. Clear existing risk factor tiers.
-5. Add new risk factor tiers.
-6. Emit `AssetChanged` event.
+2. Check if any risk factor is increasing by comparing new tiers with old tiers.
+3. If increasing:
+   - Validate that a matching request exists for the same `asset_id`.
+   - Validate that all request parameters exactly match the provided parameters.
+   - Clear the request after validation.
+4. Update `risk_factor_first_tier_boundary` and `risk_factor_tier_size` in asset config.
+5. Clear existing risk factor tiers.
+6. Add new risk factor tiers.
+7. Emit `AssetChanged` event.
 
 **Emits:**
 
@@ -1894,8 +1923,59 @@ Only the Operator can execute.
 - INVALID_ZERO_RF_FIRST_BOUNDRY
 - INVALID_ZERO_RF_TIER_SIZE
 - ASSET_REGISTERED_AS_COLLATERAL
-- INVALID_RF_VALUE
+- INVALID_NON_SYNTHETIC_RF_TIERS
+- RF_INCREASE_REQUEST_NOT_FOUND
+- RF_REQUEST_MISMATCH
 - UNSORTED_RISK_FACTOR_TIERS
+
+###### Update Asset Risk Factor Request
+
+Request an increase in asset risk factors. This function allows the app governor to request a risk factor increase, which must then be executed by the operator via `update_asset_risk_factor`.
+
+Only one request can be active at a time. A new request will overwrite any previous request, regardless of the asset ID.
+
+```rust
+fn update_asset_risk_factor_request(
+    ref self: ContractState,
+    asset_id: AssetId,
+    risk_factor_tiers: Span<u16>,
+    risk_factor_first_tier_boundary: u128,
+    risk_factor_tier_size: u128,
+)
+```
+
+**Access Control:**
+
+Only the App Governor can execute.
+
+**Validations:**
+
+1. `asset_id` is not zero.
+2. `risk_factor_tiers` length is non zero.
+3. `risk_factor_first_tier_boundary` and `risk_factor_tier_size` are non zero.
+
+**Logic:**
+
+1. Run validations.
+2. Clear any existing risk factor increase request (if present).
+3. Store the new request parameters:
+   - `risk_factor_increase_request_asset_id`
+   - `risk_factor_increase_request_first_tier_boundary`
+   - `risk_factor_increase_request_tier_size`
+   - `risk_factor_increase_request_tiers` (Vec of tier values)
+4. Emit `RiskFactorIncreaseRequest` event.
+
+**Emits:**
+
+[RiskFactorIncreaseRequest](#riskfactorincreaserequest)
+
+**Errors:**
+
+- ONLY_APP_GOVERNOR
+- INVALID_ZERO_ASSET_ID
+- INVALID_ZERO_RF_TIERS_LEN
+- INVALID_ZERO_RF_FIRST_BOUNDRY
+- INVALID_ZERO_RF_TIER_SIZE
 
 ###### Deactivate Synthetic
 
@@ -4140,6 +4220,108 @@ Only the Operator can execute.
 - POSITION_IS_NOT_HEALTHIER
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
+#### Liquidate Spot Asset
+When a user position [is liquidatable](#liquidatable), the system can match the liquidated position with a signed order without a signature of the liquidated position to make it [healthier](#is-healthier).
+
+```rust
+    fn liquidate_spot_asset(
+        ref self: ContractState,
+        operator_nonce: u64,
+        liquidated_position_id: PositionId,
+        liquidated_asset_id: AssetId,
+        liquidator_order: LimitOrder,
+        liquidator_signature: Signature,
+        actual_amount_spot_collateral: i64,
+        actual_amount_base_collateral: i64,
+        actual_liquidator_fee: u64,
+        liquidated_fee_amount: u64,
+    );
+```
+
+**Access Control:**
+
+Only the Operator can execute.
+
+**Hash:**
+
+[get\_message\_hash](#get-message-hash) on [LimitOrder](#limitorder) with position `public_key`.
+
+**Validations:**
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [public key signature](#public-key-signature) on
+6. All fees amounts are non negative (actuals and order)
+7. [Expiration validation](#expiration)
+8. [Spot asset check](#asset)
+9. Liquidator order is not from the same position as the liquidated position.
+10. Positions are not `FEE_POSITION`.
+11. Positions are not `INSURANCE_FUND_POSITION`.
+12. `liquidator_order.quote_asset_id` and `liquidator_order.fee_asset_id` are the collateral asset id.
+13. `liquidator_order.base.asset_id` is registered and active spot asset.
+14. `liquidated_position_id.is_liquidatable()==true`
+15. `|liquidator_order.quote_amount| > liquidator_order.fee_amount.`
+16. `liquidator_order.quote_amount` and `liquidator_order.base_amount` have opposite signs and are non-zero.
+17. `liquidator_order.base_amount` and `actual_amount_spot_collateral` have opposite signs.
+18. `liquidator_order.quote.amount` and `actual_amount_base_collateral` have opposite signs.
+19. `actual_amount_spot_collateral` is negative and `actual_amount_base_collateral` is positive.
+20. `|fulfillment[liquidator_order_hash]|+|actual_amount_spot_collateral|≤|liquidator_order.base.amount|`
+21. `actual_liquidator_fee / |actual_amount_base_collateral| ≤ liquidator_order.fee.amount / |liquidator_order.quote.amount|`
+22. `actual_amount_spot_collateral / |actual_amount_base_collateral| ≤ - liquidator_order.base.amount / |liquidator_order.quote.amount|`
+23. Check interest amounts in range for both positions.
+24. Check liquidated position spot asset balance is bigger than `actual_amount_spot_collateral` in absolute value
+
+
+**Logic:**
+
+1. Run validations
+2. Add `actual_amount_spot_collateral` to the `liquidated_position_id` spot asset id.
+3. Subtract `actual_amount_spot_collateral` from the `liquidator_order.position_id` spot asset id.
+4. Add `actual_amount_base_collateral` to the `liquidated_position_id` collateral.
+5. Subtract `actual_amount_base_collateral` from the `liquidator_order.position_id` collateral.
+6. Subtract `actual_liquidator_fee` from the `liquidator_order.position_id` collateral.
+7. Add `actual_liquidator_fee` to the `fee_position` collateral.
+8. Subtract `liquidated_fee_amount` from the `liquidated_position_id` collateral.
+9. Add `liquidated_fee_amount` to the `insurance_fund` collateral.
+10. Add interest amounts to collateral balances for both positions, including timestamps.
+11. `fulfillment[liquidator_order_hash] += |actual_amount_base_liquidated|`
+12. [Fundamental validation](#fundamental) for both positions.
+
+**Emits:**
+
+[Liquidate](#liquidate)
+
+**Errors:**
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- INVALID\_ASSET\_TYPE
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- INVALID_STARK_KEY_SIGNATURE
+- FULFILLMENT_EXCEEDED
+- INVALID_TRADE_SAME_POSITIONS
+- CANT_TRADE_WITH_FEE_POSITION
+- INSURANCE_FUND_POSITION
+- INVALID\_ZERO\_AMOUNT
+- ORDER\_EXPIRED
+- INVALID_TRADE_WRONG_AMOUNT_SIGN
+- INVALID_AMOUNT_SIGN
+- INVALID_QUOTE_FEE_AMOUNT
+- SYNTHETIC_NOT_ACTIVE
+- INVALID_QUOTE_AMOUNT_SIGN
+- INVALID_ACTUAL_BASE_SIGN
+- INVALID_ACTUAL_QUOTE_SIGN
+- ILLEGAL_BASE_TO_QUOTE_RATIO
+- ILLEGAL_FEE_TO_QUOTE_RATIO
+- POSITION_IS_NOT_LIQUIDATABLE
+- POSITION_IS_NOT_HEALTHIER
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
 #### Deleverage
 
 When a user position [is deleveragable](#deleveragable), the system can match the deleveraged position with deleverger position, both without position’s signature, to make it [healthier](#is-healthier).
@@ -4184,6 +4366,77 @@ Only the Operator can execute.
 3. Subtract `deleveraged_base_amount` from the `deleverager_position_id` base id synthetic.
 4. Add `deleveraged_quote_amount` to the `deleveraged_position_id` collateral.
 5. Subtract `deleveraged_quote_amount` from the `deleverager_position_id` collateral.
+6. Add interest amounts to collateral balances for both positions, including timestamps.
+7. [Fundamental validation](#fundamental) for both positions.
+
+**Emits:**
+[deleverage](#deleverage)
+
+**Errors:**
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- SYNTHETIC\_NOT\_EXISTS
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- INVALID_ZERO_AMOUNT
+- COLLATERAL_NOT_EXISTS
+- COLLATERAL\_NOT\_ACTIVE
+- INVALID_NON_SYNTHETIC_ASSET
+- INVALID_WRONG_AMOUNT_SIGN
+- INVALID_BASE_CHANGE
+- INVALID_POSITION
+- ASSET_NOT_EXISTS
+- NOT_SYNTHETIC
+- POSITION_IS_NOT_DELEVERAGABLE
+- POSITION_IS_NOT_FAIR_DELEVERAGE
+- POSITION_IS_NOT_HEALTHIER
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
+#### Deleverage Spot Asset
+
+When a user position [is deleveragable](#deleveragable), the system can match the deleveraged position with deleverger position, both without position’s signature, to make it [healthier](#is-healthier).
+
+```rust
+fn deleverage_spot_asset(
+    ref self: ContractState,
+    operator_nonce: u64,
+    deleveraged_position_id: PositionId,
+    deleverager_position_id: PositionId,
+    spot_asset_id: AssetId,
+    deleveraged_spot_amount: i64,
+    deleveraged_base_collateral_amount: i64,
+    interest_amount_deleveraged: i64,
+    interest_amount_deleverager: i64,
+)
+```
+
+**Access Control:**
+
+Only the Operator can execute.
+
+**Validations:**
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Assets check](#asset)
+4. [Price validation](#price)
+5. `deleveraged_position_id != deleverager_position_id`
+6. spot\_asset\_id must be a registered active asset.
+7. deleveraged\_position is\_deleveragable
+8. deleveraged\_spot\_amount and deleveraged\_base\_collateral\_amount have opposite signs.
+9. `deleveraged_position.spot_balance` decreases in magnitude after the change: `|spot_deleveraged.amount|` must not exceed `|deleveraged_position.spot_balance|`, and `deleveraged_position.spot_balance` must remain non-negative.
+10. Check interest amounts in range for both positions.
+
+**Logic:**
+
+1. Run validations
+2. Subtract `deleveraged_spot_amount` from the `deleveraged_position_id` spot balance.
+3. Add `deleveraged_spot_amount` to the `deleverager_position_id` spot balance.
+4. Add `deleveraged_base_collateral_amount` to the `deleveraged_position_id` base collateral balance.
+5. Subtract `deleveraged_base_collateral_amount` from the `deleverager_position_id` base collateral balance.
 6. Add interest amounts to collateral balances for both positions, including timestamps.
 7. [Fundamental validation](#fundamental) for both positions.
 

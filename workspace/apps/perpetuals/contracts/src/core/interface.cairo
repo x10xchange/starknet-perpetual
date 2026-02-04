@@ -96,6 +96,15 @@ pub trait ICore<TContractState> {
         deleveraged_base_amount: i64,
         deleveraged_quote_amount: i64,
     );
+    fn deleverage_spot_asset(
+        ref self: TContractState,
+        operator_nonce: u64,
+        deleveraged_position_id: PositionId,
+        deleverager_position_id: PositionId,
+        asset_id: AssetId,
+        deleveraged_amount: i64,
+        deleveraged_base_collateral_amount: i64,
+    );
     fn reduce_asset_position(
         ref self: TContractState,
         operator_nonce: u64,
@@ -166,6 +175,21 @@ pub trait ICore<TContractState> {
         order_b: Order,
     );
     fn forced_trade(ref self: TContractState, operator_nonce: u64, order_a: Order, order_b: Order);
-    fn update_system_time(ref self: TContractState, operator_nonce: u64, new_timestamp: Timestamp);
-    fn get_system_time(self: @TContractState) -> Timestamp;
+    fn apply_interests(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_ids: Span<PositionId>,
+        interest_amounts: Span<i64>,
+    );
+    fn liquidate_spot_asset(
+        ref self: TContractState,
+        operator_nonce: u64,
+        liquidated_position_id: PositionId,
+        liquidator_order: LimitOrder,
+        liquidator_signature: Signature,
+        actual_amount_spot_collateral: i64,
+        actual_amount_base_collateral: i64,
+        actual_liquidator_fee: u64,
+        liquidated_fee_amount: u64,
+    );
 }

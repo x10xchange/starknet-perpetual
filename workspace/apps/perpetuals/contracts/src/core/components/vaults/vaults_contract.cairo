@@ -8,21 +8,13 @@ use starkware_utils::signature::stark::Signature;
 #[starknet::interface]
 pub trait IVaultExternal<TContractState> {
     fn activate_vault(
-        ref self: TContractState,
-        operator_nonce: u64,
-        order: ConvertPositionToVault,
-        signature: Signature,
+        ref self: TContractState, order: ConvertPositionToVault, signature: Signature,
     );
     fn invest_in_vault(
-        ref self: TContractState,
-        operator_nonce: u64,
-        signature: Signature,
-        order: LimitOrder,
-        correlation_id: felt252,
+        ref self: TContractState, signature: Signature, order: LimitOrder, correlation_id: felt252,
     );
     fn redeem_from_vault(
         ref self: TContractState,
-        operator_nonce: u64,
         signature: Signature,
         order: LimitOrder,
         vault_approval: LimitOrder,
@@ -33,7 +25,6 @@ pub trait IVaultExternal<TContractState> {
 
     fn liquidate_vault_shares(
         ref self: TContractState,
-        operator_nonce: u64,
         liquidated_position_id: PositionId,
         vault_approval: LimitOrder,
         vault_signature: Signature,
@@ -60,6 +51,7 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starkware_utils::components::pausable::PausableComponent;
@@ -103,6 +95,8 @@ pub(crate) mod VaultsManager {
         #[flat]
         PositionsEvent: PositionsComponent::Event,
         #[flat]
+        SystemTimeEvent: SystemTimeComponent::Event,
+        #[flat]
         DepositEvent: DepositComponent::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
@@ -136,6 +130,8 @@ pub(crate) mod VaultsManager {
         #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
+        pub system_time: SystemTimeComponent::Storage,
+        #[substorage(v0)]
         pub fulfillment_tracking: FulfillmentComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
@@ -152,6 +148,7 @@ pub(crate) mod VaultsManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
+    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
     component!(path: DepositComponent, storage: deposits, event: DepositEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -179,19 +176,13 @@ pub(crate) mod VaultsManager {
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {
         fn activate_vault(
-            ref self: ContractState,
-            operator_nonce: u64,
-            order: ConvertPositionToVault,
-            signature: Signature,
+            ref self: ContractState, order: ConvertPositionToVault, signature: Signature,
         ) {
-            self
-                .vaults
-                .activate_vault(operator_nonce: operator_nonce, order: order, signature: signature);
+            self.vaults.activate_vault(:order, :signature);
         }
 
         fn invest_in_vault(
             ref self: ContractState,
-            operator_nonce: u64,
             signature: Signature,
             order: LimitOrder,
             correlation_id: felt252,
@@ -343,7 +334,6 @@ pub(crate) mod VaultsManager {
         }
         fn redeem_from_vault(
             ref self: ContractState,
-            operator_nonce: u64,
             signature: Span<felt252>,
             order: LimitOrder,
             vault_approval: LimitOrder,
@@ -365,7 +355,6 @@ pub(crate) mod VaultsManager {
 
         fn liquidate_vault_shares(
             ref self: ContractState,
-            operator_nonce: u64,
             liquidated_position_id: PositionId,
             vault_approval: LimitOrder,
             vault_signature: Span<felt252>,
@@ -585,12 +574,6 @@ pub(crate) mod VaultsManager {
                     position: vault_position, asset_id: self.assets.get_collateral_id(),
                 );
 
-            self
-                .positions
-                .validate_asset_balance_is_not_negative(
-                    position: redeeming_position, asset_id: order.base_asset_id,
-                );
-
             // user health checks
             self
                 .positions
@@ -605,6 +588,12 @@ pub(crate) mod VaultsManager {
                 .positions
                 .apply_diff(
                     position_id: redeeming_position_id, position_diff: redeeming_position_diff,
+                );
+
+            self
+                .positions
+                .validate_asset_balance_is_not_negative(
+                    position: redeeming_position, asset_id: order.base_asset_id,
                 );
 
             // no need to validate health as can only receive collateral

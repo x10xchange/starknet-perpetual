@@ -18,8 +18,10 @@ pub mod Positions {
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
+    use perpetuals::core::components::system_time::SystemTimeComponent;
+    use perpetuals::core::components::system_time::interface::ISystemTime;
     use perpetuals::core::types::asset::AssetId;
-    use perpetuals::core::types::asset::synthetic::AssetBalanceInfo;
+    use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, SyntheticTrait};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
     use perpetuals::core::types::position::{
@@ -29,10 +31,11 @@ pub mod Positions {
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::value_risk_calculator::{
-        PositionState, PositionTVTR, calculate_position_tvtr, evaluate_position,
+        PositionState, PositionTVTR, calculate_position_pnl, calculate_position_tvtr,
+        evaluate_position,
     };
     use starknet::storage::{
-        Map, Mutable, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+        Map, Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
@@ -42,24 +45,25 @@ pub mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::math::abs::Abs;
-    use starkware_utils::math::utils::have_same_sign;
+    use starkware_utils::math::utils::{have_same_sign, mul_wide_and_floor_div};
     use starkware_utils::signature::stark::{PublicKey, Signature};
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::storage::utils::AddToStorage;
     use starkware_utils::time::time::{Timestamp, validate_expiration};
+    use crate::core::components::assets::errors::NO_SUCH_ASSET;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::errors::{
-        INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT,
+        AMOUNT_OVERFLOW, INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_INTEREST_RATE,
+        INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, NO_DELEVERAGE_VAULT_SHARES,
     };
-    use crate::core::types::asset::synthetic::AssetBalanceDiffEnriched;
+    use crate::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetType};
     use crate::core::types::balance::BalanceDiff;
     use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
     use crate::core::value_risk_calculator::{
         assert_healthy_or_healthier, calculate_position_tvtr_before, calculate_position_tvtr_change,
     };
-
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
 
@@ -67,7 +71,7 @@ pub mod Positions {
 
     #[storage]
     pub struct Storage {
-        positions: Map<PositionId, Position>,
+        pub positions: Map<PositionId, Position>,
     }
 
     #[event]
@@ -92,6 +96,7 @@ pub mod Positions {
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl SystemTime: SystemTimeComponent::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
         fn get_position_assets(
             self: @ComponentState<TContractState>, position_id: PositionId,
@@ -185,9 +190,12 @@ pub mod Positions {
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
+            let system_time_component = get_dep_component!(@self, SystemTime);
+            let current_time = system_time_component.get_system_time();
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
             position.owner_protection_enabled.write(owner_protection_enabled);
+            position.last_interest_applied_time.write(current_time);
             if owner_account.is_non_zero() {
                 position.owner_account.write(Option::Some(owner_account));
             }
@@ -492,6 +500,86 @@ pub mod Positions {
             }
         }
 
+        /// Calculates the position PnL (profit and loss) as the total value of synthetic assets
+        /// plus base collateral. Similar to TV calculation but without vault and spot assets.
+        /// Includes funding ticks in the calculation.
+        fn calculate_position_pnl(
+            self: @ComponentState<TContractState>,
+            position_id: PositionId,
+            collateral_balance: Balance,
+        ) -> i64 {
+            let position = self.get_position_snapshot(:position_id);
+            let assets = get_dep_component!(self, Assets);
+
+            // Use existing function to derive funding delta and unchanged assets
+            // This already calculates funding and builds AssetBalanceInfo array
+            let (funding_delta, unchanged_assets) = self
+                .derive_funding_delta_and_unchanged_assets(
+                    :position, position_diff: Default::default(),
+                );
+
+            // Filter to only include synthetic assets (exclude vault and spot)
+            let mut synthetic_assets = array![];
+            for asset in unchanged_assets {
+                let asset_config = assets.get_asset_config(*asset.id);
+                if asset_config.asset_type == AssetType::SYNTHETIC {
+                    synthetic_assets.append(*asset);
+                }
+            }
+
+            let collateral_balance_with_funding = collateral_balance + funding_delta;
+            calculate_position_pnl(
+                assets: synthetic_assets.span(),
+                collateral_balance: collateral_balance_with_funding,
+            )
+        }
+
+        fn apply_interest_to_position(
+            ref self: ComponentState<TContractState>,
+            position_id: PositionId,
+            interest_amount: i64,
+            current_time: Timestamp,
+            max_interest_rate_per_sec: u32,
+            interest_rate_scale: u64,
+        ) {
+            // Check that position exists
+            let position = self.get_position_mut(:position_id);
+
+            let previous_timestamp = position.last_interest_applied_time.read();
+
+            // Calculate position PnL (total value of synthetic assets + base collateral)
+            let pnl = self.calculate_position_pnl(position_id, position.collateral_balance.read());
+
+            // Validate interest rate
+            if pnl.is_non_zero() && previous_timestamp.is_non_zero() {
+                // Calculate time difference
+                let time_diff: u64 = current_time.seconds - previous_timestamp.seconds;
+
+                // Calculate maximum allowed change: |pnl| * time_diff *
+                // max_interest_rate_per_sec / 2^32.
+                let balance_time_product: u128 = pnl.abs().into() * time_diff.into();
+                let max_allowed_change = mul_wide_and_floor_div(
+                    balance_time_product,
+                    max_interest_rate_per_sec.into(),
+                    interest_rate_scale.into(),
+                )
+                    .expect(AMOUNT_OVERFLOW);
+
+                // Check: |interest_amount| <= max_allowed_change
+                assert(interest_amount.abs().into() <= max_allowed_change, INVALID_INTEREST_RATE);
+
+                // Apply interest
+                position.collateral_balance.add_and_write(interest_amount.into());
+            } else {
+                // If old balance is zero, only allow zero interest.
+                // If `previous_timestamp` is zero, this indicates the first interest calculation,
+                // and the interest amount is required to be zero.
+                assert(interest_amount.is_zero(), INVALID_INTEREST_RATE);
+            }
+
+            position.last_interest_applied_time.write(current_time);
+        }
+
         fn get_position_snapshot(
             self: @ComponentState<TContractState>, position_id: PositionId,
         ) -> StoragePath<Position> {
@@ -661,7 +749,7 @@ pub mod Positions {
             assert(amount.abs() <= position_base_balance.abs(), INVALID_BASE_CHANGE);
         }
 
-        fn _validate_spot_collateral_shrink_non_negative(
+        fn _validate_asset_shrink_non_negative(
             self: @ComponentState<TContractState>,
             position: StoragePath<Position>,
             asset_id: AssetId,
@@ -676,7 +764,7 @@ pub mod Positions {
         }
 
         fn _validate_imposed_reduction_trade(
-            ref self: ComponentState<TContractState>,
+            self: @ComponentState<TContractState>,
             position_id_a: PositionId,
             position_id_b: PositionId,
             position_a: StoragePath<Position>,
@@ -695,15 +783,37 @@ pub mod Positions {
             // Sign Validation for amounts.
             assert(!have_same_sign(base_amount_a, quote_amount_a), INVALID_AMOUNT_SIGN);
 
-            // Ensure that TR does not increase and that the base amount retains the same sign.
-            self
-                ._validate_synthetic_shrinks(
-                    position: position_a, asset_id: base_asset_id, amount: base_amount_a,
-                );
-            self
-                ._validate_synthetic_shrinks(
-                    position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
-                );
+            let assets = get_dep_component!(self, Assets);
+            let entry = assets.asset_config.entry(base_asset_id).as_ptr();
+            match SyntheticTrait::get_asset_type(entry).expect(NO_SUCH_ASSET) {
+                AssetType::SYNTHETIC => {
+                    // Ensure that TR does not increase and that the base amount retains the same
+                    // sign.
+                    self
+                        ._validate_synthetic_shrinks(
+                            position: position_a, asset_id: base_asset_id, amount: base_amount_a,
+                        );
+                    self
+                        ._validate_synthetic_shrinks(
+                            position: position_b, asset_id: base_asset_id, amount: -base_amount_a,
+                        );
+                },
+                AssetType::SPOT_COLLATERAL => {
+                    // This is called only in deleverage_spot, position_a is the deleveraged
+                    // position and position_b is the deleverager position.
+                    // Base asset id is the spot asset id.
+
+                    // Validate that deleveraged spot balance is not negative
+                    // and will not become negative after the deleverage.
+                    self
+                        ._validate_asset_shrink_non_negative(
+                            position: position_a, asset_id: base_asset_id, amount: base_amount_a,
+                        );
+                },
+                AssetType::VAULT_SHARE_COLLATERAL => {
+                    panic_with_felt252(NO_DELEVERAGE_VAULT_SHARES);
+                },
+            }
         }
     }
 
