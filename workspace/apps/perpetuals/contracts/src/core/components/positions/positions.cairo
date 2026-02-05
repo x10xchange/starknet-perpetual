@@ -771,7 +771,7 @@ pub mod Positions {
                     let delta = tv_after - tv_at_last_check;
                     if (delta < 0_i64.into()) {
                         let tv_loss = delta.abs();
-                        if (tv_loss >= max_tvtr_loss) {
+                        if (tv_loss > max_tvtr_loss) {
                             panic_with_byte_array(
                                 err: @format!(
                                     "Vault Protection Limit Exceeded, tv_at_last_check: {}, tv_after_operation: {}, max_allowed_loss : {}",
