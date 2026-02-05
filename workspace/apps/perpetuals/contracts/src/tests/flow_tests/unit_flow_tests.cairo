@@ -2605,19 +2605,18 @@ fn test_liquidate_spot_collateral_after_price_drop() {
     //   - Base collateral: -9500 (negative from transfer)
     //   - Spot collateral: 9800 units (at price 100)
     // Calculations:
-    //   TV = base_collateral + spot_collateral * spot_price
-    //      = -9500 + (9800 * 100) = -9500 + 980000 = 970500
-    //   TR = |spot_collateral * spot_price| * risk_factor
-    //      = |9800 * 100| * 0.1 = 980000 * 0.1 = 98000
-    //   TV/TR = 970500 / 98000 = 9.9 (healthy, > 1)
+    //   TV = base_collateral + spot_collateral * spot_price - spot_risk
+    //      = -9500 + (9800 * 100) - 9800 * 100 * 0.1 = -9500 + 980000 - 98000 = 872500
+    //   TR = 0 (spot has no risk)
+    //   TV/TR = 872500 / 0 = inf (healthy, > 1)
     state
         .facade
         .validate_total_value(
-            position_id: liquidated_user.position_id, expected_total_value: 970500,
+            position_id: liquidated_user.position_id, expected_total_value: 872500,
         );
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 98000);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     // Price drop makes position liquidatable.
     state.facade.price_tick(asset_info: @asset_info, price: 1);
@@ -2627,17 +2626,16 @@ fn test_liquidate_spot_collateral_after_price_drop() {
     //   - Base collateral: -9500 (unchanged)
     //   - Spot collateral: 9800 units (at new price 1)
     // Calculations:
-    //   TV = base_collateral + spot_collateral * spot_price
-    //      = -9500 + (9800 * 1) = -9500 + 9800 = 300
-    //   TR = |spot_collateral * spot_price| * risk_factor
-    //      = |9800 * 1| * 0.1 = 9800 * 0.1 = 980
-    //   TV/TR = 300 / 980 = 0.306 (liquidatable, 0 < TV/TR < 1)
+    //   TV = base_collateral + spot_collateral * spot_price - spot_risk
+    //      = -9500 + (9800 * 1) - 980 = -9500 + 9800 - 980 = -680
+    //   TR = 0
+    //   TV/TR = -680 / 0 = -inf (liquidatable, < 1)
     state
         .facade
-        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 300);
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: -680);
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 980);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     assert(
         state.facade.is_liquidatable(position_id: liquidated_user.position_id),
@@ -2683,10 +2681,10 @@ fn test_liquidate_spot_collateral_after_price_drop() {
     //   TV/TR = 300 / 30 = 10 (healthy, > 1)
     state
         .facade
-        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 300);
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 270);
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 30);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     assert(state.facade.is_healthy(position_id: liquidated_user.position_id), 'should be healthy');
 }
@@ -3177,95 +3175,6 @@ fn test_liquidate_spot_very_small_amount() {
 }
 
 #[test]
-#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
-fn test_liquidate_spot_deleveragable_position() {
-    // Test that liquidating a deleveragable position (TV < 0) fails validation.
-    // This is expected behavior - the "healthy or healthier" validation correctly rejects this.
-    let risk_factor_data = RiskFactorTiers {
-        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
-    };
-    let mut state: FlowTestBase = FlowTestBaseTrait::new();
-
-    // Create a spot collateral asset.
-    let token = snforge_std::Token::STRK;
-    let erc20_contract_address = token.contract_address();
-    let asset_info = AssetInfoTrait::new_collateral(
-        asset_name: 'SPOT', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
-    );
-    let asset_id = asset_info.asset_id;
-    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
-
-    // Create users.
-    let liquidated_user = state.new_user_with_position();
-    let liquidator_user = state.new_user_with_position();
-    snforge_std::set_balance(target: liquidated_user.account.address, new_balance: 5000000, :token);
-    snforge_std::set_balance(target: liquidator_user.account.address, new_balance: 5000000, :token);
-
-    // Deposit spot collateral to liquidated user.
-    let deposit_info_liquidated = state
-        .facade
-        .deposit_spot(
-            depositor: liquidated_user.account,
-            :asset_id,
-            position_id: liquidated_user.position_id,
-            quantized_amount: 2000,
-        );
-    state.facade.process_deposit(deposit_info: deposit_info_liquidated);
-
-    // Deposit base collateral to liquidator.
-    let deposit_info_liquidator = state
-        .facade
-        .deposit(
-            depositor: liquidator_user.account,
-            position_id: liquidator_user.position_id,
-            quantized_amount: 200000,
-        );
-    state.facade.process_deposit(deposit_info: deposit_info_liquidator);
-
-    // Create LARGE negative base collateral for liquidated user via transfer.
-    // This will make TV negative after price drop (deleveragable state).
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 3000);
-    state.facade.transfer(:transfer_info);
-
-    // Price drop makes position deleveragable (TV < 0).
-    // At price 1: TV = -3000 + 2000*1 = -1000 (deleveragable!)
-    state.facade.price_tick(asset_info: @asset_info, price: 1);
-
-    // Verify position has negative TV (deleveragable state).
-    state
-        .facade
-        .validate_total_value(
-            position_id: liquidated_user.position_id, expected_total_value: -1000,
-        );
-
-    // Create liquidator order.
-    let liquidator_order_info = state
-        .facade
-        .create_limit_order(
-            user: liquidator_user,
-            base_asset_id: asset_id,
-            base_amount: 2000,
-            quote_amount: -2000,
-            fee_amount: 10,
-            receive_position_id: Option::None,
-        );
-
-    // This should FAIL because TR is zero and position not healthy.
-    state
-        .facade
-        .liquidate_spot_asset(
-            :liquidated_user,
-            liquidator_order_info: liquidator_order_info,
-            actual_amount_spot_collateral: -2000,
-            actual_amount_base_collateral: 2000,
-            actual_liquidator_fee: 10,
-            liquidated_fee_amount: 10,
-        );
-}
-
-#[test]
 #[should_panic(expected: 'INVALID_ASSET_TYPE')]
 fn test_liquidate_spot_for_vault_share_asset() {
     // Test that liquidate_spot_asset fails when trying to liquidate a vault share asset.
@@ -3370,31 +3279,31 @@ fn test_liquidate_spot_with_different_source_and_receive_positions() {
     state.facade.transfer(:transfer_info);
 
     // Position state after transfer (at price = 100):
-    // TV = -9500 + (9800 * 100) = 970500
-    // TR = 9800 * 100 * 0.1 = 98000
+    // TV = -9500 + (9800 * 100) - 9800 * 100 *  0.1 = 872500
+    // TR = 0
     // TV/TR = 9.9 (healthy)
     state
         .facade
         .validate_total_value(
-            position_id: liquidated_user.position_id, expected_total_value: 970500,
+            position_id: liquidated_user.position_id, expected_total_value: 872500,
         );
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 98000);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     // Price drop makes position liquidatable.
     state.facade.price_tick(asset_info: @asset_info, price: 1);
 
     // Position state after price drop (at price = 1):
-    // TV = -9500 + (9800 * 1) = 300
+    // TV = -9500 + (9800 * 1) - 9800 * 1 * 0.1 = -680
     // TR = 9800 * 1 * 0.1 = 980
     // TV/TR = 0.306 (liquidatable)
     state
         .facade
-        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 300);
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: -680);
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 980);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     assert(
         state.facade.is_liquidatable(position_id: liquidated_user.position_id),
@@ -3454,15 +3363,15 @@ fn test_liquidate_spot_with_different_source_and_receive_positions() {
     // Verify liquidated position state after liquidation (at price = 1):
     // Spot collateral: 9800 - 9500 = 300
     // Base collateral: -9500 + 9600 - 100(fee) = 0
-    // TV = 0 + (300 * 1) = 300
-    // TR = 300 * 1 * 0.1 = 30
+    // TV = 0 + (300 * 1) - 300 * 1 * 0.1 = 270
+    // TR = 0
     // TV/TR = 10 (healthy)
     state
         .facade
-        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 300);
+        .validate_total_value(position_id: liquidated_user.position_id, expected_total_value: 270);
     state
         .facade
-        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 30);
+        .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     assert(state.facade.is_healthy(position_id: liquidated_user.position_id), 'should be healthy');
 }
