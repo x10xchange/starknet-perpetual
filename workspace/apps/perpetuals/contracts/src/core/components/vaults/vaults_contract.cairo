@@ -401,6 +401,21 @@ pub(crate) mod VaultsManager {
                     user_signature: array![0, 0].span(),
                     validate_signatures: true,
                 );
+
+            self
+                .emit(
+                    events::LiquidateVaultShares {
+                        vault_position_id: self
+                            .vaults
+                            .get_vault_config_for_asset(liquidated_asset_id)
+                            .position_id
+                            .into(),
+                        liquidated_position_id: liquidated_position_id,
+                        vault_asset_id: liquidated_asset_id,
+                        shares_liquidated: actual_shares_user.abs().try_into().unwrap(),
+                        collateral_received: actual_collateral_user.abs().try_into().unwrap(),
+                    },
+                );
         }
 
         fn force_redeem_from_vault(
@@ -417,21 +432,6 @@ pub(crate) mod VaultsManager {
                     validate_user_order: false,
                     user_signature: empty_signature,
                     validate_signatures: false,
-                );
-
-            self
-                .emit(
-                    events::LiquidateVaultShares {
-                        vault_position_id: self
-                            .vaults
-                            .get_vault_config_for_asset(liquidated_asset_id)
-                            .position_id
-                            .into(),
-                        liquidated_position_id: liquidated_position_id,
-                        vault_asset_id: liquidated_asset_id,
-                        shares_liquidated: actual_shares_user.abs().try_into().unwrap(),
-                        collateral_received: actual_collateral_user.abs().try_into().unwrap(),
-                    },
                 );
         }
     }

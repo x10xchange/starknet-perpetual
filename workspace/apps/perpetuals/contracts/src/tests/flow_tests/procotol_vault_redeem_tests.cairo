@@ -1409,8 +1409,7 @@ fn test_redeem_vault_shares_negative() {
         .facade
         .process_deposit(
             state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 10000_u64),
-        );
-
+        );  
     state
         .facade
         .process_deposit(
@@ -1425,6 +1424,7 @@ fn test_redeem_vault_shares_negative() {
                 ),
         );
 
+
     // Redeeming user position before redeem:
     // 10000 x USDC @ 1usd
     // 0 x vault_shares @ 1usd
@@ -1436,12 +1436,12 @@ fn test_redeem_vault_shares_negative() {
             vault: vault_config,
             withdrawing_user: redeeming_user,
             receiving_user: redeeming_user,
-            shares_to_burn_user: 400,
-            value_of_shares_user: 400,
-            shares_to_burn_vault: 400,
-            value_of_shares_vault: 400,
-            actual_shares_user: 400,
-            actual_collateral_user: 400,
+            shares_to_burn_user: 69,
+            value_of_shares_user: 69,
+            shares_to_burn_vault: 69,
+            value_of_shares_vault: 69,
+            actual_shares_user: 69,
+            actual_collateral_user: 69,
         );
 }
 
