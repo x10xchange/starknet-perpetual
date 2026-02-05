@@ -148,6 +148,15 @@ pub trait ICore<TContractState> {
         actual_shares_user: i64,
         actual_collateral_user: i64,
     );
+
+    fn force_reset_protection_limit(
+        ref self: TContractState, vault_position: PositionId, percentage_basis_points: u32,
+    );
+
+    fn update_vault_protection_limit(
+        ref self: TContractState, vault_position: PositionId, limit: u32,
+    );
+
     fn forced_withdraw_request(
         ref self: TContractState,
         signature: Signature,
