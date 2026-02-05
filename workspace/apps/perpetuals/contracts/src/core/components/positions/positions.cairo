@@ -3,6 +3,7 @@ pub mod Positions {
     use core::nullable::{FromNullableResult, match_nullable};
     use core::num::traits::Zero;
     use core::panic_with_felt252;
+    use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
@@ -54,6 +55,7 @@ pub mod Positions {
     use starkware_utils::time::time::{Timestamp, validate_expiration};
     use crate::core::components::assets::errors::NO_SUCH_ASSET;
     use crate::core::components::snip::SNIP12MetadataImpl;
+    use crate::core::components::vaults::types::VaultProtectionParams;
     use crate::core::errors::{
         AMOUNT_OVERFLOW, INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_INTEREST_RATE,
         INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, NO_DELEVERAGE_VAULT_SHARES,
@@ -739,6 +741,7 @@ pub mod Positions {
             position: StoragePath<Position>,
             position_diff: PositionDiff,
             tvtr_before: Nullable<PositionTVTR>,
+            vault_protection_config: Option<VaultProtectionParams>,
         ) -> PositionTVTR {
             let asset_enriched_position_diff = self.enrich_asset(:position, :position_diff);
             let tvtr_before = match match_nullable(tvtr_before) {
@@ -760,6 +763,27 @@ pub mod Positions {
                 :tvtr_before, synthetic_enriched_position_diff: asset_enriched_position_diff,
             );
             assert_healthy_or_healthier(:position_id, :tvtr);
+            if let Option::Some(config) = vault_protection_config {
+                {
+                    let tv_after = tvtr.after.total_value;
+                    let tv_at_last_check = config.tv_at_check;
+                    let max_tvtr_loss = config.max_tv_loss;
+                    let delta = tv_after - tv_at_last_check;
+                    if (delta < 0_i64.into()) {
+                        let tv_loss = delta.abs();
+                        if (tv_loss >= max_tvtr_loss) {
+                            panic_with_byte_array(
+                                err: @format!(
+                                    "Vault Protection Limit Exceeded, tv_at_last_check: {}, tv_after_operation: {}, max_allowed_loss : {}",
+                                    tv_at_last_check,
+                                    tv_after,
+                                    max_tvtr_loss,
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
             tvtr.after
         }
 

@@ -1,4 +1,4 @@
-use core::array;
+    use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
@@ -2412,6 +2412,19 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let dispatcher = ISystemTimeDispatcher { contract_address: self.perpetuals_contract };
         self.operator.set_as_caller(self.perpetuals_contract);
         dispatcher.update_system_time(:operator_nonce, :new_timestamp);
+    }
+
+    fn force_reset_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, percentage_basis_points: u32,
+    ) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .force_reset_protection_limit(:vault_position, :percentage_basis_points);
+    }
+
+    fn update_vault_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId, limit: u32) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.update_vault_protection_limit(:vault_position, :limit);
     }
 }
 
