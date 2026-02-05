@@ -36,7 +36,6 @@ pub trait IVaultExternal<TContractState> {
 
 #[starknet::contract]
 pub(crate) mod VaultsManager {
-    use AssetsComponent::InternalTrait;
     use core::num::traits::{WideMul, Zero};
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -55,8 +54,6 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
-    use perpetuals::core::types::price::PriceMulTrait;
-    use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -578,40 +575,14 @@ pub(crate) mod VaultsManager {
                 );
 
             // user health checks
-            if (self.positions.is_liquidatable(redeeming_position_id)) {
-                let (asset_id, qty) = redeeming_position_diff.asset_diff.unwrap();
-                let price = self.assets.get_asset_price(asset_id);
-                //spot have constant risk factors
-                let risk_factor = self.assets.get_asset_risk_factor(asset_id, 1_i64.into(), price);
-
-                let value_of_shares_sold: u128 = price
-                    .mul(qty)
-                    .abs()
-                    .try_into()
-                    .expect('REDEEM_VAULT_SHARES_OVERFLOW');
-
-                let risk_of_shares_sold: u128 = risk_factor.mul(value_of_shares_sold);
-                let collateral_received: u128 = actual_collateral_user.abs().try_into().unwrap();
-
-                if collateral_received < value_of_shares_sold - risk_of_shares_sold {
-                    let err = format!(
-                        "Illegal transition value_of_shares_sold={}, risk_of_shares_sold={}, collateral_received={}",
-                        value_of_shares_sold,
-                        risk_of_shares_sold,
-                        collateral_received,
-                    );
-                    panic_with_byte_array(err: @err);
-                }
-            } else {
-                self
-                    .positions
-                    .validate_healthy_or_healthier_position(
-                        position_id: redeeming_position_id,
-                        position: redeeming_position,
-                        position_diff: redeeming_position_diff,
-                        tvtr_before: Default::default(),
-                    );
-            }
+            self
+                .positions
+                .validate_healthy_or_healthier_position(
+                    position_id: redeeming_position_id,
+                    position: redeeming_position,
+                    position_diff: redeeming_position_diff,
+                    tvtr_before: Default::default(),
+                );
 
             self
                 .positions
