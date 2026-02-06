@@ -156,6 +156,15 @@ pub mod Vaults {
                 };
                 self.registered_vaults_by_position.write(vault_position, updated_config);
                 self.registered_vaults_by_asset.write(current_config.asset_id, updated_config);
+                self.emit(
+                    events::VaultProtectionReset {
+                        vault_position_id: vault_position,
+                        old_tv_at_check: current_config.tv_at_check,
+                        old_max_tv_loss: current_config.max_tv_loss,
+                        new_tv_at_check: updated_config.tv_at_check,
+                        new_max_tv_loss: updated_config.max_tv_loss,
+                    },
+                );
                 return Some(
                     VaultProtectionParams {
                         tv_at_check: updated_config.tv_at_check,
@@ -322,6 +331,7 @@ pub mod Vaults {
             ref self: ComponentState<TContractState>, vault_position: PositionId, limit: u32,
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
+            assert(self.is_vault_position(vault_position), 'UNKNOWN_VAULT');
             let old_limit = self.vault_protection_limit_overrides.read(vault_position);
             self.vault_protection_limit_overrides.write(vault_position, limit);
             self
@@ -333,7 +343,11 @@ pub mod Vaults {
                         } else {
                             old_limit
                         },
-                        new_limit: limit,
+                        new_limit: if limit == 0 {
+                            5
+                        } else {
+                            limit 
+                        },
                     },
                 );
         }
