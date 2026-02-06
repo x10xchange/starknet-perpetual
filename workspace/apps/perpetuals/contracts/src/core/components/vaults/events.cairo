@@ -95,7 +95,6 @@ pub struct LiquidateVaultShares {
     pub liquidated_position_id: PositionId,
     #[key]
     pub vault_asset_id: AssetId,
-    #[key]
     pub shares_liquidated: u64,
     pub collateral_received: u64,
 }

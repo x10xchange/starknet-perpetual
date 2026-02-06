@@ -333,7 +333,9 @@ pub(crate) mod WithdrawalManager {
             // Validate position exists.
             let position = self.positions.get_position_snapshot(:position_id);
             assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-
+            // Validate position is not a vault position
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
+            
             let owner_account = if (position.owner_protection_enabled.read()) {
                 position.get_owner_account()
             } else {
