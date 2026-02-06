@@ -1,4 +1,4 @@
-    use core::array;
+use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::fmt::Debug;
 use core::nullable::{FromNullableResult, match_nullable};
