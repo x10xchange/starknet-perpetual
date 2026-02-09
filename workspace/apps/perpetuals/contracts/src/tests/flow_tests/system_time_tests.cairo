@@ -1,8 +1,8 @@
-use perpetuals::tests::flow_tests::perps_tests_facade::*;
-use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::core::components::system_time::interface::{
     ISystemTimeDispatcher, ISystemTimeDispatcherTrait,
 };
+use perpetuals::tests::flow_tests::infra::*;
+use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use starkware_utils::time::time::Time;
 
 #[test]
@@ -34,7 +34,4 @@ fn test_system_time_can_drift_a_bit() {
     state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
     dispatcher.update_system_time(2, future_timestamp);
 }
-
-
-
 
