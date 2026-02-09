@@ -1580,6 +1580,9 @@ fn test_forced_redeem_from_vault_after_timelock() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Use max uint32 to set the vault protection limit
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -1717,6 +1720,10 @@ fn test_forced_redeem_from_vault_by_operator_before_timelock() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Use max uint32 to set the vault protection limit
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+
     state
         .facade
         .process_deposit(
@@ -1809,6 +1816,10 @@ fn test_forced_redeem_from_vault_user_before_timelock_fails() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Use max uint32 to set the vault protection limit
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+
     state
         .facade
         .process_deposit(
@@ -1874,6 +1885,10 @@ fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Use max uint32 to set the vault protection limit
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
 
     state
         .facade
@@ -1946,6 +1961,10 @@ fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Use max uint32 to set the vault protection limit
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
 
     state
         .facade
