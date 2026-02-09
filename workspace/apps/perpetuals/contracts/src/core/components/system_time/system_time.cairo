@@ -9,6 +9,7 @@ pub mod SystemTimeComponent {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
+    use perpetuals::core::components::system_time::constants::MAX_TIME_DRIFT;
     use perpetuals::core::components::system_time::errors::{NON_MONOTONIC_TIME, STALE_TIME};
     use perpetuals::core::components::system_time::interface::ISystemTime;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -56,7 +57,8 @@ pub mod SystemTimeComponent {
         /// - Only the operator can call this function.
         /// - The operator_nonce must be valid.
         /// - The new system time must be strictly greater than the current system time.
-        /// - The new system time must not exceed the current Starknet block timestamp.
+        /// - The new system time must not drift more than MAX_TIME_DRIFT seconds from the current
+        /// Starknet block timestamp.
         ///
         /// Execution:
         /// - Updates the system time.
@@ -72,7 +74,8 @@ pub mod SystemTimeComponent {
             assert(new_timestamp > current_system_time, NON_MONOTONIC_TIME);
 
             let now = Time::now();
-            assert(new_timestamp <= now, STALE_TIME);
+            let acceptable_time = now.add(Time::seconds(MAX_TIME_DRIFT));
+            assert(new_timestamp <= acceptable_time, STALE_TIME);
 
             self.system_time.write(new_timestamp);
 
