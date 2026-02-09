@@ -2930,7 +2930,7 @@ fn test_successful_forced_withdraw_request() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3027,7 +3027,7 @@ fn test_successful_forced_withdraw_operator_executes() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3180,7 +3180,7 @@ fn test_successful_forced_withdraw_user_executes() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3348,7 +3348,7 @@ fn test_forced_withdraw_before_timeout() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3451,7 +3451,7 @@ fn test_forced_withdraw_after_operator_processed_withdraw() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3575,7 +3575,7 @@ fn test_withdraw_after_user_forced_withdraw_executed() {
     let user: User = Default::default();
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(:contract_address, caller_address: cfg.governance_admin);
+    cheat_caller_address_once(:contract_address, caller_address: cfg.app_governor);
     dispatcher.enable_escape_hatch();
 
     // Create a position.
@@ -3704,7 +3704,7 @@ fn test_forced_withdraw_request_zero_amount() {
     init_position(cfg: @cfg, ref :state, :user);
     let recipient = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     // Setup parameters:
@@ -5979,7 +5979,7 @@ fn test_successful_forced_trade_request() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6072,7 +6072,7 @@ fn test_successful_forced_trade_after_timelock() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6213,7 +6213,7 @@ fn test_forced_trade_user_after_operator_executed() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6294,7 +6294,7 @@ fn test_successful_forced_trade_by_operator_before_timelock() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6368,7 +6368,7 @@ fn test_forced_trade_operator_after_user_executed() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6450,7 +6450,7 @@ fn test_forced_trade_before_timelock_non_operator() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
@@ -6518,7 +6518,7 @@ fn test_forced_trade_request_insufficient_premium() {
     let token_state = cfg.collateral_cfg.token_cfg.deploy();
     let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
 
-    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.governance_admin);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.app_governor);
     state.enable_escape_hatch();
 
     let user_a = Default::default();
