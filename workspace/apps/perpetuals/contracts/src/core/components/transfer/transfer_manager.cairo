@@ -69,6 +69,7 @@ pub(crate) mod TransferManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticTrait};
     use perpetuals::core::types::position::{PositionId, PositionTrait};
@@ -107,6 +108,8 @@ pub(crate) mod TransferManager {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
+        SystemTimeEvent: SystemTimeComponent::Event,
+        #[flat]
         OperatorNonceEvent: OperatorNonceComponent::Event,
         #[flat]
         AssetsEvent: AssetsComponent::Event,
@@ -135,6 +138,8 @@ pub(crate) mod TransferManager {
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
+        system_time: SystemTimeComponent::Storage,
+        #[substorage(v0)]
         #[allow(starknet::colliding_storage_paths)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
@@ -151,6 +156,7 @@ pub(crate) mod TransferManager {
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
@@ -340,7 +346,6 @@ pub(crate) mod TransferManager {
                     position: sender_position,
                     position_diff: position_diff_sender,
                     tvtr_before: Default::default(),
-                    vault_protection_config: Option::None,
                 );
 
             // Execute transfer

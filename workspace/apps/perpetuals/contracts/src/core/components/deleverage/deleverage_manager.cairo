@@ -308,7 +308,6 @@ pub(crate) mod DeleverageManager {
                             :position,
                             :position_diff,
                             tvtr_before: Default::default(),
-                            vault_protection_config: Option::None,
                         );
                 },
                 AssetType::VAULT_SHARE_COLLATERAL => {
@@ -354,16 +353,20 @@ pub(crate) mod DeleverageManager {
                     position: deleveraged_position,
                     position_diff: deleveraged_position_diff,
                 );
-            self
+            let tvtr = self
                 .positions
                 .validate_healthy_or_healthier_position(
                     position_id: deleverager_position_id,
                     position: deleverager_position,
                     position_diff: deleverager_position_diff,
                     tvtr_before: Default::default(),
-                    vault_protection_config: self
-                        .vaults
-                        .get_vault_protection_config(deleverager_position_id),
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: deleverager_position_id,
+                    vault_protection_config: self.vaults.get_vault_protection_config(deleverager_position_id),
+                    :tvtr,
                 );
 
             // Apply diffs

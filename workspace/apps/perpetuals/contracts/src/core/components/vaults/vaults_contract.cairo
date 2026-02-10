@@ -284,7 +284,6 @@ pub(crate) mod VaultsManager {
                     position: sending_position_snapshot,
                     position_diff: sending_position_diff,
                     tvtr_before: Default::default(),
-                    vault_protection_config: Option::None,
                 );
 
             self
@@ -605,16 +604,20 @@ pub(crate) mod VaultsManager {
             };
 
             // vault health checks
-            self
+            let tvtr = self
                 .positions
                 .validate_healthy_or_healthier_position(
                     position_id: vault_position_id,
                     position: vault_position,
                     position_diff: vault_position_diff,
                     tvtr_before: Default::default(),
-                    vault_protection_config: self
-                        .vaults
-                        .get_vault_protection_config(vault_position_id),
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: vault_position_id,
+                    vault_protection_config: self.vaults.get_vault_protection_config(vault_position_id),
+                    :tvtr
                 );
 
             self
@@ -637,7 +640,6 @@ pub(crate) mod VaultsManager {
                     position: redeeming_position,
                     position_diff: redeeming_position_diff,
                     tvtr_before: Default::default(),
-                    vault_protection_config: Option::None,
                 );
 
             self

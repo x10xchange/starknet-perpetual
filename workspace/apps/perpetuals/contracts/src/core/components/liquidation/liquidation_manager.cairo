@@ -549,15 +549,23 @@ pub(crate) mod LiquidationManager {
                     position: liquidated_position,
                     position_diff: liquidated_position_diff,
                 );
-            self
+            let tvtr = 
+                self
                 .positions
                 .validate_healthy_or_healthier_position(
                     position_id: liquidator_position_id,
                     position: liquidator_position,
                     position_diff: liquidator_position_diff,
                     tvtr_before: Default::default(),
-                    vault_protection_config: self.vaults.get_vault_protection_config(liquidator_position_id)
                 );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: liquidator_position_id,
+                    vault_protection_config: self.vaults.get_vault_protection_config(liquidator_position_id),
+                    :tvtr
+                );
+                
 
             let insurance_position_diff = PositionDiff {
                 collateral_diff: liquidated_fee_amount.into(), asset_diff: Option::None,

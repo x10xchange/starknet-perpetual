@@ -1,14 +1,18 @@
 use crate::core::types::asset::AssetId;
 use crate::core::types::position::PositionId;
 use super::types::VaultProtectionParams;
+use starkware_utils::constants::DAY;
+
 
 const STORAGE_VERSION: u8 = 1;
-const CHECK_FREQUENCY: u64 = 86400;
+const CHECK_FREQUENCY: u64 = DAY;
 
 #[starknet::interface]
 pub trait IVaults<TContractState> {
     fn is_vault_position(ref self: TContractState, vault_position: PositionId) -> bool;
     fn is_vault_asset(ref self: TContractState, asset_id: AssetId) -> bool;
+    fn force_reset_protection_limit(ref self: TContractState, vault_position: PositionId, percentage_basis_points: u32);
+    fn update_vault_protection_limit(ref self: TContractState, vault_position: PositionId, limit: u32);
 }
 
 #[starknet::component]
@@ -25,16 +29,13 @@ pub mod Vaults {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::vaults::types::VaultConfig;
+    use perpetuals::core::components::vaults::types::{VaultConfig, VaultConfigTrait};
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::AssetType;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
-    use starknet::SyscallResultTrait;
     use starknet::storage::{
         Map, StorageAsPointer, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
     };
-    use starknet::storage_access::storage_address_from_base_and_offset;
-    use starknet::syscalls::storage_read_syscall;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -44,7 +45,7 @@ pub mod Vaults {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::time::time::validate_expiration;
+    use starkware_utils::time::time::{validate_expiration, Time};
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::positions::interface::IPositions;
     use perpetuals::core::components::system_time::SystemTimeComponent;
@@ -71,23 +72,95 @@ pub mod Vaults {
 
     #[embeddable_as(VaultsImpl)]
     impl VaultsComponent<
-        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+        TContractState,
+        +HasComponent<TContractState>, 
+        +Drop<TContractState>,
+        +AccessControlComponent::HasComponent<TContractState>,
+        +SRC5Component::HasComponent<TContractState>,
+        impl Assets: AssetsComponent::HasComponent<TContractState>,
+        impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
+        impl Pausable: PausableComponent::HasComponent<TContractState>,
+        impl Positions: PositionsComponent::HasComponent<TContractState>,
+        impl Roles: RolesComponent::HasComponent<TContractState>,
+        impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
+        impl SystemTime: SystemTimeComponent::HasComponent<TContractState>,
     > of IVaults<ComponentState<TContractState>> {
         fn is_vault_position(
             ref self: ComponentState<TContractState>, vault_position: PositionId,
         ) -> bool {
-            let entry = self.registered_vaults_by_position.entry(vault_position).as_ptr();
-            let variant = storage_read_syscall(
-                0, storage_address_from_base_and_offset(entry.__storage_pointer_address__, 0),
-            )
-                .unwrap_syscall();
-
-            return variant != 0;
+            let entry = (@self).registered_vaults_by_position.entry(vault_position).as_ptr();
+            let is_vault_position = VaultConfigTrait::is_some(entry);
+            return is_vault_position;
         }
 
         fn is_vault_asset(ref self: ComponentState<TContractState>, asset_id: AssetId) -> bool {
             return self.registered_vaults_by_asset.read(asset_id).version != 0;
         }
+
+        fn force_reset_protection_limit(
+            ref self: ComponentState<TContractState>,
+            vault_position: PositionId,
+            percentage_basis_points: u32,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+
+            let current_config = self.get_vault_config_for_position(:vault_position);
+            let positions = get_dep_component!(@self, Positions);
+            let position_tv_tr = positions.get_position_tv_tr(vault_position);
+            let tv_at_check = position_tv_tr.total_value;
+            let max_tv_loss = mul_wide_and_floor_div(
+                tv_at_check.abs(), percentage_basis_points.into() * 10, 1000,
+            )
+                .unwrap();
+
+            let updated_config = VaultConfig {
+                version: current_config.version,
+                asset_id: current_config.asset_id,
+                position_id: current_config.position_id,
+                last_tv_check: Time::now().into(),
+                tv_at_check: tv_at_check,
+                max_tv_loss: max_tv_loss,
+            };
+
+            self.registered_vaults_by_position.write(vault_position, updated_config);
+            self.registered_vaults_by_asset.write(current_config.asset_id, updated_config);
+
+            self
+                .emit(
+                    events::VaultProtectionReset {
+                        vault_position_id: vault_position,
+                        old_tv_at_check: current_config.tv_at_check,
+                        old_max_tv_loss: current_config.max_tv_loss,
+                        new_tv_at_check: updated_config.tv_at_check,
+                        new_max_tv_loss: updated_config.max_tv_loss,
+                    },
+                );
+        }
+
+        fn update_vault_protection_limit(
+            ref self: ComponentState<TContractState>, vault_position: PositionId, limit: u32,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+            assert(self.is_vault_position(vault_position), 'UNKNOWN_VAULT');
+            let old_limit = self.vault_protection_limit_overrides.read(vault_position);
+            self.vault_protection_limit_overrides.write(vault_position, limit);
+            self
+                .emit(
+                    events::PerVaultProtectionLimitUpdated {
+                        vault_position_id: vault_position,
+                        old_limit: if old_limit == 0 {
+                            5
+                        } else {
+                            old_limit
+                        },
+                        new_limit: if limit == 0 {
+                            5
+                        } else {
+                            limit 
+                        },
+                    },
+                );
+        }   
     }
 
 
@@ -130,7 +203,7 @@ pub mod Vaults {
             }
 
             let current_config = self.registered_vaults_by_position.read(vault_position);
-            let current_time = starknet::get_block_timestamp();
+            let current_time: u64 = Time::now().into();
             let last_check_time = current_config.last_tv_check;
             if (current_time - last_check_time >= CHECK_FREQUENCY) {    
                 let positions = get_dep_component!(@self, Positions);
@@ -285,71 +358,6 @@ pub mod Vaults {
                         },
                     ),
                 )
-        }
-
-        fn force_reset_protection_limit(
-            ref self: ComponentState<TContractState>,
-            vault_position: PositionId,
-            percentage_basis_points: u32,
-        ) {
-            get_dep_component!(@self, Roles).only_app_governor();
-
-            let current_config = self.get_vault_config_for_position(:vault_position);
-            let positions = get_dep_component!(@self, Positions);
-            let position_tv_tr = positions.get_position_tv_tr(vault_position);
-            let tv_at_check = position_tv_tr.total_value;
-            let max_tv_loss = mul_wide_and_floor_div(
-                tv_at_check.abs(), percentage_basis_points.into() * 10, 1000,
-            )
-                .unwrap();
-
-            let updated_config = VaultConfig {
-                version: current_config.version,
-                asset_id: current_config.asset_id,
-                position_id: current_config.position_id,
-                last_tv_check: starknet::get_block_timestamp(),
-                tv_at_check: tv_at_check,
-                max_tv_loss: max_tv_loss,
-            };
-
-            self.registered_vaults_by_position.write(vault_position, updated_config);
-            self.registered_vaults_by_asset.write(current_config.asset_id, updated_config);
-
-            self
-                .emit(
-                    events::VaultProtectionReset {
-                        vault_position_id: vault_position,
-                        old_tv_at_check: current_config.tv_at_check,
-                        old_max_tv_loss: current_config.max_tv_loss,
-                        new_tv_at_check: updated_config.tv_at_check,
-                        new_max_tv_loss: updated_config.max_tv_loss,
-                    },
-                );
-        }
-
-        fn update_vault_protection_limit(
-            ref self: ComponentState<TContractState>, vault_position: PositionId, limit: u32,
-        ) {
-            get_dep_component!(@self, Roles).only_app_governor();
-            assert(self.is_vault_position(vault_position), 'UNKNOWN_VAULT');
-            let old_limit = self.vault_protection_limit_overrides.read(vault_position);
-            self.vault_protection_limit_overrides.write(vault_position, limit);
-            self
-                .emit(
-                    events::PerVaultProtectionLimitUpdated {
-                        vault_position_id: vault_position,
-                        old_limit: if old_limit == 0 {
-                            5
-                        } else {
-                            old_limit
-                        },
-                        new_limit: if limit == 0 {
-                            5
-                        } else {
-                            limit 
-                        },
-                    },
-                );
         }
     }
 }

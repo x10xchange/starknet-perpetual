@@ -741,7 +741,6 @@ pub mod Positions {
             position: StoragePath<Position>,
             position_diff: PositionDiff,
             tvtr_before: Nullable<PositionTVTR>,
-            vault_protection_config: Option<VaultProtectionParams>,
         ) -> PositionTVTR {
             let asset_enriched_position_diff = self.enrich_asset(:position, :position_diff);
             let tvtr_before = match match_nullable(tvtr_before) {
@@ -763,28 +762,34 @@ pub mod Positions {
                 :tvtr_before, synthetic_enriched_position_diff: asset_enriched_position_diff,
             );
             assert_healthy_or_healthier(:position_id, :tvtr);
+            tvtr.after
+        }
+
+        fn validate_against_vault_limits(
+            self: @ComponentState<TContractState>,
+            position_id: PositionId,
+            vault_protection_config: Option<VaultProtectionParams>,
+            tvtr: PositionTVTR,
+        ) {
             if let Option::Some(config) = vault_protection_config {
-                {
-                    let tv_after = tvtr.after.total_value;
-                    let tv_at_last_check = config.tv_at_check;
-                    let max_tvtr_loss = config.max_tv_loss;
-                    let delta = tv_after - tv_at_last_check;
-                    if (delta < 0_i64.into()) {
-                        let tv_loss = delta.abs();
-                        if (tv_loss > max_tvtr_loss) {
-                            panic_with_byte_array(
-                                err: @format!(
-                                    "Vault Protection Limit Exceeded, tv_at_last_check: {}, tv_after_operation: {}, max_allowed_loss : {}",
-                                    tv_at_last_check,
-                                    tv_after,
-                                    max_tvtr_loss,
-                                ),
-                            );
-                        }
+                let tv_after = tvtr.total_value;
+                let tv_at_last_check = config.tv_at_check;
+                let max_tvtr_loss = config.max_tv_loss;
+                let delta = tv_after - tv_at_last_check;
+                if (delta < 0_i64.into()) {
+                    let tv_loss = delta.abs();
+                    if (tv_loss > max_tvtr_loss) {
+                        panic_with_byte_array(
+                            err: @format!(
+                                "Vault Protection Limit Exceeded, tv_at_last_check: {}, tv_after_operation: {}, max_allowed_loss : {}",
+                                tv_at_last_check,
+                                tv_after,
+                                max_tvtr_loss,
+                            ),
+                        );
                     }
                 }
             }
-            tvtr.after
         }
 
         fn _validate_synthetic_shrinks(

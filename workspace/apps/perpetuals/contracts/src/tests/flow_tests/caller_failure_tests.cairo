@@ -4,6 +4,7 @@ use perpetuals::core::components::assets::assets_manager::{
 };
 use perpetuals::core::components::assets::interface::{IAssetsDispatcher, IAssetsDispatcherTrait};
 use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
+use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
@@ -335,7 +336,7 @@ fn test_activate_new_component_only_upgrade_governor() {
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
 fn test_force_reset_protection_limit_only_app_governor() {
     let (_, contract_address) = setup();
-    let dispatcher = ICoreDispatcher { contract_address };
+    let dispatcher = IVaultsDispatcher { contract_address };
     dispatcher
         .force_reset_protection_limit(vault_position: POSITION_ID_100, percentage_basis_points: 0);
 }
@@ -343,7 +344,7 @@ fn test_force_reset_protection_limit_only_app_governor() {
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
 fn test_update_vault_protection_limit_only_app_governor() {
     let (_, contract_address) = setup();
-    let dispatcher = ICoreDispatcher { contract_address };
+    let dispatcher = IVaultsDispatcher { contract_address };
     dispatcher.update_vault_protection_limit(vault_position: POSITION_ID_100, limit: 0);
 }
 

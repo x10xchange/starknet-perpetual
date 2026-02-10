@@ -130,6 +130,9 @@ pub mod Core {
     impl ExternalComponentsImpl =
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
 
+    #[abi(embed_v0)]
+    impl VaultImpl = 
+        VaultsComponent::VaultsImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -781,19 +784,6 @@ pub mod Core {
                 ._get_vault_manager_dispatcher()
                 .invest_in_vault(:signature, :order, :correlation_id)
         }
-
-        fn force_reset_protection_limit(
-            ref self: ContractState, vault_position: PositionId, percentage_basis_points: u32,
-        ) {
-            self.vaults.force_reset_protection_limit(:vault_position, :percentage_basis_points);
-        }
-
-        fn update_vault_protection_limit(
-            ref self: ContractState, vault_position: PositionId, limit: u32,
-        ) {
-            self.vaults.update_vault_protection_limit(:vault_position, :limit);
-        }
-
         // Forced actions.
 
         /// Requests a forced withdrawal of a collateral amount from a position.
@@ -1351,9 +1341,13 @@ pub mod Core {
                     position: position_a,
                     position_diff: position_diff_a,
                     tvtr_before: tvtr_a_before,
-                    vault_protection_config: self
-                    .vaults
-                    .get_vault_protection_config(order_a.position_id),
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: order_a.position_id,
+                    vault_protection_config: self.vaults.get_vault_protection_config(order_a.position_id),
+                    tvtr: tvtr_a_after,
                 );
             let tvtr_b_after = self
                 .positions
@@ -1362,9 +1356,13 @@ pub mod Core {
                     position: position_b,
                     position_diff: position_diff_b,
                     tvtr_before: tvtr_b_before,
-                    vault_protection_config: self
-                        .vaults
-                        .get_vault_protection_config(order_b.position_id),
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: order_b.position_id,
+                    vault_protection_config: self.vaults.get_vault_protection_config(order_b.position_id),
+                    tvtr: tvtr_b_after,
                 );
 
             // Apply Diffs.
