@@ -1448,6 +1448,7 @@ fn test_redeem_vault_shares_negative() {
 #[test]
 fn test_forced_redeem_from_vault_request() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
@@ -1571,6 +1572,7 @@ fn test_forced_redeem_from_vault_request() {
 #[test]
 fn test_forced_redeem_from_vault_after_timelock() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
@@ -1708,6 +1710,7 @@ fn test_forced_redeem_from_vault_after_timelock() {
 #[test]
 fn test_forced_redeem_from_vault_by_operator_before_timelock() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
@@ -1800,6 +1803,7 @@ fn test_forced_redeem_from_vault_by_operator_before_timelock() {
 #[should_panic(expected: 'FORCED_WAIT_REQUIRED')]
 fn test_forced_redeem_from_vault_user_before_timelock_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
@@ -1866,6 +1870,7 @@ fn test_forced_redeem_from_vault_user_before_timelock_fails() {
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
@@ -1938,6 +1943,7 @@ fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    state.facade.enable_escape_hatch();
     let vault_user = state.new_user_with_position();
     let redeeming_user = state.new_user_with_position();
     let vault_init_deposit = state
