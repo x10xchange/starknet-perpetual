@@ -2413,6 +2413,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
         dispatcher.update_system_time(:operator_nonce, :new_timestamp);
     }
+
+    fn enable_escape_hatch(ref self: PerpsTestsFacade) {
+        self.set_app_governor_as_caller();
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.enable_escape_hatch();
+    }
 }
 
 
