@@ -61,7 +61,9 @@ pub mod Positions {
     };
     use crate::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetType};
     use crate::core::types::balance::BalanceDiff;
-    use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
+    use crate::core::types::position::{
+        AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
+    };
     use crate::core::value_risk_calculator::{
         assert_healthy_or_healthier, calculate_position_tvtr_before, calculate_position_tvtr_change,
     };
@@ -453,6 +455,58 @@ pub mod Positions {
                         position: position_mut, :synthetic_id, :asset_diff,
                     );
             };
+        }
+
+        fn apply_multi_spot_diff(
+            ref self: ComponentState<TContractState>,
+            position_id: PositionId,
+            position_diff: MultiSpotPositionDiff,
+        ) {
+            let assets = get_dep_component!(@self, Assets);
+            let position_mut = self.get_position_mut(:position_id);
+            position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
+
+            for (asset_id, asset_diff) in position_diff.asset_diffs {
+                let asset_config_ptr = assets.asset_config.entry(*asset_id).as_ptr();
+                let asset_type = SyntheticTrait::get_asset_type(asset_config_ptr)
+                    .expect(NO_SUCH_ASSET);
+
+                if (asset_type == AssetType::SYNTHETIC) {
+                    let err = format!("Asset: {:?} is not a spot asset", *asset_id);
+                    panic_with_byte_array(err: @err);
+                }
+
+                let current_spot_balance = if let Option::Some(spot) = position_mut
+                    .asset_balances
+                    .read(*asset_id) {
+                    spot.balance
+                } else {
+                    0_i64.into()
+                };
+
+                let new_spot_balance = current_spot_balance + *asset_diff;
+
+                if (new_spot_balance < 0_i64.into()) {
+                    let err = format!(
+                        "Spot Balance for asset: {:?} has gone negative. now: {:?}, was: {:?}, position: {:?}",
+                        *asset_id,
+                        new_spot_balance,
+                        current_spot_balance,
+                        position_id,
+                    );
+                    panic_with_byte_array(err: @err);
+                }
+                position_mut
+                    .asset_balances
+                    .write(
+                        *asset_id,
+                        AssetBalance {
+                            version: POSITION_VERSION,
+                            balance: new_spot_balance,
+                            funding_index: Default::default(),
+                        },
+                    );
+            }
         }
 
         /// Enriches collateral, producing a fully enriched diff.

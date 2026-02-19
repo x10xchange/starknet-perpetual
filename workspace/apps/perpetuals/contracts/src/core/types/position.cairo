@@ -79,6 +79,13 @@ pub struct PositionDiff {
     pub asset_diff: Option<(AssetId, Balance)>,
 }
 
+#[derive(Copy, Debug, Drop, Serde)]
+pub struct MultiSpotPositionDiff {
+    pub collateral_diff: Balance,
+    pub asset_diffs: Span<(AssetId, Balance)>,
+}
+
+
 /// Diff where synthetic is enriched but collateral is still raw.
 #[derive(Copy, Debug, Drop, Serde, Default)]
 pub struct AssetEnrichedPositionDiff {
