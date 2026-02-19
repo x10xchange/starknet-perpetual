@@ -280,14 +280,14 @@ pub(crate) mod TransferManager {
             // Validate interest in range
             self
                 .positions
-                .validate_interest_in_range(
+                .verify_and_update_interest_range(
                     position: sender_position,
-                    position_id: position_id,
+                    :position_id,
                     interest_amount: interest_amount_sender,
                 );
             self
                 .positions
-                .validate_interest_in_range(
+                .verify_and_update_interest_range(
                     position: recipient_position,
                     position_id: recipient,
                     interest_amount: interest_amount_recipient,
@@ -337,7 +337,7 @@ pub(crate) mod TransferManager {
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let (position_diff_sender, position_diff_recipient) = if (collateral_id == self
                 .assets
-                .get_collateral_id()) {
+                .get_base_collateral_id()) {
                 let position_diff_sender = PositionDiff {
                     collateral_diff: -amount.into() + interest_amount_sender.into(),
                     asset_diff: Option::None,
