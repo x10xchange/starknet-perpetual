@@ -96,6 +96,8 @@ pub(crate) mod VaultsManager {
     #[derive(Drop, starknet::Event)]
     pub enum Event {
         InvestInVault: events::InvestInVault,
+        LiquidateVaultShares: events::LiquidateVaultShares,
+        RedeemVaultShares: events::RedeemVaultShares,
         #[flat]
         FulfillmentEvent: FulfillmentComponent::Event,
         #[flat]
@@ -401,6 +403,21 @@ pub(crate) mod VaultsManager {
                     interest_amount_sender: interest_amount_sender,
                     interest_amount_receiver: interest_amount_receiver,
                 );
+
+            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
+            self
+                .emit(
+                    events::RedeemVaultShares {
+                        vault_position_id: vault_config.position_id.into(),
+                        redeeming_position_id: order.source_position,
+                        receiving_position_id: order.receive_position,
+                        shares_redeemed_amount: actual_shares_user.abs(),
+                        collateral_received_amount: actual_collateral_user.abs(),
+                        collateral_requested_amount: order.quote_amount.abs(),
+                        vault_asset_id: vault_config.asset_id,
+                        invested_asset_id: self.assets.get_collateral_id(),
+                    },
+                );
         }
 
         fn liquidate_vault_shares(
@@ -444,6 +461,21 @@ pub(crate) mod VaultsManager {
                     interest_amount_vault_position: interest_amount_vault_position,
                     interest_amount_sender: interest_amount_liquidated,
                     interest_amount_receiver: 0,
+                );
+
+            self
+                .emit(
+                    events::LiquidateVaultShares {
+                        vault_position_id: self
+                            .vaults
+                            .get_vault_config_for_asset(liquidated_asset_id)
+                            .position_id
+                            .into(),
+                        liquidated_position_id: liquidated_position_id,
+                        vault_asset_id: liquidated_asset_id,
+                        shares_liquidated_amount: actual_shares_user.abs(),
+                        collateral_received_amount: actual_collateral_user.abs(),
+                    },
                 );
         }
 
