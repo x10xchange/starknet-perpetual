@@ -60,9 +60,12 @@ pub mod Positions {
     };
     use crate::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetType};
     use crate::core::types::balance::BalanceDiff;
-    use crate::core::types::position::{AssetEnrichedPositionDiff, PositionDiffEnriched};
+    use crate::core::types::position::{
+        AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
+    };
     use crate::core::value_risk_calculator::{
-        assert_healthy_or_healthier, calculate_position_tvtr_before, calculate_position_tvtr_change,
+        TVTRChange, assert_healthy_or_healthier, calculate_asset_value_and_risk,
+        calculate_position_tvtr_before, calculate_position_tvtr_change,
     };
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
@@ -453,6 +456,93 @@ pub mod Positions {
                         position: position_mut, :synthetic_id, :asset_diff,
                     );
             };
+        }
+
+        fn apply_multi_spot_diff(
+            ref self: ComponentState<TContractState>,
+            position_id: PositionId,
+            position_diff: MultiSpotPositionDiff,
+        ) -> TVTRChange {
+            let assets = get_dep_component!(@self, Assets);
+            let position_mut = self.get_position_mut(:position_id);
+            let starting_position_tv_tr = self.get_position_tv_tr(:position_id);
+            position_mut.collateral_balance.add_and_write(position_diff.collateral_diff);
+
+            let mut total_value_after = starting_position_tv_tr.total_value;
+            let mut total_risk_after = starting_position_tv_tr.total_risk;
+
+            total_value_after += position_diff.collateral_diff.into();
+
+            for diff in position_diff.asset_diffs {
+                let asset_id = diff.asset_id;
+                let asset_diff = diff.diff;
+                let asset_config_ptr = assets.asset_config.entry(*asset_id).as_ptr();
+                let asset_type = SyntheticTrait::get_asset_type(asset_config_ptr)
+                    .expect(NO_SUCH_ASSET);
+                if (asset_type == AssetType::SYNTHETIC) {
+                    let err = format!("Asset: {:?} is not a spot asset", *asset_id);
+                    panic_with_byte_array(err: @err);
+                }
+                let current_spot_balance = if let Option::Some(spot) = position_mut
+                    .asset_balances
+                    .read(*asset_id) {
+                    spot.balance
+                } else {
+                    0_i64.into()
+                };
+                let asset_diff_balance: Balance = (*asset_diff).into();
+                let new_spot_balance = current_spot_balance + asset_diff_balance;
+                if (new_spot_balance < 0_i64.into()) {
+                    let err = format!(
+                        "Spot Balance for asset: {:?} has gone negative. now: {:?}, was: {:?}, position: {:?}",
+                        *asset_id,
+                        new_spot_balance,
+                        current_spot_balance,
+                        position_id,
+                    );
+                    panic_with_byte_array(err: @err);
+                }
+                position_mut
+                    .asset_balances
+                    .write(
+                        *asset_id,
+                        AssetBalance {
+                            version: POSITION_VERSION,
+                            balance: new_spot_balance,
+                            funding_index: Default::default(),
+                        },
+                    );
+                let price = assets.get_asset_price(*asset_id);
+                let risk_factor_before = assets
+                    .get_asset_risk_factor(
+                        asset_id: *asset_id, balance: current_spot_balance, :price,
+                    );
+                let risk_factor_after = assets
+                    .get_asset_risk_factor(asset_id: *asset_id, balance: new_spot_balance, :price);
+
+                let (value_before, risk_before) = calculate_asset_value_and_risk(
+                    asset_type: asset_type,
+                    price: price,
+                    balance: current_spot_balance,
+                    risk_factor: risk_factor_before,
+                );
+                let (value_after, risk_after) = calculate_asset_value_and_risk(
+                    asset_type: asset_type,
+                    price: price,
+                    balance: new_spot_balance,
+                    risk_factor: risk_factor_after,
+                );
+
+                total_value_after = total_value_after + value_after - value_before;
+                total_risk_after = total_risk_after + risk_after - risk_before;
+            }
+
+            TVTRChange {
+                before: starting_position_tv_tr,
+                after: PositionTVTR {
+                    total_value: total_value_after, total_risk: total_risk_after,
+                },
+            }
         }
 
         /// Enriches collateral, producing a fully enriched diff.
