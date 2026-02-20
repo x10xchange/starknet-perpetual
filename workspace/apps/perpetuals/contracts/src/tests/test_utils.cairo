@@ -428,6 +428,49 @@ pub fn setup_state_with_pending_spot_asset(
     state
 }
 
+pub fn setup_state_with_multiple_spot_assets(
+    cfg: @PerpetualsInitConfig, token_state: @TokenState,
+) -> Core::ContractState {
+    let mut state = init_state(:cfg, :token_state);
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
+    state
+        .assets
+        .add_spot_asset(
+            asset_id: *cfg.spot_cfg.collateral_id,
+            erc20_contract_address: *cfg.spot_cfg.contract_address,
+            quantum: *cfg.spot_cfg.quantum,
+            resolution_factor: *cfg.spot_cfg.resolution_factor,
+            risk_factor_tiers: array![RISK_FACTOR].span(),
+            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_tier_size: MAX_U128,
+            quorum: *cfg.spot_cfg.quorum,
+        );
+    cfg
+        .spot_cfg
+        .token_state
+        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
+    state
+        .assets
+        .add_spot_asset(
+            asset_id: *cfg.vault_share_cfg.collateral_id,
+            erc20_contract_address: *cfg.vault_share_cfg.contract_address,
+            quantum: *cfg.vault_share_cfg.quantum,
+            resolution_factor: *cfg.vault_share_cfg.resolution_factor,
+            risk_factor_tiers: array![RISK_FACTOR].span(),
+            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_tier_size: MAX_U128,
+            quorum: *cfg.vault_share_cfg.quorum,
+        );
+    cfg
+        .vault_share_cfg
+        .token_state
+        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    state
+}
+
 pub fn setup_state_with_pending_vault_share(
     cfg: @PerpetualsInitConfig, token_state: @TokenState,
 ) -> Core::ContractState {
