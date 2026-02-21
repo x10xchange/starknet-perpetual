@@ -7,13 +7,16 @@ use perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff;
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::position::MultiSpotPositionDiff;
 use perpetuals::core::types::price::PriceMulTrait;
+use perpetuals::core::types::risk_factor::{RiskFactorMulTrait, RiskFactorTrait};
 use perpetuals::core::value_risk_calculator::TVTRChange;
 use perpetuals::tests::constants::*;
 use starknet::storage::StoragePointerReadAccess;
+use starkware_utils::math::abs::Abs;
 use crate::tests::test_utils::{
-    PerpetualsInitConfig, User, create_token_state, init_position,
-    setup_state_with_active_synthetic, setup_state_with_multiple_spot_assets,
-    setup_state_with_pending_spot_asset, validate_asset_balance,
+    PerpetualsInitConfig, User, create_token_state, init_position, send_price_tick_for_spot,
+    send_price_tick_for_vault_share, setup_state_with_active_synthetic,
+    setup_state_with_multiple_spot_assets, setup_state_with_pending_spot_asset,
+    validate_asset_balance,
 };
 
 #[test]
@@ -235,8 +238,12 @@ fn test_apply_multi_spot_diff_tvtr_tracking() {
 
     let position_id = user.position_id;
     let spot_asset_id = cfg.spot_cfg.collateral_id;
-    let spot_asset_price = state.assets.get_asset_price(spot_asset_id);
     let vault_share_id = cfg.vault_share_cfg.collateral_id;
+
+    send_price_tick_for_spot(ref state, @cfg, 12_u64);
+    send_price_tick_for_vault_share(ref state, @cfg, 12_u64);
+
+    let spot_asset_price = state.assets.get_asset_price(spot_asset_id);
     let vault_share_price = state.assets.get_asset_price(vault_share_id);
 
     // Initial TVTR
@@ -266,16 +273,23 @@ fn test_apply_multi_spot_diff_tvtr_tracking() {
     assert(tvtr_change.before.total_risk == initial_tvtr.total_risk, 'TVTR before risk mismatch');
 
     // Expected value addition: collateral + (spot_diff * spot_price) + (vault_diff * vault_price)
-    // Both spot assets have risk factor 100% in these setups which means 100% value == 100% risk
+    // Both spot assets have risk factor 500 (50%) in these setups which means 50% value == 50% risk
     // contribution (since balances > 0)
+    let risk_factor = RiskFactorTrait::new(RISK_FACTOR);
+
     let spot_diff_balance: Balance = spot_diff_val.into();
     let spot_value_added: i128 = spot_asset_price.mul(spot_diff_balance);
+    let spot_expected_value = spot_value_added
+        - risk_factor.mul(spot_value_added.abs()).try_into().unwrap();
+
     let vault_share_diff_balance: Balance = vault_share_diff_val.into();
     let vault_share_value_added: i128 = vault_share_price.mul(vault_share_diff_balance);
+    let vault_share_expected_value = vault_share_value_added
+        - risk_factor.mul(vault_share_value_added.abs()).try_into().unwrap();
 
     let expected_tv_added: i128 = collateral_diff_val.into()
-        + spot_value_added
-        + vault_share_value_added;
+        + spot_expected_value
+        + vault_share_expected_value;
 
     // Verify after state calculations
     assert(
@@ -296,6 +310,11 @@ fn test_apply_multi_spot_diff_tvtr_tracking() {
 
     let removed_spot_balance: Balance = (-200_i64).into();
     let spot_value_removed: i128 = spot_asset_price.mul(removed_spot_balance);
-    let expected_new_tv = next_tvtr_change.before.total_value - 100_i128 + spot_value_removed;
+    let spot_expected_value_removed = spot_value_removed
+        + risk_factor.mul(spot_value_removed.abs()).try_into().unwrap();
+
+    let expected_new_tv = next_tvtr_change.before.total_value
+        - 100_i128
+        + spot_expected_value_removed;
     assert(next_tvtr_change.after.total_value == expected_new_tv, 'Final TVTR decrease mismatch');
 }
