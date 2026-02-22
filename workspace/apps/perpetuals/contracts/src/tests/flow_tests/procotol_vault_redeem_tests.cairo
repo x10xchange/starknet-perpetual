@@ -1391,7 +1391,9 @@ fn test_redeem_cannot_be_called_except_by_perps_contract() {
 }
 
 #[test]
-#[should_panic(expected: 'ASSET_BALANCE_NEGATIVE')]
+#[should_panic(
+    expected: "Spot Balance for asset: AssetId { value: 1448304433 } has gone negative. now: Balance { value: -400 }, was: Balance { value: 0 }, position: PositionId { value: 555 }",
+)]
 fn test_redeem_vault_shares_negative() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position_id(333_u32.into());
