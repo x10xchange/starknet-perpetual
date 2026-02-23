@@ -30,7 +30,7 @@ use perpetuals::core::components::system_time::interface::{
     ISystemTimeDispatcher, ISystemTimeDispatcherTrait,
 };
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
-use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
+use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType, SpotAssetBalanceDiff};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
@@ -2242,6 +2242,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         value_of_shares_vault: u64,
         actual_shares_user: u64,
         actual_collateral_user: u64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     ) {
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -2295,6 +2296,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 interest_amount_vault_position: 0,
                 interest_amount_sender: 0,
                 interest_amount_receiver: 0,
+                :other_collaterals,
             );
     }
 

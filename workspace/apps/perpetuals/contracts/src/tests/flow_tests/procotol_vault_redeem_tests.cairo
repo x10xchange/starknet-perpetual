@@ -10,9 +10,10 @@ use perpetuals::tests::event_test_utils::{
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use perpetuals::tests::test_utils::assert_with_error;
+use snforge_std::TokenTrait;
 use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use starkware_utils::hash::message_hash::OffchainMessageHash;
-use starkware_utils_testing::test_utils::TokenTrait;
+use starkware_utils_testing::test_utils::TokenTrait as StarknetTokenTrait;
 use super::perps_tests_facade::PerpsTestsFacadeTrait;
 
 
@@ -81,6 +82,7 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
     //     explicity check invariants
     // 1. perps USDC balance must not change
@@ -205,6 +207,7 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_with_9pct_premium() {
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
     //     explicity check invariants
     // 1. perps USDC balance must not change
@@ -312,6 +315,7 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_is_rejected_with_11pc
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -366,6 +370,7 @@ fn test_redeem_from_protocol_vault_impacts_price_as_expected() {
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
 
     let value_of_1000_shares_after_withdrawal = vault_config
@@ -430,6 +435,7 @@ fn test_redeem_from_protocol_vault_unfair__user_redeem() {
             value_of_shares_vault: value_of_shares - 10,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares - 10,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -480,6 +486,7 @@ fn test_redeem_from_protocol_vault_unfair__vault_redeem() {
             value_of_shares_vault: value_of_shares - 10,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -533,6 +540,7 @@ fn test_redeem_from_protocol_vault_over_fulfilled_user() {
             value_of_shares_vault: value_of_shares + 1000,
             actual_shares_user: 400 + 10,
             actual_collateral_user: value_of_shares + 1000,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -585,6 +593,10 @@ fn test_redeem_from_protocol_vault_over_fulfilled_vault() {
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400 + 10,
             actual_collateral_user: value_of_shares - 100,
+            other_collaterals: ArrayTrait::<
+                perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff,
+            >::new()
+                .span(),
         );
 }
 
@@ -710,6 +722,7 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
 
     //we sold 400 shares for $400
@@ -853,6 +866,7 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr_of_unhealth
             value_of_shares_vault: value_of_shares,
             actual_shares_user: 400,
             actual_collateral_user: value_of_shares,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -1444,6 +1458,7 @@ fn test_redeem_vault_shares_negative() {
             value_of_shares_vault: 400,
             actual_shares_user: 400,
             actual_collateral_user: 400,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -2012,4 +2027,150 @@ fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
 
     // Operator tries to execute forced redeem after user already did it (should fail)
     state.facade.force_redeem_from_vault(user_order, vault_order, caller: state.facade.operator);
+}
+#[test]
+fn test_redeem_from_protocol_vault_with_additional_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    // Add an active secondary spot asset (e.g., WBTC)
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let btc_asset_id = asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+    snforge_std::set_balance(target: vault_user.account.address, new_balance: 5000000, :token);
+
+    let deposit_info_user_1 = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user_1);
+    //vault has
+    // 5000 USDC
+    // 10 BTC * 10 * (1-0.1) = 900
+    println!("Validated total value");
+    // Register the vault's share asset
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.validate_total_value(vault_config.position_id, 5900);
+
+    // Setup redeeming user
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+
+    println!("Depositing into vault")
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+    println!("Deposited into vault");
+
+    // Prepare redeem details
+    let shares_to_burn = 650; // vault price is currently $1
+
+    let redeeming_user_usdc_balance_before = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_balance_before = state
+        .facade
+        .get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_balance_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_balance_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    // We will withdraw some USDC and some BTC
+    let value_of_shares: u64 = 650; // Expected pure USD value
+    let actual_usdc_collateral = 550; // Requested physical USD
+    // 550 USDC + 1 BTC @ 100
+
+    let btc_withdrawal_diff: i64 = 1; // Withdrawal of 1 BTC
+    let btc_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: shares_to_burn,
+            value_of_shares_user: value_of_shares,
+            shares_to_burn_vault: shares_to_burn,
+            value_of_shares_vault: value_of_shares,
+            actual_shares_user: shares_to_burn,
+            actual_collateral_user: actual_usdc_collateral,
+            other_collaterals: btc_collaterals,
+        );
+
+    let redeeming_user_usdc_balance_after = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_balance_after = state
+        .facade
+        .get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_balance_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_balance_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    // Validate final balances
+    let actual_usdc_i64: i64 = actual_usdc_collateral.try_into().unwrap();
+    let actual_usdc_balance = actual_usdc_i64.into();
+
+    assert(
+        redeeming_user_usdc_balance_after == redeeming_user_usdc_balance_before
+            + actual_usdc_balance,
+        'user missing usdc',
+    );
+    assert(
+        vault_usdc_balance_after == vault_usdc_balance_before - actual_usdc_balance,
+        'vault surplus usdc',
+    );
+
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(
+        redeeming_user_btc_balance_after == redeeming_user_btc_balance_before + btc_diff_balance,
+        'user missing btc',
+    );
+    assert(
+        vault_btc_balance_after == vault_btc_balance_before - btc_diff_balance, 'vault surplus btc',
+    );
 }
