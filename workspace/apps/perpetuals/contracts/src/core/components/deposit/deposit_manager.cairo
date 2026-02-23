@@ -95,6 +95,8 @@ pub(crate) mod DepositManager {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
+        SystemTimeEvent: SystemTimeComponent::Event,
+        #[flat]
         OperatorNonceEvent: OperatorNonceComponent::Event,
         #[flat]
         AssetsEvent: AssetsComponent::Event,
@@ -112,8 +114,6 @@ pub(crate) mod DepositManager {
         RolesEvent: RolesComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
-        #[flat]
-        SystemTimeEvent: SystemTimeComponent::Event,
         Deposit: events::Deposit,
         DepositCanceled: events::DepositCanceled,
         DepositProcessed: events::DepositProcessed,
@@ -130,6 +130,8 @@ pub(crate) mod DepositManager {
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
+        system_time: SystemTimeComponent::Storage,
+        #[substorage(v0)]
         #[allow(starknet::colliding_storage_paths)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
@@ -144,12 +146,11 @@ pub(crate) mod DepositManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
-        #[substorage(v0)]
-        system_time: SystemTimeComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
@@ -161,7 +162,6 @@ pub(crate) mod DepositManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
-    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
