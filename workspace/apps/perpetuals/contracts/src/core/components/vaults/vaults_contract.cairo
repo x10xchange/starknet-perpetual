@@ -560,16 +560,19 @@ pub(crate) mod VaultsManager {
             self
                 .positions
                 .verify_and_update_interest_range(
-                    position: vault_position,
-                    position_id: vault_position_id,
-                    interest_amount: interest_amount_vault_position,
+                    vault_position, vault_position_id, interest_amount_vault_position,
                 );
+
             self
                 .positions
                 .verify_and_update_interest_range(
-                    position: redeeming_position,
-                    position_id: redeeming_position_id,
-                    interest_amount: interest_amount_sender,
+                    redeeming_position, redeeming_position_id, interest_amount_sender,
+                );
+
+            self
+                .positions
+                .verify_and_update_interest_range(
+                    receiving_position, receiving_position_id, interest_amount_receiver,
                 );
 
             let amount_to_burn = actual_shares_user;
@@ -701,24 +704,6 @@ pub(crate) mod VaultsManager {
                 panic_with_byte_array(err: @err);
             }
 
-            self
-                .positions
-                .verify_and_update_interest_range(
-                    vault_position, vault_position_id, interest_amount_vault_position,
-                );
-
-            self
-                .positions
-                .verify_and_update_interest_range(
-                    redeeming_position, redeeming_position_id, interest_amount_sender,
-                );
-
-            self
-                .positions
-                .verify_and_update_interest_range(
-                    receiving_position, receiving_position_id, interest_amount_receiver,
-                );
-
             let mut vault_spot_diffs = array![];
             for item in other_amounts {
                 vault_spot_diffs.append((*item).invert());
@@ -764,7 +749,9 @@ pub(crate) mod VaultsManager {
                     .apply_multi_spot_diff(
                         position_id: redeeming_position_id,
                         position_diff: MultiSpotPositionDiff {
-                            collateral_diff: actual_collateral_user.into(),
+                            collateral_diff: actual_collateral_user.into()
+                                + interest_amount_sender.into()
+                                + interest_amount_receiver.into(),
                             asset_diffs: redeeming_spot_diffs.span(),
                         },
                     );
@@ -786,7 +773,8 @@ pub(crate) mod VaultsManager {
                     .apply_multi_spot_diff(
                         position_id: redeeming_position_id,
                         position_diff: MultiSpotPositionDiff {
-                            collateral_diff: 0_i64.into(), asset_diffs: redeeming_spot_diffs.span(),
+                            collateral_diff: 0_i64.into() + interest_amount_sender.into(),
+                            asset_diffs: redeeming_spot_diffs.span(),
                         },
                     );
 
@@ -798,9 +786,10 @@ pub(crate) mod VaultsManager {
                 let receiver_tv_tr = self
                     .positions
                     .apply_multi_spot_diff(
-                        position_id: redeeming_position_id,
+                        position_id: receiving_position_id,
                         position_diff: MultiSpotPositionDiff {
-                            collateral_diff: actual_collateral_user.into(),
+                            collateral_diff: actual_collateral_user.into()
+                                + interest_amount_receiver.into(),
                             asset_diffs: other_amounts,
                         },
                     );
