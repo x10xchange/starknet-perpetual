@@ -2601,3 +2601,158 @@ fn test_redeem_fails_when_vault_lacks_requested_asset() {
             other_collaterals: mixed_collaterals,
         );
 }
+
+#[test]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 102 } TV before 900, TR before 900, TV after 500, TR after 900",
+)]
+fn test_redeem_fails_when_user_becomes_unhealthy_due_to_asset_haircut() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+    let trade_user = state.new_user_with_position();
+
+    // Vault deposits 5000 USDC
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    // High risk factor: 50% haircut
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add risky asset (e.g. DOGE)
+    let doge_token = snforge_std::Token::STRK;
+    let doge_erc20 = doge_token.contract_address();
+    let doge_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'DGE',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: doge_erc20,
+    );
+    let doge_asset_id = doge_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @doge_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: doge_token,
+    );
+
+    // Deposit 10 DOGE into Vault
+    let deposit_info_doge = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: doge_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_doge);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Redeeming user deposits 1000 USDC and buys 1000 Vault Shares
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // We add a synthetic asset to create TR. Let's add BTC synthetic with 90% risk!
+    let risk_factor_tiers = RiskFactorTiers {
+        tiers: array![900].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_btc_info = AssetInfoTrait::new(
+        asset_name: 'sBTC', risk_factor_data: risk_factor_tiers, oracles_len: 1,
+    );
+    state.facade.add_active_synthetic(@synthetic_btc_info, initial_price: 1000);
+    let sbtc_id = synthetic_btc_info.asset_id;
+
+    // other user deposits $3000
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 1,
+            base_asset_id: sbtc_id,
+            quote_amount: -1000,
+            fee_amount: 0,
+        );
+    let other_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -1,
+            base_asset_id: sbtc_id,
+            quote_amount: 1000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_order,
+            base: 1,
+            quote: -1000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // TV = 900 (Shares) + 1000 (1 BTC * 1000 from trade) - 1000
+    // = 900.
+    // TR = 1 (BTC) * 1000 (Price) * 0.90 (Risk) = 900.
+    // Initial State is Healthy: TV (900) = TR (900).
+    state.facade.validate_total_value(redeeming_user.position_id, 900);
+    state.facade.validate_total_risk(redeeming_user.position_id, 900);
+
+    let doge_withdrawal_diff: i64 = 10;
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: doge_asset_id, diff: doge_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    //user will lose 900 worth of share TV contribution
+    // receive $1000 worth of DGE
+    // which contributes $500 to TV
+    // TV = TV_before - 900 + 500 = 500
+    // TR = TR_before = 900
+    // State is Unhealthy: TV (500) < TR (900).
+
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: 1000,
+            value_of_shares_user: 1000,
+            shares_to_burn_vault: 1000,
+            value_of_shares_vault: 1000,
+            actual_shares_user: 1000,
+            actual_collateral_user: 0,
+            other_collaterals: mixed_collaterals,
+        );
+}
