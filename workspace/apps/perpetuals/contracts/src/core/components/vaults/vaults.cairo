@@ -108,7 +108,7 @@ pub mod Vaults {
             let positions = get_dep_component!(@self, Positions);
             let position_tv_tr = positions.get_position_tv_tr(vault_position);
             let percentage_from_storage = self.vault_protection_limit_overrides.read(vault_position);
-            let percentage = if percentage_from_storage == 0 {
+            let percentage = if percentage_from_storage.is_zero() {
                 DEFAULT_LIMIT_PERCENT
             } else {
                 percentage_from_storage
@@ -145,7 +145,7 @@ pub mod Vaults {
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
             assert(self.is_vault_position(vault_position), 'UNKNOWN_VAULT');
-            assert(percentage != 0, 'ZERO-LIMIT');
+            assert(percentage.is_non_zero(), 'ZERO-LIMIT');
             let old_percentage = self.vault_protection_limit_overrides.read(vault_position);
             self.vault_protection_limit_overrides.write(vault_position, percentage);
             self
@@ -211,7 +211,7 @@ pub mod Vaults {
                 let tv_at_check = position_tv_tr.total_value;
 
                 let limit_from_storage = self.vault_protection_limit_overrides.read(vault_position);
-                let limit = if limit_from_storage == 0 {
+                let limit = if limit_from_storage.is_zero() {
                     DEFAULT_LIMIT_PERCENT
                 } else {
                     limit_from_storage
