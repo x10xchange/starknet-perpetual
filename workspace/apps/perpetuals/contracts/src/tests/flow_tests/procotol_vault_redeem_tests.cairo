@@ -2174,3 +2174,430 @@ fn test_redeem_from_protocol_vault_with_additional_spot_assets() {
         vault_btc_balance_after == vault_btc_balance_before - btc_diff_balance, 'vault surplus btc',
     );
 }
+
+
+#[test]
+fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add BTC
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Add ETH
+    let eth_token = snforge_std::Token::ETH;
+    let eth_erc20 = eth_token.contract_address();
+    let eth_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'ETH',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: eth_erc20,
+    );
+    let eth_asset_id = eth_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @eth_asset_info, initial_price: 50);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: eth_token,
+    );
+
+    // Deposit BTC into Vault (from Vault Admin)
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    // Deposit ETH into Vault (from Vault Admin)
+    let deposit_info_eth = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: eth_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 20,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_eth);
+
+    // Vault has
+    // 5000 USDC
+    // 10 BTC * 100 * (1-0.1) = 900
+    // 20 ETH * 50 * (1-0.1) = 900
+    // Total Value = 6800
+
+    // Register the vault's share asset
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.validate_total_value(vault_config.position_id, 6800);
+
+    // Setup redeeming user
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 2000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 2000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Prepare redeem details
+    // Value of vault shares = $1
+    let shares_to_burn = 1000;
+
+    let redeeming_user_usdc_before = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_before = state.facade.get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+    let redeeming_user_eth_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, eth_asset_id);
+    let vault_eth_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, eth_asset_id);
+
+    // We will withdraw some USDC, BTC, and ETH
+    let value_of_shares: u64 = 1000;
+
+    // 5 BTC @ $100 = $500
+    // 4 ETH @ $50 = $200
+    // 300 USDC = $300
+    // Total = $1000
+    let actual_usdc_collateral = 300;
+    let btc_withdrawal_diff: i64 = 5;
+    let eth_withdrawal_diff: i64 = 4;
+
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: eth_asset_id, diff: eth_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: shares_to_burn,
+            value_of_shares_user: value_of_shares,
+            shares_to_burn_vault: shares_to_burn,
+            value_of_shares_vault: value_of_shares,
+            actual_shares_user: shares_to_burn,
+            actual_collateral_user: actual_usdc_collateral,
+            other_collaterals: mixed_collaterals,
+        );
+
+    let redeeming_user_usdc_after = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_after = state.facade.get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+    let redeeming_user_eth_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, eth_asset_id);
+    let vault_eth_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, eth_asset_id);
+
+    // Validate final balances
+    let actual_usdc_i64: i64 = actual_usdc_collateral.try_into().unwrap();
+    let actual_usdc_balance = actual_usdc_i64.into();
+
+    assert(
+        redeeming_user_usdc_after == redeeming_user_usdc_before + actual_usdc_balance,
+        'user missing usdc',
+    );
+    assert(vault_usdc_after == vault_usdc_before - actual_usdc_balance, 'vault surplus usdc');
+
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(
+        redeeming_user_btc_after == redeeming_user_btc_before + btc_diff_balance,
+        'user missing btc',
+    );
+    assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
+
+    let eth_diff_balance: perpetuals::core::types::balance::Balance = eth_withdrawal_diff.into();
+    assert(
+        redeeming_user_eth_after == redeeming_user_eth_before + eth_diff_balance,
+        'user missing eth',
+    );
+    assert(vault_eth_after == vault_eth_before - eth_diff_balance, 'vault surplus eth');
+}
+
+#[test]
+fn test_redeem_entirely_in_other_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add BTC
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Deposit BTC into Vault (from Vault Admin)
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    // Vault has 5000 USDC and 10 BTC ($900 value) -> Total = 5900
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.validate_total_value(vault_config.position_id, 5900);
+
+    // Setup redeeming user
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    let shares_to_burn = 400;
+
+    let redeeming_user_usdc_before = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_before = state.facade.get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    // We withdraw 4 BTC @ $100 = $400, leaving exactly 0 USDC needed from the vault.
+    let value_of_shares: u64 = 400;
+    let actual_usdc_collateral = 0;
+    let btc_withdrawal_diff: i64 = 4;
+
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: shares_to_burn,
+            value_of_shares_user: value_of_shares,
+            shares_to_burn_vault: shares_to_burn,
+            value_of_shares_vault: value_of_shares,
+            actual_shares_user: shares_to_burn,
+            actual_collateral_user: actual_usdc_collateral,
+            other_collaterals: mixed_collaterals,
+        );
+
+    let redeeming_user_usdc_after = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_after = state.facade.get_position_collateral_balance(vault_config.position_id);
+    let redeeming_user_btc_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    assert(redeeming_user_usdc_after == redeeming_user_usdc_before, 'user should not receive usdc');
+    assert(vault_usdc_after == vault_usdc_before, 'vault should not lose usdc');
+
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(
+        redeeming_user_btc_after == redeeming_user_btc_before + btc_diff_balance,
+        'user missing btc',
+    );
+    assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
+}
+
+#[test]
+#[should_panic(
+    expected: "Spot Balance for asset: AssetId { value: 4346947 } has gone negative. now: Balance { value: -3 }, was: Balance { value: 2 }, position: PositionId { value: 101 }",
+)]
+fn test_redeem_fails_when_vault_lacks_requested_asset() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let vault_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position();
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 20000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add BTC
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Deposit only 2 BTC into Vault
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 2,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Setup redeeming user
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Try to withdraw 5 BTC, but the vault only has 2 BTC! This will trigger a negative value
+    // error during spot diff apply
+    let shares_to_burn = 500;
+    let value_of_shares: u64 = 500;
+    let actual_usdc_collateral = 0;
+    let btc_withdrawal_diff: i64 = 5;
+
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: redeeming_user,
+            receiving_user: redeeming_user,
+            shares_to_burn_user: shares_to_burn,
+            value_of_shares_user: value_of_shares,
+            shares_to_burn_vault: shares_to_burn,
+            value_of_shares_vault: value_of_shares,
+            actual_shares_user: shares_to_burn,
+            actual_collateral_user: actual_usdc_collateral,
+            other_collaterals: mixed_collaterals,
+        );
+}
