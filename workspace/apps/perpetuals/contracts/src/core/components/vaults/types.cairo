@@ -1,19 +1,19 @@
 use perpetuals::core::types::asset::AssetId;
-use starkware_utils::time::time::Seconds;
-use starkware_utils::math::utils::mul_wide_and_floor_div;
-use starkware_utils::math::abs::Abs;
+use starknet::SyscallResultTrait;
 use starknet::storage::StoragePointer0Offset;
 use starknet::storage_access::storage_address_from_base_and_offset;
 use starknet::syscalls::storage_read_syscall;
-use starknet::SyscallResultTrait;
+use starkware_utils::math::abs::Abs;
+use starkware_utils::math::utils::mul_wide_and_floor_div;
+use starkware_utils::time::time::Timestamp;
 
 
-#[derive(Copy, Debug, Default, Drop, Hash, PartialEq, Serde, starknet::Store)]
+#[derive(Copy, Debug, Drop, Hash, PartialEq, Serde, starknet::Store)]
 pub struct VaultConfig {
     pub version: u8,
     pub asset_id: AssetId,
     pub position_id: u32,
-    pub last_tv_check_timestamp: Seconds,
+    pub last_tv_check_timestamp: Timestamp,
     pub tv_at_check: i128,
     pub max_tv_loss: u128,
 }
@@ -49,11 +49,8 @@ pub impl VaultConfigOffsetIntoU8 of Into<VaultConfigOffset, u8> {
 
 #[generate_trait]
 pub impl VaultConfigImpl of VaultConfigTrait {
-    
     #[inline]
-    fn read(
-        entry: StoragePointer0Offset<VaultConfig>, offset: VaultConfigOffset,
-    ) -> felt252 {
+    fn read(entry: StoragePointer0Offset<VaultConfig>, offset: VaultConfigOffset) -> felt252 {
         storage_read_syscall(
             0,
             storage_address_from_base_and_offset(entry.__storage_pointer_address__, offset.into()),
@@ -66,7 +63,7 @@ pub impl VaultConfigImpl of VaultConfigTrait {
         Self::read(entry, VaultConfigOffset::VERSION)
     }
 
-   /// Returns true if the Option is Some, false if None.
+    /// Returns true if the Option is Some, false if None.
     /// At the storage 0 indicates None, 1 indicates Some.
     #[inline]
     fn is_some(entry: StoragePointer0Offset<VaultConfig>) -> bool {

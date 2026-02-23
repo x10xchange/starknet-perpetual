@@ -133,8 +133,7 @@ pub mod Core {
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl VaultImpl = 
-            VaultsComponent::VaultsImpl<ContractState>;
+    impl VaultImpl = VaultsComponent::VaultsImpl<ContractState>;
 
 
     #[storage]
