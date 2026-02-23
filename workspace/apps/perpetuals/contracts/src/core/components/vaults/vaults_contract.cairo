@@ -51,6 +51,7 @@ pub trait IVaultExternal<TContractState> {
 #[starknet::contract]
 pub(crate) mod VaultsManager {
     use AssetsComponent::InternalTrait;
+    use core::dict::Felt252Dict;
     use core::num::traits::{WideMul, Zero};
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -639,7 +640,13 @@ pub(crate) mod VaultsManager {
 
             //calculate total value of redemption
             let mut total_value_to_receive: i128 = actual_collateral_user.into();
+
+            let mut seen_assets: Felt252Dict<bool> = Default::default();
             for other_collateral in other_amounts {
+                let asset_id_felt: felt252 = (*other_collateral.asset_id).into();
+                assert(!seen_assets.get(asset_id_felt), 'DUPLICATE_SPOT_ASSET');
+                seen_assets.insert(asset_id_felt, true);
+
                 assert(*other_collateral.diff >= 0_i64, 'NEGATIVE_OTHER_COLLATERAL');
                 let price = self.assets.get_asset_price(*other_collateral.asset_id);
                 let balance_diff: Balance = (*other_collateral.diff).into();

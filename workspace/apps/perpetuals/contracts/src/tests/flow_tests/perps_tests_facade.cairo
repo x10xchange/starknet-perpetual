@@ -2057,6 +2057,99 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
     }
 
+    fn deleverage_spot_asset(
+        ref self: PerpsTestsFacade,
+        deleveraged_user: User,
+        deleverager_user: User,
+        spot_amounts: Span<SpotAssetBalanceDiff>,
+        deleveraged_base_collateral_amount: i64,
+    ) {
+        self
+            .deleverage_spot_asset_with_interest(
+                :deleveraged_user,
+                :deleverager_user,
+                :spot_amounts,
+                :deleveraged_base_collateral_amount,
+                interest_amount_deleveraged: 0,
+                interest_amount_deleverager: 0,
+            )
+    }
+
+    fn deleverage_spot_asset_with_interest(
+        ref self: PerpsTestsFacade,
+        deleveraged_user: User,
+        deleverager_user: User,
+        spot_amounts: Span<SpotAssetBalanceDiff>,
+        deleveraged_base_collateral_amount: i64,
+        interest_amount_deleveraged: i64,
+        interest_amount_deleverager: i64,
+    ) {
+        let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
+        let deleveraged_balance_before = dispatcher
+            .get_position_assets(position_id: deleveraged_user.position_id);
+        let deleveraged_collateral_balance_before = deleveraged_balance_before.collateral_balance;
+
+        let deleverager_balance_before = dispatcher
+            .get_position_assets(position_id: deleverager_user.position_id);
+        let deleverager_collateral_balance_before = deleverager_balance_before.collateral_balance;
+
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .deleverage_spot_asset(
+                :operator_nonce,
+                deleveraged_position_id: deleveraged_user.position_id,
+                deleverager_position_id: deleverager_user.position_id,
+                :spot_amounts,
+                :deleveraged_base_collateral_amount,
+                :interest_amount_deleveraged,
+                :interest_amount_deleverager,
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: deleveraged_user.position_id,
+                expected_balance: deleveraged_collateral_balance_before
+                    + deleveraged_base_collateral_amount.into()
+                    + interest_amount_deleveraged.into(),
+            );
+
+        self
+            .validate_collateral_balance(
+                position_id: deleverager_user.position_id,
+                expected_balance: deleverager_collateral_balance_before
+                    - deleveraged_base_collateral_amount.into()
+                    + interest_amount_deleverager.into(),
+            );
+
+        // Validate each spot asset balance update
+        for diff in spot_amounts {
+            let asset_id = diff.asset_id;
+            let transfer_amount = diff.diff;
+
+            let deleveraged_spot_balance_before = get_synthetic_balance(
+                assets: deleveraged_balance_before.assets, asset_id: *asset_id,
+            );
+            let deleverager_spot_balance_before = get_synthetic_balance(
+                assets: deleverager_balance_before.assets, asset_id: *asset_id,
+            );
+
+            self
+                .validate_asset_balance(
+                    position_id: deleveraged_user.position_id,
+                    asset_id: *asset_id,
+                    expected_balance: deleveraged_spot_balance_before + (*transfer_amount).into(),
+                );
+
+            self
+                .validate_asset_balance(
+                    position_id: deleverager_user.position_id,
+                    asset_id: *asset_id,
+                    expected_balance: deleverager_spot_balance_before - (*transfer_amount).into(),
+                );
+        }
+    }
+
     fn deleverage(
         ref self: PerpsTestsFacade,
         deleveraged_user: User,

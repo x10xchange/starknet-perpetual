@@ -2923,3 +2923,112 @@ fn test_redeem_from_vault_with_interest_different_receiver_and_other_collaterals
             expected_balance: vault_doge_before - doge_withdrawal_diff.into(),
         );
 }
+
+#[test]
+#[should_panic(expected: ('DUPLICATE_SPOT_ASSET',))]
+fn test_redeem_with_duplicate_spot_assets_fails() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let risk_factor_tiers_doge = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let doge_token = snforge_std::Token::STRK;
+    let doge_erc20 = doge_token.contract_address();
+    let doge_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'DGE',
+        risk_factor_data: risk_factor_tiers_doge,
+        oracles_len: 1,
+        erc20_contract_address: doge_erc20,
+    );
+    let doge_asset_id = doge_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @doge_asset_info, initial_price: 100);
+
+    let vault_user = state.new_user_with_position();
+    let withdrawing_user = state.new_user_with_position();
+    let receiving_user = withdrawing_user;
+
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 500000, token: doge_token,
+    );
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_spot(
+                    vault_user.account,
+                    asset_id: doge_asset_id,
+                    position_id: vault_user.position_id,
+                    quantized_amount: 100,
+                ),
+        );
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit(withdrawing_user.account, withdrawing_user.position_id, 10_000_u64),
+        );
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: withdrawing_user,
+                    receiving_user: withdrawing_user,
+                ),
+        );
+
+    let interest_vault: i64 = 0;
+    let interest_sender: i64 = 0;
+    let interest_receiver: i64 = 0;
+    let value_of_shares: u64 = 400;
+
+    let doge_withdrawal_diff: i64 = 1;
+    let doge_value = 100;
+    let usdc_value = value_of_shares - doge_value;
+
+    // Intentionally add `doge_asset_id` twice to trigger DUPLICATE_SPOT_ASSET panic
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: doge_asset_id, diff: doge_withdrawal_diff,
+        },
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: doge_asset_id, diff: doge_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .redeem_from_vault_with_interest(
+            vault: vault_config,
+            withdrawing_user: withdrawing_user,
+            receiving_user: receiving_user,
+            shares_to_burn_user: 400,
+            value_of_shares_user: value_of_shares,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: value_of_shares,
+            actual_shares_user: 400,
+            actual_collateral_user: usdc_value,
+            interest_amount_vault_position: interest_vault,
+            interest_amount_sender: interest_sender,
+            interest_amount_receiver: interest_receiver,
+            other_collaterals: mixed_collaterals,
+        );
+}

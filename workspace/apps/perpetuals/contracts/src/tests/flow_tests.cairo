@@ -1,4 +1,5 @@
 mod caller_failure_tests;
+mod deleverage_spot_tests;
 mod external_components_tests;
 mod flow_tests;
 mod infra;

@@ -4627,9 +4627,8 @@ fn deleverage_spot_asset(
     operator_nonce: u64,
     deleveraged_position_id: PositionId,
     deleverager_position_id: PositionId,
-    spot_asset_id: AssetId,
-    deleveraged_spot_amount: i64,
     deleveraged_base_collateral_amount: i64,
+    spot_amounts: Span<SpotAssetBalanceDiff>,
     interest_amount_deleveraged: i64,
     interest_amount_deleverager: i64,
 )

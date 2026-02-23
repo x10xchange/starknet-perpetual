@@ -1,5 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
+use crate::core::types::asset::synthetic::SpotAssetBalanceDiff;
 
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -32,8 +33,7 @@ pub trait IDeleverageManager<TContractState> {
         ref self: TContractState,
         deleveraged_position_id: PositionId,
         deleverager_position_id: PositionId,
-        asset_id: AssetId,
-        deleveraged_amount: i64,
+        spot_amounts: Span<SpotAssetBalanceDiff>,
         deleveraged_base_collateral_amount: i64,
         interest_amount_deleveraged: i64,
         interest_amount_deleverager: i64,
@@ -42,6 +42,7 @@ pub trait IDeleverageManager<TContractState> {
 
 #[starknet::contract]
 pub(crate) mod DeleverageManager {
+    use core::dict::Felt252Dict;
     use core::panic_with_felt252;
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -60,11 +61,14 @@ pub(crate) mod DeleverageManager {
     use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticTrait};
     use perpetuals::core::types::position::PositionId;
-    use starknet::storage::{StorageAsPointer, StoragePath, StoragePathEntry};
+    use starknet::storage::{
+        StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
+    };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::math::abs::Abs;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
@@ -73,12 +77,13 @@ pub(crate) mod DeleverageManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::positions::interface::IPositions;
     use crate::core::errors::{NO_DELEVERAGE_VAULT_SHARES, position_not_deleveragable};
-    use crate::core::types::position::{Position, PositionDiff};
+    use crate::core::types::asset::synthetic::SpotAssetBalanceDiffTrait;
+    use crate::core::types::position::{MultiSpotPositionDiff, Position, PositionDiff};
     use crate::core::value_risk_calculator::{
-        calculate_position_tvtr_before, calculate_position_tvtr_change,
+        assert_healthy_or_healthier, calculate_position_tvtr_before, calculate_position_tvtr_change,
         deleveraged_position_validations,
     };
-    use super::{AssetId, Deleverage, IDeleverageManager};
+    use super::{AssetId, Deleverage, IDeleverageManager, SpotAssetBalanceDiff};
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -239,32 +244,100 @@ pub(crate) mod DeleverageManager {
             ref self: ContractState,
             deleveraged_position_id: PositionId,
             deleverager_position_id: PositionId,
-            asset_id: AssetId,
-            deleveraged_amount: i64,
+            spot_amounts: Span<SpotAssetBalanceDiff>,
             deleveraged_base_collateral_amount: i64,
             interest_amount_deleveraged: i64,
             interest_amount_deleverager: i64,
         ) {
-            let deleveraged_position = self
+            let mut deleveraged_position = self
                 .positions
                 .get_position_mut(position_id: deleveraged_position_id);
-            let deleverager_position = self
+            let mut deleverager_position = self
                 .positions
                 .get_position_mut(position_id: deleverager_position_id);
 
-            /// Validation:
-            self.assets.validate_asset_active(:asset_id);
-            self
-                .positions
-                ._validate_imposed_reduction_trade(
-                    position_id_a: deleveraged_position_id,
-                    position_id_b: deleverager_position_id,
-                    position_a: deleveraged_position.into(),
-                    position_b: deleverager_position.into(),
-                    base_asset_id: asset_id,
-                    base_amount_a: deleveraged_amount,
-                    quote_amount_a: deleveraged_base_collateral_amount,
-                );
+            if (!self.positions.is_deleveragable(deleveraged_position_id)) {
+                panic_with_byte_array(
+                    @(format!("Position {:?} is not deleveragable", deleveraged_position_id)),
+                )
+            }
+
+            // Ensure debt is being cleared (i.e. positive value being transferred to the
+            // deleveraged position)
+            assert!(deleveraged_base_collateral_amount > 0, "INVALID_DEBT_REDUCTION");
+
+            let total_debt_balance: i64 = deleveraged_position.collateral_balance.read().into();
+            // Total debt must be negative since position is deleveragable
+            assert!(total_debt_balance < 0, "DEBT_MUST_BE_NEGATIVE");
+            let total_debt_abs: i64 = -total_debt_balance;
+
+            // Add import needed for the dictionary and Nullable
+
+            // Create a dictionary to keep track of matched spot amounts (O(1) lookups)
+            let mut seen_assets: Felt252Dict<bool> = Default::default();
+            let mut expected_diffs: Felt252Dict<Nullable<i64>> = Default::default();
+            for spot_amount in spot_amounts {
+                let asset_id_felt: felt252 = (*spot_amount.asset_id).into();
+                assert(!seen_assets.get(asset_id_felt), 'DUPLICATE_SPOT_ASSET');
+                seen_assets.insert(asset_id_felt, true);
+
+                expected_diffs.insert(asset_id_felt, NullableTrait::new(*spot_amount.diff));
+            }
+
+            let mut iter = deleveraged_position.asset_balances.into_iter();
+            loop {
+                match iter.next() {
+                    Option::Some((
+                        asset_id, asset_balance,
+                    )) => {
+                        let total_spot_balance: i64 = asset_balance.balance.into();
+                        if total_spot_balance <= 0 {
+                            continue;
+                        }
+
+                        // Check if this asset is active (otherwise it's not a spot asset being
+                        // held)
+                        // If it's a synthetic or inactive, we skip it for deleverage spot
+                        self.assets.validate_asset_active(asset_id: asset_id);
+
+                        // We must find this spot asset in the `spot_amounts` provided
+                        let asset_id_felt: felt252 = asset_id.into();
+                        let found_amount_nullable = expected_diffs.get(asset_id_felt);
+
+                        let spot_amount_transferred = if found_amount_nullable.is_null() {
+                            panic_with_byte_array(
+                                @format!("Missing spot asset {:?} in spot_amounts", asset_id),
+                            )
+                        } else {
+                            found_amount_nullable.deref()
+                        };
+
+                        assert!(spot_amount_transferred <= 0, "SPOT_AMOUNT_MUST_BE_NEGATIVE");
+
+                        // The amount transferred must be exactly proportional to the debt cleared
+                        // Formula: S_i_delta = - (d * S_i) / D
+                        // Using unsigned ops to avoid overflow:
+                        let expected_amount: u128 = (deleveraged_base_collateral_amount.abs().into()
+                            * total_spot_balance.abs().into())
+                            / total_debt_abs.abs().into();
+
+                        let expected_signed: i64 = -expected_amount.try_into().unwrap();
+
+                        // Allow 0 extraction if d * S_i < D (dust extraction rounds to 0)
+                        if spot_amount_transferred != expected_signed {
+                            panic_with_byte_array(
+                                @format!(
+                                    "Invalid spot proportion for {:?}. Expected {:?}, got {:?}",
+                                    asset_id,
+                                    expected_signed,
+                                    spot_amount_transferred,
+                                ),
+                            )
+                        }
+                    },
+                    Option::None => { break; },
+                }
+            }
 
             // Validate interest in range for both positions before applying diffs
             self
@@ -284,21 +357,41 @@ pub(crate) mod DeleverageManager {
                 );
 
             /// Execution:
-            // Pass default values for interest validation parameters since deleverage_spot_asset
-            // doesn't support interest amounts. Interest validation is skipped when interest
-            // amounts are zero, so these parameters are not used.
-            self
-                ._execute_deleverage(
-                    :deleveraged_position_id,
-                    :deleverager_position_id,
-                    deleveraged_position: deleveraged_position.into(),
-                    deleverager_position: deleverager_position.into(),
-                    :asset_id,
-                    deleveraged_asset_amount: deleveraged_amount,
-                    deleveraged_collateral_amount: deleveraged_base_collateral_amount,
-                    :interest_amount_deleveraged,
-                    :interest_amount_deleverager,
+            let deleveraged_position_diff = MultiSpotPositionDiff {
+                collateral_diff: deleveraged_base_collateral_amount.into()
+                    + interest_amount_deleveraged.into(),
+                asset_diffs: spot_amounts,
+            };
+
+            let mut deleverager_diffs = array![];
+            for diff in spot_amounts {
+                deleverager_diffs.append((*diff).invert());
+            }
+
+            let deleverager_position_diff = MultiSpotPositionDiff {
+                collateral_diff: -deleveraged_base_collateral_amount.into()
+                    + interest_amount_deleverager.into(),
+                asset_diffs: deleverager_diffs.span(),
+            };
+
+            let deleveraged_tvtr = self
+                .positions
+                .apply_multi_spot_diff(
+                    position_id: deleveraged_position_id, position_diff: deleveraged_position_diff,
                 );
+
+            let deleverager_tvtr = self
+                .positions
+                .apply_multi_spot_diff(
+                    position_id: deleverager_position_id, position_diff: deleverager_position_diff,
+                );
+
+            assert_healthy_or_healthier(
+                position_id: deleveraged_position_id, tvtr: deleveraged_tvtr,
+            );
+            assert_healthy_or_healthier(
+                position_id: deleverager_position_id, tvtr: deleverager_tvtr,
+            );
         }
     }
 
