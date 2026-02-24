@@ -896,3 +896,235 @@ fn test_deleverage_spot_asset_full_amount() {
     assert(deleveraged_eth_after == 0_i64.into(), 'ETH balance should be 0');
 }
 
+#[test]
+fn test_deleverage_spot_asset_with_interest() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    // 1. Setup spot assets
+    let token_1 = snforge_std::Token::STRK;
+    let erc20_1 = token_1.contract_address();
+    let test_asset_1_info = AssetInfoTrait::new_collateral(
+        asset_name: 'STRK',
+        risk_factor_data: RiskFactorTiers {
+            tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+        },
+        oracles_len: 1,
+        erc20_contract_address: erc20_1,
+    );
+    let asset_id_1 = test_asset_1_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @test_asset_1_info, initial_price: 100);
+
+    let token_2 = snforge_std::Token::ETH;
+    let erc20_2 = token_2.contract_address();
+    let test_asset_2_info = AssetInfoTrait::new_collateral(
+        asset_name: 'ETH',
+        risk_factor_data: RiskFactorTiers {
+            tiers: array![250].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+        },
+        oracles_len: 1,
+        erc20_contract_address: erc20_2,
+    );
+    let asset_id_2 = test_asset_2_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @test_asset_2_info, initial_price: 100);
+
+    // 2. Setup users
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+
+    // Mint tokens
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, token: token_1,
+    );
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, token: token_2,
+    );
+
+    // 3. Deposit Base Collateral (USDC)
+    // Deleverager needs a large amount of USDC to take over the spot assets.
+    let deposit_info_deleverager = state
+        .facade
+        .deposit(deleverager_user.account, deleverager_user.position_id, 100000);
+    state.facade.process_deposit(deposit_info_deleverager);
+
+    // 4. Deposit Spot Assets for deleveraged user
+    // The user has STRK and ETH as spot collateral.
+    let deposit_spo_1 = state
+        .facade
+        .deposit_spot(deleveraged_user.account, asset_id_1, deleveraged_user.position_id, 100);
+    state.facade.process_deposit(deposit_spo_1);
+
+    let deposit_spo_2 = state
+        .facade
+        .deposit_spot(deleveraged_user.account, asset_id_2, deleveraged_user.position_id, 50);
+    state.facade.process_deposit(deposit_spo_2);
+
+    // Initial Risk Adjusted Value:
+    // STRK: 100 * 100 * 0.5 = 5000
+    // ETH: 50 * 100 * 0.75 = 3750
+    // Total Value = 8750
+
+    // 5. Open Synthetic Position to take a loss
+    let risk_factor_data_synth = RiskFactorTiers {
+        tiers: array![1].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_PERP', risk_factor_data: risk_factor_data_synth, oracles_len: 1,
+    );
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 20000);
+
+    let order_deleveraged_user = state
+        .facade
+        .create_order(
+            user: deleveraged_user,
+            base_amount: 10, // Long 10 BTC
+            base_asset_id: synthetic_info.asset_id,
+            quote_amount: -200000,
+            fee_amount: 0,
+        );
+
+    // Deleverager user will take the short side just to match the trade
+    let order_deleverager_user = state
+        .facade
+        .create_order(
+            user: deleverager_user,
+            base_amount: -10, // Short 10 BTC
+            base_asset_id: synthetic_info.asset_id,
+            quote_amount: 200000,
+            fee_amount: 0,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: order_deleveraged_user,
+            order_info_b: order_deleverager_user,
+            base: 10,
+            quote: -200000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // 6. Reverse the trade at a worse price to realize a massive USD loss
+    // Deleveraged user sells 10 BTC at 19130 = 191300 USDC total.
+    // Realized loss = 191300 - 200000 = -8700 USDC.
+    let order_deleveraged_user_close = state
+        .facade
+        .create_order(
+            user: deleveraged_user,
+            base_amount: -10,
+            base_asset_id: synthetic_info.asset_id,
+            quote_amount: 191300,
+            fee_amount: 0,
+        );
+
+    let order_deleverager_user_close = state
+        .facade
+        .create_order(
+            user: deleverager_user,
+            base_amount: 10,
+            base_asset_id: synthetic_info.asset_id,
+            quote_amount: -191300,
+            fee_amount: 0,
+        );
+
+    state
+        .facade
+        .trade(
+            order_info_a: order_deleveraged_user_close,
+            order_info_b: order_deleverager_user_close,
+            base: -10,
+            quote: 191300,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // Total Value after trade = 8750 - 8700 = 50. Still strictly positive.
+
+    // Now tick down the STRK spot price.
+    state.facade.price_tick(asset_info: @test_asset_1_info, price: 50);
+
+    // New Risk adjusted value:
+    // STRK: 100 * 50 * 0.5 = 2500
+    // ETH: 50 * 100 * 0.75 = 3750
+    // Total value = 2500 + 3750 - 8700 = -2450 < 0 (Insolvent).
+
+    // Total physical spot value (D):
+    // STRK: 100 * 50 = 5000
+    // ETH: 50 * 100 = 5000
+    // D = 10000.
+
+    // Check deleveragability
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'user is not deleveragable',
+    );
+
+    // Calculate proportions:
+    // d = 400.
+    // d * S_i / D:
+    // STRK proportion = (100 / 8700) * 400 = floor(4.59) = 4
+    // ETH proportion = (50 / 8700) * 400 = floor(2.29) = 2
+
+    let debt_to_clear = 400; // Debt in terms of USDC
+    let expected_strk_diff = -4;
+    let expected_eth_diff = -2;
+
+    let mut expected_transfers = array![];
+    expected_transfers
+        .append(SpotAssetBalanceDiff { asset_id: asset_id_1, diff: expected_strk_diff });
+    expected_transfers
+        .append(SpotAssetBalanceDiff { asset_id: asset_id_2, diff: expected_eth_diff });
+
+    let interest_amount_deleveraged = -2;
+
+    state.facade.advance_time(seconds: starkware_utils::constants::HOUR);
+
+    state
+        .facade
+        .deleverage_spot_asset_with_interest(
+            :deleveraged_user,
+            :deleverager_user,
+            spot_amounts: expected_transfers.span(),
+            deleveraged_base_collateral_amount: debt_to_clear,
+            :interest_amount_deleveraged,
+            interest_amount_deleverager: 0,
+        );
+
+    // Explicitly assert balances to document the interest logic calculations:
+    let deleveraged_usdc_after = state
+        .facade
+        .get_position_collateral_balance(deleveraged_user.position_id);
+    let deleverager_usdc_after = state
+        .facade
+        .get_position_collateral_balance(deleverager_user.position_id);
+
+    // Deleveraged user starts with -8700 USDC (from synthetic loss).
+    // They deleverage 400 debt, but process -2 interest.
+    // Net result: -8700 + 400 - 2 = -8302
+    assert(deleveraged_usdc_after == -8302_i64.into(), 'deleveraged USDC incorrect');
+
+    // Deleverager user starts with 100,000 deposit + 8700 synthetic win = 108,700 USDC.
+    // They absorb 400 debt (giving up 400 USDC to the insolvent user).
+    // Net result: 108700 - 400 = 108300
+    assert(deleverager_usdc_after == 108300_i64.into(), 'deleverager USDC incorrect');
+
+    let deleveraged_strk = state
+        .facade
+        .get_position_asset_balance(deleveraged_user.position_id, asset_id_1);
+    let deleveraged_eth = state
+        .facade
+        .get_position_asset_balance(deleveraged_user.position_id, asset_id_2);
+
+    assert(deleveraged_strk == 96_i64.into(), 'deleveraged STRK incorrect');
+    assert(deleveraged_eth == 48_i64.into(), 'deleveraged ETH incorrect');
+
+    let deleverager_strk = state
+        .facade
+        .get_position_asset_balance(deleverager_user.position_id, asset_id_1);
+    let deleverager_eth = state
+        .facade
+        .get_position_asset_balance(deleverager_user.position_id, asset_id_2);
+
+    assert(deleverager_strk == 4_i64.into(), 'deleverager STRK incorrect');
+    assert(deleverager_eth == 2_i64.into(), 'deleverager ETH incorrect');
+}
