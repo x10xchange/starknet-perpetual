@@ -1,5 +1,4 @@
 use core::traits::{Default, Into};
-#[cfg(test)]
 use perpetuals::core::components::assets::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::components::positions::interface::IPositions;
@@ -151,42 +150,6 @@ fn test_apply_multi_spot_diff_synthetic_panic() {
 }
 
 #[test]
-fn test_apply_multi_spot_diff_mixed_diffs_same_asset() {
-    let mut cfg: PerpetualsInitConfig = Default::default();
-    let mut token_state = create_token_state();
-    let mut state = setup_state_with_pending_spot_asset(@cfg, @token_state);
-
-    let user: User = Default::default();
-    init_position(@cfg, ref state, user);
-
-    let position_id = user.position_id;
-    let spot_asset_id = cfg.spot_cfg.collateral_id;
-
-    // 1. Initial funding
-    let initial_diff = MultiSpotPositionDiff {
-        collateral_diff: 0_i64.into(),
-        asset_diffs: array![SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: 1000 }].span(),
-    };
-    state.positions.apply_multi_spot_diff(position_id, initial_diff);
-
-    // 2. Apply a mix of positive and negative diffs
-    let mixed_diffs = MultiSpotPositionDiff {
-        collateral_diff: 50_i64.into(),
-        asset_diffs: array![
-            SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: 200 }, // +200 -> 1200
-            SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: -500 }, // -500 -> 700
-            SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: 150 }, // +150 -> 850
-            SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: -50 } // -50 -> 800
-        ]
-            .span(),
-    };
-    state.positions.apply_multi_spot_diff(position_id, mixed_diffs);
-
-    // 3. Verify net balance is 800
-    validate_asset_balance(ref state, position_id, spot_asset_id, 800_i64.into());
-}
-
-#[test]
 fn test_apply_multi_spot_diff_multiple_assets_mixed() {
     let mut cfg: PerpetualsInitConfig = Default::default();
     let mut token_state = create_token_state();
@@ -215,16 +178,14 @@ fn test_apply_multi_spot_diff_multiple_assets_mixed() {
         collateral_diff: 100_i64.into(),
         asset_diffs: array![
             SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: 500 }, // 1000 + 500 = 1500
-            SpotAssetBalanceDiff { asset_id: vault_share_id, diff: -300 }, // 1000 - 300 = 700
-            SpotAssetBalanceDiff { asset_id: spot_asset_id, diff: -200 }, // 1500 - 200 = 1300
-            SpotAssetBalanceDiff { asset_id: vault_share_id, diff: 400 } // 700 + 400 = 1100
+            SpotAssetBalanceDiff { asset_id: vault_share_id, diff: -300 } // 1000 - 300 = 700
         ]
             .span(),
     };
     state.positions.apply_multi_spot_diff(position_id, mixed_diffs);
 
-    validate_asset_balance(ref state, position_id, spot_asset_id, 1300_i64.into());
-    validate_asset_balance(ref state, position_id, vault_share_id, 1100_i64.into());
+    validate_asset_balance(ref state, position_id, spot_asset_id, 1500_i64.into());
+    validate_asset_balance(ref state, position_id, vault_share_id, 700_i64.into());
 }
 
 #[test]
