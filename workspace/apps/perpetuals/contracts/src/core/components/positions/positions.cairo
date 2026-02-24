@@ -1,5 +1,6 @@
 #[starknet::component]
 pub mod Positions {
+    use core::dict::Felt252Dict;
     use core::nullable::{FromNullableResult, match_nullable};
     use core::num::traits::{Pow, Zero};
     use core::panic_with_felt252;
@@ -472,9 +473,12 @@ pub mod Positions {
             let mut total_risk_after = starting_position_tv_tr.total_risk;
 
             total_value_after += position_diff.collateral_diff.into();
-
+            let mut seen_assets: Felt252Dict<bool> = Default::default();
             for diff in position_diff.asset_diffs {
                 let asset_id = diff.asset_id;
+                let asset_id_felt: felt252 = (*asset_id).into();
+                assert(!seen_assets.get(asset_id_felt), 'DUPLICATE_SPOT_ASSET');
+                seen_assets.insert(asset_id_felt, true);
                 let asset_diff = diff.diff;
                 let asset_config_ptr = assets.asset_config.entry(*asset_id).as_ptr();
                 let asset_type = SyntheticTrait::get_asset_type(asset_config_ptr)
