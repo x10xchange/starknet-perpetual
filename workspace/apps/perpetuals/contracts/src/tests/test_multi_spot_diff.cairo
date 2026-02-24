@@ -1,5 +1,4 @@
 use core::traits::{Default, Into};
-#[cfg(test)]
 use perpetuals::core::components::assets::assets::AssetsComponent::InternalTrait as AssetsInternal;
 use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
 use perpetuals::core::components::positions::interface::IPositions;
