@@ -117,13 +117,13 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::assets::errors::{ASSET_NOT_EXISTS, CANNOT_WITHDRAW_SYNTHETIC};
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_AMOUNT, SIGNED_TX_EXPIRED,
         TRANSFER_FAILED,
@@ -189,6 +189,8 @@ pub(crate) mod WithdrawalManager {
         RolesEvent: RolesComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        ExchangeTimeEvent: ExchangeTimeComponent::Event,
     }
 
     #[storage]
@@ -216,6 +218,8 @@ pub(crate) mod WithdrawalManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        exchange_time: ExchangeTimeComponent::Storage,
         // Timelock before forced actions can be executed.
         forced_action_timelock: TimeDelta,
         // Cost for executing forced actions.
@@ -235,6 +239,7 @@ pub(crate) mod WithdrawalManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
