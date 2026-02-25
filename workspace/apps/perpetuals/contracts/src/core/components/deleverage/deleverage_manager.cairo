@@ -60,8 +60,8 @@ pub(crate) mod DeleverageManager {
     use crate::core::components::assets::errors::NO_SUCH_ASSET;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DELEVERAGES;
     use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
-    use crate::core::components::vaults::vaults::{Vaults as VaultsComponent};
     use crate::core::errors::{NO_DELEVERAGE_SPOT, NO_DELEVERAGE_VAULT_SHARES};
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::value_risk_calculator::deleveraged_position_validations;
@@ -310,7 +310,8 @@ pub(crate) mod DeleverageManager {
                     position_diff: deleverager_position_diff,
                     tvtr_before: Default::default(),
                 );
-            // Deleveraged is not validated against vault limits as this might block ADL, which takes precedence.
+            // Deleveraged is not validated against vault limits as this might block ADL, which
+            // takes precedence.
             self
                 .positions
                 .validate_against_vault_limits(
@@ -320,7 +321,6 @@ pub(crate) mod DeleverageManager {
                         .get_vault_protection_config(deleverager_position_id),
                     :tvtr,
                 );
-            
 
             // Apply diffs
             self
