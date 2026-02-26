@@ -18,6 +18,9 @@ use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
     DepositStatus, IDepositDispatcher, IDepositDispatcherTrait,
 };
+use perpetuals::core::components::exchange_time::interface::{
+    IExchangeTimeDispatcher, IExchangeTimeDispatcherTrait,
+};
 use perpetuals::core::components::operator_nonce::interface::{
     IOperatorNonceDispatcher, IOperatorNonceDispatcherTrait,
 };
@@ -26,9 +29,7 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
-use perpetuals::core::components::system_time::interface::{
-    ISystemTimeDispatcher, ISystemTimeDispatcherTrait,
-};
+use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType, SpotAssetBalanceDiff};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -735,18 +736,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 asset_id,
                 erc20_contract_address: vault.contract_address,
                 quantum: 1,
-                risk_factor_tiers: risk_factor_1,
-                :risk_factor_first_tier_boundary,
-                :risk_factor_tier_size,
+                risk_factor: *risk_factor_1[0],
                 quorum: asset_info.oracles.len().try_into().unwrap(),
             );
 
         assert_add_spot_event_with_expected(
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             asset_id: asset_info.asset_id,
-            risk_factor_tiers: asset_info.risk_factor_data.tiers,
-            risk_factor_first_tier_boundary: asset_info.risk_factor_data.first_tier_boundary,
-            risk_factor_tier_size: asset_info.risk_factor_data.tier_size,
+            risk_factor: *asset_info.risk_factor_data.tiers[0],
             resolution_factor: asset_info.resolution_factor,
             quorum: asset_info.oracles.len().try_into().unwrap(),
             contract_address: vault.contract_address,
@@ -2222,18 +2219,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 erc20_contract_address: *asset_info.erc20_contract_address,
                 quantum: *asset_info.quantum,
                 resolution_factor: *asset_info.resolution_factor,
-                risk_factor_tiers: risk_factor_data.tiers,
-                risk_factor_first_tier_boundary: risk_factor_data.first_tier_boundary,
-                risk_factor_tier_size: risk_factor_data.tier_size,
+                risk_factor: *risk_factor_data.tiers[0],
                 quorum: asset_info.oracles.len().try_into().unwrap(),
             );
 
         assert_add_spot_event_with_expected(
             spied_event: self.get_last_event(contract_address: self.perpetuals_contract),
             asset_id: *asset_info.asset_id,
-            risk_factor_tiers: risk_factor_data.tiers,
-            risk_factor_first_tier_boundary: risk_factor_data.first_tier_boundary,
-            risk_factor_tier_size: risk_factor_data.tier_size,
+            risk_factor: *risk_factor_data.tiers[0],
             resolution_factor: *asset_info.resolution_factor,
             quorum: asset_info.oracles.len().try_into().unwrap(),
             contract_address: *asset_info.erc20_contract_address,
@@ -2847,16 +2840,30 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let new_timestamp = Time::now().add(Time::seconds(seconds));
         start_cheat_block_timestamp_global(new_timestamp.into());
 
-        // Update system time in the contract
+        // Update exchange time in the contract
         let operator_nonce = self.get_nonce();
-        let dispatcher = ISystemTimeDispatcher { contract_address: self.perpetuals_contract };
+        let dispatcher = IExchangeTimeDispatcher { contract_address: self.perpetuals_contract };
         self.operator.set_as_caller(self.perpetuals_contract);
-        dispatcher.update_system_time(:operator_nonce, :new_timestamp);
+        dispatcher.update_exchange_time(:operator_nonce, :new_timestamp);
     }
 
     fn enable_escape_hatch(ref self: PerpsTestsFacade) {
         self.set_app_governor_as_caller();
         ICoreDispatcher { contract_address: self.perpetuals_contract }.enable_escape_hatch();
+    }
+
+    fn force_reset_daily_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId) {
+        self.set_app_governor_as_caller();
+        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+            .force_reset_daily_protection_limit(:vault_position);
+    }
+
+    fn update_vault_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, percentage: u32,
+    ) {
+        self.set_app_governor_as_caller();
+        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+            .update_vault_protection_limit(:vault_position, :percentage);
     }
 }
 

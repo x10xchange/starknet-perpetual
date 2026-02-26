@@ -67,6 +67,7 @@ pub(crate) mod LiquidationManager {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::interface::IAssets;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::fulfillment::interface::IFulfillment;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -76,7 +77,6 @@ pub(crate) mod LiquidationManager {
         FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
     };
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::synthetic::SyntheticTrait;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use starknet::storage::{Mutable, StorageAsPointer, StoragePath, StoragePathEntry};
@@ -91,8 +91,10 @@ pub(crate) mod LiquidationManager {
     use crate::core::components::assets::errors::{NO_SUCH_ASSET, SYNTHETIC_NOT_EXISTS};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_LIQUIDATIONS;
     use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
+    use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::errors::{
-        CANT_LIQUIDATE_IF_POSITION, CANT_TRADE_WITH_FEE_POSITION, INVALID_SAME_POSITIONS,
+        CANT_LIQUIDATE_IF_POSITION, CANT_LIQUIDATE_WITH_FP, INVALID_SAME_POSITIONS,
     };
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::order::ValidateableOrderTrait;
@@ -117,7 +119,7 @@ pub(crate) mod LiquidationManager {
         #[flat]
         PositionsEvent: PositionsComponent::Event,
         #[flat]
-        SystemTimeEvent: SystemTimeComponent::Event,
+        ExchangeTimeEvent: ExchangeTimeComponent::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         #[flat]
@@ -126,6 +128,8 @@ pub(crate) mod LiquidationManager {
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
         RolesEvent: RolesComponent::Event,
+        #[flat]
+        VaultsEvent: VaultsComponent::Event,
     }
 
     #[storage]
@@ -144,13 +148,15 @@ pub(crate) mod LiquidationManager {
         #[substorage(v0)]
         pub positions: PositionsComponent::Storage,
         #[substorage(v0)]
-        pub system_time: SystemTimeComponent::Storage,
+        pub exchange_time: ExchangeTimeComponent::Storage,
         #[substorage(v0)]
         pub fulfillment_tracking: FulfillmentComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
+        #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -158,13 +164,14 @@ pub(crate) mod LiquidationManager {
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
-    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
+    component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
 
 
     #[abi(embed_v0)]
@@ -336,7 +343,7 @@ pub(crate) mod LiquidationManager {
                 liquidator_order.receive_position != INSURANCE_FUND_POSITION,
                 CANT_LIQUIDATE_IF_POSITION,
             );
-            assert(liquidator_order.receive_position != FEE_POSITION, CANT_TRADE_WITH_FEE_POSITION);
+            assert(liquidator_order.receive_position != FEE_POSITION, CANT_LIQUIDATE_WITH_FP);
             assert(
                 liquidator_order.receive_position != liquidated_position_id, INVALID_SAME_POSITIONS,
             );
@@ -606,13 +613,22 @@ pub(crate) mod LiquidationManager {
                     position: liquidated_position.into(),
                     position_diff: liquidated_position_diff,
                 );
-            self
+            let tvtr = self
                 .positions
                 .validate_healthy_or_healthier_position(
                     position_id: liquidator_position_id,
                     position: liquidator_position.into(),
                     position_diff: liquidator_position_diff,
                     tvtr_before: Default::default(),
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: liquidator_position_id,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(liquidator_position_id),
+                    :tvtr,
                 );
 
             if let Option::Some(liquidator_receive_position_diff) =

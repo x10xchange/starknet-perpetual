@@ -2171,6 +2171,108 @@ Only APP\_GOVERNOR can execute.
 - INVALID_ZERO_QUORUM
 - INVALID_SAME_QUORUM
 
+  ###### Force Reset Protection Limit
+
+  Force-resets the vault protection mechanism by snapshotting the current total value and recalculating the maximum allowed TV loss so that the limit for a day can be extended.
+
+  ```rust
+  fn force_reset_daily_protection_limit(
+      ref self: ContractState,
+      vault_position: PositionId,
+  )
+  ```
+
+  **Access Control:**
+
+  Only APP\_GOVERNOR can execute.
+
+  **Validations:**
+
+  1. App Governor is the caller.
+  2. `vault_position` is a registered vault position.
+
+  **Logic:**
+
+  1. Run validations.
+  2. Get current `VaultConfig` for the vault position.
+  3. Calculate current total value via `get_position_tv_tr`.
+  4. Calculate `max_tv_loss` from `tv_at_check` and `percentage`.
+  5. Update `VaultConfig` with new `tv_at_check`, `max_tv_loss`, and `last_tv_check_timestamp = now`.
+  6. Write updated config to both `registered_vaults_by_position` and `registered_vaults_by_asset`.
+
+  **Emits:**
+
+  [VaultProtectionReset](#vaultprotectionreset)
+
+  **Errors:**
+
+  - ONLY\_APP\_GOVERNOR
+  - UNKNOWN\_VAULT
+
+  ###### Update Vault Protection Limit
+
+  Updates the per-vault protection limit percentage override. Default is 5%, 0 is not allowed as it prevents any withdraws.
+
+  ```rust
+  fn update_vault_protection_limit(
+      ref self: ContractState,
+      vault_position: PositionId,
+      limit: u32,
+  )
+  ```
+
+  **Access Control:**
+
+  Only APP\_GOVERNOR can execute.
+
+  **Validations:**
+
+  1. App Governor is the caller.
+  2. `vault_position` is a registered vault position.
+
+  **Logic:**
+
+  1. Run validations.
+  2. Write `limit` to `vault_protection_limit_overrides[vault_position]`.
+
+  **Emits:**
+
+  [VaultProtectionLimitUpdated](#VaultProtectionLimitUpdated)
+
+  **Errors:**
+
+  - ONLY\_APP\_GOVERNOR
+  - UNKNOWN\_VAULT
+
+  And the events:
+
+  ###### VaultProtectionReset
+
+  ```rust
+  #[derive(Debug, Drop, PartialEq, starknet::Event)]
+  pub struct VaultProtectionReset {
+      #[key]
+      pub vault_position_id: PositionId,
+      pub old_tv_at_check: i128,
+      pub old_max_tv_loss: i128,
+      pub new_tv_at_check: i128,
+      pub new_max_tv_loss: i128,
+  }
+  ```
+
+  ###### VaultProtectionLimitUpdated
+
+  ```rust
+  #[derive(Debug, Drop, PartialEq, starknet::Event)]
+  pub struct VaultProtectionLimitUpdated {
+      #[key]
+      pub vault_position_id: PositionId,
+      pub old_limit: u32,
+      pub new_limit: u32,
+  }
+  ```
+
+
 ###### ActivateVault
 
 Activate vault is called by the operator to activate a vault position
@@ -3051,8 +3153,8 @@ struct Storage {
     forced_action_timelock: TimeDelta,
     // Cost for executing forced actions (in quantized units).
     premium_cost: u64,
-    // System time from the latest system_time call.
-    system_time: Timestamp,
+    // Exchange time from the latest exchange_time call.
+    exchange_time: Timestamp,
 }
 ```
 
@@ -3097,7 +3199,7 @@ pub enum Event {
     ForcedWithdraw: events::ForcedWithdraw,
     ForcedWithdrawRequest: events::ForcedWithdrawRequest,
     InterestApplied: events::InterestApplied,
-    TimeTick: events::TimeTick,
+    ExchangeTimeUpdated: events::ExchangeTimeUpdated,
     #[flat]
     FulfillmentEvent: Fulfillement::Event,
     #[flat]
@@ -3441,12 +3543,12 @@ pub struct InterestApplied {
 }
 ```
 
-##### TimeTick
+##### ExchangeTimeUpdated
 
 ```rust
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct TimeTick {
-    pub timestamp: Timestamp,
+pub struct ExchangeTimeUpdated {
+    pub new_timestamp: Timestamp,
     }
 ```
 
@@ -3558,7 +3660,7 @@ pub fn constructor(
 5. Initialize positions: create fee position with `fee_position_owner_public_key` and insurance fund position with `insurance_fund_position_owner_public_key`.
 6. Initialize forced action timelock with `forced_action_timelock`.
 7. Initialize premium cost with `premium_cost`.
-8. Initialize last system time to current time.
+8. Initialize last exchange time to current time.
 
 ### Public Functions
 
@@ -3951,12 +4053,12 @@ Only the Operator can execute.
 
 [InterestApplied](#interestapplied)
 
-#### Time Tick
+#### Exchange Time Updated
 
-Updates the system time. This function allows the operator to set the current system time, which must be monotonically increasing and not exceed the current block timestamp.
+Updates the exchange time. This function allows the operator to set the current exchange time, which must be monotonically increasing and not exceed the current block timestamp.
 
 ```rust
-fn update_system_time(
+fn update_exchange_time(
     ref self: ContractState,
     operator_nonce: u64,
     new_timestamp: Timestamp,
@@ -3972,12 +4074,12 @@ Only the Operator can execute.
 1. [Pausable check](#pausable)
 2. [Operator Nonce check](#operator-nonce)
 3. `new_timestamp <= now`
-4. `new_timestamp > system_time`
+4. `new_timestamp > exchange_time`
 
 **Logic:**
 
 1. Run validations
-2. Update `system_time` to `new_timestamp`
+2. Update `exchange_time` to `new_timestamp`
 
 **Errors:**
 
@@ -3989,7 +4091,7 @@ Only the Operator can execute.
 
 **Emits:**
 
-[TimeTick](#timetick)
+[ExchangeTimeUpdated](#exchangetimeupdated)
 
 #### Trade
 

@@ -68,12 +68,12 @@ pub(crate) mod TransferManager {
     use perpetuals::core::components::assets::AssetsComponent::InternalImpl as AssetsInternal;
     use perpetuals::core::components::assets::errors::NO_SUCH_ASSET;
     use perpetuals::core::components::assets::interface::IAssets;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticTrait};
     use perpetuals::core::types::position::{PositionId, PositionTrait};
@@ -112,6 +112,8 @@ pub(crate) mod TransferManager {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
+        ExchangeTimeEvent: ExchangeTimeComponent::Event,
+        #[flat]
         OperatorNonceEvent: OperatorNonceComponent::Event,
         #[flat]
         AssetsEvent: AssetsComponent::Event,
@@ -127,8 +129,6 @@ pub(crate) mod TransferManager {
         RolesEvent: RolesComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
-        #[flat]
-        SystemTimeEvent: SystemTimeComponent::Event,
     }
 
     #[storage]
@@ -142,6 +142,8 @@ pub(crate) mod TransferManager {
         #[substorage(v0)]
         pub roles: RolesComponent::Storage,
         #[substorage(v0)]
+        exchange_time: ExchangeTimeComponent::Storage,
+        #[substorage(v0)]
         #[allow(starknet::colliding_storage_paths)]
         pub assets: AssetsComponent::Storage,
         #[substorage(v0)]
@@ -154,12 +156,11 @@ pub(crate) mod TransferManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
-        #[substorage(v0)]
-        system_time: SystemTimeComponent::Storage,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: AssetsComponent, storage: assets, event: AssetsEvent);
     component!(path: PositionsComponent, storage: positions, event: PositionsEvent);
@@ -170,7 +171,6 @@ pub(crate) mod TransferManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
-    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -332,7 +332,7 @@ pub(crate) mod TransferManager {
             interest_amount_recipient: i64,
         ) {
             // Parameters
-
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_TRANSFER");
             let sender_position = self.positions.get_position_snapshot(:position_id);
             let recipient_position = self.positions.get_position_snapshot(position_id: recipient);
             let (position_diff_sender, position_diff_recipient) = if (collateral_id == self

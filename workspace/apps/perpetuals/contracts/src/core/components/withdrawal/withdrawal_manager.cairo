@@ -117,13 +117,13 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::assets::errors::{ASSET_NOT_EXISTS, CANNOT_WITHDRAW_SYNTHETIC};
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit::InternalImpl as DepositInternal;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_AMOUNT, SIGNED_TX_EXPIRED,
         TRANSFER_FAILED,
@@ -151,6 +151,7 @@ pub(crate) mod WithdrawalManager {
     use starkware_utils::time::time::{Time, TimeDelta, validate_expiration};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
     use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
     use super::{
         ForcedWithdraw, ForcedWithdrawRequest, IWithdrawalManager, Signature, Timestamp, Withdraw,
@@ -185,7 +186,9 @@ pub(crate) mod WithdrawalManager {
         #[flat]
         RolesEvent: RolesComponent::Event,
         #[flat]
-        SystemTimeEvent: SystemTimeComponent::Event,
+        VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        ExchangeTimeEvent: ExchangeTimeComponent::Event,
     }
 
     #[storage]
@@ -210,7 +213,9 @@ pub(crate) mod WithdrawalManager {
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
-        system_time: SystemTimeComponent::Storage,
+        pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        exchange_time: ExchangeTimeComponent::Storage,
         // Timelock before forced actions can be executed.
         forced_action_timelock: TimeDelta,
         // Cost for executing forced actions.
@@ -228,7 +233,8 @@ pub(crate) mod WithdrawalManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
-    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -463,6 +469,7 @@ pub(crate) mod WithdrawalManager {
             collateral_id: AssetId,
             interest_amount: i64,
         ) -> (HashType, ContractAddress) {
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
             let hash = self
@@ -499,7 +506,7 @@ pub(crate) mod WithdrawalManager {
                 (
                     PositionDiff {
                         collateral_diff: interest_amount.into(),
-                        asset_diff: Some((collateral_id, -amount.into())),
+                        asset_diff: Some((collateral_id, negative_amount.into())),
                     },
                     SyntheticTrait::at_quantum(entry),
                     IERC20Dispatcher { contract_address: SyntheticTrait::at_token_contract(entry) },

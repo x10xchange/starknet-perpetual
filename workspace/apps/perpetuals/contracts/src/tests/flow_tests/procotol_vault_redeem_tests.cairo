@@ -16,7 +16,6 @@ use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils_testing::test_utils::TokenTrait as StarknetTokenTrait;
 use super::perps_tests_facade::PerpsTestsFacadeTrait;
 
-
 pub const MAX_U128: u128 = Bounded::<u128>::MAX;
 
 #[test]
@@ -30,6 +29,9 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -155,6 +157,9 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_with_9pct_premium() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -330,6 +335,9 @@ fn test_redeem_from_protocol_vault_impacts_price_as_expected() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -614,6 +622,9 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -885,6 +896,9 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr() {
 
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -1005,6 +1019,9 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr_starting_with_negat
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
 
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -1129,6 +1146,9 @@ fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_nega
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
 
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -1420,6 +1440,10 @@ fn test_redeem_vault_shares_negative() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
 
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state.facade.process_deposit(state.facade.deposit(user.account, user.position_id, 10000_u64));
     state
         .facade
@@ -1599,6 +1623,9 @@ fn test_forced_redeem_from_vault_after_timelock() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -1737,6 +1764,9 @@ fn test_forced_redeem_from_vault_by_operator_before_timelock() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -1830,6 +1860,9 @@ fn test_forced_redeem_from_vault_user_before_timelock_fails() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -1896,6 +1929,9 @@ fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
@@ -1969,6 +2005,9 @@ fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
     state.facade.process_deposit(vault_init_deposit);
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade
