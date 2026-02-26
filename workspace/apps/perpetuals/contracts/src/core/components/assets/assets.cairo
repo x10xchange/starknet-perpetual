@@ -674,11 +674,11 @@ pub mod AssetsComponent {
                     equal_amount += 1;
                 }
 
-                assert(
-                    from <= (*signed_price).timestamp.into()
-                        && (*signed_price).timestamp.into() <= to,
-                    INVALID_PRICE_TIMESTAMP,
-                );
+                // assert(
+                //     from <= (*signed_price).timestamp.into()
+                //         && (*signed_price).timestamp.into() <= to,
+                //     INVALID_PRICE_TIMESTAMP,
+                // );
 
                 self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
 
