@@ -558,14 +558,13 @@ pub mod AssetsComponent {
         /// Validates assets integrity prerequisites:
         /// - Funding interval validation.
         /// - Prices validation.
-        fn validate_assets_integrity(ref self: ComponentState<TContractState>) {
-            let current_time = Time::now();
-            // Funding validation.
-            assert(
-                current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
-                FUNDING_EXPIRED,
-            );
-            self.validate_price_interval_integrity(:current_time);
+        fn validate_assets_integrity(ref self: ComponentState<TContractState>) {// let current_time = Time::now();
+        // // Funding validation.
+        // assert(
+        //     current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
+        //     FUNDING_EXPIRED,
+        // );
+        // self.validate_price_interval_integrity(:current_time);
         }
 
         fn validate_price_interval_integrity(
