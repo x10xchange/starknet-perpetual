@@ -721,7 +721,7 @@ pub(crate) mod VaultsManager {
                     position_diff: vault_position_diff,
                     tvtr_before: Default::default(),
                 );
-            
+
             self
                 .positions
                 .validate_against_vault_limits(
