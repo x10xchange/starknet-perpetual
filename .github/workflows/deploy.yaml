@@ -27,7 +27,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
+          custom_prompt: |
             You are an expert Smart Contract Auditor and Web3 Security Engineer.
             Analyze the following git diff for a smart contract deployment/update.
             Your primary goal is to identify **security vulnerabilities**, **logic flaws**, and **gas inefficiencies** introduced or modified by these changes. Smart contract bugs can lead to catastrophic loss of funds, so treat security with the absolute highest priority.
