@@ -20,6 +20,16 @@ pub struct Settlement {
 
 #[starknet::interface]
 pub trait ICore<TContractState> {
+    fn process_old_deposit(
+        ref self: TContractState,
+        operator_nonce: u64,
+        depositor: ContractAddress,
+        asset_id: AssetId,
+        position_id: PositionId,
+        quantized_amount: u64,
+        salt: felt252,
+    );
+    fn migrate_usdc(ref self: TContractState, amount: u256);
     fn withdraw_request(
         ref self: TContractState,
         signature: Signature,
