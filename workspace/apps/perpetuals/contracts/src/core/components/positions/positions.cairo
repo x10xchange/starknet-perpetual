@@ -487,13 +487,13 @@ pub mod Positions {
                     let err = format!("Asset: {:?} is not a spot asset", *asset_id);
                     panic_with_byte_array(err: @err);
                 }
-                let current_spot_balance = if let Option::Some(spot) = position_mut
+
+                let current_spot_balance = position_mut
                     .asset_balances
-                    .read(*asset_id) {
-                    spot.balance
-                } else {
-                    0_i64.into()
-                };
+                    .read(*asset_id)
+                    .map(|spot| spot.balance)
+                    .unwrap_or(0_i64.into());
+
                 let asset_diff_balance: Balance = (*asset_diff).into();
                 let new_spot_balance = current_spot_balance + asset_diff_balance;
                 if (new_spot_balance < 0_i64.into()) {
