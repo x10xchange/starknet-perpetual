@@ -29,6 +29,7 @@ use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
+use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -2846,6 +2847,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn enable_escape_hatch(ref self: PerpsTestsFacade) {
         self.set_app_governor_as_caller();
         ICoreDispatcher { contract_address: self.perpetuals_contract }.enable_escape_hatch();
+    }
+
+    fn force_reset_daily_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId) {
+        self.set_app_governor_as_caller();
+        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+            .force_reset_daily_protection_limit(:vault_position);
+    }
+
+    fn update_vault_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, percentage: u32,
+    ) {
+        self.set_app_governor_as_caller();
+        IVaultsDispatcher { contract_address: self.perpetuals_contract }
+            .update_vault_protection_limit(:vault_position, :percentage);
     }
 }
 

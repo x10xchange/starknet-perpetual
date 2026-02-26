@@ -713,13 +713,23 @@ pub(crate) mod VaultsManager {
             };
 
             // vault health checks
-            self
+            let tvtr = self
                 .positions
                 .validate_healthy_or_healthier_position(
                     position_id: vault_position_id,
                     position: vault_position.into(),
                     position_diff: vault_position_diff,
                     tvtr_before: Default::default(),
+                );
+
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: vault_position_id,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(vault_position_id),
+                    :tvtr,
                 );
 
             self

@@ -5189,6 +5189,9 @@ fn test_redeem_from_vault_with_mixed_interest_same_position() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     state
         .facade
         .process_deposit(
@@ -5540,6 +5543,9 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
         );
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     state
         .facade

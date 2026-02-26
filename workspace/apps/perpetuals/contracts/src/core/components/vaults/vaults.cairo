@@ -3,11 +3,9 @@ use starkware_utils::time::time::TimeDelta;
 use crate::core::types::asset::AssetId;
 use crate::core::types::position::PositionId;
 
-
 const STORAGE_VERSION: u8 = 1;
 const CHECK_FREQUENCY: TimeDelta = TimeDelta { seconds: DAY };
 const DEFAULT_LIMIT_PERCENT: u32 = 5;
-
 
 #[starknet::interface]
 pub trait IVaults<TContractState> {

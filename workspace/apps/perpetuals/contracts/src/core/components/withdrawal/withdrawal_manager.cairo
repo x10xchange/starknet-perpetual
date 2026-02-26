@@ -151,6 +151,7 @@ pub(crate) mod WithdrawalManager {
     use starkware_utils::time::time::{Time, TimeDelta, validate_expiration};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
     use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
     use super::{
         ForcedWithdraw, ForcedWithdrawRequest, IWithdrawalManager, Signature, Timestamp, Withdraw,
@@ -185,6 +186,8 @@ pub(crate) mod WithdrawalManager {
         #[flat]
         RolesEvent: RolesComponent::Event,
         #[flat]
+        VaultsEvent: VaultsComponent::Event,
+        #[flat]
         ExchangeTimeEvent: ExchangeTimeComponent::Event,
     }
 
@@ -210,6 +213,8 @@ pub(crate) mod WithdrawalManager {
         #[substorage(v0)]
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
+        pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
         exchange_time: ExchangeTimeComponent::Storage,
         // Timelock before forced actions can be executed.
         forced_action_timelock: TimeDelta,
@@ -228,6 +233,7 @@ pub(crate) mod WithdrawalManager {
     component!(
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
+    component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
     component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
 
     #[abi(embed_v0)]
@@ -463,6 +469,7 @@ pub(crate) mod WithdrawalManager {
             collateral_id: AssetId,
             interest_amount: i64,
         ) -> (HashType, ContractAddress) {
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
             let hash = self
