@@ -210,10 +210,10 @@ pub(crate) mod VaultsManager {
             assert(order.quote_amount < 0, 'INVALID_POSITIVE_QUOTE_AMOUNT');
             // Expiration check.
             let now = Time::now();
-            if (now > order.expiration) {
-                let err = order_expired_err(from_position_id);
-                panic_with_byte_array(err: @err);
-            }
+            // if (now > order.expiration) {
+            //     let err = order_expired_err(from_position_id);
+            //     panic_with_byte_array(err: @err);
+            // }
             assert(order.quote_asset_id == self.assets.get_collateral_id(), 'INVALID_QUOTE_ASSET');
 
             let receiving_position_id = order.receive_position;

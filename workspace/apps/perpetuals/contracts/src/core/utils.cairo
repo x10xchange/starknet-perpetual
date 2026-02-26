@@ -93,11 +93,11 @@ pub fn validate_order<T, impl TValidateableOrder: ValidateableOrderTrait<T>, +Dr
     assert(order.quote_amount().is_non_zero(), INVALID_ZERO_AMOUNT);
 
     // Expiration check.
-    let now = Time::now();
-    if (now > order.expiration()) {
-        let err = order_expired_err(order.position_id());
-        panic_with_byte_array(err: @err);
-    }
+    // let now = Time::now();
+    // if (now > order.expiration()) {
+    //     let err = order_expired_err(order.position_id());
+    //     panic_with_byte_array(err: @err);
+    // }
 
     // Sign Validation for amounts.
     assert(!have_same_sign(order.quote_amount(), order.base_amount()), INVALID_AMOUNT_SIGN);
