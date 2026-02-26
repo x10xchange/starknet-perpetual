@@ -262,7 +262,7 @@ pub(crate) mod TransferManager {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            validate_expiration(:expiration, err: TRANSFER_EXPIRED);
+            // validate_expiration(:expiration, err: TRANSFER_EXPIRED);
             assert(recipient != position_id, INVALID_SAME_POSITIONS);
             let position = self.positions.get_position_snapshot(:position_id);
             let hash = self
