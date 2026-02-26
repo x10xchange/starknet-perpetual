@@ -11,6 +11,8 @@ pub mod Core {
     use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent::InternalTrait as ExchangeInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -18,8 +20,6 @@ pub mod Core {
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
-    use perpetuals::core::components::system_time::SystemTimeComponent::InternalTrait as SystemInternal;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, ESCAPE_HATCH_DISABLED, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT,
         LENGTH_MISMATCH, ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC, TRANSFER_FAILED,
@@ -75,7 +75,7 @@ pub mod Core {
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: OperatorNonceComponent, storage: operator_nonce, event: OperatorNonceEvent);
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
-    component!(path: SystemTimeComponent, storage: system_time, event: SystemTimeEvent);
+    component!(path: ExchangeTimeComponent, storage: exchange_time, event: ExchangeTimeEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -100,7 +100,7 @@ pub mod Core {
         OperatorNonceComponent::OperatorNonceImpl<ContractState>;
 
     #[abi(embed_v0)]
-    impl SystemTimeImpl = SystemTimeComponent::SystemTimeImpl<ContractState>;
+    impl ExchangeTimeImpl = ExchangeTimeComponent::ExchangeTimeImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl DepositImpl = Deposit::DepositImpl<ContractState>;
@@ -132,6 +132,9 @@ pub mod Core {
     impl ExternalComponentsImpl =
         ExternalComponentsComponent::ExternalComponentsImpl<ContractState>;
 
+    #[abi(embed_v0)]
+    impl VaultImpl = VaultsComponent::VaultsImpl<ContractState>;
+
 
     #[storage]
     struct Storage {
@@ -143,7 +146,7 @@ pub mod Core {
         #[substorage(v0)]
         pausable: PausableComponent::Storage,
         #[substorage(v0)]
-        system_time: SystemTimeComponent::Storage,
+        exchange_time: ExchangeTimeComponent::Storage,
         #[substorage(v0)]
         pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
@@ -186,7 +189,7 @@ pub mod Core {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
-        SystemTimeEvent: SystemTimeComponent::Event,
+        ExchangeTimeEvent: ExchangeTimeComponent::Event,
         #[flat]
         ReplaceabilityEvent: ReplaceabilityComponent::Event,
         #[flat]
@@ -273,7 +276,7 @@ pub mod Core {
         assert(forced_action_timelock.is_non_zero(), INVALID_ZERO_TIMEOUT);
         self.forced_action_timelock.write(TimeDelta { seconds: forced_action_timelock });
         self.premium_cost.write(premium_cost);
-        self.system_time.initialize();
+        self.exchange_time.initialize();
     }
 
     #[abi(embed_v0)]
@@ -421,7 +424,7 @@ pub mod Core {
             self.assets.validate_assets_integrity();
 
             // Read interest validation parameters once for all settlements
-            let current_time = self.get_system_time();
+            let current_time = self.get_exchange_time();
             let max_interest_rate_per_sec = self.get_max_interest_rate_per_sec();
 
             let mut tvtr_cache: Felt252Dict<Nullable<PositionTVTR>> = Default::default();
@@ -618,51 +621,6 @@ pub mod Core {
                 );
         }
 
-        /// Executes a spot asset deleverage of a user position with a deleverager position.
-        ///
-        /// Validations:
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The prices of all assets in the system are valid.
-        /// - Verifies the signs of amounts:
-        ///   - Ensures the opposite sign of amounts in spot and base collateral.
-        ///   - Ensures the sign of amounts in each position is consistent.
-        /// - Verifies that the spot asset is active.
-        /// - validates the deleveraged position is deleveragable.
-        ///
-        /// Execution:
-        /// - Update the position, based on `delevereged_spot_asset`.
-        /// - Adjust collateral balances based on `delevereged_base_collateral_amount`.
-        /// - Perform fundamental validation for both positions after the execution.
-        fn deleverage_spot_asset(
-            ref self: ContractState,
-            operator_nonce: u64,
-            deleveraged_position_id: PositionId,
-            deleverager_position_id: PositionId,
-            asset_id: AssetId,
-            deleveraged_amount: i64,
-            deleveraged_base_collateral_amount: i64,
-            interest_amount_deleveraged: i64,
-            interest_amount_deleverager: i64,
-        ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-            self
-                .external_components
-                ._get_deleverage_manager_dispatcher()
-                .deleverage_spot_asset(
-                    :deleveraged_position_id,
-                    :deleverager_position_id,
-                    :asset_id,
-                    :deleveraged_amount,
-                    :deleveraged_base_collateral_amount,
-                    :interest_amount_deleveraged,
-                    :interest_amount_deleverager,
-                )
-        }
-
         /// Executes a trade between position with inactive synthetic assets.
         ///
         /// Validations:
@@ -823,6 +781,9 @@ pub mod Core {
                 ._get_vault_manager_dispatcher()
                 .activate_vault(:order, :signature)
         }
+        // TODO: Add cancel invest in vault. Currently, this flow depend on a non-atomic
+        // `process_deposit` step. A malicious operator could refuse to process the deposit,
+        // effectively locking user funds.
         fn invest_in_vault(
             ref self: ContractState,
             operator_nonce: u64,
@@ -1265,7 +1226,7 @@ pub mod Core {
             self.operator_nonce.use_checked_nonce(:operator_nonce);
 
             // Read once and pass as arguments to avoid redundant storage reads
-            let current_time = self.get_system_time();
+            let current_time = self.get_exchange_time();
             let max_interest_rate_per_sec = self.positions.max_interest_rate_per_sec.read();
 
             for (position_id, interest_amount) in position_interest_amounts {
@@ -1490,6 +1451,15 @@ pub mod Core {
                     position_diff: position_diff_a,
                     tvtr_before: tvtr_a_before,
                 );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: order_a.position_id,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(order_a.position_id),
+                    tvtr: tvtr_a_after,
+                );
             let tvtr_b_after = self
                 .positions
                 .validate_healthy_or_healthier_position(
@@ -1497,6 +1467,15 @@ pub mod Core {
                     position: position_b.into(),
                     position_diff: position_diff_b,
                     tvtr_before: tvtr_b_before,
+                );
+            self
+                .positions
+                .validate_against_vault_limits(
+                    position_id: order_b.position_id,
+                    vault_protection_config: self
+                        .vaults
+                        .get_vault_protection_config(order_b.position_id),
+                    tvtr: tvtr_b_after,
                 );
 
             // Apply Diffs.

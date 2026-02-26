@@ -2,7 +2,7 @@
 pub mod Positions {
     use core::dict::Felt252Dict;
     use core::nullable::{FromNullableResult, match_nullable};
-    use core::num::traits::{Pow, Zero};
+    use core::num::traits::Zero;
     use core::panic_with_felt252;
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -10,6 +10,8 @@ pub mod Positions {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternalTrait;
     use perpetuals::core::components::assets::interface::IAssets;
+    use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
+    use perpetuals::core::components::exchange_time::interface::IExchangeTime;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::errors::{
@@ -20,8 +22,6 @@ pub mod Positions {
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
-    use perpetuals::core::components::system_time::SystemTimeComponent;
-    use perpetuals::core::components::system_time::interface::ISystemTime;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, SyntheticTrait};
     use perpetuals::core::types::balance::Balance;
@@ -33,7 +33,8 @@ pub mod Positions {
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::value_risk_calculator::{
-        PositionState, PositionTVTR, calculate_pnl, calculate_position_tvtr, evaluate_position,
+        PositionState, PositionTVTR, calculate_max_allowed_change, calculate_pnl,
+        calculate_position_tvtr, evaluate_position,
     };
     use starknet::storage::{
         Map, Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
@@ -46,7 +47,7 @@ pub mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::math::abs::Abs;
-    use starkware_utils::math::utils::{have_same_sign, mul_wide_and_floor_div};
+    use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::signature::stark::{PublicKey, Signature};
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
@@ -55,8 +56,9 @@ pub mod Positions {
     use starkware_utils::time::time::{Time, Timestamp, validate_expiration};
     use crate::core::components::assets::errors::NO_SUCH_ASSET;
     use crate::core::components::snip::SNIP12MetadataImpl;
+    use crate::core::components::vaults::types::VaultProtectionParams;
     use crate::core::errors::{
-        AMOUNT_OVERFLOW, INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS,
+        INVALID_AMOUNT_SIGN, INVALID_BASE_CHANGE, INVALID_SAME_POSITIONS,
         INVALID_SHRINK_TO_NEGATIVE, INVALID_ZERO_AMOUNT, NO_DELEVERAGE_VAULT_SHARES,
     };
     use crate::core::types::asset::synthetic::{AssetBalanceDiffEnriched, AssetType};
@@ -70,7 +72,6 @@ pub mod Positions {
     };
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
-    pub const INTEREST_RATE_SCALE: u64 = 2_u64.pow(32);
 
     impl SnipImpl = SNIP12MetadataImpl;
 
@@ -105,7 +106,7 @@ pub mod Positions {
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
-        impl SystemTime: SystemTimeComponent::HasComponent<TContractState>,
+        impl ExchangeTime: ExchangeTimeComponent::HasComponent<TContractState>,
     > of IPositions<ComponentState<TContractState>> {
         fn get_position_assets(
             self: @ComponentState<TContractState>, position_id: PositionId,
@@ -199,8 +200,8 @@ pub mod Positions {
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
             assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
-            let system_time_component = get_dep_component!(@self, SystemTime);
-            let current_time = system_time_component.get_system_time();
+            let exchange_time_component = get_dep_component!(@self, ExchangeTime);
+            let current_time = exchange_time_component.get_exchange_time();
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
             position.owner_protection_enabled.write(owner_protection_enabled);
@@ -414,7 +415,7 @@ pub mod Positions {
         impl Pausable: PausableComponent::HasComponent<TContractState>,
         impl Roles: RolesComponent::HasComponent<TContractState>,
         impl RequestApprovals: RequestApprovalsComponent::HasComponent<TContractState>,
-        impl SystemTime: SystemTimeComponent::HasComponent<TContractState>,
+        impl ExchangeTime: ExchangeTimeComponent::HasComponent<TContractState>,
     > of InternalTrait<TContractState> {
         fn initialize(
             ref self: ComponentState<TContractState>,
@@ -626,11 +627,11 @@ pub mod Positions {
                     synthetic_assets.append(*asset);
                 }
             }
-            let collateral_balance = position.collateral_balance.read();
-            let collateral_balance_with_funding = collateral_balance + funding_delta;
+            let base_collateral_balance = position.collateral_balance.read();
+            let base_collateral_balance_with_funding = base_collateral_balance + funding_delta;
             calculate_pnl(
                 synthetic_assets: synthetic_assets.span(),
-                collateral_balance: collateral_balance_with_funding,
+                collateral_balance: base_collateral_balance_with_funding,
             )
         }
 
@@ -640,8 +641,8 @@ pub mod Positions {
             position_id: PositionId,
             interest_amount: i64,
         ) {
-            let system_time_component = get_dep_component!(@self, SystemTime);
-            let current_time = system_time_component.get_system_time();
+            let exchange_time_component = get_dep_component!(@self, ExchangeTime);
+            let current_time = exchange_time_component.get_exchange_time();
             let max_interest_rate_per_sec = self.max_interest_rate_per_sec.read();
 
             self
@@ -841,6 +842,34 @@ pub mod Positions {
             tvtr.after
         }
 
+        fn validate_against_vault_limits(
+            self: @ComponentState<TContractState>,
+            position_id: PositionId,
+            vault_protection_config: Option<VaultProtectionParams>,
+            tvtr: PositionTVTR,
+        ) {
+            if let Option::Some(config) = vault_protection_config {
+                let tv_after = tvtr.total_value;
+                let tv_at_last_check = config.tv_at_check;
+                let max_tvtr_loss = config.max_tv_loss;
+                let delta = tv_after - tv_at_last_check;
+                if (delta < 0_i64.into()) {
+                    let tv_loss = delta.abs();
+                    if (tv_loss > max_tvtr_loss) {
+                        panic_with_byte_array(
+                            err: @format!(
+                                "Vault Protection Limit Exceeded, position_id: {:?}, tv_at_last_check: {}, tv_after_operation: {}, max_allowed_loss : {}",
+                                position_id,
+                                tv_at_last_check,
+                                tv_after,
+                                max_tvtr_loss,
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+
         fn _validate_synthetic_shrinks(
             self: @ComponentState<TContractState>,
             position: StoragePath<Position>,
@@ -931,7 +960,7 @@ pub mod Positions {
         +Drop<TContractState>,
         +AccessControlComponent::HasComponent<TContractState>,
         +SRC5Component::HasComponent<TContractState>,
-        +SystemTimeComponent::HasComponent<TContractState>,
+        +ExchangeTimeComponent::HasComponent<TContractState>,
         impl Assets: AssetsComponent::HasComponent<TContractState>,
         impl OperatorNonce: OperatorNonceComponent::HasComponent<TContractState>,
         impl Pausable: PausableComponent::HasComponent<TContractState>,
@@ -1035,13 +1064,9 @@ pub mod Positions {
             // Calculate time difference
             let time_diff: u64 = current_time.sub(previous_timestamp).into();
 
-            // Calculate maximum allowed change: |pnl| * time_diff *
-            // max_interest_rate_per_sec / 2^32.
-            let balance_time_product: u128 = pnl.abs().into() * time_diff.into();
-            let max_allowed_change = mul_wide_and_floor_div(
-                balance_time_product, max_interest_rate_per_sec.into(), INTEREST_RATE_SCALE.into(),
-            )
-                .expect(AMOUNT_OVERFLOW);
+            let max_allowed_change = calculate_max_allowed_change(
+                :pnl, :time_diff, :max_interest_rate_per_sec,
+            );
 
             // Check: |interest_amount| <= max_allowed_change
             if interest_amount.abs().into() > max_allowed_change {
