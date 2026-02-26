@@ -4,8 +4,58 @@ on:
   workflow_dispatch:
 
 jobs:
-  CI:
+
+  generate-summary:
+    name: Diff Summary Generator
     runs-on: ubuntu-latest
+    outputs:
+      image_misc: ${{ steps.image-name.outputs.image_misc }}
+      image_hot_path: ${{ steps.image-name.outputs.image_hot_path }}
+
+    permissions:
+      contents: 'read'
+      actions: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Security Check
+        uses: x10xchange/gemini-pr-check@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          custom_prompt: |
+            You are an expert Smart Contract Auditor and Web3 Security Engineer.
+            Analyze the following git diff for a smart contract deployment/update.
+            Your primary goal is to identify **security vulnerabilities**, **logic flaws**, and **gas inefficiencies** introduced or modified by these changes. Smart contract bugs can lead to catastrophic loss of funds, so treat security with the absolute highest priority.
+            You should use the tools provided to you to understand the changes and their impact on the wider protocol. 
+            Please provide output in **GitHub Flavored Markdown**.
+            Use emojis (e.g., 🚨, ⚠️, ⛽, 🟢) to make it visually scannable.
+            Include the following sections:
+            1. **Executive Summary**: A concise overview of the protocol changes and their purpose.
+            2. **Critical Security Analysis** (Zero Tolerance):
+              - 🚨 **High/Critical Risk**: (e.g., Reentrancy, broken access control, flash loan vulnerabilities, unchecked external calls, unsafe math/precision loss).
+              - ⚠️ **Medium/Low Risk**: (e.g., Missing zero-address checks, front-running possibilities, logic bugs that don't directly drain funds, centralization risks).
+            3. **Gas & Optimization**:
+              - ⛽ **Inefficiencies**: (e.g., Unnecessary storage reads/writes, suboptimal loops, unused variables).
+            4. **Technical Change Log**:
+              - 🔄 **Logic Changes**: (Core protocol modifications, interface updates).
+              - 🟢 **Safe Changes**: (NatSpec/Documentation updates, refactoring without logic changes).
+            **Important Audit Guidelines:**
+            - If you see state variables being updated *after* external calls, flag it immediately (CEI pattern violation).
+            - Check if newly added functions have the correct visibility and access modifiers (e.g., `onlyOwner`).
+            - Verify that mathematical operations handle precision correctly and are safe from underflow/overflow (if applicable to the compiler version).
+            If you choose not to request files before and after the diff, please explain your reasoning after the technical change log. 
+            If you chose to request files, please explain why you needed to request them. This helps improve the tooling.
+            Please also summarize the use of the grep functionality—whether it was useful or if you encountered any issues using it.          
+
+  CI:
+    needs: generate-summary
+    runs-on: ubuntu-latest
+    environment: starknet-prod
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
