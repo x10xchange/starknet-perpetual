@@ -5,7 +5,10 @@ const SCALE: u64 = 1000000_u64;
 #[starknet::contract]
 pub mod ProtocolVault {
     use ERC4626Component::Fee;
+    use core::num::traits::Zero;
+    use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::extensions::erc4626::{
         ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
     };
@@ -13,10 +16,20 @@ pub mod ProtocolVault {
     use perpetuals::core::components::positions::interface::{
         IPositionsDispatcher, IPositionsDispatcherTrait,
     };
-    use starknet::ContractAddress;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, get_caller_address};
+    use starkware_utils::components::replaceability::ReplaceabilityComponent;
+    use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
+    use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::abs::Abs;
     use super::{IProtocolVault, SCALE};
+
+    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
+    component!(path: RolesComponent, storage: roles, event: RolesEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
     component!(path: ERC4626Component, storage: erc4626, event: ERC4626Event);
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
@@ -30,12 +43,27 @@ pub mod ProtocolVault {
     #[abi(embed_v0)]
     impl ERC20CamelOnlyImpl = ERC20Component::ERC20CamelOnlyImpl<ContractState>;
 
+    #[abi(embed_v0)]
+    impl ReplaceabilityImpl =
+        ReplaceabilityComponent::ReplaceabilityImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
+
 
     impl ERC4626InternalImpl = ERC4626Component::InternalImpl<ContractState>;
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
 
     #[storage]
     pub struct Storage {
+        #[substorage(v0)]
+        accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        pub replaceability: ReplaceabilityComponent::Storage,
+        #[substorage(v0)]
+        pub roles: RolesComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
         #[substorage(v0)]
         erc4626: ERC4626Component::Storage,
         #[substorage(v0)]
@@ -47,13 +75,25 @@ pub mod ProtocolVault {
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
+        #[flat]
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        ReplaceabilityEvent: ReplaceabilityComponent::Event,
+        #[flat]
+        RolesEvent: RolesComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
+        #[flat]
         ERC4626Event: ERC4626Component::Event,
+        #[flat]
         ERC20Event: ERC20Component::Event,
     }
 
     #[constructor]
     pub fn constructor(
         ref self: ContractState,
+        governance_admin: ContractAddress,
+        upgrade_delay: u64,
         name: ByteArray,
         symbol: ByteArray,
         pnl_collateral_contract: ContractAddress,
@@ -62,13 +102,18 @@ pub mod ProtocolVault {
         recipient: ContractAddress,
         initial_price: u64,
     ) -> u256 {
+        self.roles.initialize(:governance_admin);
+        self.replaceability.initialize(:upgrade_delay);
+
         self.perps_contract.write(perps_contract);
         self.owning_position_id.write(owning_position_id);
         self.erc20.initializer(name, symbol);
         self.erc4626.initializer(pnl_collateral_contract);
+
         let total_assets = self.erc4626.get_total_assets();
         assert(total_assets > 0_u256, 'INITIAL_ASSETS_MUST_BE_POSITIVE');
         assert(recipient != perps_contract, 'RECIPIENT_CANNOT_BE_PERPS');
+        assert(initial_price.is_non_zero(), 'INVALID_ZERO_INIT_PRICE');
         let amount_to_mint = (total_assets * SCALE.into()) / initial_price.into();
         self.erc20.mint(recipient, amount_to_mint);
         return total_assets;
@@ -78,7 +123,16 @@ pub mod ProtocolVault {
     pub impl Impl of IProtocolVault<ContractState> {
         fn redeem_with_price(ref self: ContractState, shares: u256, value_of_shares: u256) -> u256 {
             let perps = self.perps_contract.read();
-            self.erc4626._withdraw(perps, perps, perps, value_of_shares, shares, Option::None);
+            self
+                .erc4626
+                ._withdraw(
+                    caller: get_caller_address(),
+                    receiver: perps,
+                    owner: perps,
+                    assets: value_of_shares,
+                    :shares,
+                    fee: Option::None,
+                );
             value_of_shares
         }
 
