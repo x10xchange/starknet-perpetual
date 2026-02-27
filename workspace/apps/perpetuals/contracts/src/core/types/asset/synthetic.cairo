@@ -120,7 +120,7 @@ pub impl SyntheticImpl of SyntheticTrait {
         AssetConfig {
             version: VERSION,
             status,
-            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_first_tier_boundary: MAX_U128 - 1,
             risk_factor_tier_size: 0,
             quorum,
             resolution_factor,
@@ -140,7 +140,7 @@ pub impl SyntheticImpl of SyntheticTrait {
         AssetConfig {
             version: VERSION,
             status,
-            risk_factor_first_tier_boundary: MAX_U128,
+            risk_factor_first_tier_boundary: MAX_U128 - 1,
             risk_factor_tier_size: 0,
             quorum,
             resolution_factor,
