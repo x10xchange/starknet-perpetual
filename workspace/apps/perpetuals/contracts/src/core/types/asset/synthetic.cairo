@@ -12,7 +12,7 @@ use starkware_utils::time::time::Timestamp;
 
 const VERSION: u8 = 1;
 
-#[derive(Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+#[derive(Copy, Debug, Drop, PartialEq, Serde, starknet::Store, Default)]
 pub enum AssetType {
     #[default]
     SYNTHETIC,
@@ -62,6 +62,7 @@ pub struct AssetBalanceInfo {
     pub price: Price,
     pub risk_factor: RiskFactor,
     pub cached_funding_index: FundingIndex,
+    pub asset_type: AssetType,
 }
 
 #[derive(Copy, Debug, Default, Drop, Serde)]
@@ -72,6 +73,7 @@ pub struct AssetBalanceDiffEnriched {
     pub price: Price,
     pub risk_factor_before: RiskFactor,
     pub risk_factor_after: RiskFactor,
+    pub asset_type: AssetType,
 }
 
 #[generate_trait]

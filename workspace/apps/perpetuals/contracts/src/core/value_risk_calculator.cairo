@@ -13,6 +13,8 @@ use perpetuals::core::types::price::{Price, PriceMulTrait};
 use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
 use starkware_utils::math::abs::Abs;
 use starkware_utils::math::fraction::FractionTrait;
+use super::types::asset::synthetic::AssetType;
+use super::types::risk_factor::RiskFactor;
 
 /// This is equivalent to 1e-6 USD as the everything is in units of the smallest collateral asset.
 const EPSILON: i128 = 1_i128;
@@ -93,7 +95,38 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     }
 
     if tvtr.before.total_risk.is_zero() || tvtr.after.total_risk.is_zero() {
-        panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+        if tvtr.before.total_risk.is_zero() && tvtr.after.total_risk.is_zero() {
+            // position only had spot and collateral assets (no synthetic assets)
+            // collateral must be negative
+            // spot must have been sold for collateral
+            // TV must increase
+            if tvtr.after.total_value <= tvtr.before.total_value {
+                panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+            }
+        }
+
+        if tvtr.before.total_risk.is_zero() && !tvtr.after.total_risk.is_zero() {
+            // position didn't have synthetic assets and now it does
+            // not allowed when final state is unhealthy
+            panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+        }
+
+        if !tvtr.before.total_risk.is_zero() && tvtr.after.total_risk.is_zero() {
+            // position had synthetic assets and now it doesn't
+            // As all synthetic risk has been removed.
+            // position must have negative collateral and positive spots resulting in a negative TV
+
+            // we can allow a TV drop up to the value of TR as this still constitutes
+            //a healthier transition for a position ending with TR = 0
+            let minimum_value_after_transition = tvtr.before.total_value
+                - tvtr.before.total_risk.try_into().unwrap();
+
+            if (tvtr.after.total_value < minimum_value_after_transition) {
+                panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
+            }
+        }
+        // all possible states when total_risk is zero are checked
+        return;
     }
 
     /// This is checked only when the after is not healthy:
@@ -101,8 +134,8 @@ pub fn assert_healthy_or_healthier(position_id: PositionId, tvtr: TVTRChange) {
     /// is equal or higher after the change and the total_risk is lower.
     /// Formal definition:
     /// total_value_after / total_risk_after >= total_value_before / total_risk_before
-    /// AND total_risk_after < total_risk_before.
-    if tvtr.after.total_risk >= tvtr.before.total_risk {
+    /// AND total_risk_after <= total_risk_before.
+    if tvtr.after.total_risk > tvtr.before.total_risk {
         panic_with_byte_array(@position_not_healthy_nor_healthier(:position_id, :tvtr));
     }
     let before_ratio = FractionTrait::new(tvtr.before.total_value, tvtr.before.total_risk);
@@ -200,10 +233,19 @@ pub fn calculate_position_tvtr_change(
 
     if let Option::Some(asset_diff) = synthetic_enriched_position_diff.asset_diff_enriched {
         // asset_value is in units of 10^-6 USD.
-        let asset_value_before = asset_diff.price.mul(rhs: asset_diff.balance_before);
-        let asset_value_after = asset_diff.price.mul(rhs: asset_diff.balance_after);
-        let asset_risk_before = asset_diff.risk_factor_before.mul(asset_value_before.abs());
-        let asset_risk_after = asset_diff.risk_factor_after.mul(asset_value_after.abs());
+        let (asset_value_before, asset_risk_before) = calculate_asset_value_and_risk(
+            asset_diff.asset_type,
+            asset_diff.price,
+            asset_diff.balance_before,
+            asset_diff.risk_factor_before,
+        );
+
+        let (asset_value_after, asset_risk_after) = calculate_asset_value_and_risk(
+            asset_diff.asset_type,
+            asset_diff.price,
+            asset_diff.balance_after,
+            asset_diff.risk_factor_after,
+        );
 
         total_value_after = total_value_after + asset_value_after - asset_value_before;
         total_risk_after = total_risk_after + asset_risk_after - asset_risk_before;
@@ -222,23 +264,43 @@ pub fn calculate_position_tvtr_change(
     }
 }
 
+pub fn calculate_asset_value_and_risk(
+    asset_type: AssetType, price: Price, balance: Balance, risk_factor: RiskFactor,
+) -> (i128, u128) {
+    let asset_value: i128 = (price).mul(rhs: balance);
+    let asset_risk: u128 = (risk_factor).mul(asset_value.abs());
+
+    if asset_type == AssetType::SYNTHETIC {
+        return (asset_value, asset_risk);
+    } else {
+        // spot and vault share are always postive
+        return (asset_value - asset_risk.try_into().unwrap(), 0);
+    }
+}
+
 pub fn calculate_position_tvtr_before(
     unchanged_assets: Span<AssetBalanceInfo>, position_diff_enriched: PositionDiffEnriched,
 ) -> PositionTVTR {
     let mut total_value = 0_i128;
     let mut total_risk = 0_u128;
     for synthetic in unchanged_assets {
-        // asset_value is in units of 10^-6 USD.
-        let asset_value: i128 = (*synthetic.price).mul(rhs: *synthetic.balance);
-        total_value += asset_value;
-        total_risk += (*synthetic.risk_factor).mul(asset_value.abs());
+        let (value_to_add, risk_to_add) = calculate_asset_value_and_risk(
+            *synthetic.asset_type, *synthetic.price, *synthetic.balance, *synthetic.risk_factor,
+        );
+        total_value += value_to_add;
+        total_risk += risk_to_add;
     }
 
     if let Option::Some(asset_diff) = position_diff_enriched.asset_diff_enriched {
         // asset_value is in units of 10^-6 USD.
-        let asset_value_before = asset_diff.price.mul(rhs: asset_diff.balance_before);
-        total_value += asset_value_before;
-        total_risk += asset_diff.risk_factor_before.mul(asset_value_before.abs());
+        let (value_to_add, risk_to_add) = calculate_asset_value_and_risk(
+            asset_diff.asset_type,
+            asset_diff.price,
+            asset_diff.balance_before,
+            asset_diff.risk_factor_before,
+        );
+        total_value += value_to_add;
+        total_risk += risk_to_add;
     }
 
     // Collateral price is always "One" in Perps - "One" is 10^-6 USD which means 2^28 same as the

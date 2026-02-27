@@ -541,6 +541,7 @@ pub mod Positions {
                             price,
                             risk_factor,
                             cached_funding_index: synthetic.funding_index,
+                            asset_type: assets.get_asset_type_unsafe(synthetic_id),
                         },
                     );
             }
@@ -602,6 +603,7 @@ pub mod Positions {
                     price,
                     risk_factor_before,
                     risk_factor_after,
+                    asset_type: assets.get_asset_type_unsafe(asset_id),
                 };
                 Option::Some(asset_diff_enriched)
             } else {

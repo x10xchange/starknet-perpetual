@@ -546,6 +546,13 @@ pub mod AssetsComponent {
             SyntheticTrait::at_funding_index(entry)
         }
 
+        fn get_asset_type_unsafe(
+            self: @ComponentState<TContractState>, asset_id: AssetId,
+        ) -> AssetType {
+            let entry = self.asset_config.entry(asset_id).as_ptr();
+            SyntheticTrait::at_asset_type(entry)
+        }
+
 
         fn validate_asset_active(self: @ComponentState<TContractState>, synthetic_id: AssetId) {
             if let Option::Some(config) = self.asset_config.read(synthetic_id) {
