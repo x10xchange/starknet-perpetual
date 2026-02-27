@@ -43,6 +43,10 @@ pub fn deploy_protocol_vault_with_dispatcher(
     let name: ByteArray = "Perpetuals Protocol Vault";
     let symbol: ByteArray = "PPV";
     let initial_price = 1_000_000_u64; // 1 USDC with 6 decimals
+    let governance_admin = GOVERNANCE_ADMIN();
+    let upgrade_delay = UPGRADE_DELAY;
+    governance_admin.serialize(ref calldata);
+    upgrade_delay.serialize(ref calldata);
     name.serialize(ref calldata);
     symbol.serialize(ref calldata);
     usdc_token_state.address.serialize(ref calldata);

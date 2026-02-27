@@ -116,6 +116,10 @@ pub fn deploy_protocol_vault_with_dispatcher(
     let name: ByteArray = "Perpetuals Protocol Vault";
     let symbol: ByteArray = "PPV";
     let initial_price = 1_000_000_u64; // 1 USDC with 6 decimals
+    let governance_admin = GOVERNANCE_ADMIN();
+    let upgrade_delay = UPGRADE_DELAY;
+    governance_admin.serialize(ref calldata);
+    upgrade_delay.serialize(ref calldata);
     name.serialize(ref calldata);
     symbol.serialize(ref calldata);
     usdc_token_state.address.serialize(ref calldata);
@@ -1901,9 +1905,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .force_reset_protection_limit(:vault_position, :percentage_basis_points);
     }
 
-    fn update_vault_protection_limit(ref self: PerpsTestsFacade, vault_position: PositionId, limit: u32) {
+    fn update_vault_protection_limit(
+        ref self: PerpsTestsFacade, vault_position: PositionId, limit: u32,
+    ) {
         self.set_app_governor_as_caller();
-        ICoreDispatcher { contract_address: self.perpetuals_contract }.update_vault_protection_limit(:vault_position, :limit);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .update_vault_protection_limit(:vault_position, :limit);
     }
 }
 
