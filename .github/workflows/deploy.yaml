@@ -117,6 +117,9 @@ jobs:
           echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
           sleep 30s
 
+          MIGRATE_USDC_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c MigrateTVLEIC -p perpetuals)
+          echo "MIGRATE_USDC_EIC_HASH=$MIGRATE_USDC_EIC_HASH"
+
           VAULT_CLASS_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolVault -p vault)
           echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
 
