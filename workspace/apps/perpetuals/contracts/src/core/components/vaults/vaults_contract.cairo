@@ -542,6 +542,14 @@ pub(crate) mod VaultsManager {
             let redeeming_position_id = order.source_position;
             let receiving_position_id = order.receive_position;
 
+            //validate three way interest amounts
+            if (redeeming_position_id == receiving_position_id && interest_amount_receiver != 0) {
+                let err = format!(
+                    "INVALID_STATE_INTEREST_ON_SAME_POSITION: {:?}", receiving_position_id,
+                );
+                panic_with_byte_array(err: @err);
+            }
+
             if (actual_shares_user >= 0) {
                 let err = format!("INVALID_ACTUAL_SHARES_AMOUNT: {}", actual_shares_user);
                 panic_with_byte_array(err: @err);
@@ -569,11 +577,13 @@ pub(crate) mod VaultsManager {
                     redeeming_position, redeeming_position_id, interest_amount_sender,
                 );
 
-            self
-                .positions
-                .verify_and_update_interest_range(
-                    receiving_position, receiving_position_id, interest_amount_receiver,
-                );
+            if (receiving_position_id != redeeming_position_id) {
+                self
+                    .positions
+                    .verify_and_update_interest_range(
+                        receiving_position, receiving_position_id, interest_amount_receiver,
+                    );
+            }
 
             let amount_to_burn = actual_shares_user;
 
@@ -759,8 +769,7 @@ pub(crate) mod VaultsManager {
                         position_id: redeeming_position_id,
                         position_diff: MultiSpotPositionDiff {
                             collateral_diff: actual_collateral_user.into()
-                                + interest_amount_sender.into()
-                                + interest_amount_receiver.into(),
+                                + interest_amount_sender.into(),
                             asset_diffs: redeeming_spot_diffs.span(),
                         },
                     );
