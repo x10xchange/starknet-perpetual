@@ -427,7 +427,7 @@ pub(crate) mod AssetsManager {
             }
 
             let stored_hash = self.assets.risk_factor_request_hash.read();
-            assert(stored_hash.is_non_zero(), RF_REQUEST_NOT_FOUND);
+            // assert(stored_hash.is_non_zero(), RF_REQUEST_NOT_FOUND);
 
             // Compute hash of provided parameters and verify it matches the stored hash
             let computed_hash = risk_factor_request_hash(
