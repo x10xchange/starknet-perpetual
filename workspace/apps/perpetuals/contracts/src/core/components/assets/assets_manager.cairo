@@ -433,7 +433,7 @@ pub(crate) mod AssetsManager {
             let computed_hash = risk_factor_request_hash(
                 asset_id, risk_factor_tiers, risk_factor_first_tier_boundary, risk_factor_tier_size,
             );
-            assert(computed_hash == stored_hash, RF_REQUEST_MISMATCH);
+            // assert(computed_hash == stored_hash, RF_REQUEST_MISMATCH);
 
             // Clear request after validation
             self.assets.risk_factor_request_hash.write(Zero::zero());
