@@ -163,5 +163,5 @@ jobs:
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}    
           MIGRATE_USDC_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c MigrateTVLEIC -p perpetuals)
           echo "MIGRATE_USDC_EIC_HASH=$MIGRATE_USDC_EIC_HASH"      
-          voyager verify --network mainnet --class-hash $MIGRATE_USDC_EIC_HASH --contract-name MigrateTVLEIC --license Apache-2.0  --package vault --watch --lock-file  || echo "MigrateTVLEIC verification might have failed check https://voyager.online/class/$MIGRATE_USDC_EIC_HASH"   
+          voyager verify --network mainnet --class-hash $MIGRATE_USDC_EIC_HASH --contract-name MigrateTVLEIC --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "MigrateTVLEIC verification might have failed check https://voyager.online/class/$MIGRATE_USDC_EIC_HASH"   
 
