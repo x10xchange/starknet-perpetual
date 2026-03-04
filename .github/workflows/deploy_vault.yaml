@@ -1,0 +1,50 @@
+name: Deploy Vault
+
+on:
+  workflow_dispatch:
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+
+
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.53.0-rc.0  
+    
+      - name: Install Voyager Verifier
+        run: |
+          asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
+          asdf install voyager 1.2.4
+          asdf set -u voyager 1.2.4  
+
+      - name: install starkli
+        run: |
+          curl https://get.starkli.sh | sh
+          . /home/runner/.config/.starkli/env
+          starkliup
+
+      - name: Retrieve account info
+        run: |
+          . /home/runner/.config/.starkli/env
+          starkli account fetch --rpc ${{ secrets. RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}          
+
+      - name: Deploy Vault
+        id: deploy_contracts
+        run: |
+          ./utils/deploy_vault.sh -a mainnet -u ${{ secrets.RPC_V9 }} 
