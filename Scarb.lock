@@ -198,6 +198,7 @@ name = "test_utils"
 version = "0.0.1"
 dependencies = [
  "openzeppelin",
+ "snforge_std",
 ]
 
 [[package]]
