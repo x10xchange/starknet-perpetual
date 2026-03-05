@@ -1,7 +1,7 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use starknet::ContractAddress;
-use starkware_utils::signature::stark::Signature;
+use starkware_utils::signature::stark::{HashType, Signature};
 use starkware_utils::time::time::Timestamp;
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -32,20 +32,6 @@ pub struct Withdraw {
     pub withdraw_request_hash: felt252,
     pub salt: felt252,
     pub interest_amount: i64,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct ForcedWithdrawRequest {
-    #[key]
-    pub position_id: PositionId,
-    #[key]
-    pub recipient: ContractAddress,
-    pub collateral_id: AssetId,
-    pub amount: u64,
-    pub expiration: Timestamp,
-    #[key]
-    pub forced_withdraw_request_hash: felt252,
-    pub salt: felt252,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
@@ -85,16 +71,6 @@ pub trait IWithdrawalManager<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
-    fn forced_withdraw_request(
-        ref self: TContractState,
-        signature: Signature,
-        collateral_id: AssetId,
-        recipient: ContractAddress,
-        position_id: PositionId,
-        amount: u64,
-        expiration: Timestamp,
-        salt: felt252,
-    );
     fn forced_withdraw(
         ref self: TContractState,
         collateral_id: AssetId,
@@ -125,8 +101,8 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::errors::{
-        AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_AMOUNT, SIGNED_TX_EXPIRED,
-        TRANSFER_FAILED,
+        AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
+        SIGNED_TX_EXPIRED, TRANSFER_FAILED,
     };
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::SyntheticTrait;
@@ -134,10 +110,10 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceImpl;
     use perpetuals::core::types::withdraw::{ForcedWithdrawArgs, WithdrawArgs};
+    use starknet::ContractAddress;
     use starknet::storage::{
         Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
-    use starknet::{ContractAddress, get_block_info, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -154,8 +130,7 @@ pub(crate) mod WithdrawalManager {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
     use super::{
-        ForcedWithdraw, ForcedWithdrawRequest, IWithdrawalManager, Signature, Timestamp, Withdraw,
-        WithdrawRequest,
+        ForcedWithdraw, IWithdrawalManager, Signature, Timestamp, Withdraw, WithdrawRequest,
     };
 
     impl SnipImpl = SNIP12MetadataImpl;
@@ -166,7 +141,6 @@ pub(crate) mod WithdrawalManager {
         Withdraw: Withdraw,
         WithdrawRequest: WithdrawRequest,
         ForcedWithdraw: ForcedWithdraw,
-        ForcedWithdrawRequest: ForcedWithdrawRequest,
         #[flat]
         FulfillmentEvent: FulfillmentComponent::Event,
         #[flat]
@@ -322,80 +296,6 @@ pub(crate) mod WithdrawalManager {
                         withdraw_request_hash: hash,
                         salt,
                         interest_amount,
-                    },
-                );
-        }
-
-        fn forced_withdraw_request(
-            ref self: ContractState,
-            signature: Signature,
-            collateral_id: AssetId,
-            recipient: ContractAddress,
-            position_id: PositionId,
-            amount: u64,
-            expiration: Timestamp,
-            salt: felt252,
-        ) {
-            /// Validations:
-            ///
-            // Validate position exists.
-            let position = self.positions.get_position_snapshot(:position_id);
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-
-            let owner_account = if (position.owner_protection_enabled.read()) {
-                position.get_owner_account()
-            } else {
-                Option::None
-            };
-            let public_key = position.get_owner_public_key();
-
-            // Validate the withdraw request was not registered nor processed yet.
-            let withdraw_args_hash = self
-                .request_approvals
-                .store_approval(
-                    :public_key,
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                );
-
-            // Validate the forced request signature
-            let hash = self
-                .request_approvals
-                .register_forced_approval(
-                    :owner_account,
-                    :public_key,
-                    :signature,
-                    args: ForcedWithdrawArgs { withdraw_args_hash },
-                );
-
-            /// Executions:
-
-            // Transfer premium_cost (forced fee) from the caller to the sequencer address.
-            let premium_cost = self.premium_cost.read();
-            let quantum = self.assets.get_collateral_quantum();
-            let token_contract = self.assets.get_base_collateral_token_contract();
-
-            assert(
-                token_contract
-                    .transfer_from(
-                        sender: get_caller_address(),
-                        recipient: get_block_info().sequencer_address,
-                        amount: (premium_cost * quantum).into(),
-                    ),
-                TRANSFER_FAILED,
-            );
-
-            self
-                .emit(
-                    ForcedWithdrawRequest {
-                        position_id,
-                        recipient,
-                        collateral_id,
-                        amount,
-                        expiration,
-                        forced_withdraw_request_hash: hash,
-                        salt,
                     },
                 );
         }

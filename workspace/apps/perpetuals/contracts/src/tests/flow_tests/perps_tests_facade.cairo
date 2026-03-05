@@ -5,8 +5,8 @@ use core::nullable::{FromNullableResult, match_nullable};
 use core::num::traits::{WideMul, Zero};
 use external_components::interface::{
     EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
-    EXTERNAL_COMPONENT_LIQUIDATIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
-    EXTERNAL_COMPONENT_WITHDRAWALS,
+    EXTERNAL_COMPONENT_FORCED_REQUESTS, EXTERNAL_COMPONENT_LIQUIDATIONS,
+    EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
 };
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
@@ -574,6 +574,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let forced_requests_external_component = snforge_std::declare("ForcedRequestsManager")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -646,6 +650,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
 
         external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_FORCED_REQUESTS,
+                component_address: *forced_requests_external_component.class_hash,
+            );
+
+        external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
@@ -681,6 +691,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_ASSETS,
                 component_address: *assets_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_FORCED_REQUESTS,
+                component_address: *forced_requests_external_component.class_hash,
             );
 
         stop_cheat_caller_address(contract_address: perpetuals_contract);
@@ -1422,20 +1438,23 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .get_position_assets(position_id: FEE_POSITION)
             .collateral_balance;
 
+        let settelment = Settlement {
+            signature_a,
+            signature_b,
+            order_a,
+            order_b,
+            actual_amount_base_a: base,
+            actual_amount_quote_a: quote,
+            actual_fee_a: fee_a,
+            actual_fee_b: fee_b,
+            interest_amount_a: 0,
+            interest_amount_b: 0,
+        };
+
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .trade(
-                :operator_nonce,
-                :signature_a,
-                :signature_b,
-                :order_a,
-                :order_b,
-                actual_amount_base_a: base,
-                actual_amount_quote_a: quote,
-                actual_fee_a: fee_a,
-                actual_fee_b: fee_b,
-            );
+            .multi_trade(:operator_nonce, trades: array![settelment].span());
 
         self
             .validate_collateral_balance(
@@ -2816,7 +2835,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         (user_order, vault_order)
     }
 
-    fn force_redeem_from_vault(
+    fn forced_redeem_from_vault(
         ref self: PerpsTestsFacade,
         user_order: LimitOrder,
         vault_order: LimitOrder,
@@ -2830,7 +2849,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         caller.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .force_redeem_from_vault(
+            .forced_redeem_from_vault(
                 :operator_nonce, order: user_order, vault_approval: vault_order,
             );
     }

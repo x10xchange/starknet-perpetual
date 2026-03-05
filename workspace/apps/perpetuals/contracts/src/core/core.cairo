@@ -4,7 +4,6 @@ pub mod Core {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
@@ -21,8 +20,8 @@ pub mod Core {
     };
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
-        AMOUNT_OVERFLOW, ESCAPE_HATCH_DISABLED, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT,
-        LENGTH_MISMATCH, ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC, TRANSFER_FAILED,
+        AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
+        ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
@@ -38,7 +37,7 @@ pub mod Core {
     use starknet::storage::{
         StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_block_info, get_caller_address};
+    use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -59,6 +58,7 @@ pub mod Core {
     use crate::core::components::deposit::events as deposit_events;
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
     use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
+    use crate::core::components::forced_requests::forced_requests_manager::IForcedRequestsManagerDispatcherTrait;
     use crate::core::components::fulfillment::fulfillment::Fulfillement;
     use crate::core::components::fulfillment::interface::IFulfillment;
     use crate::core::components::liquidation::liquidation_manager::ILiquidationManagerDispatcherTrait;
@@ -213,6 +213,7 @@ pub mod Core {
         WithdrawRequest: events::WithdrawRequest,
         ForcedTradeRequest: events::ForcedTradeRequest,
         ForcedTrade: events::ForcedTrade,
+        ForcedWithdrawRequest: events::ForcedWithdrawRequest,
         ForcedRedeemFromVaultRequest: vault_events::ForcedRedeemFromVaultRequest,
         ForcedRedeemFromVault: vault_events::ForcedRedeemFromVault,
         InterestApplied: events::InterestApplied,
@@ -426,6 +427,7 @@ pub mod Core {
 
             // Read interest validation parameters once for all settlements
             let current_time = self.get_exchange_time();
+            let time_of_last_update = self.exchange_time.get_time_of_last_update();
             let max_interest_rate_per_sec = self.get_max_interest_rate_per_sec();
 
             let mut tvtr_cache: Felt252Dict<Nullable<PositionTVTR>> = Default::default();
@@ -450,6 +452,7 @@ pub mod Core {
                         interest_amount_a: trade.interest_amount_a,
                         interest_amount_b: trade.interest_amount_b,
                         :current_time,
+                        :time_of_last_update,
                         :max_interest_rate_per_sec,
                         tvtr_a_before: cached_pos_a_tvtr,
                         tvtr_b_before: cached_pos_b_tvtr,
@@ -476,70 +479,6 @@ pub mod Core {
                 i += 1;
             }
             self.fulfillment_tracking.clean_fulfillment(hashes.span());
-        }
-
-
-        /// Executes a trade between two orders (Order A and Order B).
-        ///
-        /// Validations:
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The funding validation interval has not passed since the last funding tick.
-        /// - The prices of all assets in the system are valid.
-        /// - Validates signatures for both orders using the public keys of their respective owners.
-        /// - Ensures the fee amounts in both orders are positive.
-        /// - Validates that the base and quote asset types match between the two orders.
-        /// - Verifies the signs of amounts:
-        ///   - Ensures the sign of amounts in each order is consistent.
-        ///   - Ensures the signs between Order A and Order B amounts are opposite where required.
-        /// - Ensures the order fulfillment amounts do not exceed their respective limits.
-        /// - Validates that the fee ratio does not increase.
-        /// - Ensures the base-to-quote amount ratio does not decrease.
-        ///
-        /// Execution:
-        /// - Subtract the fees from each position's collateral.
-        /// - Add the fees to the `fee_position`.
-        /// - Update Order A's position and Order B's position, based on `actual_amount_base`.
-        /// - Adjust collateral balances.
-        /// - Perform fundamental validation for both positions after the execution.
-        /// - Update order fulfillment.
-        fn trade(
-            ref self: ContractState,
-            operator_nonce: u64,
-            signature_a: Signature,
-            signature_b: Signature,
-            order_a: Order,
-            order_b: Order,
-            actual_amount_base_a: i64,
-            actual_amount_quote_a: i64,
-            actual_fee_a: u64,
-            actual_fee_b: u64,
-        ) {
-            self.pausable.assert_not_paused();
-            self.assets.validate_assets_integrity();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-
-            // Pass default values for interest validation parameters since interest_amount_a and
-            // interest_amount_b are zero. Interest validation is skipped when interest amounts are
-            // zero, so these parameters are not used.
-            self
-                ._execute_trade(
-                    :signature_a,
-                    :signature_b,
-                    :order_a,
-                    :order_b,
-                    :actual_amount_base_a,
-                    :actual_amount_quote_a,
-                    :actual_fee_a,
-                    :actual_fee_b,
-                    interest_amount_a: 0,
-                    interest_amount_b: 0,
-                    current_time: Timestamp { seconds: 0 },
-                    max_interest_rate_per_sec: 0,
-                    tvtr_a_before: Default::default(),
-                    tvtr_b_before: Default::default(),
-                    check_signature: true,
-                );
         }
 
         fn liquidate(
@@ -836,11 +775,8 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
-            assert(!self._is_vault(vault_position: position_id), 'VAULT_CANNOT_INITIATE_WITHDRAW');
-            self
-                .external_components
-                ._get_withdrawal_manager_dispatcher()
+            let dispatcher = self.external_components._get_forced_request_manager();
+            dispatcher
                 .forced_withdraw_request(
                     :signature,
                     :collateral_id,
@@ -900,70 +836,8 @@ pub mod Core {
             order_a: Order,
             order_b: Order,
         ) {
-            assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
-            let position_a = self.positions.get_position_snapshot(position_id: order_a.position_id);
-            let position_b = self.positions.get_position_snapshot(position_id: order_b.position_id);
-
-            // Validate the caller is the position owner account
-            let owner_account = if (position_a.owner_protection_enabled.read()) {
-                position_a.get_owner_account()
-            } else {
-                Option::None
-            };
-            let public_key_a = position_a.get_owner_public_key();
-            let public_key_b = position_b.get_owner_public_key();
-
-            // Validate the forced request signatures.
-            self
-                .request_approvals
-                .register_forced_approval(
-                    :owner_account,
-                    public_key: public_key_a,
-                    signature: signature_a,
-                    args: ForcedTrade { order_a, order_b },
-                );
-
-            validate_signature(
-                public_key: public_key_b,
-                message: ForcedTrade { order_a, order_b },
-                signature: signature_b,
-            );
-
-            // Transfer premium_cost (forced fee) from the caller to the sequencer address.
-            let premium_cost = self.premium_cost.read();
-            let quantum = self.assets.get_collateral_quantum();
-            let token_contract = self.assets.get_base_collateral_token_contract();
-            assert(
-                token_contract
-                    .transfer_from(
-                        sender: get_caller_address(),
-                        recipient: get_block_info().sequencer_address,
-                        amount: (premium_cost * quantum).into(),
-                    ),
-                TRANSFER_FAILED,
-            );
-
-            self
-                .emit(
-                    events::ForcedTradeRequest {
-                        order_a_position_id: order_a.position_id,
-                        order_a_base_asset_id: order_a.base_asset_id,
-                        order_a_base_amount: order_a.base_amount,
-                        order_a_quote_asset_id: order_a.quote_asset_id,
-                        order_a_quote_amount: order_a.quote_amount,
-                        fee_a_asset_id: order_a.fee_asset_id,
-                        fee_a_amount: order_a.fee_amount,
-                        order_b_position_id: order_b.position_id,
-                        order_b_base_asset_id: order_b.base_asset_id,
-                        order_b_base_amount: order_b.base_amount,
-                        order_b_quote_asset_id: order_b.quote_asset_id,
-                        order_b_quote_amount: order_b.quote_amount,
-                        fee_b_asset_id: order_b.fee_asset_id,
-                        fee_b_amount: order_b.fee_amount,
-                        order_a_hash: order_a.get_message_hash(public_key: public_key_a),
-                        order_b_hash: order_b.get_message_hash(public_key: public_key_b),
-                    },
-                );
+            let dispatcher = self.external_components._get_forced_request_manager();
+            dispatcher.forced_trade_request(:signature_a, :signature_b, :order_a, :order_b);
         }
 
         /// Executes a previously submitted forced trade request for a position.
@@ -1020,6 +894,7 @@ pub mod Core {
                     interest_amount_a: 0,
                     interest_amount_b: 0,
                     current_time: Timestamp { seconds: 0 },
+                    time_of_last_update: Timestamp { seconds: 0 },
                     max_interest_rate_per_sec: 0,
                     tvtr_a_before: Default::default(),
                     tvtr_b_before: Default::default(),
@@ -1070,79 +945,10 @@ pub mod Core {
             order: LimitOrder,
             vault_approval: LimitOrder,
         ) {
-            assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
-
-            let redeeming_position = self
-                .positions
-                .get_position_snapshot(position_id: order.source_position);
-            let vault_config = self.vaults.get_vault_config_for_asset(order.base_asset_id);
-            let vault_position_id: PositionId = vault_config.position_id.into();
-            let vault_position = self
-                .positions
-                .get_position_snapshot(position_id: vault_position_id);
-
-            // Validate the caller is the position owner account
-            let owner_account = if (redeeming_position.owner_protection_enabled.read()) {
-                redeeming_position.get_owner_account()
-            } else {
-                Option::None
-            };
-            let public_key = redeeming_position.get_owner_public_key();
-            let vault_public_key = vault_position.get_owner_public_key();
-            let forced_redeem_from_vault = ForcedRedeemFromVault { order, vault_approval };
-
-            // Validate the forced request signatures.
-            let hash = self
-                .request_approvals
-                .register_forced_approval(
-                    :owner_account, :public_key, :signature, args: forced_redeem_from_vault,
-                );
-
-            validate_signature(
-                public_key: vault_public_key,
-                message: forced_redeem_from_vault,
-                signature: vault_signature,
-            );
-
-            // Transfer premium_cost (forced fee) from the caller to the sequencer address.
-            let premium_cost = self.premium_cost.read();
-            let quantum = self.assets.get_collateral_quantum();
-            let token_contract = self.assets.get_base_collateral_token_contract();
-            assert(
-                token_contract
-                    .transfer_from(
-                        sender: get_caller_address(),
-                        recipient: get_block_info().sequencer_address,
-                        amount: (premium_cost * quantum).into(),
-                    ),
-                TRANSFER_FAILED,
-            );
-
-            self
-                .emit(
-                    vault_events::ForcedRedeemFromVaultRequest {
-                        order_source_position: order.source_position,
-                        order_receive_position: order.receive_position,
-                        order_base_asset_id: order.base_asset_id,
-                        order_base_amount: order.base_amount,
-                        order_quote_asset_id: order.quote_asset_id,
-                        order_quote_amount: order.quote_amount,
-                        order_fee_asset_id: order.fee_asset_id,
-                        order_fee_amount: order.fee_amount,
-                        order_expiration: order.expiration,
-                        order_salt: order.salt,
-                        vault_approval_source_position: vault_approval.source_position,
-                        vault_approval_receive_position: vault_approval.receive_position,
-                        vault_approval_base_asset_id: vault_approval.base_asset_id,
-                        vault_approval_base_amount: vault_approval.base_amount,
-                        vault_approval_quote_asset_id: vault_approval.quote_asset_id,
-                        vault_approval_quote_amount: vault_approval.quote_amount,
-                        vault_approval_fee_asset_id: vault_approval.fee_asset_id,
-                        vault_approval_fee_amount: vault_approval.fee_amount,
-                        vault_approval_expiration: vault_approval.expiration,
-                        vault_approval_salt: vault_approval.salt,
-                        hash,
-                    },
+            let dispatcher = self.external_components._get_forced_request_manager();
+            dispatcher
+                .forced_redeem_from_vault_request(
+                    :signature, :vault_signature, :order, :vault_approval,
                 );
         }
 
@@ -1159,7 +965,7 @@ pub mod Core {
         /// - Processes the forced redeem.
         /// - Marks the forced request as completed and clears the pending entry.
         /// - Emits a `ForcedRedeemFromVault` event.
-        fn force_redeem_from_vault(
+        fn forced_redeem_from_vault(
             ref self: ContractState,
             operator_nonce: u64,
             order: LimitOrder,
@@ -1190,7 +996,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .force_redeem_from_vault(:order, :vault_approval);
+                .forced_redeem_from_vault(:order, :vault_approval);
 
             self
                 .emit(
@@ -1230,6 +1036,7 @@ pub mod Core {
 
             // Read once and pass as arguments to avoid redundant storage reads
             let current_time = self.get_exchange_time();
+            let time_of_last_update = self.exchange_time.get_time_of_last_update();
             let max_interest_rate_per_sec = self.positions.max_interest_rate_per_sec.read();
 
             for (position_id, interest_amount) in position_interest_amounts {
@@ -1243,6 +1050,7 @@ pub mod Core {
                         :position_id,
                         :interest_amount,
                         :current_time,
+                        :time_of_last_update,
                         :max_interest_rate_per_sec,
                     );
 
@@ -1339,6 +1147,7 @@ pub mod Core {
             interest_amount_a: i64,
             interest_amount_b: i64,
             current_time: Timestamp,
+            time_of_last_update: Timestamp,
             max_interest_rate_per_sec: u32,
             tvtr_a_before: Nullable<PositionTVTR>,
             tvtr_b_before: Nullable<PositionTVTR>,
@@ -1370,6 +1179,7 @@ pub mod Core {
                     position_id: position_id_a,
                     interest_amount: interest_amount_a,
                     :current_time,
+                    :time_of_last_update,
                     :max_interest_rate_per_sec,
                 );
 
@@ -1380,6 +1190,7 @@ pub mod Core {
                     position_id: position_id_b,
                     interest_amount: interest_amount_b,
                     :current_time,
+                    :time_of_last_update,
                     :max_interest_rate_per_sec,
                 );
 
@@ -1524,10 +1335,6 @@ pub mod Core {
 
         fn _is_vault(ref self: ContractState, vault_position: PositionId) -> bool {
             self.vaults.is_vault_position(vault_position)
-        }
-
-        fn _is_escape_hatch_enabled(ref self: ContractState) -> bool {
-            return self.forced_actions_enabled.read();
         }
     }
 }
