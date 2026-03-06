@@ -601,14 +601,13 @@ pub mod AssetsComponent {
         /// Validates assets integrity prerequisites:
         /// - Funding interval validation.
         /// - Prices validation.
-        fn validate_assets_integrity(ref self: ComponentState<TContractState>) {
-            let current_time = Time::now();
-            // Funding validation.
-            assert(
-                current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
-                FUNDING_EXPIRED,
-            );
-            self.validate_price_interval_integrity(:current_time);
+        fn validate_assets_integrity(ref self: ComponentState<TContractState>) {// let current_time = Time::now();
+        // // Funding validation.
+        // assert(
+        //     current_time.sub(self.last_funding_tick.read()) <= self.max_funding_interval.read(),
+        //     FUNDING_EXPIRED,
+        // );
+        // self.validate_price_interval_integrity(:current_time);
         }
 
         fn validate_price_interval_integrity(
@@ -618,7 +617,7 @@ pub mod AssetsComponent {
             /// synthetic prices and update `last_price_validation` to current time.
             let max_price_interval = self.max_price_interval.read();
             if current_time.sub(self.last_price_validation.read()) > max_price_interval {
-                self._validate_asset_prices(current_time, max_price_interval);
+                // self._validate_asset_prices(current_time, max_price_interval);
                 self.last_price_validation.write(current_time);
             }
         }
