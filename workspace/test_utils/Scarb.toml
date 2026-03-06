@@ -7,9 +7,6 @@ edition = "2024_07"
 starknet.workspace = true
 openzeppelin.workspace = true
 
-[dev-dependencies]
-snforge_std.workspace = true
-
 [[target.starknet-contract]]
 sierra = true
 casm = true
@@ -25,9 +22,3 @@ unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
 inlining-strategy = "avoid"
 panic-backtrace = true
-
-[[test]]
-name = "test_utils_unittest"
-build-external-contracts = []
-
-[lib]
