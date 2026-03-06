@@ -53,3 +53,4 @@ sncast --account=$account invoke -u $url --contract-address $contract --function
 echo activate $name
 sleep 10
 sncast --account=$account invoke -u $url --contract-address $contract --function activate_external_component --calldata  $NAME_HASH $hash
+sleep 10
