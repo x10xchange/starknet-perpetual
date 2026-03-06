@@ -31,7 +31,6 @@ mod USDC {
     #[constructor]
     fn constructor(ref self: ContractState, recipient: ContractAddress) {
         self.erc20.initializer("USDC", "USDC");
-
         self.erc20.mint(recipient, 10000000000000000);
     }
 
