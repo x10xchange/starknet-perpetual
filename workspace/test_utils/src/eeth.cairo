@@ -32,7 +32,7 @@ mod eETH {
     #[constructor]
     fn constructor(ref self: ContractState, recipient: ContractAddress) {
         self.erc20.initializer("eETH", "eETH");
-        self.erc20.mint(recipient, 2_u256.pow(254).try_into().unwrap());
+        self.erc20.mint(recipient, 10_u256.pow(24));
     }
 
     impl ERC20ImmutableConfig of ERC20Component::ImmutableConfig {
