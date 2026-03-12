@@ -8,3 +8,5 @@ pub mod migrate_usdc_eic;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
+pub mod migrate_collateral_eic;
+pub mod replace_vault_collateral_eic;

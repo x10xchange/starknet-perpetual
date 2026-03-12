@@ -63,3 +63,4 @@ declare_contract_class() {
 
 # Call the function with the parsed parameters
 declare_contract_class "$account" "$url" "$contract" "$package"
+sleep 10
