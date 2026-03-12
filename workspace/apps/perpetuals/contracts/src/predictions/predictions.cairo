@@ -3,6 +3,7 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IPredictions<TContractState> {
+    fn create_account(ref self: TContractState, client_id: felt252, owning_key: felt252);
     fn deposit_to_prediction_account(
         ref self: TContractState,
         from_position_id: PositionId,
@@ -109,6 +110,10 @@ pub mod Predictions {
 
     #[abi(embed_v0)]
     impl PredictionsImpl of IPredictions<ContractState> {
+        fn create_account(ref self: ContractState, client_id: felt252, owning_key: felt252) {
+            self.prediction_positions.create_account(:client_id, :owning_key);
+        }
+
         fn deposit_to_prediction_account(
             ref self: ContractState,
             from_position_id: PositionId,

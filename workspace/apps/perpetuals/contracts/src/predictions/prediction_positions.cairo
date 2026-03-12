@@ -16,6 +16,17 @@ pub mod PredictionPositionsComponent {
     pub impl InternalImpl<
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of InternalTrait<TContractState> {
+        fn create_account(
+            ref self: ComponentState<TContractState>,
+            client_id: felt252,
+            owning_key: felt252,
+        ) {
+            let account = self.accounts.entry(client_id);
+            assert!(account.owning_key.read().is_zero(), "ACCOUNT_ALREADY_EXISTS");
+            assert!(owning_key.is_non_zero(), "INVALID_ZERO_OWNING_KEY");
+            account.owning_key.write(owning_key);
+        }
+
         fn deposit_collateral(
             ref self: ComponentState<TContractState>,
             client_id: felt252,
