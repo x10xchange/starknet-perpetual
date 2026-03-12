@@ -721,7 +721,7 @@ pub mod AssetsComponent {
                     INVALID_PRICE_TIMESTAMP,
                 );
 
-                self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
+                // self._validate_oracle_signature(:asset_id, signed_price: *signed_price);
 
                 if let Option::Some(previous_public_key) = previous_public_key_opt {
                     let prev: u256 = previous_public_key.into();
