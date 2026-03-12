@@ -2881,6 +2881,42 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IVaultsDispatcher { contract_address: self.perpetuals_contract }
             .update_vault_protection_limit(:vault_position, :percentage);
     }
+
+    fn create_prediction_account(
+        ref self: PerpsTestsFacade, client_id: felt252, owning_key: felt252,
+    ) {
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .create_prediction_account(:client_id, :owning_key);
+    }
+
+    fn deposit_to_prediction_account(
+        ref self: PerpsTestsFacade,
+        from_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .deposit_to_prediction_account(
+                :operator_nonce, :from_position_id, :client_id, :quantized_amount,
+            );
+    }
+
+    fn withdraw_from_prediction_account(
+        ref self: PerpsTestsFacade,
+        to_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+    ) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw_from_prediction_account(
+                :operator_nonce, :to_position_id, :client_id, :quantized_amount,
+            );
+    }
 }
 
 
@@ -2945,6 +2981,14 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
         assert_eq!(total_risk, expected_total_risk);
+    }
+
+    fn validate_prediction_collateral(
+        self: @PerpsTestsFacade, client_id: felt252, expected_collateral: u64,
+    ) {
+        let collateral = ICoreDispatcher { contract_address: *self.perpetuals_contract }
+            .get_prediction_collateral(:client_id);
+        assert_eq!(collateral, expected_collateral);
     }
 }
 

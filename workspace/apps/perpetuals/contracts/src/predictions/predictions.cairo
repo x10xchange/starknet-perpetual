@@ -15,7 +15,7 @@ pub trait IPredictions<TContractState> {
         ref self: TContractState,
         to_position_id: PositionId,
         client_id: felt252,
-        dp3_amount: u64,
+        quantized_amount: u64,
         caller_address: ContractAddress,
     );
 }
@@ -25,7 +25,6 @@ pub mod Predictions {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
-    use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
@@ -33,13 +32,11 @@ pub mod Predictions {
     use perpetuals::core::types::position::{PositionDiff, PositionId};
     use perpetuals::predictions::PredictionPositionsComponent;
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
-    use perpetuals::predictions::types::Dp3Trait;
+    use perpetuals::predictions::predictions::IPredictions;
     use starknet::ContractAddress;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-
-    use super::IPredictions;
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -139,26 +136,20 @@ pub mod Predictions {
 
             self.positions.apply_diff(position_id: from_position_id, :position_diff);
 
-            // Translate quantized amount to dp3 and credit the prediction account.
-            let collateral_quantum = self.assets.get_collateral_quantum();
-            let dp3_amount = Dp3Trait::quantized_to_dp3(:quantized_amount, :collateral_quantum);
-
-            self.prediction_positions.deposit_collateral(:client_id, :dp3_amount);
+            let amount = quantized_amount;
+            self.prediction_positions.deposit_collateral(:client_id, :amount);
         }
 
         fn withdraw_from_prediction_account(
             ref self: ContractState,
             to_position_id: PositionId,
             client_id: felt252,
-            dp3_amount: u64,
+            quantized_amount: u64,
             caller_address: ContractAddress,
         ) {
+            let amount = quantized_amount;
             // Debit the prediction account.
-            self.prediction_positions.withdraw_collateral(:client_id, :dp3_amount);
-
-            // Translate dp3 back to quantized and credit the perpetuals position.
-            let collateral_quantum = self.assets.get_collateral_quantum();
-            let quantized_amount = Dp3Trait::dp3_to_quantized(:dp3_amount, :collateral_quantum);
+            self.prediction_positions.withdraw_collateral(:client_id, :amount);
 
             let position_diff = PositionDiff {
                 collateral_diff: quantized_amount.into(), asset_diff: Option::None,

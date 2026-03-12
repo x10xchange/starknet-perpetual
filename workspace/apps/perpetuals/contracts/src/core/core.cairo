@@ -18,6 +18,8 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::predictions::PredictionPositionsComponent;
+    use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
@@ -93,6 +95,11 @@ pub mod Core {
     );
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(
+        path: PredictionPositionsComponent,
+        storage: prediction_positions,
+        event: PredictionPositionsEvent,
+    );
 
 
     #[abi(embed_v0)]
@@ -168,6 +175,8 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        pub prediction_positions: PredictionPositionsComponent::Storage,
         /// ------- Core -------
         // Forced action parameters:
         // Timelock before forced actions can be executed.
@@ -222,6 +231,8 @@ pub mod Core {
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        PredictionPositionsEvent: PredictionPositionsComponent::Event,
         //duplicated for ABI
         Deposit: deposit_events::Deposit,
         DepositCanceled: deposit_events::DepositCanceled,
@@ -1126,6 +1137,67 @@ pub mod Core {
             self.roles.only_app_governor();
             assert(max_interest_rate_per_sec.is_non_zero(), ZERO_MAX_INTEREST_RATE);
             self.positions.max_interest_rate_per_sec.write(max_interest_rate_per_sec);
+        }
+
+        fn create_prediction_account(
+            ref self: ContractState, client_id: felt252, owning_key: felt252,
+        ) {
+            self.prediction_positions.create_account(:client_id, :owning_key);
+        }
+
+        fn deposit_to_prediction_account(
+            ref self: ContractState,
+            operator_nonce: u64,
+            from_position_id: PositionId,
+            client_id: felt252,
+            quantized_amount: u64,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+
+            let position = self.positions.get_position_mut(position_id: from_position_id);
+
+            let position_diff = PositionDiff {
+                collateral_diff: -(quantized_amount.into()), asset_diff: Option::None,
+            };
+
+            self
+                .positions
+                .validate_healthy_or_healthier_position(
+                    position_id: from_position_id,
+                    position: position.into(),
+                    :position_diff,
+                    tvtr_before: Default::default(),
+                );
+
+            self.positions.apply_diff(position_id: from_position_id, :position_diff);
+
+            let amount = quantized_amount;
+            self.prediction_positions.deposit_collateral(:client_id, :amount);
+        }
+
+        fn withdraw_from_prediction_account(
+            ref self: ContractState,
+            operator_nonce: u64,
+            to_position_id: PositionId,
+            client_id: felt252,
+            quantized_amount: u64,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+
+            let amount = quantized_amount;
+            self.prediction_positions.withdraw_collateral(:client_id, :amount);
+
+            let position_diff = PositionDiff {
+                collateral_diff: quantized_amount.into(), asset_diff: Option::None,
+            };
+
+            self.positions.apply_diff(position_id: to_position_id, :position_diff);
+        }
+
+        fn get_prediction_collateral(self: @ContractState, client_id: felt252) -> u64 {
+            self.prediction_positions.get_collateral(:client_id)
         }
     }
 

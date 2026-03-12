@@ -1,5 +1,6 @@
 #[starknet::component]
 pub mod PredictionPositionsComponent {
+    use core::num::traits::Zero;
     use perpetuals::predictions::types::{Account, MarketPosition};
     use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
 
@@ -30,22 +31,22 @@ pub mod PredictionPositionsComponent {
         fn deposit_collateral(
             ref self: ComponentState<TContractState>,
             client_id: felt252,
-            dp3_amount: u64,
+            amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
             let current_collateral = account.collateral.read();
-            account.collateral.write(current_collateral + dp3_amount);
+            account.collateral.write(current_collateral + amount);
         }
 
         fn withdraw_collateral(
             ref self: ComponentState<TContractState>,
             client_id: felt252,
-            dp3_amount: u64,
+            amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
             let current_collateral = account.collateral.read();
-            assert!(current_collateral >= dp3_amount, "INSUFFICIENT_PREDICTION_COLLATERAL");
-            account.collateral.write(current_collateral - dp3_amount);
+            assert!(current_collateral >= amount, "INSUFFICIENT_PREDICTION_COLLATERAL");
+            account.collateral.write(current_collateral - amount);
         }
 
         fn get_collateral(
