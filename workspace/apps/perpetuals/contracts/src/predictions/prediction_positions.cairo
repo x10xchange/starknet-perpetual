@@ -50,6 +50,7 @@ pub mod PredictionPositionsComponent {
             amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
+            assert!(account.owning_key.read().is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
             let current_collateral = account.collateral.read();
             account.collateral.write(current_collateral + amount);
         }
@@ -60,6 +61,7 @@ pub mod PredictionPositionsComponent {
             amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
+            assert!(account.owning_key.read().is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
             let current_collateral = account.collateral.read();
             assert!(current_collateral >= amount, "INSUFFICIENT_PREDICTION_COLLATERAL");
             account.collateral.write(current_collateral - amount);

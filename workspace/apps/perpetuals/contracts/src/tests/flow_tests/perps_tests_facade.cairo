@@ -2916,16 +2916,16 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         from_position_id: PositionId,
         client_id: felt252,
         quantized_amount: u64,
-        owning_key_pair: StarkKeyPair,
+        signing_key_pair: StarkKeyPair,
     ) {
         let operator_nonce = self.get_nonce();
         let expiration = Time::now();
         let salt = self.generate_salt();
         let deposit_args = PredictionDepositArgs {
-            client_id, amount: quantized_amount, expiration, salt,
+            client_id, from_position_id, amount: quantized_amount, expiration, salt,
         };
-        let msg_hash = deposit_args.get_message_hash(owning_key_pair.public_key);
-        let (r, s) = owning_key_pair.sign(msg_hash).unwrap();
+        let msg_hash = deposit_args.get_message_hash(signing_key_pair.public_key);
+        let (r, s) = signing_key_pair.sign(msg_hash).unwrap();
         let signature = array![r, s].span();
 
         self.operator.set_as_caller(self.perpetuals_contract);
@@ -2946,16 +2946,16 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         to_position_id: PositionId,
         client_id: felt252,
         quantized_amount: u64,
-        owning_key_pair: StarkKeyPair,
+        signing_key_pair: StarkKeyPair,
     ) {
         let operator_nonce = self.get_nonce();
         let expiration = Time::now();
         let salt = self.generate_salt();
         let withdraw_args = PredictionWithdrawArgs {
-            client_id, amount: quantized_amount, expiration, salt,
+            client_id, to_position_id, amount: quantized_amount, expiration, salt,
         };
-        let msg_hash = withdraw_args.get_message_hash(owning_key_pair.public_key);
-        let (r, s) = owning_key_pair.sign(msg_hash).unwrap();
+        let msg_hash = withdraw_args.get_message_hash(signing_key_pair.public_key);
+        let (r, s) = signing_key_pair.sign(msg_hash).unwrap();
         let signature = array![r, s].span();
 
         self.operator.set_as_caller(self.perpetuals_contract);

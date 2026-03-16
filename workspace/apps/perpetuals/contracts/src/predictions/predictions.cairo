@@ -1,6 +1,4 @@
 use perpetuals::core::types::position::PositionId;
-use perpetuals::predictions::types::{PredictionDepositArgs, PredictionWithdrawArgs};
-use starknet::ContractAddress;
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
 
@@ -38,12 +36,11 @@ pub mod Predictions {
     use perpetuals::core::components::fulfillment::interface::IFulfillment;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::types::position::{PositionDiff, PositionId};
+    use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
     use perpetuals::predictions::PredictionPositionsComponent;
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
     use perpetuals::predictions::types::{PredictionDepositArgs, PredictionWithdrawArgs};
-    use starknet::ContractAddress;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -53,6 +50,7 @@ pub mod Predictions {
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_PREDICTIONS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
+    use core::num::traits::Zero;
 
     impl SnipImpl = SNIP12MetadataImpl;
 
@@ -151,12 +149,15 @@ pub mod Predictions {
             salt: felt252,
         ) {
             let deposit_args = PredictionDepositArgs {
-                client_id, amount: quantized_amount, expiration, salt,
+                client_id, from_position_id, amount: quantized_amount, expiration, salt,
             };
-            let hash = self._validate_prediction_signature(:signature, :client_id, :expiration, message: deposit_args);
+            let public_key = self
+                .positions
+                .get_position_snapshot(position_id: from_position_id)
+                .get_owner_public_key();
+            let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: deposit_args);
 
-            let amount_felt: felt252 = quantized_amount.into();
-            let amount_i64: i64 = amount_felt.try_into().unwrap();
+            let amount_i64: i64 = quantized_amount.try_into().unwrap();
             self
                 .fulfillment_tracking
                 .update_fulfillment(
@@ -184,8 +185,7 @@ pub mod Predictions {
 
             self.positions.apply_diff(position_id: from_position_id, :position_diff);
 
-            let amount = quantized_amount;
-            self.prediction_positions.deposit_collateral(:client_id, :amount);
+            self.prediction_positions.deposit_collateral(:client_id, amount: quantized_amount);
         }
 
         fn withdraw_from_prediction_account(
@@ -198,12 +198,13 @@ pub mod Predictions {
             salt: felt252,
         ) {
             let withdraw_args = PredictionWithdrawArgs {
-                client_id, amount: quantized_amount, expiration, salt,
+                client_id, to_position_id, amount: quantized_amount, expiration, salt,
             };
-            let hash = self._validate_prediction_signature(:signature, :client_id, :expiration, message: withdraw_args);
+            let public_key = self.prediction_positions.get_owning_key(:client_id);
+            assert!(public_key.is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
+            let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: withdraw_args);
 
-            let amount_felt: felt252 = quantized_amount.into();
-            let amount_i64: i64 = amount_felt.try_into().unwrap();
+            let amount_i64: i64 = quantized_amount.try_into().unwrap();
             self
                 .fulfillment_tracking
                 .update_fulfillment(
@@ -213,9 +214,8 @@ pub mod Predictions {
                     actual_base_amount: amount_i64,
                 );
 
-            let amount = quantized_amount;
             // Debit the prediction account.
-            self.prediction_positions.withdraw_collateral(:client_id, :amount);
+            self.prediction_positions.withdraw_collateral(:client_id, amount: quantized_amount);
 
             let position_diff = PositionDiff {
                 collateral_diff: quantized_amount.into(), asset_diff: Option::None,
@@ -230,12 +230,11 @@ pub mod Predictions {
         fn _validate_prediction_signature<T, +Drop<T>, +Copy<T>, +OffchainMessageHash<T>>(
             self: @ContractState,
             signature: Signature,
-            client_id: felt252,
+            public_key: felt252,
             expiration: Timestamp,
             message: T,
         ) -> felt252 {
             assert!(Time::now() <= expiration, "SIGNATURE_EXPIRED");
-            let public_key = self.prediction_positions.get_owning_key(:client_id);
             let msg_hash = message.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);
             msg_hash

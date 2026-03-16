@@ -1,6 +1,7 @@
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
+use perpetuals::core::types::position::PositionId;
 use starknet::storage::Map;
 use starkware_utils::signature::stark::HashType;
 use starkware_utils::time::time::Timestamp;
@@ -20,6 +21,7 @@ pub struct Account {
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct PredictionDepositArgs {
     pub client_id: felt252,
+    pub from_position_id: PositionId,
     pub amount: u64,
     pub expiration: Timestamp,
     pub salt: felt252,
@@ -28,6 +30,7 @@ pub struct PredictionDepositArgs {
 /// selector!(
 ///   "\"PredictionDepositArgs\"(
 ///    \"client_id\":\"felt\",
+///    \"from_position_id\":\"felt\",
 ///    \"amount\":\"u64\",
 ///    \"expiration\":\"Timestamp\",
 ///    \"salt\":\"felt\"
@@ -38,7 +41,7 @@ pub struct PredictionDepositArgs {
 /// );
 const DEPOSIT_ARGS_TYPE_HASH: HashType =
     selector!(
-        "\"PredictionDepositArgs\"(\"client_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+        "\"PredictionDepositArgs\"(\"client_id\":\"felt\",\"from_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
     );
 
 impl PredictionDepositArgsStructHashImpl of StructHash<PredictionDepositArgs> {
@@ -51,6 +54,7 @@ impl PredictionDepositArgsStructHashImpl of StructHash<PredictionDepositArgs> {
 #[derive(Copy, Drop, Hash, Serde)]
 pub struct PredictionWithdrawArgs {
     pub client_id: felt252,
+    pub to_position_id: PositionId,
     pub amount: u64,
     pub expiration: Timestamp,
     pub salt: felt252,
@@ -59,6 +63,7 @@ pub struct PredictionWithdrawArgs {
 /// selector!(
 ///   "\"PredictionWithdrawArgs\"(
 ///    \"client_id\":\"felt\",
+///    \"to_position_id\":\"felt\",
 ///    \"amount\":\"u64\",
 ///    \"expiration\":\"Timestamp\",
 ///    \"salt\":\"felt\"
@@ -69,7 +74,7 @@ pub struct PredictionWithdrawArgs {
 /// );
 const WITHDRAW_ARGS_TYPE_HASH: HashType =
     selector!(
-        "\"PredictionWithdrawArgs\"(\"client_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+        "\"PredictionWithdrawArgs\"(\"client_id\":\"felt\",\"to_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
     );
 
 impl PredictionWithdrawArgsStructHashImpl of StructHash<PredictionWithdrawArgs> {

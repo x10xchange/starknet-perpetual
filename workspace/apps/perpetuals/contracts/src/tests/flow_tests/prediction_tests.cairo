@@ -24,14 +24,14 @@ fn test_prediction_deposit_and_withdraw() {
         .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 0);
 
-    // Deposit from perps position to prediction account.
+    // Deposit from perps position to prediction account (signed by position owner).
     state
         .facade
         .deposit_to_prediction_account(
             from_position_id: user.position_id,
             :client_id,
             quantized_amount: 50_000,
-            :owning_key_pair,
+            signing_key_pair: user.account.key_pair,
         );
 
     // Validate balances after deposit.
@@ -42,14 +42,14 @@ fn test_prediction_deposit_and_withdraw() {
         );
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 50_000);
 
-    // Withdraw from prediction account back to perps position.
+    // Withdraw from prediction account back to perps position (signed by prediction owner).
     state
         .facade
         .withdraw_from_prediction_account(
             to_position_id: user.position_id,
             :client_id,
             quantized_amount: 30_000,
-            :owning_key_pair,
+            signing_key_pair: owning_key_pair,
         );
 
     // Validate balances after withdraw.
@@ -87,7 +87,7 @@ fn test_prediction_deposit_full_and_withdraw_full() {
             from_position_id: user.position_id,
             :client_id,
             quantized_amount: amount,
-            :owning_key_pair,
+            signing_key_pair: user.account.key_pair,
         );
 
     state
@@ -102,7 +102,7 @@ fn test_prediction_deposit_full_and_withdraw_full() {
             to_position_id: user.position_id,
             :client_id,
             quantized_amount: amount,
-            :owning_key_pair,
+            signing_key_pair: owning_key_pair,
         );
 
     state
@@ -140,7 +140,7 @@ fn test_prediction_withdraw_insufficient_collateral() {
             from_position_id: user.position_id,
             :client_id,
             quantized_amount: 10_000,
-            :owning_key_pair,
+            signing_key_pair: user.account.key_pair,
         );
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 10_000);
 
@@ -151,7 +151,7 @@ fn test_prediction_withdraw_insufficient_collateral() {
             to_position_id: user.position_id,
             :client_id,
             quantized_amount: 20_000,
-            :owning_key_pair,
+            signing_key_pair: owning_key_pair,
         );
 }
 
@@ -179,4 +179,46 @@ fn test_prediction_create_account_zero_owning_key() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
     state.facade.create_prediction_account(client_id: 1, owning_key: 0);
+}
+
+#[test]
+#[should_panic(expected: "ACCOUNT_DOES_NOT_EXIST")]
+fn test_prediction_deposit_nonexistent_account() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+
+    let deposit_info = state
+        .facade
+        .deposit(
+            depositor: user.account, position_id: user.position_id, quantized_amount: 100_000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info);
+
+    // Deposit to non-existent prediction account — should panic.
+    state
+        .facade
+        .deposit_to_prediction_account(
+            from_position_id: user.position_id,
+            client_id: 999,
+            quantized_amount: 10_000,
+            signing_key_pair: user.account.key_pair,
+        );
+}
+
+#[test]
+#[should_panic(expected: "ACCOUNT_DOES_NOT_EXIST")]
+fn test_prediction_withdraw_nonexistent_account() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+
+    let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    // Withdraw from non-existent prediction account — should panic.
+    state
+        .facade
+        .withdraw_from_prediction_account(
+            to_position_id: user.position_id,
+            client_id: 999,
+            quantized_amount: 10_000,
+            signing_key_pair: owning_key_pair,
+        );
 }
