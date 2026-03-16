@@ -1,3 +1,8 @@
+#[starknet::interface]
+pub trait IPredictionPositions<TContractState> {
+    fn get_prediction_collateral(self: @TContractState, client_id: felt252) -> u64;
+}
+
 #[starknet::component]
 pub mod PredictionPositionsComponent {
     use core::num::traits::Zero;
@@ -12,6 +17,17 @@ pub mod PredictionPositionsComponent {
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {}
+
+    #[embeddable_as(PredictionPositionsImpl)]
+    impl PredictionPositionsExternal<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of super::IPredictionPositions<ComponentState<TContractState>> {
+        fn get_prediction_collateral(
+            self: @ComponentState<TContractState>, client_id: felt252,
+        ) -> u64 {
+            self.accounts.entry(client_id).collateral.read()
+        }
+    }
 
     #[generate_trait]
     pub impl InternalImpl<
@@ -73,8 +89,9 @@ pub mod PredictionPositionsComponent {
             self: @ComponentState<TContractState>,
             client_id: felt252,
             market_id: felt252,
+            outcome_id: felt252,
         ) -> MarketPosition {
-            self.accounts.entry(client_id).tokens.entry(market_id).read()
+            self.accounts.entry(client_id).tokens.entry(market_id).entry(outcome_id).read()
         }
     }
 }

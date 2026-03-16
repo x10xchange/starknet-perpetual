@@ -1,5 +1,6 @@
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
+use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
 
 #[test]
 fn test_prediction_deposit_and_withdraw() {
@@ -15,17 +16,22 @@ fn test_prediction_deposit_and_withdraw() {
         );
     state.facade.process_deposit(deposit_info: deposit_info);
 
-    // Create prediction account.
+    // Create prediction account with a real key pair.
     let client_id: felt252 = 1;
-    let owning_key: felt252 = 42;
-    state.facade.create_prediction_account(:client_id, :owning_key);
+    let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    state
+        .facade
+        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 0);
 
     // Deposit from perps position to prediction account.
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user.position_id, :client_id, quantized_amount: 50_000,
+            from_position_id: user.position_id,
+            :client_id,
+            quantized_amount: 50_000,
+            :owning_key_pair,
         );
 
     // Validate balances after deposit.
@@ -40,7 +46,10 @@ fn test_prediction_deposit_and_withdraw() {
     state
         .facade
         .withdraw_from_prediction_account(
-            to_position_id: user.position_id, :client_id, quantized_amount: 30_000,
+            to_position_id: user.position_id,
+            :client_id,
+            quantized_amount: 30_000,
+            :owning_key_pair,
         );
 
     // Validate balances after withdraw.
@@ -68,12 +77,17 @@ fn test_prediction_deposit_full_and_withdraw_full() {
 
     // Create prediction account and deposit full amount.
     let client_id: felt252 = 1;
-    let owning_key: felt252 = 42;
-    state.facade.create_prediction_account(:client_id, :owning_key);
+    let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    state
+        .facade
+        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user.position_id, :client_id, quantized_amount: amount,
+            from_position_id: user.position_id,
+            :client_id,
+            quantized_amount: amount,
+            :owning_key_pair,
         );
 
     state
@@ -85,7 +99,10 @@ fn test_prediction_deposit_full_and_withdraw_full() {
     state
         .facade
         .withdraw_from_prediction_account(
-            to_position_id: user.position_id, :client_id, quantized_amount: amount,
+            to_position_id: user.position_id,
+            :client_id,
+            quantized_amount: amount,
+            :owning_key_pair,
         );
 
     state
@@ -111,14 +128,19 @@ fn test_prediction_withdraw_insufficient_collateral() {
     state.facade.process_deposit(deposit_info: deposit_info);
 
     let client_id: felt252 = 1;
-    let owning_key: felt252 = 42;
-    state.facade.create_prediction_account(:client_id, :owning_key);
+    let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    state
+        .facade
+        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
 
     // Deposit 10,000.
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user.position_id, :client_id, quantized_amount: 10_000,
+            from_position_id: user.position_id,
+            :client_id,
+            quantized_amount: 10_000,
+            :owning_key_pair,
         );
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 10_000);
 
@@ -126,7 +148,10 @@ fn test_prediction_withdraw_insufficient_collateral() {
     state
         .facade
         .withdraw_from_prediction_account(
-            to_position_id: user.position_id, :client_id, quantized_amount: 20_000,
+            to_position_id: user.position_id,
+            :client_id,
+            quantized_amount: 20_000,
+            :owning_key_pair,
         );
 }
 
@@ -136,11 +161,16 @@ fn test_prediction_create_duplicate_account() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
     let client_id: felt252 = 1;
-    let owning_key: felt252 = 42;
-    state.facade.create_prediction_account(:client_id, :owning_key);
+    let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    state
+        .facade
+        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
 
     // Create again with same client_id — should panic.
-    state.facade.create_prediction_account(:client_id, owning_key: 99);
+    let other_key_pair = StarkCurveKeyPairImpl::from_secret_key(99);
+    state
+        .facade
+        .create_prediction_account(:client_id, owning_key: other_key_pair.public_key);
 }
 
 #[test]

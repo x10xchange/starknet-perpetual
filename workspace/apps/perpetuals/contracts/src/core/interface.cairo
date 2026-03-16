@@ -213,16 +213,21 @@ pub trait ICore<TContractState> {
     fn deposit_to_prediction_account(
         ref self: TContractState,
         operator_nonce: u64,
+        signature: Signature,
         from_position_id: PositionId,
         client_id: felt252,
         quantized_amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
     );
     fn withdraw_from_prediction_account(
         ref self: TContractState,
         operator_nonce: u64,
+        signature: Signature,
         to_position_id: PositionId,
         client_id: felt252,
         quantized_amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
     );
-    fn get_prediction_collateral(self: @TContractState, client_id: felt252) -> u64;
 }

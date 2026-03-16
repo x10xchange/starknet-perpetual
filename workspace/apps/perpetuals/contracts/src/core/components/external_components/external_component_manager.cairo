@@ -19,7 +19,8 @@ pub mod ExternalComponents {
     use crate::core::components::deposit::deposit_manager::IDepositExternalLibraryDispatcher;
     use crate::core::components::external_components::events;
     use crate::core::components::external_components::interface::{
-        EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_FORCED_REQUESTS, IExternalComponents,
+        EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_FORCED_REQUESTS,
+        EXTERNAL_COMPONENT_PREDICTIONS, IExternalComponents,
     };
     use crate::core::components::external_components::named_component::ITypedComponentLibraryDispatcher;
     use crate::core::components::forced_requests::forced_requests_manager::IForcedRequestsManagerLibraryDispatcher;
@@ -27,6 +28,7 @@ pub mod ExternalComponents {
     use crate::core::components::transfer::transfer_manager::ITransferManagerLibraryDispatcher;
     use crate::core::components::vaults::vaults_contract::IVaultExternalLibraryDispatcher;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerLibraryDispatcher;
+    use perpetuals::predictions::predictions::IPredictionsLibraryDispatcher;
     use super::super::interface::{
         EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DEPOSITS, EXTERNAL_COMPONENT_LIQUIDATIONS,
         EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
@@ -172,6 +174,17 @@ pub mod ExternalComponents {
             assert(class_hash.is_non_zero(), 'NO_FORCED_REQUESTS_MANAGER');
             IForcedRequestsManagerLibraryDispatcher { class_hash: class_hash }
         }
+
+        fn _get_predictions_dispatcher(
+            ref self: ComponentState<TContractState>,
+        ) -> IPredictionsLibraryDispatcher {
+            let class_hash = self
+                .external_component_implementations
+                .entry(EXTERNAL_COMPONENT_PREDICTIONS)
+                .read();
+            assert(class_hash.is_non_zero(), 'NO_PREDICTIONS_MANAGER');
+            IPredictionsLibraryDispatcher { class_hash: class_hash }
+        }
     }
 
     #[generate_trait]
@@ -211,7 +224,8 @@ pub mod ExternalComponents {
                 || (component_type == EXTERNAL_COMPONENT_LIQUIDATIONS)
                 || (component_type == EXTERNAL_COMPONENT_DELEVERAGES)
                 || (component_type == EXTERNAL_COMPONENT_ASSETS)
-                || (component_type == EXTERNAL_COMPONENT_FORCED_REQUESTS) {
+                || (component_type == EXTERNAL_COMPONENT_FORCED_REQUESTS)
+                || (component_type == EXTERNAL_COMPONENT_PREDICTIONS) {
                 let now = Time::now();
                 let activation_time = now.add(update_delay);
                 let entry = self.registered_external_components.entry(component_type);
