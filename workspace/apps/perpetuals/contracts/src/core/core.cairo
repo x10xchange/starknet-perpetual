@@ -18,6 +18,7 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::predictions::PredictionPositionsComponent;
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
@@ -69,6 +70,7 @@ pub mod Core {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
+    use perpetuals::predictions::predictions::IPredictionsDispatcherTrait;
     use crate::core::utils::{validate_signature, validate_trade};
 
 
@@ -93,6 +95,11 @@ pub mod Core {
     );
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(
+        path: PredictionPositionsComponent,
+        storage: prediction_positions,
+        event: PredictionPositionsEvent,
+    );
 
 
     #[abi(embed_v0)]
@@ -135,6 +142,10 @@ pub mod Core {
     #[abi(embed_v0)]
     impl VaultImpl = VaultsComponent::VaultsImpl<ContractState>;
 
+    #[abi(embed_v0)]
+    impl PredictionPositionsImpl =
+        PredictionPositionsComponent::PredictionPositionsImpl<ContractState>;
+
 
     #[storage]
     struct Storage {
@@ -168,6 +179,8 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        pub prediction_positions: PredictionPositionsComponent::Storage,
         /// ------- Core -------
         // Forced action parameters:
         // Timelock before forced actions can be executed.
@@ -222,6 +235,8 @@ pub mod Core {
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        PredictionPositionsEvent: PredictionPositionsComponent::Event,
         //duplicated for ABI
         Deposit: deposit_events::Deposit,
         DepositCanceled: deposit_events::DepositCanceled,
@@ -1127,6 +1142,56 @@ pub mod Core {
             assert(max_interest_rate_per_sec.is_non_zero(), ZERO_MAX_INTEREST_RATE);
             self.positions.max_interest_rate_per_sec.write(max_interest_rate_per_sec);
         }
+
+        fn create_prediction_account(
+            ref self: ContractState, client_id: felt252, owning_key: felt252,
+        ) {
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .create_account(:client_id, :owning_key);
+        }
+
+        fn deposit_to_prediction_account(
+            ref self: ContractState,
+            operator_nonce: u64,
+            signature: Signature,
+            from_position_id: PositionId,
+            client_id: felt252,
+            quantized_amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .deposit_to_prediction_account(
+                    :signature, :from_position_id, :client_id, :quantized_amount, :expiration, :salt,
+                );
+        }
+
+        fn withdraw_from_prediction_account(
+            ref self: ContractState,
+            operator_nonce: u64,
+            signature: Signature,
+            to_position_id: PositionId,
+            client_id: felt252,
+            quantized_amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .withdraw_from_prediction_account(
+                    :signature, :to_position_id, :client_id, :quantized_amount, :expiration, :salt,
+                );
+        }
+
     }
 
     #[generate_trait]

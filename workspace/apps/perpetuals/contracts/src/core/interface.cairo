@@ -206,4 +206,28 @@ pub trait ICore<TContractState> {
     fn enable_escape_hatch(ref self: TContractState);
     fn get_max_interest_rate_per_sec(self: @TContractState) -> u32;
     fn set_max_interest_rate_per_sec(ref self: TContractState, max_interest_rate_per_sec: u32);
+
+    fn create_prediction_account(
+        ref self: TContractState, client_id: felt252, owning_key: felt252,
+    );
+    fn deposit_to_prediction_account(
+        ref self: TContractState,
+        operator_nonce: u64,
+        signature: Signature,
+        from_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+    );
+    fn withdraw_from_prediction_account(
+        ref self: TContractState,
+        operator_nonce: u64,
+        signature: Signature,
+        to_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+    );
 }

@@ -6,7 +6,8 @@ use core::num::traits::{WideMul, Zero};
 use external_components::interface::{
     EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
     EXTERNAL_COMPONENT_FORCED_REQUESTS, EXTERNAL_COMPONENT_LIQUIDATIONS,
-    EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
+    EXTERNAL_COMPONENT_PREDICTIONS, EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT,
+    EXTERNAL_COMPONENT_WITHDRAWALS,
 };
 use openzeppelin::interfaces::erc20::IERC20Dispatcher;
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
@@ -30,6 +31,10 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
+use perpetuals::predictions::prediction_positions::{
+    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
+};
+use perpetuals::predictions::types::{PredictionDepositArgs, PredictionWithdrawArgs};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -578,6 +583,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
+        let predictions_external_component = snforge_std::declare("Predictions")
+            .unwrap()
+            .contract_class();
+
         let collateral_quantum = COLLATERAL_QUANTUM;
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
@@ -656,6 +665,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             );
 
         external_components_dispatcher
+            .register_external_component(
+                component_type: EXTERNAL_COMPONENT_PREDICTIONS,
+                component_address: *predictions_external_component.class_hash,
+            );
+
+        external_components_dispatcher
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_DELEVERAGES,
                 component_address: *deleverage_external_component.class_hash,
@@ -697,6 +712,12 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .activate_external_component(
                 component_type: EXTERNAL_COMPONENT_FORCED_REQUESTS,
                 component_address: *forced_requests_external_component.class_hash,
+            );
+
+        external_components_dispatcher
+            .activate_external_component(
+                component_type: EXTERNAL_COMPONENT_PREDICTIONS,
+                component_address: *predictions_external_component.class_hash,
             );
 
         stop_cheat_caller_address(contract_address: perpetuals_contract);
@@ -2881,6 +2902,74 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         IVaultsDispatcher { contract_address: self.perpetuals_contract }
             .update_vault_protection_limit(:vault_position, :percentage);
     }
+
+    fn create_prediction_account(
+        ref self: PerpsTestsFacade, client_id: felt252, owning_key: felt252,
+    ) {
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .create_prediction_account(:client_id, :owning_key);
+    }
+
+    fn deposit_to_prediction_account(
+        ref self: PerpsTestsFacade,
+        from_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+        signing_key_pair: StarkKeyPair,
+    ) {
+        let operator_nonce = self.get_nonce();
+        let expiration = Time::now();
+        let salt = self.generate_salt();
+        let deposit_args = PredictionDepositArgs {
+            client_id, from_position_id, amount: quantized_amount, expiration, salt,
+        };
+        let msg_hash = deposit_args.get_message_hash(signing_key_pair.public_key);
+        let (r, s) = signing_key_pair.sign(msg_hash).unwrap();
+        let signature = array![r, s].span();
+
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .deposit_to_prediction_account(
+                :operator_nonce,
+                :signature,
+                :from_position_id,
+                :client_id,
+                :quantized_amount,
+                :expiration,
+                :salt,
+            );
+    }
+
+    fn withdraw_from_prediction_account(
+        ref self: PerpsTestsFacade,
+        to_position_id: PositionId,
+        client_id: felt252,
+        quantized_amount: u64,
+        signing_key_pair: StarkKeyPair,
+    ) {
+        let operator_nonce = self.get_nonce();
+        let expiration = Time::now();
+        let salt = self.generate_salt();
+        let withdraw_args = PredictionWithdrawArgs {
+            client_id, to_position_id, amount: quantized_amount, expiration, salt,
+        };
+        let msg_hash = withdraw_args.get_message_hash(signing_key_pair.public_key);
+        let (r, s) = signing_key_pair.sign(msg_hash).unwrap();
+        let signature = array![r, s].span();
+
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw_from_prediction_account(
+                :operator_nonce,
+                :signature,
+                :to_position_id,
+                :client_id,
+                :quantized_amount,
+                :expiration,
+                :salt,
+            );
+    }
 }
 
 
@@ -2945,6 +3034,16 @@ pub impl PerpsTestsFacadeValidationsImpl of PerpsTestsFacadeValidationsTrait {
         let dispatcher = IPositionsDispatcher { contract_address: *self.perpetuals_contract };
         let PositionTVTR { total_risk, .. } = dispatcher.get_position_tv_tr(position_id);
         assert_eq!(total_risk, expected_total_risk);
+    }
+
+    fn validate_prediction_collateral(
+        self: @PerpsTestsFacade, client_id: felt252, expected_collateral: u64,
+    ) {
+        let collateral = IPredictionPositionsDispatcher {
+            contract_address: *self.perpetuals_contract,
+        }
+            .get_prediction_collateral(:client_id);
+        assert_eq!(collateral, expected_collateral);
     }
 }
 

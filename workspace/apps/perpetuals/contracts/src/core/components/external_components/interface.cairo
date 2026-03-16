@@ -9,6 +9,7 @@ pub const EXTERNAL_COMPONENT_DELEVERAGES: felt252 = 'DELEVERAGES';
 pub const EXTERNAL_COMPONENT_DEPOSITS: felt252 = 'DEPOSITS';
 pub const EXTERNAL_COMPONENT_ASSETS: felt252 = 'ASSETS';
 pub const EXTERNAL_COMPONENT_FORCED_REQUESTS: felt252 = 'FORCED_REQUESTS';
+pub const EXTERNAL_COMPONENT_PREDICTIONS: felt252 = 'PREDICTIONS';
 
 #[starknet::interface]
 pub trait IExternalComponents<TContractState> {
