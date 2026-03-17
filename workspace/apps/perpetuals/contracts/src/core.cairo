@@ -7,3 +7,4 @@ pub mod interface;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
+pub mod set_interest_rate_eic;
