@@ -6,7 +6,8 @@ pub trait IPredictionPositions<TContractState> {
 #[starknet::component]
 pub mod PredictionPositionsComponent {
     use core::num::traits::Zero;
-    use perpetuals::predictions::types::{Account, MarketPosition};
+    use perpetuals::predictions::errors;
+    use perpetuals::predictions::types::Account;
     use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
 
     #[storage]
@@ -39,8 +40,8 @@ pub mod PredictionPositionsComponent {
             owning_key: felt252,
         ) {
             let account = self.accounts.entry(client_id);
-            assert!(account.owning_key.read().is_zero(), "ACCOUNT_ALREADY_EXISTS");
-            assert!(owning_key.is_non_zero(), "INVALID_ZERO_OWNING_KEY");
+            assert(account.owning_key.read().is_zero(), errors::ACCOUNT_ALREADY_EXISTS);
+            assert(owning_key.is_non_zero(), errors::INVALID_ZERO_OWNING_KEY);
             account.owning_key.write(owning_key);
         }
 
@@ -50,7 +51,7 @@ pub mod PredictionPositionsComponent {
             amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
-            assert!(account.owning_key.read().is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
+            assert(account.owning_key.read().is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
             let current_collateral = account.collateral.read();
             account.collateral.write(current_collateral + amount);
         }
@@ -61,9 +62,9 @@ pub mod PredictionPositionsComponent {
             amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
-            assert!(account.owning_key.read().is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
+            assert(account.owning_key.read().is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
             let current_collateral = account.collateral.read();
-            assert!(current_collateral >= amount, "INSUFFICIENT_PREDICTION_COLLATERAL");
+            assert(current_collateral >= amount, errors::INSUFFICIENT_COLLATERAL);
             account.collateral.write(current_collateral - amount);
         }
 
@@ -87,13 +88,13 @@ pub mod PredictionPositionsComponent {
             self.accounts.entry(client_id).owning_key.write(owning_key);
         }
 
-        fn get_market_position(
+        fn get_position(
             self: @ComponentState<TContractState>,
             client_id: felt252,
             market_id: felt252,
             outcome_id: felt252,
-        ) -> MarketPosition {
-            self.accounts.entry(client_id).tokens.entry(market_id).entry(outcome_id).read()
+        ) -> u64 {
+            self.accounts.entry(client_id).positions.entry(market_id).entry(outcome_id).read()
         }
     }
 }

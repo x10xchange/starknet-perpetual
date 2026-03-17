@@ -1,4 +1,5 @@
 use perpetuals::core::types::position::PositionId;
+use perpetuals::predictions::types::SignedPredictionOutcome;
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
 
@@ -23,6 +24,13 @@ pub trait IPredictions<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+    fn create_prediction_market(
+        ref self: TContractState,
+        market_id: felt252,
+        oracle: felt252,
+        outcomes: Span<felt252>,
+    );
+    fn finalize_prediction_market(ref self: TContractState, signed_outcome: SignedPredictionOutcome);
 }
 
 #[starknet::contract]
@@ -37,10 +45,14 @@ pub mod Predictions {
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
+    use perpetuals::predictions::PredictionMarketsComponent;
     use perpetuals::predictions::PredictionPositionsComponent;
+    use perpetuals::predictions::prediction_markets::PredictionMarketsComponent::InternalTrait as PredictionMarketsInternal;
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
-    use perpetuals::predictions::types::{PredictionDepositArgs, PredictionWithdrawArgs};
+    use perpetuals::predictions::types::{
+        PredictionDepositArgs, PredictionWithdrawArgs, SignedPredictionOutcome,
+    };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -51,6 +63,7 @@ pub mod Predictions {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use core::num::traits::Zero;
+    use perpetuals::predictions::errors;
 
     impl SnipImpl = SNIP12MetadataImpl;
 
@@ -77,6 +90,8 @@ pub mod Predictions {
         ExchangeTimeEvent: ExchangeTimeComponent::Event,
         #[flat]
         PredictionPositionsEvent: PredictionPositionsComponent::Event,
+        #[flat]
+        PredictionMarketsEvent: PredictionMarketsComponent::Event,
         #[flat]
         FulfillmentEvent: Fulfillement::Event,
     }
@@ -105,6 +120,8 @@ pub mod Predictions {
         #[substorage(v0)]
         pub prediction_positions: PredictionPositionsComponent::Storage,
         #[substorage(v0)]
+        pub prediction_markets: PredictionMarketsComponent::Storage,
+        #[substorage(v0)]
         pub fulfillment_tracking: Fulfillement::Storage,
     }
 
@@ -123,6 +140,11 @@ pub mod Predictions {
         path: PredictionPositionsComponent,
         storage: prediction_positions,
         event: PredictionPositionsEvent,
+    );
+    component!(
+        path: PredictionMarketsComponent,
+        storage: prediction_markets,
+        event: PredictionMarketsEvent,
     );
     component!(path: Fulfillement, storage: fulfillment_tracking, event: FulfillmentEvent);
 
@@ -201,7 +223,7 @@ pub mod Predictions {
                 client_id, to_position_id, amount: quantized_amount, expiration, salt,
             };
             let public_key = self.prediction_positions.get_owning_key(:client_id);
-            assert!(public_key.is_non_zero(), "ACCOUNT_DOES_NOT_EXIST");
+            assert(public_key.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
             let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: withdraw_args);
 
             let amount_i64: i64 = quantized_amount.try_into().unwrap();
@@ -223,6 +245,30 @@ pub mod Predictions {
 
             self.positions.apply_diff(position_id: to_position_id, :position_diff);
         }
+
+        fn create_prediction_market(
+            ref self: ContractState,
+            market_id: felt252,
+            oracle: felt252,
+            outcomes: Span<felt252>,
+        ) {
+            self.prediction_markets.create_prediction_market(:market_id, :oracle, :outcomes);
+        }
+
+        fn finalize_prediction_market(
+            ref self: ContractState, signed_outcome: SignedPredictionOutcome,
+        ) {
+            let oracle_key = self
+                .prediction_markets
+                .get_market_oracle(market_id: signed_outcome.market_id);
+            assert(oracle_key.is_non_zero(), errors::MARKET_NOT_FOUND);
+            PrivateImpl::_validate_oracle_signature(:oracle_key, :signed_outcome);
+            self
+                .prediction_markets
+                .finalize_prediction_market(
+                    market_id: signed_outcome.market_id, winner: signed_outcome.outcome,
+                );
+        }
     }
 
     #[generate_trait]
@@ -234,10 +280,22 @@ pub mod Predictions {
             expiration: Timestamp,
             message: T,
         ) -> felt252 {
-            assert!(Time::now() <= expiration, "SIGNATURE_EXPIRED");
+            assert(Time::now() <= expiration, errors::SIGNATURE_EXPIRED);
             let msg_hash = message.get_message_hash(:public_key);
             validate_stark_signature(:public_key, :msg_hash, :signature);
             msg_hash
+        }
+
+        fn _validate_oracle_signature(
+            oracle_key: felt252, signed_outcome: SignedPredictionOutcome,
+        ) {
+            let msg_hash = core::pedersen::pedersen(
+                core::pedersen::pedersen(signed_outcome.market_id, signed_outcome.outcome),
+                signed_outcome.timestamp.into(),
+            );
+            validate_stark_signature(
+                public_key: oracle_key, :msg_hash, signature: signed_outcome.signature,
+            );
         }
     }
 }

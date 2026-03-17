@@ -114,7 +114,7 @@ fn test_prediction_deposit_full_and_withdraw_full() {
 }
 
 #[test]
-#[should_panic(expected: "INSUFFICIENT_PREDICTION_COLLATERAL")]
+#[should_panic(expected: 'INSUFFICIENT_COLLATERAL')]
 fn test_prediction_withdraw_insufficient_collateral() {
     // Setup.
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
@@ -156,7 +156,7 @@ fn test_prediction_withdraw_insufficient_collateral() {
 }
 
 #[test]
-#[should_panic(expected: "ACCOUNT_ALREADY_EXISTS")]
+#[should_panic(expected: 'ACCOUNT_ALREADY_EXISTS')]
 fn test_prediction_create_duplicate_account() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
@@ -174,7 +174,7 @@ fn test_prediction_create_duplicate_account() {
 }
 
 #[test]
-#[should_panic(expected: "INVALID_ZERO_OWNING_KEY")]
+#[should_panic(expected: 'INVALID_ZERO_OWNING_KEY')]
 fn test_prediction_create_account_zero_owning_key() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
@@ -182,7 +182,7 @@ fn test_prediction_create_account_zero_owning_key() {
 }
 
 #[test]
-#[should_panic(expected: "ACCOUNT_DOES_NOT_EXIST")]
+#[should_panic(expected: 'ACCOUNT_DOES_NOT_EXIST')]
 fn test_prediction_deposit_nonexistent_account() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
@@ -206,7 +206,7 @@ fn test_prediction_deposit_nonexistent_account() {
 }
 
 #[test]
-#[should_panic(expected: "ACCOUNT_DOES_NOT_EXIST")]
+#[should_panic(expected: 'ACCOUNT_DOES_NOT_EXIST')]
 fn test_prediction_withdraw_nonexistent_account() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
@@ -221,4 +221,94 @@ fn test_prediction_withdraw_nonexistent_account() {
             quantized_amount: 10_000,
             signing_key_pair: owning_key_pair,
         );
+}
+
+#[test]
+fn test_create_and_finalize_market() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let outcomes: Array<felt252> = array![1, 2, 3];
+
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+    state
+        .facade
+        .finalize_prediction_market(:market_id, outcome: 2, :oracle_key_pair);
+}
+
+#[test]
+#[should_panic(expected: 'MARKET_ALREADY_EXISTS')]
+fn test_create_duplicate_market() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let outcomes: Array<felt252> = array![1, 2];
+
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+}
+
+#[test]
+#[should_panic(expected: 'MARKET_NOT_FOUND')]
+fn test_finalize_nonexistent_market() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    state.facade.finalize_prediction_market(market_id: 999, outcome: 1, :oracle_key_pair);
+}
+
+#[test]
+#[should_panic(expected: 'MARKET_ALREADY_FINALIZED')]
+fn test_finalize_market_twice() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let outcomes: Array<felt252> = array![1, 2];
+
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+    state.facade.finalize_prediction_market(:market_id, outcome: 1, :oracle_key_pair);
+    state.facade.finalize_prediction_market(:market_id, outcome: 2, :oracle_key_pair);
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_OUTCOME')]
+fn test_finalize_market_invalid_winner() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let outcomes: Array<felt252> = array![1, 2];
+
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+    state.facade.finalize_prediction_market(:market_id, outcome: 99, :oracle_key_pair);
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_STARK_KEY_SIGNATURE')]
+fn test_finalize_market_wrong_oracle_key() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let wrong_key_pair = StarkCurveKeyPairImpl::from_secret_key(888);
+    let outcomes: Array<felt252> = array![1, 2];
+
+    state
+        .facade
+        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+    // Sign with wrong key — should panic.
+    state.facade.finalize_prediction_market(:market_id, outcome: 1, oracle_key_pair: wrong_key_pair);
 }

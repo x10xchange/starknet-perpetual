@@ -34,7 +34,9 @@ use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDis
 use perpetuals::predictions::prediction_positions::{
     IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
 };
-use perpetuals::predictions::types::{PredictionDepositArgs, PredictionWithdrawArgs};
+use perpetuals::predictions::types::{
+    PredictionDepositArgs, PredictionWithdrawArgs, SignedPredictionOutcome,
+};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -2970,6 +2972,39 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :salt,
             );
     }
+
+    fn create_prediction_market(
+        ref self: PerpsTestsFacade,
+        market_id: felt252,
+        oracle: felt252,
+        outcomes: Span<felt252>,
+    ) {
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .create_prediction_market(:market_id, :oracle, :outcomes);
+    }
+
+    fn finalize_prediction_market(
+        ref self: PerpsTestsFacade,
+        market_id: felt252,
+        outcome: felt252,
+        oracle_key_pair: StarkKeyPair,
+    ) {
+        let timestamp: u32 = Time::now().seconds.try_into().unwrap();
+        let msg_hash = core::pedersen::pedersen(
+            core::pedersen::pedersen(market_id, outcome),
+            timestamp.into(),
+        );
+        let (r, s) = oracle_key_pair.sign(msg_hash).unwrap();
+        let signature = array![r, s].span();
+        let signed_outcome = SignedPredictionOutcome {
+            signature, timestamp, market_id, outcome,
+        };
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .finalize_prediction_market(:signed_outcome);
+    }
+
 }
 
 

@@ -2,20 +2,32 @@ use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
 use perpetuals::core::types::position::PositionId;
-use starknet::storage::Map;
-use starkware_utils::signature::stark::HashType;
+use starknet::storage::{Map, Vec};
+use starkware_utils::signature::stark::{HashType, Signature};
 use starkware_utils::time::time::Timestamp;
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct MarketPosition {
-    pub amount: u64,
-}
 
 #[starknet::storage_node]
 pub struct Account {
     pub owning_key: felt252,
     pub collateral: u64,
-    pub tokens: Map<felt252, Map<felt252, MarketPosition>>,
+    pub positions: Map<felt252, Map<felt252, u64>>,
+}
+
+#[starknet::storage_node]
+pub struct Market {
+    pub oracle: felt252,
+    pub outcomes: Vec<felt252>,
+    pub winner: felt252,
+    pub is_finalized: bool,
+    pub pot: u256,
+}
+
+#[derive(Copy, Drop, Serde)]
+pub struct SignedPredictionOutcome {
+    pub signature: Signature,
+    pub timestamp: u32,
+    pub market_id: felt252,
+    pub outcome: felt252,
 }
 
 #[derive(Copy, Drop, Hash, Serde)]
