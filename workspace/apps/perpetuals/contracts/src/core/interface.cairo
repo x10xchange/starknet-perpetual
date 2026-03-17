@@ -230,4 +230,14 @@ pub trait ICore<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
+    fn create_prediction_market(
+        ref self: TContractState,
+        market_id: felt252,
+        oracle: felt252,
+        outcomes: Span<felt252>,
+    );
+    fn finalize_prediction_market(
+        ref self: TContractState,
+        signed_outcome: perpetuals::predictions::types::SignedPredictionOutcome,
+    );
 }

@@ -18,7 +18,9 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
+    use perpetuals::predictions::PredictionMarketsComponent;
     use perpetuals::predictions::PredictionPositionsComponent;
+    use perpetuals::predictions::types::SignedPredictionOutcome;
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
@@ -99,6 +101,11 @@ pub mod Core {
         path: PredictionPositionsComponent,
         storage: prediction_positions,
         event: PredictionPositionsEvent,
+    );
+    component!(
+        path: PredictionMarketsComponent,
+        storage: prediction_markets,
+        event: PredictionMarketsEvent,
     );
 
 
@@ -181,6 +188,8 @@ pub mod Core {
         pub vaults: VaultsComponent::Storage,
         #[substorage(v0)]
         pub prediction_positions: PredictionPositionsComponent::Storage,
+        #[substorage(v0)]
+        pub prediction_markets: PredictionMarketsComponent::Storage,
         /// ------- Core -------
         // Forced action parameters:
         // Timelock before forced actions can be executed.
@@ -237,6 +246,8 @@ pub mod Core {
         VaultsEvent: VaultsComponent::Event,
         #[flat]
         PredictionPositionsEvent: PredictionPositionsComponent::Event,
+        #[flat]
+        PredictionMarketsEvent: PredictionMarketsComponent::Event,
         //duplicated for ABI
         Deposit: deposit_events::Deposit,
         DepositCanceled: deposit_events::DepositCanceled,
@@ -1190,6 +1201,27 @@ pub mod Core {
                 .withdraw_from_prediction_account(
                     :signature, :to_position_id, :client_id, :quantized_amount, :expiration, :salt,
                 );
+        }
+
+        fn create_prediction_market(
+            ref self: ContractState,
+            market_id: felt252,
+            oracle: felt252,
+            outcomes: Span<felt252>,
+        ) {
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .create_prediction_market(:market_id, :oracle, :outcomes);
+        }
+
+        fn finalize_prediction_market(
+            ref self: ContractState, signed_outcome: SignedPredictionOutcome,
+        ) {
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .finalize_prediction_market(:signed_outcome);
         }
 
     }
