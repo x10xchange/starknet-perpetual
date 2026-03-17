@@ -1,6 +1,8 @@
+use perpetuals::predictions::types::PredictionOrder;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
+use starkware_utils::time::time::Time;
 
 #[test]
 fn test_prediction_deposit_and_withdraw() {
@@ -311,4 +313,94 @@ fn test_finalize_market_wrong_oracle_key() {
         .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
     // Sign with wrong key — should panic.
     state.facade.finalize_prediction_market(:market_id, outcome: 1, oracle_key_pair: wrong_key_pair);
+}
+
+#[test]
+fn test_prediction_trade_skeleton() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user_a = state.new_user_with_position();
+    let user_b = state.new_user_with_position();
+
+    // Fund perps positions.
+    let deposit_a = state
+        .facade
+        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: 100_000);
+    state.facade.process_deposit(deposit_info: deposit_a);
+    let deposit_b = state
+        .facade
+        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: 100_000);
+    state.facade.process_deposit(deposit_info: deposit_b);
+
+    // Create prediction accounts.
+    let client_a: felt252 = 1;
+    let client_b: felt252 = 2;
+    let key_pair_a = StarkCurveKeyPairImpl::from_secret_key(42);
+    let key_pair_b = StarkCurveKeyPairImpl::from_secret_key(43);
+    state.facade.create_prediction_account(client_id: client_a, owning_key: key_pair_a.public_key);
+    state.facade.create_prediction_account(client_id: client_b, owning_key: key_pair_b.public_key);
+
+    // Deposit collateral to prediction accounts.
+    state
+        .facade
+        .deposit_to_prediction_account(
+            from_position_id: user_a.position_id,
+            client_id: client_a,
+            quantized_amount: 50_000,
+            signing_key_pair: user_a.account.key_pair,
+        );
+    state
+        .facade
+        .deposit_to_prediction_account(
+            from_position_id: user_b.position_id,
+            client_id: client_b,
+            quantized_amount: 50_000,
+            signing_key_pair: user_b.account.key_pair,
+        );
+
+    // Create a market.
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    state
+        .facade
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: array![1, 2].span(),
+        );
+
+    // Build orders: A buys 10 shares of outcome 1, B sells 10 shares of outcome 1.
+    let expiration = Time::now().add(delta: Time::days(1));
+    let order_a = PredictionOrder {
+        client_id: client_a,
+        market_id,
+        outcome: 1,
+        is_long: true,
+        amount: 10,
+        price: 600, // willing to pay 600 per share
+        fee_amount: 100,
+        expiration,
+        salt: 1,
+    };
+    let order_b = PredictionOrder {
+        client_id: client_b,
+        market_id,
+        outcome: 1,
+        is_long: false,
+        amount: -10,
+        price: 600,
+        fee_amount: 100,
+        expiration,
+        salt: 2,
+    };
+
+    // Execute the trade (skeleton — only validates sigs and tracks fulfillment).
+    state
+        .facade
+        .prediction_trade(
+            :order_a,
+            :order_b,
+            actual_amount: 10,
+            actual_fee_a: 50,
+            actual_fee_b: 50,
+            signing_key_pair_a: key_pair_a,
+            signing_key_pair_b: key_pair_b,
+        );
 }

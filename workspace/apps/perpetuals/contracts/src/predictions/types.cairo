@@ -31,6 +31,65 @@ pub struct SignedPredictionOutcome {
 }
 
 #[derive(Copy, Drop, Hash, Serde)]
+pub struct PredictionOrder {
+    pub client_id: felt252,
+    pub market_id: felt252,
+    pub outcome: felt252,
+    // true = long (buy shares on this outcome), false = short (equivalent to buying all other
+    // outcomes).
+    pub is_long: bool,
+    // Signed: positive = buy, negative = sell.
+    pub amount: i64,
+    // Limit price per share the user is willing to pay/accept.
+    pub price: u64,
+    // Maximum fee the user is willing to pay.
+    pub fee_amount: u64,
+    pub expiration: Timestamp,
+    pub salt: felt252,
+}
+
+/// selector!(
+///   "\"PredictionOrder\"(
+///    \"client_id\":\"felt\",
+///    \"market_id\":\"felt\",
+///    \"outcome\":\"felt\",
+///    \"is_long\":\"bool\",
+///    \"amount\":\"i64\",
+///    \"price\":\"u64\",
+///    \"fee_amount\":\"u64\",
+///    \"expiration\":\"Timestamp\",
+///    \"salt\":\"felt\"
+///    )
+///    \"Timestamp\"(
+///    \"seconds\":\"u64\"
+///    )
+/// );
+const PREDICTION_ORDER_TYPE_HASH: HashType =
+    selector!(
+        "\"PredictionOrder\"(\"client_id\":\"felt\",\"market_id\":\"felt\",\"outcome\":\"felt\",\"is_long\":\"bool\",\"amount\":\"i64\",\"price\":\"u64\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+    );
+
+impl PredictionOrderStructHashImpl of StructHash<PredictionOrder> {
+    fn hash_struct(self: @PredictionOrder) -> HashType {
+        let hash_state = PoseidonTrait::new();
+        hash_state.update_with(PREDICTION_ORDER_TYPE_HASH).update_with(*self).finalize()
+    }
+}
+
+#[derive(Copy, Drop, Serde)]
+pub struct PredictionSettlement {
+    pub signature_a: Signature,
+    pub signature_b: Signature,
+    pub order_a: PredictionOrder,
+    pub order_b: PredictionOrder,
+    // Actual number of shares exchanged.
+    pub actual_amount: u64,
+    // Actual fees charged to each party.
+    pub actual_fee_a: u64,
+    pub actual_fee_b: u64,
+}
+
+#[derive(Copy, Drop, Hash, Serde)]
 pub struct PredictionDepositArgs {
     pub client_id: felt252,
     pub from_position_id: PositionId,

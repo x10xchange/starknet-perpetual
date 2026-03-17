@@ -240,4 +240,8 @@ pub trait ICore<TContractState> {
         ref self: TContractState,
         signed_outcome: perpetuals::predictions::types::SignedPredictionOutcome,
     );
+    fn prediction_trade(
+        ref self: TContractState,
+        settlement: perpetuals::predictions::types::PredictionSettlement,
+    );
 }

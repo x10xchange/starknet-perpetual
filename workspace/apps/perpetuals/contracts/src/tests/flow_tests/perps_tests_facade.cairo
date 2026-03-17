@@ -35,7 +35,8 @@ use perpetuals::predictions::prediction_positions::{
     IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
 };
 use perpetuals::predictions::types::{
-    PredictionDepositArgs, PredictionWithdrawArgs, SignedPredictionOutcome,
+    PredictionDepositArgs, PredictionOrder, PredictionSettlement, PredictionWithdrawArgs,
+    SignedPredictionOutcome,
 };
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
@@ -2982,6 +2983,32 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .create_prediction_market(:market_id, :oracle, :outcomes);
+    }
+
+    fn prediction_trade(
+        ref self: PerpsTestsFacade,
+        order_a: PredictionOrder,
+        order_b: PredictionOrder,
+        actual_amount: u64,
+        actual_fee_a: u64,
+        actual_fee_b: u64,
+        signing_key_pair_a: StarkKeyPair,
+        signing_key_pair_b: StarkKeyPair,
+    ) {
+        let hash_a = order_a.get_message_hash(public_key: signing_key_pair_a.public_key);
+        let (r_a, s_a) = signing_key_pair_a.sign(hash_a).unwrap();
+        let signature_a = array![r_a, s_a].span();
+
+        let hash_b = order_b.get_message_hash(public_key: signing_key_pair_b.public_key);
+        let (r_b, s_b) = signing_key_pair_b.sign(hash_b).unwrap();
+        let signature_b = array![r_b, s_b].span();
+
+        let settlement = PredictionSettlement {
+            signature_a, signature_b, order_a, order_b, actual_amount, actual_fee_a, actual_fee_b,
+        };
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .prediction_trade(:settlement);
     }
 
     fn finalize_prediction_market(

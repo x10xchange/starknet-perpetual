@@ -20,7 +20,7 @@ pub mod Core {
     };
     use perpetuals::predictions::PredictionMarketsComponent;
     use perpetuals::predictions::PredictionPositionsComponent;
-    use perpetuals::predictions::types::SignedPredictionOutcome;
+    use perpetuals::predictions::types::{PredictionSettlement, SignedPredictionOutcome};
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
@@ -1224,6 +1224,14 @@ pub mod Core {
                 .finalize_prediction_market(:signed_outcome);
         }
 
+        fn prediction_trade(
+            ref self: ContractState, settlement: PredictionSettlement,
+        ) {
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .prediction_trade(:settlement);
+        }
     }
 
     #[generate_trait]

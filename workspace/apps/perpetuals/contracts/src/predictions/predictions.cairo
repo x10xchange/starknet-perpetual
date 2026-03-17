@@ -1,5 +1,5 @@
 use perpetuals::core::types::position::PositionId;
-use perpetuals::predictions::types::SignedPredictionOutcome;
+use perpetuals::predictions::types::{PredictionSettlement, SignedPredictionOutcome};
 use starkware_utils::signature::stark::Signature;
 use starkware_utils::time::time::Timestamp;
 
@@ -31,6 +31,7 @@ pub trait IPredictions<TContractState> {
         outcomes: Span<felt252>,
     );
     fn finalize_prediction_market(ref self: TContractState, signed_outcome: SignedPredictionOutcome);
+    fn prediction_trade(ref self: TContractState, settlement: PredictionSettlement);
 }
 
 #[starknet::contract]
@@ -51,7 +52,8 @@ pub mod Predictions {
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
     use perpetuals::predictions::types::{
-        PredictionDepositArgs, PredictionWithdrawArgs, SignedPredictionOutcome,
+        PredictionDepositArgs, PredictionSettlement, PredictionWithdrawArgs,
+        SignedPredictionOutcome,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -268,6 +270,50 @@ pub mod Predictions {
                 .finalize_prediction_market(
                     market_id: signed_outcome.market_id, winner: signed_outcome.outcome,
                 );
+        }
+
+        fn prediction_trade(ref self: ContractState, settlement: PredictionSettlement) {
+            let order_a = settlement.order_a;
+            let order_b = settlement.order_b;
+
+            // Validate signatures against prediction account owning keys.
+            let public_key_a = self.prediction_positions.get_owning_key(client_id: order_a.client_id);
+            assert(public_key_a.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
+            let hash_a = self._validate_prediction_signature(
+                signature: settlement.signature_a,
+                public_key: public_key_a,
+                expiration: order_a.expiration,
+                message: order_a,
+            );
+
+            let public_key_b = self.prediction_positions.get_owning_key(client_id: order_b.client_id);
+            assert(public_key_b.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
+            let hash_b = self._validate_prediction_signature(
+                signature: settlement.signature_b,
+                public_key: public_key_b,
+                expiration: order_b.expiration,
+                message: order_b,
+            );
+
+            // Track fulfillment for partial fills.
+            let actual_amount_i64: i64 = settlement.actual_amount.try_into().unwrap();
+            self
+                .fulfillment_tracking
+                .update_fulfillment(
+                    position_id: Zero::zero(),
+                    hash: hash_a,
+                    order_base_amount: order_a.amount,
+                    actual_base_amount: actual_amount_i64,
+                );
+            self
+                .fulfillment_tracking
+                .update_fulfillment(
+                    position_id: Zero::zero(),
+                    hash: hash_b,
+                    order_base_amount: order_b.amount,
+                    actual_base_amount: actual_amount_i64,
+                );
+            // todo - stefan mint and burn logic
         }
     }
 
