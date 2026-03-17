@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod ReplaceCollateralEIC {
+mod InitializeInterestRateEIC {
     use perpetuals::core::components::positions::Positions as PositionComponent;
     use perpetuals::core::components::positions::positions::Positions::Event as PositionsEvent;
     use starknet::storage::StoragePointerWriteAccess;
