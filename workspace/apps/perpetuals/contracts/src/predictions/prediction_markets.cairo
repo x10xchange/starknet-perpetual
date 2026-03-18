@@ -40,6 +40,7 @@ pub mod PredictionMarketsComponent {
             market.oracle.write(oracle);
             for outcome in outcomes {
                 market.outcomes.push(*outcome);
+                market.valid_outcomes.entry(*outcome).write(true);
             };
         }
 
@@ -62,21 +63,51 @@ pub mod PredictionMarketsComponent {
             self.markets.entry(market_id).oracle.read()
         }
 
+        fn is_market_finalized(
+            self: @ComponentState<TContractState>, market_id: felt252,
+        ) -> bool {
+            self.markets.entry(market_id).is_finalized.read()
+        }
+
+        fn get_outcomes_count(
+            self: @ComponentState<TContractState>, market_id: felt252,
+        ) -> u64 {
+            self.markets.entry(market_id).outcomes.len()
+        }
+
+        fn get_outcome_at(
+            self: @ComponentState<TContractState>, market_id: felt252, index: u64,
+        ) -> felt252 {
+            self.markets.entry(market_id).outcomes.at(index).read()
+        }
+
+        fn get_market_winner(
+            self: @ComponentState<TContractState>, market_id: felt252,
+        ) -> felt252 {
+            self.markets.entry(market_id).winner.read()
+        }
+
+        fn add_to_pot(
+            ref self: ComponentState<TContractState>, market_id: felt252, amount: u256,
+        ) {
+            let market = self.markets.entry(market_id);
+            market.pot.write(market.pot.read() + amount);
+        }
+
+        fn sub_from_pot(
+            ref self: ComponentState<TContractState>, market_id: felt252, amount: u256,
+        ) {
+            let market = self.markets.entry(market_id);
+            market.pot.write(market.pot.read() - amount);
+        }
+
         fn assert_valid_outcome(
             self: @ComponentState<TContractState>, market_id: felt252, outcome_id: felt252,
         ) {
-            let market = self.markets.entry(market_id);
-            let len = market.outcomes.len();
-            let mut found = false;
-            let mut i: u64 = 0;
-            while i < len {
-                if market.outcomes.at(i).read() == outcome_id {
-                    found = true;
-                    break;
-                }
-                i += 1;
-            };
-            assert(found, errors::INVALID_OUTCOME);
+            assert(
+                self.markets.entry(market_id).valid_outcomes.entry(outcome_id).read(),
+                errors::INVALID_OUTCOME,
+            );
         }
     }
 }

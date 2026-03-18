@@ -244,4 +244,5 @@ pub trait ICore<TContractState> {
         ref self: TContractState,
         settlement: perpetuals::predictions::types::PredictionSettlement,
     );
+    fn claim(ref self: TContractState, client_id: felt252, market_id: felt252);
 }

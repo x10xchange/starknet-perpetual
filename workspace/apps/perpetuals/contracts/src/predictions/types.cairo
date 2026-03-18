@@ -17,6 +17,7 @@ pub struct Account {
 pub struct Market {
     pub oracle: felt252,
     pub outcomes: Vec<felt252>,
+    pub valid_outcomes: Map<felt252, bool>,
     pub winner: felt252,
     pub is_finalized: bool,
     pub pot: u256,
@@ -35,12 +36,12 @@ pub struct PredictionOrder {
     pub client_id: felt252,
     pub market_id: felt252,
     pub outcome: felt252,
-    // true = long (buy shares on this outcome), false = short (equivalent to buying all other
-    // outcomes).
-    pub is_long: bool,
-    // Signed: positive = buy, negative = sell.
+    // Positive = buy (yes/long), negative = sell (no/short).
+    // Selling means minting all other outcome shares.
     pub amount: i64,
-    // Limit price per share the user is willing to pay/accept.
+    // Limit price per share.
+    // For buyers: maximum price willing to pay.
+    // For sellers: minimum price willing to accept.
     pub price: u64,
     // Maximum fee the user is willing to pay.
     pub fee_amount: u64,
@@ -53,7 +54,6 @@ pub struct PredictionOrder {
 ///    \"client_id\":\"felt\",
 ///    \"market_id\":\"felt\",
 ///    \"outcome\":\"felt\",
-///    \"is_long\":\"bool\",
 ///    \"amount\":\"i64\",
 ///    \"price\":\"u64\",
 ///    \"fee_amount\":\"u64\",
@@ -66,7 +66,7 @@ pub struct PredictionOrder {
 /// );
 const PREDICTION_ORDER_TYPE_HASH: HashType =
     selector!(
-        "\"PredictionOrder\"(\"client_id\":\"felt\",\"market_id\":\"felt\",\"outcome\":\"felt\",\"is_long\":\"bool\",\"amount\":\"i64\",\"price\":\"u64\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+        "\"PredictionOrder\"(\"client_id\":\"felt\",\"market_id\":\"felt\",\"outcome\":\"felt\",\"amount\":\"i64\",\"price\":\"u64\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
     );
 
 impl PredictionOrderStructHashImpl of StructHash<PredictionOrder> {
@@ -84,6 +84,8 @@ pub struct PredictionSettlement {
     pub order_b: PredictionOrder,
     // Actual number of shares exchanged.
     pub actual_amount: u64,
+    // Actual price per share settled at.
+    pub actual_price: u64,
     // Actual fees charged to each party.
     pub actual_fee_a: u64,
     pub actual_fee_b: u64,

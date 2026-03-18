@@ -1232,6 +1232,13 @@ pub mod Core {
                 ._get_predictions_dispatcher()
                 .prediction_trade(:settlement);
         }
+
+        fn claim(ref self: ContractState, client_id: felt252, market_id: felt252) {
+            self
+                .external_components
+                ._get_predictions_dispatcher()
+                .claim(:client_id, :market_id);
+        }
     }
 
     #[generate_trait]

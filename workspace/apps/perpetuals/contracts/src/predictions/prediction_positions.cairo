@@ -1,6 +1,9 @@
 #[starknet::interface]
 pub trait IPredictionPositions<TContractState> {
     fn get_prediction_collateral(self: @TContractState, client_id: felt252) -> u64;
+    fn get_prediction_position(
+        self: @TContractState, client_id: felt252, market_id: felt252, outcome_id: felt252,
+    ) -> u64;
 }
 
 #[starknet::component]
@@ -27,6 +30,15 @@ pub mod PredictionPositionsComponent {
             self: @ComponentState<TContractState>, client_id: felt252,
         ) -> u64 {
             self.accounts.entry(client_id).collateral.read()
+        }
+
+        fn get_prediction_position(
+            self: @ComponentState<TContractState>,
+            client_id: felt252,
+            market_id: felt252,
+            outcome_id: felt252,
+        ) -> u64 {
+            self.accounts.entry(client_id).positions.entry(market_id).entry(outcome_id).read()
         }
     }
 
@@ -95,6 +107,28 @@ pub mod PredictionPositionsComponent {
             outcome_id: felt252,
         ) -> u64 {
             self.accounts.entry(client_id).positions.entry(market_id).entry(outcome_id).read()
+        }
+
+        fn add_shares(
+            ref self: ComponentState<TContractState>,
+            client_id: felt252,
+            market_id: felt252,
+            outcome_id: felt252,
+            amount: u64,
+        ) {
+            let pos = self.accounts.entry(client_id).positions.entry(market_id).entry(outcome_id);
+            pos.write(pos.read() + amount);
+        }
+
+        fn sub_shares(
+            ref self: ComponentState<TContractState>,
+            client_id: felt252,
+            market_id: felt252,
+            outcome_id: felt252,
+            amount: u64,
+        ) {
+            let pos = self.accounts.entry(client_id).positions.entry(market_id).entry(outcome_id);
+            pos.write(pos.read() - amount);
         }
     }
 }

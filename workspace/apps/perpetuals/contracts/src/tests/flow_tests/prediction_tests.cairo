@@ -1,3 +1,6 @@
+use perpetuals::predictions::prediction_positions::{
+    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
+};
 use perpetuals::predictions::types::PredictionOrder;
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
@@ -372,7 +375,6 @@ fn test_prediction_trade_skeleton() {
         client_id: client_a,
         market_id,
         outcome: 1,
-        is_long: true,
         amount: 10,
         price: 600, // willing to pay 600 per share
         fee_amount: 100,
@@ -383,7 +385,6 @@ fn test_prediction_trade_skeleton() {
         client_id: client_b,
         market_id,
         outcome: 1,
-        is_long: false,
         amount: -10,
         price: 600,
         fee_amount: 100,
@@ -391,16 +392,33 @@ fn test_prediction_trade_skeleton() {
         salt: 2,
     };
 
-    // Execute the trade (skeleton — only validates sigs and tracks fulfillment).
+    // Execute the trade.
     state
         .facade
         .prediction_trade(
             :order_a,
             :order_b,
             actual_amount: 10,
+            actual_price: 600,
             actual_fee_a: 50,
             actual_fee_b: 50,
             signing_key_pair_a: key_pair_a,
             signing_key_pair_b: key_pair_b,
         );
+
+    // Verify token balances.
+    // Buyer A: 10 shares of outcome 1, 0 of outcome 2.
+    let pos_a = IPredictionPositionsDispatcher {
+        contract_address: state.facade.perpetuals_contract,
+    };
+    assert_eq!(pos_a.get_prediction_position(client_id: client_a, :market_id, outcome_id: 1), 10);
+    assert_eq!(pos_a.get_prediction_position(client_id: client_a, :market_id, outcome_id: 2), 0);
+
+    // Seller B: 0 of outcome 1, 10 of outcome 2.
+    assert_eq!(pos_a.get_prediction_position(client_id: client_b, :market_id, outcome_id: 1), 0);
+    assert_eq!(pos_a.get_prediction_position(client_id: client_b, :market_id, outcome_id: 2), 10);
+
+    // Verify collateral: buyer paid 10*600 + 50 = 6050, seller paid 10*400 + 50 = 4050.
+    assert_eq!(pos_a.get_prediction_collateral(client_id: client_a), 50_000 - 6050);
+    assert_eq!(pos_a.get_prediction_collateral(client_id: client_b), 50_000 - 4050);
 }
