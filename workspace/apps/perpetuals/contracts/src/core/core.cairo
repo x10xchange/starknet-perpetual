@@ -691,6 +691,7 @@ pub mod Core {
             actual_collateral_user: i64,
             interest_amount_vault_position: i64,
             interest_amount_liquidated: i64,
+            other_collaterals: Span<SpotAssetBalanceDiff>,
         ) {
             self.pausable.assert_not_paused();
             self.assets.validate_assets_integrity();
@@ -707,6 +708,7 @@ pub mod Core {
                     :actual_collateral_user,
                     :interest_amount_vault_position,
                     :interest_amount_liquidated,
+                    :other_collaterals,
                 )
         }
         fn activate_vault(

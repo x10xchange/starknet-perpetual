@@ -2569,6 +2569,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :actual_collateral_user,
                 interest_amount_vault_position: 0,
                 interest_amount_liquidated: 0,
+                other_collaterals: array![].span(),
             )
     }
 
@@ -2582,6 +2583,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         actual_collateral_user: u64,
         interest_amount_vault_position: i64,
         interest_amount_liquidated: i64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
         let vault_collateral_before = dispatcher
@@ -2626,6 +2628,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 actual_collateral_user: actual_collateral_user.try_into().unwrap(),
                 :interest_amount_vault_position,
                 :interest_amount_liquidated,
+                :other_collaterals,
             );
 
         self

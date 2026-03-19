@@ -42,6 +42,7 @@ pub trait IVaultExternal<TContractState> {
         actual_collateral_user: i64,
         interest_amount_vault_position: i64,
         interest_amount_liquidated: i64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     );
     fn forced_redeem_from_vault(
         ref self: TContractState, order: LimitOrder, vault_approval: LimitOrder,
@@ -444,6 +445,7 @@ pub(crate) mod VaultsManager {
             actual_collateral_user: i64,
             interest_amount_vault_position: i64,
             interest_amount_liquidated: i64,
+            other_collaterals: Span<SpotAssetBalanceDiff>,
         ) {
             assert(
                 self.positions.is_liquidatable(liquidated_position_id), 'POSITION_NOT_LIQUIDATABLE',
@@ -475,7 +477,7 @@ pub(crate) mod VaultsManager {
                     interest_amount_vault_position: interest_amount_vault_position,
                     interest_amount_sender: interest_amount_liquidated,
                     interest_amount_receiver: 0,
-                    other_amounts: array![].span(),
+                    other_amounts: other_collaterals,
                 );
 
             self
