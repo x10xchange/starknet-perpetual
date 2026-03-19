@@ -3267,9 +3267,7 @@ fn test_liquidate_vault_shares_with_additional_spot_assets() {
         .get_position_asset_balance(vault_config.position_id, btc_asset_id);
 
     let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
-    assert(
-        liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc',
-    );
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
     assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
 }
 
@@ -3388,9 +3386,7 @@ fn test_liquidate_vault_shares_entirely_in_spot_assets() {
     let liquidated_usdc_before = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
-    let vault_usdc_before = state
-        .facade
-        .get_position_collateral_balance(vault_config.position_id);
+    let vault_usdc_before = state.facade.get_position_collateral_balance(vault_config.position_id);
     let liquidated_btc_before = state
         .facade
         .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
@@ -3425,9 +3421,7 @@ fn test_liquidate_vault_shares_entirely_in_spot_assets() {
     let liquidated_usdc_after = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
-    let vault_usdc_after = state
-        .facade
-        .get_position_collateral_balance(vault_config.position_id);
+    let vault_usdc_after = state.facade.get_position_collateral_balance(vault_config.position_id);
     assert(liquidated_usdc_after == liquidated_usdc_before, 'user usdc should not change');
     assert(vault_usdc_after == vault_usdc_before, 'vault usdc should not change');
 
@@ -3439,9 +3433,7 @@ fn test_liquidate_vault_shares_entirely_in_spot_assets() {
         .facade
         .get_position_asset_balance(vault_config.position_id, btc_asset_id);
     let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
-    assert(
-        liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc',
-    );
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
     assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
 }
 
@@ -3778,15 +3770,11 @@ fn test_liquidate_vault_shares_with_multiple_spot_assets() {
         .get_position_asset_balance(vault_config.position_id, eth_asset_id);
 
     let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
-    assert(
-        liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc',
-    );
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
     assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
 
     let eth_diff_balance: perpetuals::core::types::balance::Balance = eth_withdrawal_diff.into();
-    assert(
-        liquidated_eth_after == liquidated_eth_before + eth_diff_balance, 'user missing eth',
-    );
+    assert(liquidated_eth_after == liquidated_eth_before + eth_diff_balance, 'user missing eth');
     assert(vault_eth_after == vault_eth_before - eth_diff_balance, 'vault surplus eth');
 }
 
