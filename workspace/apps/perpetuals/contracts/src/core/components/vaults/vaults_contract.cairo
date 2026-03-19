@@ -457,7 +457,7 @@ pub(crate) mod VaultsManager {
                 base_asset_id: liquidated_asset_id,
                 base_amount: actual_shares_user,
                 quote_asset_id: self.assets.get_base_collateral_id(),
-                quote_amount: actual_collateral_user,
+                quote_amount: 1,
                 fee_asset_id: self.assets.get_base_collateral_id(),
                 fee_amount: 0_u64,
                 salt: Zero::zero(),
