@@ -97,7 +97,10 @@ pub(crate) mod VaultsManager {
     use crate::core::types::position::{MultiSpotPositionDiff, PositionDiff};
     use crate::core::types::price::PriceMulTrait;
     use crate::core::utils::{validate_signature, validate_trade};
-    use crate::core::value_risk_calculator::assert_healthy_or_healthier;
+    use crate::core::value_risk_calculator::{
+        assert_healthy_or_healthier, calculate_asset_value_and_risk,
+    };
+    use crate::core::types::asset::synthetic::AssetType;
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, Signature};
 
     #[event]
@@ -649,16 +652,29 @@ pub(crate) mod VaultsManager {
 
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
 
-            //calculate total value of redemption
-            let mut total_value_to_receive: i128 = actual_collateral_user.into();
+            //calculate total notional value of redemption (for validate_trade fairness check)
+            let mut total_notional_value: i128 = actual_collateral_user.into();
+            // Calculate risk-adjusted total value (for vault ERC4626 cap check)
+            // USDC has no haircut, so its risk-adjusted value equals its notional value.
+            let mut total_risk_adjusted_value: i128 = actual_collateral_user.into();
             for other_collateral in other_amounts {
                 assert(*other_collateral.diff >= 0_i64, 'NEGATIVE_OTHER_COLLATERAL');
                 let price = self.assets.get_asset_price(*other_collateral.asset_id);
                 let balance_diff: Balance = (*other_collateral.diff).into();
-                total_value_to_receive += price.mul(balance_diff);
+                total_notional_value += price.mul(balance_diff);
+
+                let risk_factor = self
+                    .assets
+                    .get_asset_risk_factor(
+                        asset_id: *other_collateral.asset_id, balance: balance_diff, :price,
+                    );
+                let (risk_adjusted_value, _) = calculate_asset_value_and_risk(
+                    asset_type: AssetType::SPOT_COLLATERAL, :price, balance: balance_diff, :risk_factor,
+                );
+                total_risk_adjusted_value += risk_adjusted_value;
             }
 
-            let value_to_receive: u64 = total_value_to_receive
+            let value_to_receive: u64 = total_notional_value
                 .abs()
                 .try_into()
                 .expect('REDEEM_VALUE_TOO_LARGE');
@@ -673,6 +689,13 @@ pub(crate) mod VaultsManager {
                 asset: Some(vault_asset),
                 collateral_id: self.assets.get_base_collateral_id(),
             );
+
+            // Risk-adjusted value is used for vault ERC4626 interactions (cap check, redeem).
+            // This accounts for spot asset haircuts so high-haircut assets don't block redemption.
+            let risk_adjusted_to_receive: u64 = total_risk_adjusted_value
+                .abs()
+                .try_into()
+                .expect('REDEEM_VALUE_TOO_LARGE');
 
             //approve the vault contract to transfer pnl collateral to itself to "send back" to
             //perps
@@ -694,10 +717,12 @@ pub(crate) mod VaultsManager {
 
             let max_value = ((value_of_shares_from_er4626 * 1100) / 1000);
 
-            if value_to_receive.into() > max_value {
+            // Use risk-adjusted value for cap check so high-haircut collaterals
+            // are properly discounted, matching the TV-based preview_redeem.
+            if risk_adjusted_to_receive.into() > max_value {
                 let err = format!(
                     "Redeem value too high. requested={}, actual={}, number_of_shares={}",
-                    value_to_receive,
+                    risk_adjusted_to_receive,
                     value_of_shares_from_er4626,
                     unquantized_amount_to_burn,
                 );
@@ -706,12 +731,14 @@ pub(crate) mod VaultsManager {
             let burn_result = vault_dispatcher
                 .redeem_with_price(
                     shares: unquantized_amount_to_burn.into(),
-                    value_of_shares: value_to_receive.into(),
+                    value_of_shares: risk_adjusted_to_receive.into(),
                 );
 
-            if (burn_result != value_to_receive.into()) {
+            if (burn_result != risk_adjusted_to_receive.into()) {
                 let err = format!(
-                    "UNFAIR_REDEEM: expected {:?}, got {:?}", value_to_receive, burn_result,
+                    "UNFAIR_REDEEM: expected {:?}, got {:?}",
+                    risk_adjusted_to_receive,
+                    burn_result,
                 );
                 panic_with_byte_array(err: @err);
             }
