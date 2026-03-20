@@ -11,7 +11,9 @@ pub mod PredictionPositionsComponent {
     use core::num::traits::Zero;
     use perpetuals::predictions::errors;
     use perpetuals::predictions::types::Account;
-    use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::storage::{
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
 
     #[storage]
     pub struct Storage {
@@ -47,9 +49,7 @@ pub mod PredictionPositionsComponent {
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of InternalTrait<TContractState> {
         fn create_account(
-            ref self: ComponentState<TContractState>,
-            client_id: felt252,
-            owning_key: felt252,
+            ref self: ComponentState<TContractState>, client_id: felt252, owning_key: felt252,
         ) {
             let account = self.accounts.entry(client_id);
             assert(account.owning_key.read().is_zero(), errors::ACCOUNT_ALREADY_EXISTS);
@@ -58,9 +58,7 @@ pub mod PredictionPositionsComponent {
         }
 
         fn deposit_collateral(
-            ref self: ComponentState<TContractState>,
-            client_id: felt252,
-            amount: u64,
+            ref self: ComponentState<TContractState>, client_id: felt252, amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
             assert(account.owning_key.read().is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
@@ -69,9 +67,7 @@ pub mod PredictionPositionsComponent {
         }
 
         fn withdraw_collateral(
-            ref self: ComponentState<TContractState>,
-            client_id: felt252,
-            amount: u64,
+            ref self: ComponentState<TContractState>, client_id: felt252, amount: u64,
         ) {
             let account = self.accounts.entry(client_id);
             assert(account.owning_key.read().is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
@@ -80,22 +76,16 @@ pub mod PredictionPositionsComponent {
             account.collateral.write(current_collateral - amount);
         }
 
-        fn get_collateral(
-            self: @ComponentState<TContractState>, client_id: felt252,
-        ) -> u64 {
+        fn get_collateral(self: @ComponentState<TContractState>, client_id: felt252) -> u64 {
             self.accounts.entry(client_id).collateral.read()
         }
 
-        fn get_owning_key(
-            self: @ComponentState<TContractState>, client_id: felt252,
-        ) -> felt252 {
+        fn get_owning_key(self: @ComponentState<TContractState>, client_id: felt252) -> felt252 {
             self.accounts.entry(client_id).owning_key.read()
         }
 
         fn set_owning_key(
-            ref self: ComponentState<TContractState>,
-            client_id: felt252,
-            owning_key: felt252,
+            ref self: ComponentState<TContractState>, client_id: felt252, owning_key: felt252,
         ) {
             self.accounts.entry(client_id).owning_key.write(owning_key);
         }

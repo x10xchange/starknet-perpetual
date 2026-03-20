@@ -1,7 +1,6 @@
 /// Price scale with 6 decimal places. A complete set of shares = PRICE_SCALE collateral units.
 /// Prices range from 0 to PRICE_SCALE (0.000000 to 1.000000).
 pub const PRICE_SCALE: u64 = 1_000_000;
-
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
@@ -68,10 +67,9 @@ pub struct PredictionOrder {
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const PREDICTION_ORDER_TYPE_HASH: HashType =
-    selector!(
-        "\"PredictionOrder\"(\"client_id\":\"felt\",\"market_id\":\"felt\",\"outcome\":\"felt\",\"amount\":\"i64\",\"price\":\"u64\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
-    );
+const PREDICTION_ORDER_TYPE_HASH: HashType = selector!(
+    "\"PredictionOrder\"(\"client_id\":\"felt\",\"market_id\":\"felt\",\"outcome\":\"felt\",\"amount\":\"i64\",\"price\":\"u64\",\"fee_amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+);
 
 impl PredictionOrderStructHashImpl of StructHash<PredictionOrder> {
     fn hash_struct(self: @PredictionOrder) -> HashType {
@@ -116,10 +114,9 @@ pub struct PredictionDepositArgs {
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const DEPOSIT_ARGS_TYPE_HASH: HashType =
-    selector!(
-        "\"PredictionDepositArgs\"(\"client_id\":\"felt\",\"from_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
-    );
+const DEPOSIT_ARGS_TYPE_HASH: HashType = selector!(
+    "\"PredictionDepositArgs\"(\"client_id\":\"felt\",\"from_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+);
 
 impl PredictionDepositArgsStructHashImpl of StructHash<PredictionDepositArgs> {
     fn hash_struct(self: @PredictionDepositArgs) -> HashType {
@@ -149,10 +146,9 @@ pub struct PredictionWithdrawArgs {
 ///    \"seconds\":\"u64\"
 ///    )
 /// );
-const WITHDRAW_ARGS_TYPE_HASH: HashType =
-    selector!(
-        "\"PredictionWithdrawArgs\"(\"client_id\":\"felt\",\"to_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
-    );
+const WITHDRAW_ARGS_TYPE_HASH: HashType = selector!(
+    "\"PredictionWithdrawArgs\"(\"client_id\":\"felt\",\"to_position_id\":\"felt\",\"amount\":\"u64\",\"expiration\":\"Timestamp\",\"salt\":\"felt\")\"Timestamp\"(\"seconds\":\"u64\")",
+);
 
 impl PredictionWithdrawArgsStructHashImpl of StructHash<PredictionWithdrawArgs> {
     fn hash_struct(self: @PredictionWithdrawArgs) -> HashType {

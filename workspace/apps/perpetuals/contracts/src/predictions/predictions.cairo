@@ -25,30 +25,30 @@ pub trait IPredictions<TContractState> {
         salt: felt252,
     );
     fn create_prediction_market(
-        ref self: TContractState,
-        market_id: felt252,
-        oracle: felt252,
-        outcomes: Span<felt252>,
+        ref self: TContractState, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
     );
-    fn finalize_prediction_market(ref self: TContractState, signed_outcome: SignedPredictionOutcome);
+    fn finalize_prediction_market(
+        ref self: TContractState, signed_outcome: SignedPredictionOutcome,
+    );
     fn prediction_trade(ref self: TContractState, settlement: PredictionSettlement);
     fn claim(ref self: TContractState, client_id: felt252, market_id: felt252);
 }
 
 #[starknet::contract]
 pub mod Predictions {
+    use core::num::traits::Zero;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
-    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement;
     use perpetuals::core::components::fulfillment::interface::IFulfillment;
+    use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
-    use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::positions::Positions::{
+        FEE_POSITION, InternalTrait as PositionsInternal,
+    };
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
-    use perpetuals::predictions::PredictionMarketsComponent;
-    use perpetuals::predictions::PredictionPositionsComponent;
     use perpetuals::predictions::prediction_markets::PredictionMarketsComponent::InternalTrait as PredictionMarketsInternal;
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
@@ -56,19 +56,17 @@ pub mod Predictions {
         PRICE_SCALE, PredictionDepositArgs, PredictionOrder, PredictionSettlement,
         PredictionWithdrawArgs, SignedPredictionOutcome,
     };
+    use perpetuals::predictions::{PredictionMarketsComponent, PredictionPositionsComponent, errors};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::signature::stark::{Signature, validate_stark_signature};
     use starkware_utils::hash::message_hash::OffchainMessageHash;
+    use starkware_utils::math::abs::Abs;
+    use starkware_utils::signature::stark::{Signature, validate_stark_signature};
     use starkware_utils::time::time::{Time, Timestamp};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_PREDICTIONS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
-    use core::num::traits::Zero;
-    use perpetuals::core::components::positions::Positions::FEE_POSITION;
-    use starkware_utils::math::abs::Abs;
-    use perpetuals::predictions::errors;
 
     impl SnipImpl = SNIP12MetadataImpl;
 
@@ -182,7 +180,10 @@ pub mod Predictions {
                 .positions
                 .get_position_snapshot(position_id: from_position_id)
                 .get_owner_public_key();
-            let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: deposit_args);
+            let hash = self
+                ._validate_prediction_signature(
+                    :signature, :public_key, :expiration, message: deposit_args,
+                );
 
             let amount_i64: i64 = quantized_amount.try_into().unwrap();
             let prediction_position_id = PositionId { value: client_id.try_into().unwrap() };
@@ -230,7 +231,10 @@ pub mod Predictions {
             };
             let public_key = self.prediction_positions.get_owning_key(:client_id);
             assert(public_key.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
-            let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: withdraw_args);
+            let hash = self
+                ._validate_prediction_signature(
+                    :signature, :public_key, :expiration, message: withdraw_args,
+                );
 
             let amount_i64: i64 = quantized_amount.try_into().unwrap();
             let prediction_position_id = PositionId { value: client_id.try_into().unwrap() };
@@ -254,10 +258,7 @@ pub mod Predictions {
         }
 
         fn create_prediction_market(
-            ref self: ContractState,
-            market_id: felt252,
-            oracle: felt252,
-            outcomes: Span<felt252>,
+            ref self: ContractState, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
         ) {
             self.prediction_markets.create_prediction_market(:market_id, :oracle, :outcomes);
         }
@@ -331,7 +332,9 @@ pub mod Predictions {
             self._settle_net_cost(buyer_id, market_id, net: buyer_burn_refund - buyer_gross);
 
             let seller_burn_refund: i64 = (burned_seller * PRICE_SCALE).try_into().unwrap();
-            let seller_gross: i64 = (actual_amount * (PRICE_SCALE - actual_price)).try_into().unwrap();
+            let seller_gross: i64 = (actual_amount * (PRICE_SCALE - actual_price))
+                .try_into()
+                .unwrap();
             self._settle_net_cost(seller_id, market_id, net: seller_burn_refund - seller_gross);
 
             // Collect fees from both users and credit to FEE_POSITION.
@@ -394,9 +397,9 @@ pub mod Predictions {
             );
 
             // Valid outcome.
-            self.prediction_markets.assert_valid_outcome(
-                market_id: order_a.market_id, outcome_id: order_a.outcome,
-            );
+            self
+                .prediction_markets
+                .assert_valid_outcome(market_id: order_a.market_id, outcome_id: order_a.outcome);
 
             // Non-zero actual amount.
             assert(actual_amount.is_non_zero(), errors::INVALID_ZERO_AMOUNT);
@@ -428,23 +431,25 @@ pub mod Predictions {
                 .prediction_positions
                 .get_owning_key(client_id: order_a.client_id);
             assert(public_key_a.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
-            let hash_a = self._validate_prediction_signature(
-                signature: *settlement.signature_a,
-                public_key: public_key_a,
-                expiration: order_a.expiration,
-                message: order_a,
-            );
+            let hash_a = self
+                ._validate_prediction_signature(
+                    signature: *settlement.signature_a,
+                    public_key: public_key_a,
+                    expiration: order_a.expiration,
+                    message: order_a,
+                );
 
             let public_key_b = self
                 .prediction_positions
                 .get_owning_key(client_id: order_b.client_id);
             assert(public_key_b.is_non_zero(), errors::ACCOUNT_DOES_NOT_EXIST);
-            let hash_b = self._validate_prediction_signature(
-                signature: *settlement.signature_b,
-                public_key: public_key_b,
-                expiration: order_b.expiration,
-                message: order_b,
-            );
+            let hash_b = self
+                ._validate_prediction_signature(
+                    signature: *settlement.signature_b,
+                    public_key: public_key_b,
+                    expiration: order_b.expiration,
+                    message: order_b,
+                );
 
             (hash_a, hash_b)
         }
@@ -453,10 +458,7 @@ pub mod Predictions {
         /// Positive net = user gains collateral from pot.
         /// Negative net = user pays collateral into pot.
         fn _settle_net_cost(
-            ref self: ContractState,
-            client_id: felt252,
-            market_id: felt252,
-            net: i64,
+            ref self: ContractState, client_id: felt252, market_id: felt252, net: i64,
         ) {
             if net > 0 {
                 let gain: u64 = net.try_into().unwrap();
@@ -536,7 +538,7 @@ pub mod Predictions {
                     min_shares = shares;
                 }
                 i += 1;
-            };
+            }
 
             // Burn min_shares from each outcome.
             let mut j: u64 = 0;
@@ -544,7 +546,7 @@ pub mod Predictions {
                 let oc = self.prediction_markets.get_outcome_at(market_id, j);
                 self.prediction_positions.sub_shares(client_id, market_id, oc, min_shares);
                 j += 1;
-            };
+            }
 
             min_shares
         }

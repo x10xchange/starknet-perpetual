@@ -16,17 +16,13 @@ fn test_prediction_deposit_and_withdraw() {
     // Deposit collateral to perps position.
     let deposit_info = state
         .facade
-        .deposit(
-            depositor: user.account, position_id: user.position_id, quantized_amount: 100_000,
-        );
+        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 100_000);
     state.facade.process_deposit(deposit_info: deposit_info);
 
     // Create prediction account with a real key pair.
     let client_id: felt252 = 1;
     let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
-    state
-        .facade
-        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
+    state.facade.create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
     state.facade.validate_prediction_collateral(:client_id, expected_collateral: 0);
 
     // Deposit from perps position to prediction account (signed by position owner).
@@ -75,17 +71,13 @@ fn test_prediction_deposit_full_and_withdraw_full() {
     let amount: u64 = 100_000;
     let deposit_info = state
         .facade
-        .deposit(
-            depositor: user.account, position_id: user.position_id, quantized_amount: amount,
-        );
+        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: amount);
     state.facade.process_deposit(deposit_info: deposit_info);
 
     // Create prediction account and deposit full amount.
     let client_id: felt252 = 1;
     let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
-    state
-        .facade
-        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
+    state.facade.create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
     state
         .facade
         .deposit_to_prediction_account(
@@ -127,16 +119,12 @@ fn test_prediction_withdraw_insufficient_collateral() {
 
     let deposit_info = state
         .facade
-        .deposit(
-            depositor: user.account, position_id: user.position_id, quantized_amount: 100_000,
-        );
+        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 100_000);
     state.facade.process_deposit(deposit_info: deposit_info);
 
     let client_id: felt252 = 1;
     let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
-    state
-        .facade
-        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
+    state.facade.create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
 
     // Deposit 10,000.
     state
@@ -167,15 +155,11 @@ fn test_prediction_create_duplicate_account() {
 
     let client_id: felt252 = 1;
     let owning_key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
-    state
-        .facade
-        .create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
+    state.facade.create_prediction_account(:client_id, owning_key: owning_key_pair.public_key);
 
     // Create again with same client_id — should panic.
     let other_key_pair = StarkCurveKeyPairImpl::from_secret_key(99);
-    state
-        .facade
-        .create_prediction_account(:client_id, owning_key: other_key_pair.public_key);
+    state.facade.create_prediction_account(:client_id, owning_key: other_key_pair.public_key);
 }
 
 #[test]
@@ -194,9 +178,7 @@ fn test_prediction_deposit_nonexistent_account() {
 
     let deposit_info = state
         .facade
-        .deposit(
-            depositor: user.account, position_id: user.position_id, quantized_amount: 100_000,
-        );
+        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 100_000);
     state.facade.process_deposit(deposit_info: deposit_info);
 
     // Deposit to non-existent prediction account — should panic.
@@ -238,10 +220,10 @@ fn test_create_and_finalize_market() {
 
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
-    state
-        .facade
-        .finalize_prediction_market(:market_id, outcome: 2, :oracle_key_pair);
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
+    state.facade.finalize_prediction_market(:market_id, outcome: 2, :oracle_key_pair);
 }
 
 #[test]
@@ -255,10 +237,14 @@ fn test_create_duplicate_market() {
 
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
 }
 
 #[test]
@@ -281,7 +267,9 @@ fn test_finalize_market_twice() {
 
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
     state.facade.finalize_prediction_market(:market_id, outcome: 1, :oracle_key_pair);
     state.facade.finalize_prediction_market(:market_id, outcome: 2, :oracle_key_pair);
 }
@@ -297,7 +285,9 @@ fn test_finalize_market_invalid_winner() {
 
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
     state.facade.finalize_prediction_market(:market_id, outcome: 99, :oracle_key_pair);
 }
 
@@ -313,9 +303,13 @@ fn test_finalize_market_wrong_oracle_key() {
 
     state
         .facade
-        .create_prediction_market(:market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span());
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: outcomes.span(),
+        );
     // Sign with wrong key — should panic.
-    state.facade.finalize_prediction_market(:market_id, outcome: 1, oracle_key_pair: wrong_key_pair);
+    state
+        .facade
+        .finalize_prediction_market(:market_id, outcome: 1, oracle_key_pair: wrong_key_pair);
 }
 
 #[test]
@@ -327,11 +321,19 @@ fn test_prediction_trade_skeleton() {
     // Fund perps positions.
     let deposit_a = state
         .facade
-        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: 100_000_000);
+        .deposit(
+            depositor: user_a.account,
+            position_id: user_a.position_id,
+            quantized_amount: 100_000_000,
+        );
     state.facade.process_deposit(deposit_info: deposit_a);
     let deposit_b = state
         .facade
-        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: 100_000_000);
+        .deposit(
+            depositor: user_b.account,
+            position_id: user_b.position_id,
+            quantized_amount: 100_000_000,
+        );
     state.facade.process_deposit(deposit_info: deposit_b);
 
     // Create prediction accounts.
@@ -409,9 +411,7 @@ fn test_prediction_trade_skeleton() {
 
     // Verify token balances.
     // Buyer A: 10 shares of outcome 1, 0 of outcome 2.
-    let pos = IPredictionPositionsDispatcher {
-        contract_address: state.facade.perpetuals_contract,
-    };
+    let pos = IPredictionPositionsDispatcher { contract_address: state.facade.perpetuals_contract };
     assert_eq!(pos.get_prediction_position(client_id: client_a, :market_id, outcome_id: 1), 10);
     assert_eq!(pos.get_prediction_position(client_id: client_a, :market_id, outcome_id: 2), 0);
 
@@ -438,11 +438,19 @@ fn test_binary_market_trade_and_claim() {
     // Fund and create prediction accounts.
     let deposit_a = state
         .facade
-        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: collateral * 2);
+        .deposit(
+            depositor: user_a.account,
+            position_id: user_a.position_id,
+            quantized_amount: collateral * 2,
+        );
     state.facade.process_deposit(deposit_info: deposit_a);
     let deposit_b = state
         .facade
-        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: collateral * 2);
+        .deposit(
+            depositor: user_b.account,
+            position_id: user_b.position_id,
+            quantized_amount: collateral * 2,
+        );
     state.facade.process_deposit(deposit_info: deposit_b);
 
     let client_a: felt252 = 1;
@@ -454,14 +462,18 @@ fn test_binary_market_trade_and_claim() {
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user_a.position_id, client_id: client_a,
-            quantized_amount: collateral, signing_key_pair: user_a.account.key_pair,
+            from_position_id: user_a.position_id,
+            client_id: client_a,
+            quantized_amount: collateral,
+            signing_key_pair: user_a.account.key_pair,
         );
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user_b.position_id, client_id: client_b,
-            quantized_amount: collateral, signing_key_pair: user_b.account.key_pair,
+            from_position_id: user_b.position_id,
+            client_id: client_b,
+            quantized_amount: collateral,
+            signing_key_pair: user_b.account.key_pair,
         );
 
     // Binary market: outcomes YES=1, NO=2.
@@ -473,28 +485,43 @@ fn test_binary_market_trade_and_claim() {
             :market_id, oracle: oracle_key_pair.public_key, outcomes: array![1, 2].span(),
         );
 
-    let pos = IPredictionPositionsDispatcher {
-        contract_address: state.facade.perpetuals_contract,
-    };
+    let pos = IPredictionPositionsDispatcher { contract_address: state.facade.perpetuals_contract };
 
     // Trade: A buys 10 YES at price 600_000 (0.6), B sells 10 YES.
     let expiration = Time::now().add(delta: Time::days(1));
     let price: u64 = 600_000; // 0.6
     let amount: u64 = 10;
     let order_a = PredictionOrder {
-        client_id: client_a, market_id, outcome: 1, amount: 10, price, fee_amount: 0,
-        expiration, salt: 1,
+        client_id: client_a,
+        market_id,
+        outcome: 1,
+        amount: 10,
+        price,
+        fee_amount: 0,
+        expiration,
+        salt: 1,
     };
     let order_b = PredictionOrder {
-        client_id: client_b, market_id, outcome: 1, amount: -10, price, fee_amount: 0,
-        expiration, salt: 2,
+        client_id: client_b,
+        market_id,
+        outcome: 1,
+        amount: -10,
+        price,
+        fee_amount: 0,
+        expiration,
+        salt: 2,
     };
     state
         .facade
         .prediction_trade(
-            :order_a, :order_b, actual_amount: amount, actual_price: price,
-            actual_fee_a: 0, actual_fee_b: 0,
-            signing_key_pair_a: key_pair_a, signing_key_pair_b: key_pair_b,
+            :order_a,
+            :order_b,
+            actual_amount: amount,
+            actual_price: price,
+            actual_fee_a: 0,
+            actual_fee_b: 0,
+            signing_key_pair_a: key_pair_a,
+            signing_key_pair_b: key_pair_b,
         );
 
     // A has 10 YES, B has 10 NO.
@@ -543,11 +570,19 @@ fn test_quad_market_trade_and_claim() {
     // Fund and create prediction accounts.
     let deposit_a = state
         .facade
-        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: collateral * 2);
+        .deposit(
+            depositor: user_a.account,
+            position_id: user_a.position_id,
+            quantized_amount: collateral * 2,
+        );
     state.facade.process_deposit(deposit_info: deposit_a);
     let deposit_b = state
         .facade
-        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: collateral * 2);
+        .deposit(
+            depositor: user_b.account,
+            position_id: user_b.position_id,
+            quantized_amount: collateral * 2,
+        );
     state.facade.process_deposit(deposit_info: deposit_b);
 
     let client_a: felt252 = 1;
@@ -559,14 +594,18 @@ fn test_quad_market_trade_and_claim() {
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user_a.position_id, client_id: client_a,
-            quantized_amount: collateral, signing_key_pair: user_a.account.key_pair,
+            from_position_id: user_a.position_id,
+            client_id: client_a,
+            quantized_amount: collateral,
+            signing_key_pair: user_a.account.key_pair,
         );
     state
         .facade
         .deposit_to_prediction_account(
-            from_position_id: user_b.position_id, client_id: client_b,
-            quantized_amount: collateral, signing_key_pair: user_b.account.key_pair,
+            from_position_id: user_b.position_id,
+            client_id: client_b,
+            quantized_amount: collateral,
+            signing_key_pair: user_b.account.key_pair,
         );
 
     // 4-outcome market: outcomes 1, 2, 3, 4.
@@ -578,28 +617,43 @@ fn test_quad_market_trade_and_claim() {
             :market_id, oracle: oracle_key_pair.public_key, outcomes: array![1, 2, 3, 4].span(),
         );
 
-    let pos = IPredictionPositionsDispatcher {
-        contract_address: state.facade.perpetuals_contract,
-    };
+    let pos = IPredictionPositionsDispatcher { contract_address: state.facade.perpetuals_contract };
     let expiration = Time::now().add(delta: Time::days(1));
 
     // Trade 1: A buys 5 shares of outcome 1 at price 250_000 (0.25).
     // B sells (shorts) outcome 1 → gets 5 shares each of outcomes 2, 3, 4.
     let price_1: u64 = 250_000;
     let order_a1 = PredictionOrder {
-        client_id: client_a, market_id, outcome: 1, amount: 5, price: price_1, fee_amount: 0,
-        expiration, salt: 10,
+        client_id: client_a,
+        market_id,
+        outcome: 1,
+        amount: 5,
+        price: price_1,
+        fee_amount: 0,
+        expiration,
+        salt: 10,
     };
     let order_b1 = PredictionOrder {
-        client_id: client_b, market_id, outcome: 1, amount: -5, price: price_1, fee_amount: 0,
-        expiration, salt: 11,
+        client_id: client_b,
+        market_id,
+        outcome: 1,
+        amount: -5,
+        price: price_1,
+        fee_amount: 0,
+        expiration,
+        salt: 11,
     };
     state
         .facade
         .prediction_trade(
-            order_a: order_a1, order_b: order_b1, actual_amount: 5, actual_price: price_1,
-            actual_fee_a: 0, actual_fee_b: 0,
-            signing_key_pair_a: key_pair_a, signing_key_pair_b: key_pair_b,
+            order_a: order_a1,
+            order_b: order_b1,
+            actual_amount: 5,
+            actual_price: price_1,
+            actual_fee_a: 0,
+            actual_fee_b: 0,
+            signing_key_pair_a: key_pair_a,
+            signing_key_pair_b: key_pair_b,
         );
 
     // After trade 1:
@@ -617,19 +671,36 @@ fn test_quad_market_trade_and_claim() {
     // B sells outcome 2 → gets 5 more of outcomes 1, 3, 4.
     // B will then have [5, 5, 10, 10] → min = 5, burn 5 complete sets.
     let order_a2 = PredictionOrder {
-        client_id: client_a, market_id, outcome: 2, amount: 5, price: price_1, fee_amount: 0,
-        expiration, salt: 20,
+        client_id: client_a,
+        market_id,
+        outcome: 2,
+        amount: 5,
+        price: price_1,
+        fee_amount: 0,
+        expiration,
+        salt: 20,
     };
     let order_b2 = PredictionOrder {
-        client_id: client_b, market_id, outcome: 2, amount: -5, price: price_1, fee_amount: 0,
-        expiration, salt: 21,
+        client_id: client_b,
+        market_id,
+        outcome: 2,
+        amount: -5,
+        price: price_1,
+        fee_amount: 0,
+        expiration,
+        salt: 21,
     };
     state
         .facade
         .prediction_trade(
-            order_a: order_a2, order_b: order_b2, actual_amount: 5, actual_price: price_1,
-            actual_fee_a: 0, actual_fee_b: 0,
-            signing_key_pair_a: key_pair_a, signing_key_pair_b: key_pair_b,
+            order_a: order_a2,
+            order_b: order_b2,
+            actual_amount: 5,
+            actual_price: price_1,
+            actual_fee_a: 0,
+            actual_fee_b: 0,
+            signing_key_pair_a: key_pair_a,
+            signing_key_pair_b: key_pair_b,
         );
 
     // After trade 2 (before burn):

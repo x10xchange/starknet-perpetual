@@ -18,9 +18,6 @@ pub mod Core {
     use perpetuals::core::components::positions::Positions::{
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
-    use perpetuals::predictions::PredictionMarketsComponent;
-    use perpetuals::predictions::PredictionPositionsComponent;
-    use perpetuals::predictions::types::{PredictionSettlement, SignedPredictionOutcome};
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
@@ -36,6 +33,9 @@ pub mod Core {
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use perpetuals::predictions::predictions::IPredictionsDispatcherTrait;
+    use perpetuals::predictions::types::{PredictionSettlement, SignedPredictionOutcome};
+    use perpetuals::predictions::{PredictionMarketsComponent, PredictionPositionsComponent};
     use starknet::event::EventEmitter;
     use starknet::storage::{
         StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
@@ -72,7 +72,6 @@ pub mod Core {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
-    use perpetuals::predictions::predictions::IPredictionsDispatcherTrait;
     use crate::core::utils::{validate_signature, validate_trade};
 
 
@@ -1179,7 +1178,12 @@ pub mod Core {
                 .external_components
                 ._get_predictions_dispatcher()
                 .deposit_to_prediction_account(
-                    :signature, :from_position_id, :client_id, :quantized_amount, :expiration, :salt,
+                    :signature,
+                    :from_position_id,
+                    :client_id,
+                    :quantized_amount,
+                    :expiration,
+                    :salt,
                 );
         }
 
@@ -1204,10 +1208,7 @@ pub mod Core {
         }
 
         fn create_prediction_market(
-            ref self: ContractState,
-            market_id: felt252,
-            oracle: felt252,
-            outcomes: Span<felt252>,
+            ref self: ContractState, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
         ) {
             self
                 .external_components
@@ -1224,20 +1225,12 @@ pub mod Core {
                 .finalize_prediction_market(:signed_outcome);
         }
 
-        fn prediction_trade(
-            ref self: ContractState, settlement: PredictionSettlement,
-        ) {
-            self
-                .external_components
-                ._get_predictions_dispatcher()
-                .prediction_trade(:settlement);
+        fn prediction_trade(ref self: ContractState, settlement: PredictionSettlement) {
+            self.external_components._get_predictions_dispatcher().prediction_trade(:settlement);
         }
 
         fn claim(ref self: ContractState, client_id: felt252, market_id: felt252) {
-            self
-                .external_components
-                ._get_predictions_dispatcher()
-                .claim(:client_id, :market_id);
+            self.external_components._get_predictions_dispatcher().claim(:client_id, :market_id);
         }
     }
 

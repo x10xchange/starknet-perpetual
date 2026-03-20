@@ -31,13 +31,6 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
-use perpetuals::predictions::prediction_positions::{
-    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
-};
-use perpetuals::predictions::types::{
-    PredictionDepositArgs, PredictionOrder, PredictionSettlement, PredictionWithdrawArgs,
-    SignedPredictionOutcome,
-};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -50,6 +43,13 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::vault::ConvertPositionToVault;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
+use perpetuals::predictions::prediction_positions::{
+    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
+};
+use perpetuals::predictions::types::{
+    PredictionDepositArgs, PredictionOrder, PredictionSettlement, PredictionWithdrawArgs,
+    SignedPredictionOutcome,
+};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
     assert_add_spot_event_with_expected, assert_add_synthetic_event_with_expected,
@@ -2975,10 +2975,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn create_prediction_market(
-        ref self: PerpsTestsFacade,
-        market_id: felt252,
-        oracle: felt252,
-        outcomes: Span<felt252>,
+        ref self: PerpsTestsFacade, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
     ) {
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
@@ -3027,14 +3024,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     ) {
         let timestamp: u32 = Time::now().seconds.try_into().unwrap();
         let msg_hash = core::pedersen::pedersen(
-            core::pedersen::pedersen(market_id, outcome),
-            timestamp.into(),
+            core::pedersen::pedersen(market_id, outcome), timestamp.into(),
         );
         let (r, s) = oracle_key_pair.sign(msg_hash).unwrap();
         let signature = array![r, s].span();
-        let signed_outcome = SignedPredictionOutcome {
-            signature, timestamp, market_id, outcome,
-        };
+        let signed_outcome = SignedPredictionOutcome { signature, timestamp, market_id, outcome };
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .finalize_prediction_market(:signed_outcome);
@@ -3042,7 +3036,8 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
     fn claim(ref self: PerpsTestsFacade, client_id: felt252, market_id: felt252) {
         self.operator.set_as_caller(self.perpetuals_contract);
-        ICoreDispatcher { contract_address: self.perpetuals_contract }.claim(:client_id, :market_id);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .claim(:client_id, :market_id);
     }
 }
 
