@@ -327,11 +327,11 @@ fn test_prediction_trade_skeleton() {
     // Fund perps positions.
     let deposit_a = state
         .facade
-        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: 100_000);
+        .deposit(depositor: user_a.account, position_id: user_a.position_id, quantized_amount: 100_000_000);
     state.facade.process_deposit(deposit_info: deposit_a);
     let deposit_b = state
         .facade
-        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: 100_000);
+        .deposit(depositor: user_b.account, position_id: user_b.position_id, quantized_amount: 100_000_000);
     state.facade.process_deposit(deposit_info: deposit_b);
 
     // Create prediction accounts.
@@ -348,7 +348,7 @@ fn test_prediction_trade_skeleton() {
         .deposit_to_prediction_account(
             from_position_id: user_a.position_id,
             client_id: client_a,
-            quantized_amount: 50_000,
+            quantized_amount: 50_000_000,
             signing_key_pair: user_a.account.key_pair,
         );
     state
@@ -356,7 +356,7 @@ fn test_prediction_trade_skeleton() {
         .deposit_to_prediction_account(
             from_position_id: user_b.position_id,
             client_id: client_b,
-            quantized_amount: 50_000,
+            quantized_amount: 50_000_000,
             signing_key_pair: user_b.account.key_pair,
         );
 
@@ -370,13 +370,14 @@ fn test_prediction_trade_skeleton() {
         );
 
     // Build orders: A buys 10 shares of outcome 1, B sells 10 shares of outcome 1.
+    // Price 600_000 = 0.6 (60% probability) with PRICE_SCALE = 1_000_000.
     let expiration = Time::now().add(delta: Time::days(1));
     let order_a = PredictionOrder {
         client_id: client_a,
         market_id,
         outcome: 1,
         amount: 10,
-        price: 600, // willing to pay 600 per share
+        price: 600_000,
         fee_amount: 100,
         expiration,
         salt: 1,
@@ -386,7 +387,7 @@ fn test_prediction_trade_skeleton() {
         market_id,
         outcome: 1,
         amount: -10,
-        price: 600,
+        price: 600_000,
         fee_amount: 100,
         expiration,
         salt: 2,
@@ -399,7 +400,7 @@ fn test_prediction_trade_skeleton() {
             :order_a,
             :order_b,
             actual_amount: 10,
-            actual_price: 600,
+            actual_price: 600_000,
             actual_fee_a: 50,
             actual_fee_b: 50,
             signing_key_pair_a: key_pair_a,
@@ -408,17 +409,17 @@ fn test_prediction_trade_skeleton() {
 
     // Verify token balances.
     // Buyer A: 10 shares of outcome 1, 0 of outcome 2.
-    let pos_a = IPredictionPositionsDispatcher {
+    let pos = IPredictionPositionsDispatcher {
         contract_address: state.facade.perpetuals_contract,
     };
-    assert_eq!(pos_a.get_prediction_position(client_id: client_a, :market_id, outcome_id: 1), 10);
-    assert_eq!(pos_a.get_prediction_position(client_id: client_a, :market_id, outcome_id: 2), 0);
+    assert_eq!(pos.get_prediction_position(client_id: client_a, :market_id, outcome_id: 1), 10);
+    assert_eq!(pos.get_prediction_position(client_id: client_a, :market_id, outcome_id: 2), 0);
 
     // Seller B: 0 of outcome 1, 10 of outcome 2.
-    assert_eq!(pos_a.get_prediction_position(client_id: client_b, :market_id, outcome_id: 1), 0);
-    assert_eq!(pos_a.get_prediction_position(client_id: client_b, :market_id, outcome_id: 2), 10);
+    assert_eq!(pos.get_prediction_position(client_id: client_b, :market_id, outcome_id: 1), 0);
+    assert_eq!(pos.get_prediction_position(client_id: client_b, :market_id, outcome_id: 2), 10);
 
-    // Verify collateral: buyer paid 10*600 + 50 = 6050, seller paid 10*400 + 50 = 4050.
-    assert_eq!(pos_a.get_prediction_collateral(client_id: client_a), 50_000 - 6050);
-    assert_eq!(pos_a.get_prediction_collateral(client_id: client_b), 50_000 - 4050);
+    // Verify collateral: buyer paid 10*600_000 + 50, seller paid 10*400_000 + 50.
+    assert_eq!(pos.get_prediction_collateral(client_id: client_a), 50_000_000 - 6_000_050);
+    assert_eq!(pos.get_prediction_collateral(client_id: client_b), 50_000_000 - 4_000_050);
 }

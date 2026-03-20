@@ -53,8 +53,8 @@ pub mod Predictions {
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
     use perpetuals::predictions::types::{
-        PredictionDepositArgs, PredictionOrder, PredictionSettlement, PredictionWithdrawArgs,
-        SignedPredictionOutcome,
+        PRICE_SCALE, PredictionDepositArgs, PredictionOrder, PredictionSettlement,
+        PredictionWithdrawArgs, SignedPredictionOutcome,
     };
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -66,6 +66,8 @@ pub mod Predictions {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use core::num::traits::Zero;
+    use perpetuals::core::components::positions::Positions::FEE_POSITION;
+    use starkware_utils::math::abs::Abs;
     use perpetuals::predictions::errors;
 
     impl SnipImpl = SNIP12MetadataImpl;
@@ -310,12 +312,6 @@ pub mod Predictions {
                 (order_b.client_id, order_a.client_id)
             };
 
-            let (buyer_fee, seller_fee) = if order_a.amount > 0 {
-                (settlement.actual_fee_a, settlement.actual_fee_b)
-            } else {
-                (settlement.actual_fee_b, settlement.actual_fee_a)
-            };
-
             // Mint shares: buyer gets outcome shares, seller gets all other outcome shares.
             self.prediction_positions.add_shares(buyer_id, market_id, outcome, actual_amount);
 
@@ -329,24 +325,22 @@ pub mod Predictions {
                 i += 1;
             };
 
-            // Buyer pays: actual_amount * actual_price + fee.
-            let buyer_cost: u64 = actual_amount * actual_price + buyer_fee;
-            self.prediction_positions.withdraw_collateral(client_id: buyer_id, amount: buyer_cost);
-
-            // Seller pays: actual_amount * (PRICE_SCALE - actual_price) + fee.
-            // TODO: define PRICE_SCALE constant.
-            let seller_cost: u64 = actual_amount * (1000 - actual_price) + seller_fee;
-            self
-                .prediction_positions
-                .withdraw_collateral(client_id: seller_id, amount: seller_cost);
-
-            // Add to pot (excluding fees).
-            let pot_amount: u256 = (actual_amount * 1000).into();
-            self.prediction_markets.add_to_pot(market_id, amount: pot_amount);
-
             // Burn complete sets for both users.
-            self._burn_complete_sets(buyer_id, market_id);
-            self._burn_complete_sets(seller_id, market_id);
+            let burned_buyer = self._burn_complete_sets(buyer_id, market_id);
+            let burned_seller = self._burn_complete_sets(seller_id, market_id);
+
+            // Net collateral: burn refund - gross cost.
+            // Positive = user gains, negative = user pays.
+            let buyer_burn_refund: i64 = (burned_buyer * PRICE_SCALE).try_into().unwrap();
+            let buyer_gross: i64 = (actual_amount * actual_price).try_into().unwrap();
+            self._settle_net_cost(buyer_id, market_id, net: buyer_burn_refund - buyer_gross);
+
+            let seller_burn_refund: i64 = (burned_seller * PRICE_SCALE).try_into().unwrap();
+            let seller_gross: i64 = (actual_amount * (PRICE_SCALE - actual_price)).try_into().unwrap();
+            self._settle_net_cost(seller_id, market_id, net: seller_burn_refund - seller_gross);
+
+            // Collect fees from both users and credit to FEE_POSITION.
+            self._collect_fees(settlement.actual_fee_a, settlement.actual_fee_b, order_a, order_b);
         }
 
         fn claim(ref self: ContractState, client_id: felt252, market_id: felt252) {
@@ -362,8 +356,7 @@ pub mod Predictions {
             self.prediction_positions.sub_shares(client_id, market_id, winner, shares);
 
             // Return collateral from pot.
-            // TODO: use PRICE_SCALE instead of 1000.
-            let payout: u64 = shares * 1000;
+            let payout: u64 = shares * PRICE_SCALE;
             let payout_u256: u256 = payout.into();
             self.prediction_markets.sub_from_pot(market_id, amount: payout_u256);
             self.prediction_positions.deposit_collateral(client_id, amount: payout);
@@ -461,9 +454,59 @@ pub mod Predictions {
             (hash_a, hash_b)
         }
 
+        /// Settles net collateral between a user and the pot.
+        /// Positive net = user gains collateral from pot.
+        /// Negative net = user pays collateral into pot.
+        fn _settle_net_cost(
+            ref self: ContractState,
+            client_id: felt252,
+            market_id: felt252,
+            net: i64,
+        ) {
+            if net > 0 {
+                let gain: u64 = net.try_into().unwrap();
+                self.prediction_markets.sub_from_pot(market_id, amount: gain.into());
+                self.prediction_positions.deposit_collateral(:client_id, amount: gain);
+            } else if net < 0 {
+                let cost: u64 = (-net).try_into().unwrap();
+                self.prediction_positions.withdraw_collateral(:client_id, amount: cost);
+                self.prediction_markets.add_to_pot(market_id, amount: cost.into());
+            }
+        }
+
+        fn _collect_fees(
+            ref self: ContractState,
+            actual_fee_a: u64,
+            actual_fee_b: u64,
+            order_a: PredictionOrder,
+            order_b: PredictionOrder,
+        ) {
+            // Deduct fees from prediction account collateral.
+            if actual_fee_a > 0 {
+                self
+                    .prediction_positions
+                    .withdraw_collateral(client_id: order_a.client_id, amount: actual_fee_a);
+            }
+            if actual_fee_b > 0 {
+                self
+                    .prediction_positions
+                    .withdraw_collateral(client_id: order_b.client_id, amount: actual_fee_b);
+            }
+
+            // Credit total fees to FEE_POSITION.
+            let total_fees = actual_fee_a + actual_fee_b;
+            if total_fees > 0 {
+                let fee_diff = PositionDiff {
+                    collateral_diff: total_fees.into(), asset_diff: Option::None,
+                };
+                self.positions.apply_diff(position_id: FEE_POSITION, position_diff: fee_diff);
+            }
+        }
+
+        /// Burns complete sets for a user and returns the number of sets burned.
         fn _burn_complete_sets(
             ref self: ContractState, client_id: felt252, market_id: felt252,
-        ) {
+        ) -> u64 {
             let outcomes_count = self.prediction_markets.get_outcomes_count(market_id);
 
             // Find minimum across all outcomes.
@@ -473,7 +516,7 @@ pub mod Predictions {
                 let oc = self.prediction_markets.get_outcome_at(market_id, i);
                 let shares = self.prediction_positions.get_position(client_id, market_id, oc);
                 if shares == 0 {
-                    return;
+                    return 0;
                 }
                 if shares < min_shares {
                     min_shares = shares;
@@ -489,12 +532,7 @@ pub mod Predictions {
                 j += 1;
             };
 
-            // Return collateral from pot.
-            // TODO: use PRICE_SCALE instead of 1000.
-            let refund: u64 = min_shares * 1000;
-            let refund_u256: u256 = refund.into();
-            self.prediction_markets.sub_from_pot(market_id, amount: refund_u256);
-            self.prediction_positions.deposit_collateral(client_id, amount: refund);
+            min_shares
         }
 
         fn _validate_oracle_signature(

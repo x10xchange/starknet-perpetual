@@ -1,3 +1,7 @@
+/// Price scale with 6 decimal places. A complete set of shares = PRICE_SCALE collateral units.
+/// Prices range from 0 to PRICE_SCALE (0.000000 to 1.000000).
+pub const PRICE_SCALE: u64 = 1_000_000;
+
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::utils::snip12::StructHash;
