@@ -91,7 +91,9 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::order_expired_err;
-    use crate::core::types::asset::synthetic::{SpotAssetBalanceDiff, SpotAssetBalanceDiffTrait};
+    use crate::core::types::asset::synthetic::{
+        AssetType, SpotAssetBalanceDiff, SpotAssetBalanceDiffTrait,
+    };
     use crate::core::types::balance::Balance;
     use crate::core::types::order::ValidateableOrderTrait;
     use crate::core::types::position::{MultiSpotPositionDiff, PositionDiff};
@@ -100,7 +102,6 @@ pub(crate) mod VaultsManager {
     use crate::core::value_risk_calculator::{
         assert_healthy_or_healthier, calculate_asset_value_and_risk,
     };
-    use crate::core::types::asset::synthetic::AssetType;
     use super::{ConvertPositionToVault, IVaultExternal, LimitOrder, Signature};
 
     #[event]
@@ -669,7 +670,10 @@ pub(crate) mod VaultsManager {
                         asset_id: *other_collateral.asset_id, balance: balance_diff, :price,
                     );
                 let (risk_adjusted_value, _) = calculate_asset_value_and_risk(
-                    asset_type: AssetType::SPOT_COLLATERAL, :price, balance: balance_diff, :risk_factor,
+                    asset_type: AssetType::SPOT_COLLATERAL,
+                    :price,
+                    balance: balance_diff,
+                    :risk_factor,
                 );
                 total_risk_adjusted_value += risk_adjusted_value;
             }
@@ -736,9 +740,7 @@ pub(crate) mod VaultsManager {
 
             if (burn_result != risk_adjusted_to_receive.into()) {
                 let err = format!(
-                    "UNFAIR_REDEEM: expected {:?}, got {:?}",
-                    risk_adjusted_to_receive,
-                    burn_result,
+                    "UNFAIR_REDEEM: expected {:?}, got {:?}", risk_adjusted_to_receive, burn_result,
                 );
                 panic_with_byte_array(err: @err);
             }
