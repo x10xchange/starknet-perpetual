@@ -3040,6 +3040,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .finalize_prediction_market(:signed_outcome);
     }
 
+    fn claim(ref self: PerpsTestsFacade, client_id: felt252, market_id: felt252) {
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }.claim(:client_id, :market_id);
+    }
 }
 
 

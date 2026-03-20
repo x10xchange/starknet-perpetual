@@ -185,10 +185,11 @@ pub mod Predictions {
             let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: deposit_args);
 
             let amount_i64: i64 = quantized_amount.try_into().unwrap();
+            let prediction_position_id = PositionId { value: client_id.try_into().unwrap() };
             self
                 .fulfillment_tracking
                 .update_fulfillment(
-                    position_id: from_position_id,
+                    position_id: prediction_position_id,
                     :hash,
                     order_base_amount: amount_i64,
                     actual_base_amount: amount_i64,
@@ -232,10 +233,11 @@ pub mod Predictions {
             let hash = self._validate_prediction_signature(:signature, :public_key, :expiration, message: withdraw_args);
 
             let amount_i64: i64 = quantized_amount.try_into().unwrap();
+            let prediction_position_id = PositionId { value: client_id.try_into().unwrap() };
             self
                 .fulfillment_tracking
                 .update_fulfillment(
-                    position_id: to_position_id,
+                    position_id: prediction_position_id,
                     :hash,
                     order_base_amount: amount_i64,
                     actual_base_amount: amount_i64,
@@ -283,10 +285,12 @@ pub mod Predictions {
 
             // Track fulfillment for partial fills.
             let actual_amount_i64: i64 = settlement.actual_amount.try_into().unwrap();
+            let position_id_a = PositionId { value: order_a.client_id.try_into().unwrap() };
+            let position_id_b = PositionId { value: order_b.client_id.try_into().unwrap() };
             self
                 .fulfillment_tracking
                 .update_fulfillment(
-                    position_id: Zero::zero(),
+                    position_id: position_id_a,
                     hash: hash_a,
                     order_base_amount: order_a.amount,
                     actual_base_amount: actual_amount_i64,
@@ -294,7 +298,7 @@ pub mod Predictions {
             self
                 .fulfillment_tracking
                 .update_fulfillment(
-                    position_id: Zero::zero(),
+                    position_id: position_id_b,
                     hash: hash_b,
                     order_base_amount: order_b.amount,
                     actual_base_amount: -actual_amount_i64,
@@ -314,16 +318,7 @@ pub mod Predictions {
 
             // Mint shares: buyer gets outcome shares, seller gets all other outcome shares.
             self.prediction_positions.add_shares(buyer_id, market_id, outcome, actual_amount);
-
-            let outcomes_count = self.prediction_markets.get_outcomes_count(market_id);
-            let mut i: u64 = 0;
-            while i < outcomes_count {
-                let oc = self.prediction_markets.get_outcome_at(market_id, i);
-                if oc != outcome {
-                    self.prediction_positions.add_shares(seller_id, market_id, oc, actual_amount);
-                }
-                i += 1;
-            };
+            self._mint_other_outcomes(seller_id, market_id, outcome, actual_amount);
 
             // Burn complete sets for both users.
             let burned_buyer = self._burn_complete_sets(buyer_id, market_id);
@@ -501,6 +496,25 @@ pub mod Predictions {
                 };
                 self.positions.apply_diff(position_id: FEE_POSITION, position_diff: fee_diff);
             }
+        }
+
+        /// Mints shares of all outcomes except the given one (for the seller/short side).
+        fn _mint_other_outcomes(
+            ref self: ContractState,
+            client_id: felt252,
+            market_id: felt252,
+            excluded_outcome: felt252,
+            amount: u64,
+        ) {
+            let outcomes_count = self.prediction_markets.get_outcomes_count(market_id);
+            let mut i: u64 = 0;
+            while i < outcomes_count {
+                let oc = self.prediction_markets.get_outcome_at(market_id, i);
+                if oc != excluded_outcome {
+                    self.prediction_positions.add_shares(client_id, market_id, oc, amount);
+                }
+                i += 1;
+            };
         }
 
         /// Burns complete sets for a user and returns the number of sets burned.

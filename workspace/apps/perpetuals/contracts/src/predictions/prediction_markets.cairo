@@ -39,6 +39,7 @@ pub mod PredictionMarketsComponent {
             assert(outcomes.len() >= 2, errors::INSUFFICIENT_OUTCOMES);
             market.oracle.write(oracle);
             for outcome in outcomes {
+                assert(!market.valid_outcomes.entry(*outcome).read(), errors::DUPLICATE_OUTCOME);
                 market.outcomes.push(*outcome);
                 market.valid_outcomes.entry(*outcome).write(true);
             };
