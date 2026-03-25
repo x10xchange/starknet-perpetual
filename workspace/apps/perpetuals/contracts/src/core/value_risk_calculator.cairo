@@ -1,9 +1,10 @@
 use core::num::traits::{One, Pow, Zero};
+use core::panic_with_felt252;
 use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
-    AMOUNT_OVERFLOW, position_not_deleveragable, position_not_fair_deleverage,
-    position_not_fair_spot_deleverage, position_not_healthy_nor_healthier,
-    position_not_liquidatable,
+    AMOUNT_OVERFLOW, SPOT_DELEVERAGE_NON_SPOT_ASSET, SPOT_DELEVERAGE_POSITIVE_COLLATERAL,
+    position_not_deleveragable, position_not_fair_deleverage, position_not_fair_spot_deleverage,
+    position_not_healthy_nor_healthier, position_not_liquidatable,
 };
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
@@ -251,22 +252,26 @@ pub fn deleveraged_spot_position_validations(
 
     let mut total_spot_tv: i128 = asset_tv;
     for info in unchanged_assets {
-        if *info.asset_type == AssetType::SPOT_COLLATERAL {
-            let (spot_tv, _) = calculate_asset_value_and_risk(
-                *info.asset_type, *info.price, *info.balance, *info.risk_factor,
-            );
-            total_spot_tv += spot_tv;
+        if *info.asset_type != AssetType::SPOT_COLLATERAL {
+            panic_with_felt252(SPOT_DELEVERAGE_NON_SPOT_ASSET);
         }
+        let (spot_tv, _) = calculate_asset_value_and_risk(
+            *info.asset_type, *info.price, *info.balance, *info.risk_factor,
+        );
+        total_spot_tv += spot_tv;
     };
 
     let debt: i128 = position_diff_enriched.collateral_enriched.before.into();
+    assert(debt < 0, SPOT_DELEVERAGE_POSITIVE_COLLATERAL);
     let abs_debt: u128 = debt.abs();
     let collateral_diff: i128 = (position_diff_enriched.collateral_enriched.after
         - position_diff_enriched.collateral_enriched.before)
         .into();
 
     if (!is_fair_spot_deleverage(:collateral_diff, :abs_debt, :asset_tv, :total_spot_tv)) {
-        let err = position_not_fair_spot_deleverage(:position_id, :tvtr);
+        let err = position_not_fair_spot_deleverage(
+            :position_id, :collateral_diff, :abs_debt, :asset_tv, :total_spot_tv,
+        );
         panic_with_byte_array(err: @err);
     }
 }
