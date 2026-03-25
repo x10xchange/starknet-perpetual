@@ -75,12 +75,8 @@ fn is_fair_spot_deleverage(
     if abs_debt == 0 {
         return collateral_diff == 0;
     }
-    let collateral_ratio = FractionTrait::new(
-        numerator: collateral_diff, denominator: abs_debt,
-    );
-    let spot_ratio = FractionTrait::new(
-        numerator: asset_tv, denominator: total_spot_tv.abs(),
-    );
+    let collateral_ratio = FractionTrait::new(numerator: collateral_diff, denominator: abs_debt);
+    let spot_ratio = FractionTrait::new(numerator: asset_tv, denominator: total_spot_tv.abs());
     let spot_minus_epsilon_ratio = FractionTrait::new(
         numerator: asset_tv - EPSILON, denominator: total_spot_tv.abs(),
     );
@@ -236,12 +232,9 @@ pub fn deleveraged_spot_position_validations(
     assert_healthy_or_healthier(:position_id, :tvtr);
 
     // Fair spot deleverage: collateral_diff / |debt| == asset_tv / total_spot_tv (within epsilon).
-    let asset_diff = position_diff_enriched
-        .asset_diff_enriched
-        .expect('MISSING_ASSET_DIFF');
+    let asset_diff = position_diff_enriched.asset_diff_enriched.expect('MISSING_ASSET_DIFF');
     assert!(
-        asset_diff.asset_type == AssetType::SPOT_COLLATERAL,
-        "Expected SPOT_COLLATERAL asset type",
+        asset_diff.asset_type == AssetType::SPOT_COLLATERAL, "Expected SPOT_COLLATERAL asset type",
     );
     let (asset_tv, _) = calculate_asset_value_and_risk(
         asset_diff.asset_type,
@@ -259,7 +252,7 @@ pub fn deleveraged_spot_position_validations(
             *info.asset_type, *info.price, *info.balance, *info.risk_factor,
         );
         total_spot_tv += spot_tv;
-    };
+    }
 
     let debt: i128 = position_diff_enriched.collateral_enriched.before.into();
     assert(debt < 0, SPOT_DELEVERAGE_POSITIVE_COLLATERAL);
@@ -1152,7 +1145,11 @@ mod tests {
     fn test_is_fair_spot_deleverage_exact_ratio() {
         // collateral_diff / abs_debt == asset_tv / total_spot_tv
         // 50 / 100 == 500 / 1000 → true
-        assert!(is_fair_spot_deleverage(collateral_diff: 50, abs_debt: 100, asset_tv: 500, total_spot_tv: 1000));
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 50, abs_debt: 100, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
     }
 
     #[test]
@@ -1161,21 +1158,33 @@ mod tests {
         // asset_tv / total_spot_tv = 500 / 1000 = 0.5
         // (asset_tv - EPSILON) / total_spot_tv = 499 / 1000 = 0.499
         // collateral_diff / abs_debt = 499 / 1000 = 0.499 → within [0.499, 0.5] → true
-        assert!(is_fair_spot_deleverage(collateral_diff: 499, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000));
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 499, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
     }
 
     #[test]
     fn test_is_fair_spot_deleverage_unfair_too_high() {
         // collateral_diff / abs_debt > asset_tv / total_spot_tv → unfair
         // 600 / 1000 > 500 / 1000 → false
-        assert!(!is_fair_spot_deleverage(collateral_diff: 600, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000));
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 600, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
     }
 
     #[test]
     fn test_is_fair_spot_deleverage_unfair_too_low() {
         // collateral_diff / abs_debt < (asset_tv - EPSILON) / total_spot_tv → unfair
         // 400 / 1000 < 499 / 1000 → false
-        assert!(!is_fair_spot_deleverage(collateral_diff: 400, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000));
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 400, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
     }
 
     #[test]
@@ -1183,13 +1192,25 @@ mod tests {
         // Only one spot asset: asset_tv == total_spot_tv
         // collateral_diff / abs_debt should == 1 (within epsilon)
         // 100 / 100 == 1000 / 1000 → true
-        assert!(is_fair_spot_deleverage(collateral_diff: 100, abs_debt: 100, asset_tv: 1000, total_spot_tv: 1000));
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 100, abs_debt: 100, asset_tv: 1000, total_spot_tv: 1000,
+            ),
+        );
     }
 
     #[test]
     fn test_is_fair_spot_deleverage_zero_total_spot_tv() {
         // Edge case: total_spot_tv == 0, collateral_diff must be 0
-        assert!(is_fair_spot_deleverage(collateral_diff: 0, abs_debt: 100, asset_tv: 0, total_spot_tv: 0));
-        assert!(!is_fair_spot_deleverage(collateral_diff: 1, abs_debt: 100, asset_tv: 0, total_spot_tv: 0));
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 0, abs_debt: 100, asset_tv: 0, total_spot_tv: 0,
+            ),
+        );
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 1, abs_debt: 100, asset_tv: 0, total_spot_tv: 0,
+            ),
+        );
     }
 }

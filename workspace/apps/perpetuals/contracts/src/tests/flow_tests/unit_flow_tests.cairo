@@ -6230,8 +6230,12 @@ fn test_spot_deleverage() {
 
     let deleveraged_user = state.new_user_with_position();
     let deleverager_user = state.new_user_with_position();
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 5000000, :token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 5000000, :token);
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, :token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 5000000, :token,
+    );
 
     // Deposit spot collateral to deleveraged user.
     let deposit_spot = state
@@ -6349,10 +6353,18 @@ fn test_unfair_spot_deleverage() {
 
     let deleveraged_user = state.new_user_with_position();
     let deleverager_user = state.new_user_with_position();
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token);
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 50000000, token: strk_token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 50000000, token: eth_token);
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: eth_token,
+    );
 
     // Deposit 1000 SPOT_A and 3000 SPOT_B.
     let dep_a = state
@@ -6431,8 +6443,12 @@ fn test_partial_spot_deleverage() {
 
     let deleveraged_user = state.new_user_with_position();
     let deleverager_user = state.new_user_with_position();
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 5000000, :token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 5000000, :token);
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, :token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 5000000, :token,
+    );
 
     let deposit_spot = state
         .facade
@@ -6487,7 +6503,9 @@ fn test_partial_spot_deleverage() {
     // Collateral: 0, Spot: 5000 * 1 = 5000, spot_risk = 500, TV = 4500, TR = 0
     state
         .facade
-        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 4500);
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: 4500,
+        );
     state
         .facade
         .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
@@ -6520,10 +6538,18 @@ fn test_spot_deleverage_two_spot_assets() {
 
     let deleveraged_user = state.new_user_with_position();
     let deleverager_user = state.new_user_with_position();
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token);
-    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 50000000, token: strk_token);
-    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 50000000, token: eth_token);
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: eth_token,
+    );
 
     // Deposit 1000 of SPOT_A and 3000 of SPOT_B to deleveraged user.
     let dep_a = state
@@ -6556,8 +6582,9 @@ fn test_spot_deleverage_two_spot_assets() {
     state.facade.process_deposit(deposit_info: deposit_deleverager);
 
     // Transfer out base collateral to create debt (position stays healthy at price 10).
-    // At price 10: SPOT_A TV = 1000*10 - 1000*10*0.1 = 9000, SPOT_B TV = 3000*10 - 3000*10*0.1 = 27000
-    // total_spot_tv = 36000. Transfer 10000 so collateral = -10000, TV = 26000 (still healthy).
+    // At price 10: SPOT_A TV = 1000*10 - 1000*10*0.1 = 9000, SPOT_B TV = 3000*10 - 3000*10*0.1 =
+    // 27000 total_spot_tv = 36000. Transfer 10000 so collateral = -10000, TV = 26000 (still
+    // healthy).
     let transfer_info = state
         .facade
         .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10000);
