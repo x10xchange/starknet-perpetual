@@ -71,6 +71,9 @@ fn is_fair_spot_deleverage(
     if total_spot_tv == 0 {
         return collateral_diff == 0;
     }
+    if abs_debt == 0 {
+        return collateral_diff == 0;
+    }
     let collateral_ratio = FractionTrait::new(
         numerator: collateral_diff, denominator: abs_debt,
     );
@@ -223,24 +226,29 @@ pub fn deleveraged_spot_position_validations(
         :tvtr_before, synthetic_enriched_position_diff: position_diff_enriched.into(),
     );
 
-    // Validate the position is deleveragable (TV < 0) before the change.
     let position_state_before_change = get_position_state(position_tvtr: tvtr.before);
     if (position_state_before_change != PositionState::Deleveragable) {
         let err = position_not_deleveragable(:position_id, :tvtr);
         panic_with_byte_array(err: @err);
     }
 
-    // Validate the position is healthy or healthier after the change.
     assert_healthy_or_healthier(:position_id, :tvtr);
 
-    // Fair spot deleverage check:
-    // collateral_diff / |debt| == asset_tv / total_spot_tv (within epsilon)
-    let asset_diff = position_diff_enriched.asset_diff_enriched.unwrap();
+    // Fair spot deleverage: collateral_diff / |debt| == asset_tv / total_spot_tv (within epsilon).
+    let asset_diff = position_diff_enriched
+        .asset_diff_enriched
+        .expect('MISSING_ASSET_DIFF');
+    assert!(
+        asset_diff.asset_type == AssetType::SPOT_COLLATERAL,
+        "Expected SPOT_COLLATERAL asset type",
+    );
     let (asset_tv, _) = calculate_asset_value_and_risk(
-        asset_diff.asset_type, asset_diff.price, asset_diff.balance_before, asset_diff.risk_factor_before,
+        asset_diff.asset_type,
+        asset_diff.price,
+        asset_diff.balance_before,
+        asset_diff.risk_factor_before,
     );
 
-    // Sum TV for all SPOT_COLLATERAL assets in unchanged_assets + the deleveraged asset's TV.
     let mut total_spot_tv: i128 = asset_tv;
     for info in unchanged_assets {
         if *info.asset_type == AssetType::SPOT_COLLATERAL {
@@ -251,14 +259,11 @@ pub fn deleveraged_spot_position_validations(
         }
     };
 
-    // debt = collateral before (negative), abs_debt = |debt|
     let debt: i128 = position_diff_enriched.collateral_enriched.before.into();
     let abs_debt: u128 = debt.abs();
-
-    // collateral_diff = after - before
-    let collateral_diff: i128 = Into::<Balance, i128>::into(
-        position_diff_enriched.collateral_enriched.after,
-    ) - Into::<Balance, i128>::into(position_diff_enriched.collateral_enriched.before);
+    let collateral_diff: i128 = (position_diff_enriched.collateral_enriched.after
+        - position_diff_enriched.collateral_enriched.before)
+        .into();
 
     if (!is_fair_spot_deleverage(:collateral_diff, :abs_debt, :asset_tv, :total_spot_tv)) {
         let err = position_not_fair_spot_deleverage(:position_id, :tvtr);
