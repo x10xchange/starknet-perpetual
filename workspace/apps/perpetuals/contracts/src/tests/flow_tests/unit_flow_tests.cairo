@@ -6213,6 +6213,101 @@ fn test_liquidate_synthetic_with_spot_in_position() {
 }
 
 #[test]
+fn test_spot_deleverage() {
+    // Setup: position with only spot collateral, negative base collateral, TV < 0.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let asset_id = asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+    snforge_std::set_balance(target: deleveraged_user.account.address, new_balance: 5000000, :token);
+    snforge_std::set_balance(target: deleverager_user.account.address, new_balance: 5000000, :token);
+
+    // Deposit spot collateral to deleveraged user.
+    let deposit_spot = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: asset_id,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 10000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_spot);
+
+    // Deposit base collateral to deleverager.
+    let deposit_deleverager = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 200000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_deleverager);
+
+    // Transfer out base collateral to make the deleveraged user's collateral negative.
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10100);
+    state.facade.transfer(:transfer_info);
+
+    // At spot price 100:
+    //   Collateral: -10100
+    //   Spot: 10000 * 100 = 1000000, spot_risk = 10000 * 100 * 0.1 = 100000
+    //   spot_tv = 1000000 - 100000 = 900000
+    //   TV = -10100 + 900000 = 889900, TR = 0 => healthy
+    assert(state.facade.is_healthy(position_id: deleveraged_user.position_id), 'should be healthy');
+
+    // Massive price drop to make position deleveragable (TV < 0).
+    state.facade.price_tick(asset_info: @asset_info, price: 1);
+
+    // At spot price 1:
+    //   Collateral: -10100
+    //   Spot: 10000 * 1 = 10000, spot_risk = 10000 * 1 * 0.1 = 1000
+    //   spot_tv = 10000 - 1000 = 9000 (the only spot, so total_spot_tv = 9000)
+    //   TV = -10100 + 9000 = -1100, TR = 0
+    //   TV < 0 => deleveragable
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: -1100,
+        );
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'should be deleveragable',
+    );
+
+    // Fair spot deleverage: sell all 10000 spot units.
+    // Formula: collateral_diff / |debt| == asset_tv / total_spot_tv
+    // Only one spot asset, so asset_tv == total_spot_tv => ratio = 1.
+    // Therefore collateral_diff / |debt| must == 1, i.e. collateral_diff == |debt| = 10100.
+    // After: collateral = -10100 + 10100 = 0, spot = 0, TV = 0, TR = 0.
+    state
+        .facade
+        .deleverage(
+            :deleveraged_user,
+            :deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: -10000,
+            deleveraged_quote: 10100,
+        );
+
+    // Position fully closed.
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 0);
+}
+
+#[test]
 fn test_liquidate_spot_deleveraged_stays_deleveraged() {
     // Create a deeply underwater position (TV < 0, deleveragable).
     // Liquidate spot to improve it, but keep TV still negative.

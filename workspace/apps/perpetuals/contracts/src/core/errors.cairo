@@ -29,7 +29,6 @@ pub const SAME_BASE_QUOTE_ASSET_IDS: felt252 = 'SAME_BASE_QUOTE_ASSET_IDS';
 pub const ORDER_IS_NOT_EXPIRED: felt252 = 'ORDER_IS_NOT_EXPIRED';
 pub const LENGTH_MISMATCH: felt252 = 'LENGTH_MISMATCH';
 pub const NO_DELEVERAGE_VAULT_SHARES: felt252 = 'NO_DELEVERAGE_VAULT_SHARES';
-pub const NO_DELEVERAGE_SPOT: felt252 = 'NO_DELEVERAGE_SPOT';
 pub const NOT_TRANSFERABLE_ASSET: felt252 = 'NOT_TRANSFERABLE_ASSET';
 pub const VAULT_CANNOT_HOLD_SHARES: felt252 = 'VAULT_CANNOT_HOLD_SHARES';
 pub const ESCAPE_HATCH_DISABLED: felt252 = 'ESCAPE_HATCH_DISABLED';
@@ -68,6 +67,17 @@ pub fn position_not_deleveragable(position_id: PositionId, tvtr: TVTRChange) -> 
 pub fn position_not_fair_deleverage(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
     format!(
         "POSITION_IS_NOT_FAIR_DELEVERAGE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
+        position_id,
+        tvtr.before.total_value,
+        tvtr.before.total_risk,
+        tvtr.after.total_value,
+        tvtr.after.total_risk,
+    )
+}
+
+pub fn position_not_fair_spot_deleverage(position_id: PositionId, tvtr: TVTRChange) -> ByteArray {
+    format!(
+        "POSITION_IS_NOT_FAIR_SPOT_DELEVERAGE position_id: {:?} TV before {:?}, TR before {:?}, TV after {:?}, TR after {:?}",
         position_id,
         tvtr.before.total_value,
         tvtr.before.total_risk,
