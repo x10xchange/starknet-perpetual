@@ -3,8 +3,8 @@ use core::panic_with_felt252;
 use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
     AMOUNT_OVERFLOW, SPOT_DELEVERAGE_POSITIVE_COLLATERAL, position_not_deleveragable,
-    position_not_fair_deleverage, position_not_fair_spot_deleverage, spot_deleverage_non_spot_asset,
-    position_not_healthy_nor_healthier, position_not_liquidatable,
+    position_not_fair_deleverage, position_not_fair_spot_deleverage,
+    position_not_healthy_nor_healthier, position_not_liquidatable, spot_deleverage_non_spot_asset,
 };
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
