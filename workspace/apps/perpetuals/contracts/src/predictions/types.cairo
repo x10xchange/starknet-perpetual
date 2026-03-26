@@ -35,6 +35,31 @@ pub struct SignedPredictionOutcome {
 }
 
 #[derive(Copy, Drop, Hash, Serde)]
+pub struct PredictionOutcome {
+    pub market_id: felt252,
+    pub outcome: felt252,
+    pub timestamp: u32,
+}
+
+/// selector!(
+///   "\"PredictionOutcome\"(
+///    \"market_id\":\"felt\",
+///    \"outcome\":\"felt\",
+///    \"timestamp\":\"u32\"
+///    )
+/// ");
+const PREDICTION_OUTCOME_TYPE_HASH: HashType = selector!(
+    "\"PredictionOutcome\"(\"market_id\":\"felt\",\"outcome\":\"felt\",\"timestamp\":\"u32\")",
+);
+
+impl PredictionOutcomeStructHashImpl of StructHash<PredictionOutcome> {
+    fn hash_struct(self: @PredictionOutcome) -> HashType {
+        let hash_state = PoseidonTrait::new();
+        hash_state.update_with(PREDICTION_OUTCOME_TYPE_HASH).update_with(*self).finalize()
+    }
+}
+
+#[derive(Copy, Drop, Hash, Serde)]
 pub struct PredictionOrder {
     pub client_id: felt252,
     pub market_id: felt252,

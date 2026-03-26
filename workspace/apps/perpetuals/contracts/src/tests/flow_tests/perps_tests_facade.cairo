@@ -47,8 +47,8 @@ use perpetuals::predictions::prediction_positions::{
     IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
 };
 use perpetuals::predictions::types::{
-    PredictionDepositArgs, PredictionOrder, PredictionSettlement, PredictionWithdrawArgs,
-    SignedPredictionOutcome,
+    PredictionDepositArgs, PredictionOrder, PredictionOutcome, PredictionSettlement,
+    PredictionWithdrawArgs, SignedPredictionOutcome,
 };
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
@@ -3023,9 +3023,8 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         oracle_key_pair: StarkKeyPair,
     ) {
         let timestamp: u32 = Time::now().seconds.try_into().unwrap();
-        let msg_hash = core::pedersen::pedersen(
-            core::pedersen::pedersen(market_id, outcome), timestamp.into(),
-        );
+        let message = PredictionOutcome { market_id, outcome, timestamp };
+        let msg_hash = message.get_message_hash(public_key: oracle_key_pair.public_key);
         let (r, s) = oracle_key_pair.sign(msg_hash).unwrap();
         let signature = array![r, s].span();
         let signed_outcome = SignedPredictionOutcome { signature, timestamp, market_id, outcome };

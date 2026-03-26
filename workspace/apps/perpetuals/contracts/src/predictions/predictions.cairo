@@ -53,8 +53,8 @@ pub mod Predictions {
     use perpetuals::predictions::prediction_positions::PredictionPositionsComponent::InternalTrait as PredictionPositionsInternal;
     use perpetuals::predictions::predictions::IPredictions;
     use perpetuals::predictions::types::{
-        PRICE_SCALE, PredictionDepositArgs, PredictionOrder, PredictionSettlement,
-        PredictionWithdrawArgs, SignedPredictionOutcome,
+        PRICE_SCALE, PredictionDepositArgs, PredictionOrder, PredictionOutcome,
+        PredictionSettlement, PredictionWithdrawArgs, SignedPredictionOutcome,
     };
     use perpetuals::predictions::{PredictionMarketsComponent, PredictionPositionsComponent, errors};
     use starkware_utils::components::pausable::PausableComponent;
@@ -554,10 +554,12 @@ pub mod Predictions {
         fn _validate_oracle_signature(
             oracle_key: felt252, signed_outcome: SignedPredictionOutcome,
         ) {
-            let msg_hash = core::pedersen::pedersen(
-                core::pedersen::pedersen(signed_outcome.market_id, signed_outcome.outcome),
-                signed_outcome.timestamp.into(),
-            );
+            let message = PredictionOutcome {
+                market_id: signed_outcome.market_id,
+                outcome: signed_outcome.outcome,
+                timestamp: signed_outcome.timestamp,
+            };
+            let msg_hash = message.get_message_hash(public_key: oracle_key);
             validate_stark_signature(
                 public_key: oracle_key, :msg_hash, signature: signed_outcome.signature,
             );
