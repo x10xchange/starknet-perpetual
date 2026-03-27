@@ -62,9 +62,11 @@ pub(crate) mod DeleverageManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
-    use crate::core::errors::{NO_DELEVERAGE_SPOT, NO_DELEVERAGE_VAULT_SHARES};
+    use crate::core::errors::NO_DELEVERAGE_VAULT_SHARES;
     use crate::core::types::position::{Position, PositionDiff};
-    use crate::core::value_risk_calculator::deleveraged_position_validations;
+    use crate::core::value_risk_calculator::{
+        deleveraged_position_validations, deleveraged_spot_position_validations,
+    };
     use super::{AssetId, Deleverage, IDeleverageManager};
 
     #[event]
@@ -260,7 +262,11 @@ pub(crate) mod DeleverageManager {
                         :position_id, :unchanged_assets, :position_diff_enriched,
                     );
                 },
-                AssetType::SPOT_COLLATERAL => { panic_with_felt252(NO_DELEVERAGE_SPOT); },
+                AssetType::SPOT_COLLATERAL => {
+                    deleveraged_spot_position_validations(
+                        :position_id, :unchanged_assets, :position_diff_enriched,
+                    );
+                },
                 AssetType::VAULT_SHARE_COLLATERAL => {
                     panic_with_felt252(NO_DELEVERAGE_VAULT_SHARES);
                 },
