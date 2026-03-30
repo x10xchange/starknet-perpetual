@@ -1,7 +1,8 @@
+use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::predictions::prediction_positions::{
     IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
 };
-use perpetuals::predictions::types::{PRICE_SCALE, PredictionOrder};
+use perpetuals::predictions::types::{PRICE_SCALE, PredictionOrder, SignedPredictionOutcome};
 use perpetuals::tests::flow_tests::infra::*;
 use perpetuals::tests::flow_tests::perps_tests_facade::*;
 use snforge_std::signature::stark_curve::StarkCurveKeyPairImpl;
@@ -744,4 +745,151 @@ fn test_quad_market_trade_and_claim() {
 
     // B net P&L: started with 50M, now has 50M - 7.5M + 5M + 5M = 52.5M → profit 2.5M.
     assert_eq!(pos.get_prediction_collateral(client_id: client_b), collateral + 2_500_000);
+}
+
+// ============================================================
+// Operator nonce tests
+// ============================================================
+
+#[test]
+#[should_panic(expected: "INVALID_NONCE")]
+fn test_create_prediction_account_invalid_nonce() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let bad_nonce: u64 = 999;
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    ICoreDispatcher { contract_address: state.facade.perpetuals_contract }
+        .create_prediction_account(operator_nonce: bad_nonce, client_id: 1, owning_key: 0x1234);
+}
+
+#[test]
+#[should_panic(expected: "INVALID_NONCE")]
+fn test_create_prediction_market_invalid_nonce() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let bad_nonce: u64 = 999;
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    ICoreDispatcher { contract_address: state.facade.perpetuals_contract }
+        .create_prediction_market(
+            operator_nonce: bad_nonce,
+            market_id: 100,
+            oracle: 0x1234,
+            outcomes: array![1, 2].span(),
+        );
+}
+
+#[test]
+#[should_panic(expected: "INVALID_NONCE")]
+fn test_finalize_prediction_market_invalid_nonce() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    // Nonce check happens before signature validation, so we can use a dummy signed outcome.
+    let signed_outcome = SignedPredictionOutcome {
+        signature: array![0, 0].span(), timestamp: 0, market_id: 100, outcome: 1,
+    };
+
+    let bad_nonce: u64 = 999;
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    ICoreDispatcher { contract_address: state.facade.perpetuals_contract }
+        .finalize_prediction_market(operator_nonce: bad_nonce, :signed_outcome);
+}
+
+#[test]
+#[should_panic(expected: "INVALID_NONCE")]
+fn test_claim_invalid_nonce() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+
+    let collateral: u64 = 50_000_000;
+    let deposit_info = state
+        .facade
+        .deposit(
+            depositor: user.account,
+            position_id: user.position_id,
+            quantized_amount: collateral,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info);
+
+    // Create prediction account and fund it.
+    let client_id: felt252 = 1;
+    let key_pair = StarkCurveKeyPairImpl::from_secret_key(42);
+    state.facade.create_prediction_account(:client_id, owning_key: key_pair.public_key);
+    state
+        .facade
+        .deposit_to_prediction_account(
+            from_position_id: user.position_id,
+            :client_id,
+            quantized_amount: collateral,
+            signing_key_pair: user.account.key_pair,
+        );
+
+    // Create market, trade, and finalize.
+    let market_id: felt252 = 100;
+    let oracle_key_pair = StarkCurveKeyPairImpl::from_secret_key(777);
+    let client_b: felt252 = 2;
+    let key_pair_b = StarkCurveKeyPairImpl::from_secret_key(43);
+    let user_b = state.new_user_with_position();
+    let deposit_b = state
+        .facade
+        .deposit(
+            depositor: user_b.account,
+            position_id: user_b.position_id,
+            quantized_amount: collateral,
+        );
+    state.facade.process_deposit(deposit_info: deposit_b);
+    state.facade.create_prediction_account(client_id: client_b, owning_key: key_pair_b.public_key);
+    state
+        .facade
+        .deposit_to_prediction_account(
+            from_position_id: user_b.position_id,
+            client_id: client_b,
+            quantized_amount: collateral,
+            signing_key_pair: user_b.account.key_pair,
+        );
+
+    state
+        .facade
+        .create_prediction_market(
+            :market_id, oracle: oracle_key_pair.public_key, outcomes: array![1, 2].span(),
+        );
+
+    let expiration = Time::now().add(delta: Time::days(1));
+    let order_a = PredictionOrder {
+        client_id,
+        market_id,
+        outcome: 1,
+        amount: 10,
+        price: 600_000,
+        fee_amount: 0,
+        expiration,
+        salt: 1,
+    };
+    let order_b = PredictionOrder {
+        client_id: client_b,
+        market_id,
+        outcome: 1,
+        amount: -10,
+        price: 600_000,
+        fee_amount: 0,
+        expiration,
+        salt: 2,
+    };
+    state
+        .facade
+        .prediction_trade(
+            :order_a,
+            :order_b,
+            actual_amount: 10,
+            actual_price: 600_000,
+            actual_fee_a: 0,
+            actual_fee_b: 0,
+            signing_key_pair_a: key_pair,
+            signing_key_pair_b: key_pair_b,
+        );
+
+    state.facade.finalize_prediction_market(:market_id, outcome: 1, :oracle_key_pair);
+
+    // Claim with bad nonce.
+    let bad_nonce: u64 = 999;
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    ICoreDispatcher { contract_address: state.facade.perpetuals_contract }
+        .claim(operator_nonce: bad_nonce, :client_id, :market_id);
 }

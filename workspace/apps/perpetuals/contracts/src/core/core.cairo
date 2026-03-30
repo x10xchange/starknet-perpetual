@@ -1154,8 +1154,10 @@ pub mod Core {
         }
 
         fn create_prediction_account(
-            ref self: ContractState, client_id: felt252, owning_key: felt252,
+            ref self: ContractState, operator_nonce: u64, client_id: felt252, owning_key: felt252,
         ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_predictions_dispatcher()
@@ -1208,8 +1210,14 @@ pub mod Core {
         }
 
         fn create_prediction_market(
-            ref self: ContractState, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
+            ref self: ContractState,
+            operator_nonce: u64,
+            market_id: felt252,
+            oracle: felt252,
+            outcomes: Span<felt252>,
         ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_predictions_dispatcher()
@@ -1217,8 +1225,10 @@ pub mod Core {
         }
 
         fn finalize_prediction_market(
-            ref self: ContractState, signed_outcome: SignedPredictionOutcome,
+            ref self: ContractState, operator_nonce: u64, signed_outcome: SignedPredictionOutcome,
         ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self
                 .external_components
                 ._get_predictions_dispatcher()
@@ -1229,7 +1239,9 @@ pub mod Core {
             self.external_components._get_predictions_dispatcher().prediction_trade(:settlement);
         }
 
-        fn claim(ref self: ContractState, client_id: felt252, market_id: felt252) {
+        fn claim(ref self: ContractState, operator_nonce: u64, client_id: felt252, market_id: felt252) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
             self.external_components._get_predictions_dispatcher().claim(:client_id, :market_id);
         }
     }

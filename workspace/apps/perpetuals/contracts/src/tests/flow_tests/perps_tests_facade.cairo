@@ -2909,9 +2909,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn create_prediction_account(
         ref self: PerpsTestsFacade, client_id: felt252, owning_key: felt252,
     ) {
+        let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .create_prediction_account(:client_id, :owning_key);
+            .create_prediction_account(:operator_nonce, :client_id, :owning_key);
     }
 
     fn deposit_to_prediction_account(
@@ -2977,9 +2978,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn create_prediction_market(
         ref self: PerpsTestsFacade, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
     ) {
+        let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .create_prediction_market(:market_id, :oracle, :outcomes);
+            .create_prediction_market(:operator_nonce, :market_id, :oracle, :outcomes);
     }
 
     fn prediction_trade(
@@ -3022,6 +3024,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         outcome: felt252,
         oracle_key_pair: StarkKeyPair,
     ) {
+        let operator_nonce = self.get_nonce();
         let timestamp: u32 = Time::now().seconds.try_into().unwrap();
         let message = PredictionOutcome { market_id, outcome, timestamp };
         let msg_hash = message.get_message_hash(public_key: oracle_key_pair.public_key);
@@ -3030,13 +3033,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let signed_outcome = SignedPredictionOutcome { signature, timestamp, market_id, outcome };
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .finalize_prediction_market(:signed_outcome);
+            .finalize_prediction_market(:operator_nonce, :signed_outcome);
     }
 
     fn claim(ref self: PerpsTestsFacade, client_id: felt252, market_id: felt252) {
+        let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .claim(:client_id, :market_id);
+            .claim(:operator_nonce, :client_id, :market_id);
     }
 }
 
