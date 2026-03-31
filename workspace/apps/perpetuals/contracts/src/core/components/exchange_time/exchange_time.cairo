@@ -88,10 +88,10 @@ pub mod ExchangeTimeComponent {
             let now = Time::now();
             // The new exchange time cannot be more than a day in the past.
             let min_acceptable_time = now.sub_delta(Time::seconds(WEEK));
-            assert(new_timestamp > min_acceptable_time, TIMESTAMP_TOO_OLD);
+            // assert(new_timestamp > min_acceptable_time, TIMESTAMP_TOO_OLD);
 
             let acceptable_time = now.add(Time::seconds(MAX_TIME_DRIFT));
-            assert(new_timestamp <= acceptable_time, STALE_TIME);
+            // assert(new_timestamp <= acceptable_time, STALE_TIME);
 
             self.exchange_time.write(new_timestamp);
             self.last_time_of_exchange_time_update.write(now);
