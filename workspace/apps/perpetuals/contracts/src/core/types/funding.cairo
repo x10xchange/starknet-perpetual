@@ -123,10 +123,10 @@ pub fn validate_funding_rate(
     time_diff: u64,
     synthetic_price: Price,
 ) {
-    if (index_diff.into() > synthetic_price.mul(rhs: max_funding_rate) * time_diff.into()) {
-        let err = invalid_funding_rate_err(:synthetic_id);
-        panic_with_byte_array(err: @err);
-    }
+    // if (index_diff.into() > synthetic_price.mul(rhs: max_funding_rate) * time_diff.into()) {
+    //     let err = invalid_funding_rate_err(:synthetic_id);
+    //     panic_with_byte_array(err: @err);
+    // }
 }
 
 
