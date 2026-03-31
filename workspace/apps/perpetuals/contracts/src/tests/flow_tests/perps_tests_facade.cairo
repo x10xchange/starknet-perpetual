@@ -31,7 +31,7 @@ use perpetuals::core::components::positions::interface::{
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
-use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
+use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType, SpotAssetBalanceDiff};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::Balance;
 use perpetuals::core::types::funding::FundingTick;
@@ -2387,6 +2387,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         value_of_shares_vault: u64,
         actual_shares_user: u64,
         actual_collateral_user: u64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     ) {
         self
             .redeem_from_vault_with_interest(
@@ -2402,6 +2403,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 interest_amount_vault_position: 0,
                 interest_amount_sender: 0,
                 interest_amount_receiver: 0,
+                other_collaterals: other_collaterals,
             )
     }
 
@@ -2419,6 +2421,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         interest_amount_vault_position: i64,
         interest_amount_sender: i64,
         interest_amount_receiver: i64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     ) {
         let dispatcher = IPositionsDispatcher { contract_address: self.perpetuals_contract };
 
@@ -2489,6 +2492,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :interest_amount_vault_position,
                 :interest_amount_sender,
                 :interest_amount_receiver,
+                other_collaterals: other_collaterals,
             );
 
         // Validate vault collateral
@@ -2499,7 +2503,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                     - actual_collateral_user.into()
                     + interest_amount_vault_position.into(),
             );
-
         // Validate sender shares burned
         self
             .validate_asset_balance(

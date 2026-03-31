@@ -1,8 +1,10 @@
 use core::num::traits::{One, Pow, Zero};
+use core::panic_with_felt252;
 use core::panics::panic_with_byte_array;
 use perpetuals::core::errors::{
-    AMOUNT_OVERFLOW, position_not_deleveragable, position_not_fair_deleverage,
-    position_not_healthy_nor_healthier, position_not_liquidatable,
+    AMOUNT_OVERFLOW, SPOT_DELEVERAGE_POSITIVE_COLLATERAL, position_not_deleveragable,
+    position_not_fair_deleverage, position_not_fair_spot_deleverage,
+    position_not_healthy_nor_healthier, position_not_liquidatable, spot_deleverage_non_spot_asset,
 };
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
@@ -60,6 +62,25 @@ fn get_position_state(position_tvtr: PositionTVTR) -> PositionState {
     } else {
         PositionState::Healthy
     }
+}
+
+/// The spot deleverage is fair if collateral_diff / |debt| == asset_tv / total_spot_tv
+/// within epsilon tolerance.
+fn is_fair_spot_deleverage(
+    collateral_diff: i128, abs_debt: u128, asset_tv: i128, total_spot_tv: i128,
+) -> bool {
+    if total_spot_tv == 0 {
+        return collateral_diff == 0;
+    }
+    if abs_debt == 0 {
+        return collateral_diff == 0;
+    }
+    let collateral_ratio = FractionTrait::new(numerator: collateral_diff, denominator: abs_debt);
+    let spot_ratio = FractionTrait::new(numerator: asset_tv, denominator: total_spot_tv.abs());
+    let spot_minus_epsilon_ratio = FractionTrait::new(
+        numerator: asset_tv - EPSILON, denominator: total_spot_tv.abs(),
+    );
+    spot_minus_epsilon_ratio <= collateral_ratio && collateral_ratio <= spot_ratio
 }
 
 /// The position is fair if the total_value divided by the total_risk is the almost before and after
@@ -188,6 +209,62 @@ pub fn deleveraged_position_validations(
     assert_healthy_or_healthier(:position_id, :tvtr);
     if (!is_fair_deleverage(before: tvtr.before, after: tvtr.after)) {
         let err = position_not_fair_deleverage(:position_id, :tvtr);
+        panic_with_byte_array(err: @err);
+    }
+}
+
+pub fn deleveraged_spot_position_validations(
+    position_id: PositionId,
+    unchanged_assets: Span<AssetBalanceInfo>,
+    position_diff_enriched: PositionDiffEnriched,
+) {
+    let tvtr_before = calculate_position_tvtr_before(:unchanged_assets, :position_diff_enriched);
+    let tvtr = calculate_position_tvtr_change(
+        :tvtr_before, synthetic_enriched_position_diff: position_diff_enriched.into(),
+    );
+
+    let position_state_before_change = get_position_state(position_tvtr: tvtr.before);
+    if (position_state_before_change != PositionState::Deleveragable) {
+        let err = position_not_deleveragable(:position_id, :tvtr);
+        panic_with_byte_array(err: @err);
+    }
+
+    assert_healthy_or_healthier(:position_id, :tvtr);
+
+    // Fair spot deleverage: collateral_diff / |debt| == asset_tv / total_spot_tv (within epsilon).
+    let asset_diff = position_diff_enriched.asset_diff_enriched.expect('MISSING_ASSET_DIFF');
+    assert!(
+        asset_diff.asset_type == AssetType::SPOT_COLLATERAL, "Expected SPOT_COLLATERAL asset type",
+    );
+    let (asset_tv, _) = calculate_asset_value_and_risk(
+        asset_diff.asset_type,
+        asset_diff.price,
+        asset_diff.balance_before,
+        asset_diff.risk_factor_before,
+    );
+
+    let mut total_spot_tv: i128 = asset_tv;
+    for info in unchanged_assets {
+        if *info.asset_type != AssetType::SPOT_COLLATERAL {
+            panic_with_byte_array(@spot_deleverage_non_spot_asset(*info.id));
+        }
+        let (spot_tv, _) = calculate_asset_value_and_risk(
+            *info.asset_type, *info.price, *info.balance, *info.risk_factor,
+        );
+        total_spot_tv += spot_tv;
+    }
+
+    let debt: i128 = position_diff_enriched.collateral_enriched.before.into();
+    assert(debt < 0, SPOT_DELEVERAGE_POSITIVE_COLLATERAL);
+    let abs_debt: u128 = debt.abs();
+    let collateral_diff: i128 = (position_diff_enriched.collateral_enriched.after
+        - position_diff_enriched.collateral_enriched.before)
+        .into();
+
+    if (!is_fair_spot_deleverage(:collateral_diff, :abs_debt, :asset_tv, :total_spot_tv)) {
+        let err = position_not_fair_spot_deleverage(
+            :position_id, :collateral_diff, :abs_debt, :asset_tv, :total_spot_tv,
+        );
         panic_with_byte_array(err: @err);
     }
 }
@@ -1062,5 +1139,78 @@ mod tests {
         let result = calculate_max_allowed_change(pnl, time_diff, max_interest_rate_per_sec);
         // Expected: (1000000 * 4294967 * 1) / 2^32 = 4294967000000 / 4294967296 = 999
         assert_eq!(result, 999);
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_exact_ratio() {
+        // collateral_diff / abs_debt == asset_tv / total_spot_tv
+        // 50 / 100 == 500 / 1000 → true
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 50, abs_debt: 100, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_within_epsilon() {
+        // collateral_diff / abs_debt slightly below asset_tv / total_spot_tv but within epsilon
+        // asset_tv / total_spot_tv = 500 / 1000 = 0.5
+        // (asset_tv - EPSILON) / total_spot_tv = 499 / 1000 = 0.499
+        // collateral_diff / abs_debt = 499 / 1000 = 0.499 → within [0.499, 0.5] → true
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 499, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_unfair_too_high() {
+        // collateral_diff / abs_debt > asset_tv / total_spot_tv → unfair
+        // 600 / 1000 > 500 / 1000 → false
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 600, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_unfair_too_low() {
+        // collateral_diff / abs_debt < (asset_tv - EPSILON) / total_spot_tv → unfair
+        // 400 / 1000 < 499 / 1000 → false
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 400, abs_debt: 1000, asset_tv: 500, total_spot_tv: 1000,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_single_spot_asset() {
+        // Only one spot asset: asset_tv == total_spot_tv
+        // collateral_diff / abs_debt should == 1 (within epsilon)
+        // 100 / 100 == 1000 / 1000 → true
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 100, abs_debt: 100, asset_tv: 1000, total_spot_tv: 1000,
+            ),
+        );
+    }
+
+    #[test]
+    fn test_is_fair_spot_deleverage_zero_total_spot_tv() {
+        // Edge case: total_spot_tv == 0, collateral_diff must be 0
+        assert!(
+            is_fair_spot_deleverage(
+                collateral_diff: 0, abs_debt: 100, asset_tv: 0, total_spot_tv: 0,
+            ),
+        );
+        assert!(
+            !is_fair_spot_deleverage(
+                collateral_diff: 1, abs_debt: 100, asset_tv: 0, total_spot_tv: 0,
+            ),
+        );
     }
 }

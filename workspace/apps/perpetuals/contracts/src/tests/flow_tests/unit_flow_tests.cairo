@@ -5251,6 +5251,7 @@ fn test_redeem_from_vault_with_mixed_interest_same_position() {
             interest_amount_vault_position: interest_vault,
             interest_amount_sender: interest_sender,
             interest_amount_receiver: 0,
+            other_collaterals: array![].span(),
         );
 
     state
@@ -5373,6 +5374,7 @@ fn test_redeem_from_vault_with_positive_interest_enables_otherwise_unhealthy_red
             interest_amount_vault_position: 0,
             interest_amount_sender: 1,
             interest_amount_receiver: 0,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -5476,6 +5478,7 @@ fn test_redeem_from_vault_with_negative_interest_makes_redeem_unhealthy() {
             interest_amount_vault_position: 0,
             interest_amount_sender: -1,
             interest_amount_receiver: 0,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -5530,6 +5533,7 @@ fn test_redeem_from_vault_non_zero_interest_without_time_advance() {
             interest_amount_vault_position: 0,
             interest_amount_sender: 1,
             interest_amount_receiver: 0,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -5616,6 +5620,7 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
             interest_amount_vault_position: interest_vault,
             interest_amount_sender: interest_sender,
             interest_amount_receiver: interest_receiver,
+            other_collaterals: array![].span(),
         );
 
     // Sender gets only interest (shares burned, no collateral from redeem)
@@ -5625,6 +5630,7 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
             position_id: withdrawing_user.position_id,
             expected_balance: sender_collateral_before + interest_sender.into(),
         );
+    println!("Sender verified")
     // Receiver gets collateral from redeem + interest
     state
         .facade
@@ -5634,6 +5640,7 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
                 + value_of_shares.into()
                 + interest_receiver.into(),
         );
+    println!("Receiver verified")
     // Vault loses collateral, gains interest
     state
         .facade
@@ -5643,6 +5650,7 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
                 - value_of_shares.into()
                 + interest_vault.into(),
         );
+    println!("Vault verified")
 }
 
 #[test]
@@ -5700,6 +5708,7 @@ fn test_redeem_from_vault_negative_interest_on_vault_makes_vault_unhealthy() {
             interest_amount_vault_position: -1,
             interest_amount_sender: 0,
             interest_amount_receiver: 0,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -5811,6 +5820,7 @@ fn test_redeem_from_vault_negative_interest_makes_receiver_unhealthy() {
             interest_amount_vault_position: 0,
             interest_amount_sender: 0,
             interest_amount_receiver: -10,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -5876,6 +5886,7 @@ fn test_redeem_from_vault_receiver_interest_exceeds_max_allowed() {
             interest_amount_vault_position: 0,
             interest_amount_sender: 0,
             interest_amount_receiver: 11,
+            other_collaterals: array![].span(),
         );
 }
 
@@ -6199,6 +6210,431 @@ fn test_liquidate_synthetic_with_spot_in_position() {
     state
         .facade
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 275);
+}
+
+#[test]
+fn test_spot_deleverage() {
+    // Setup: position with only spot collateral, negative base collateral, TV < 0.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let asset_id = asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, :token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 5000000, :token,
+    );
+
+    // Deposit spot collateral to deleveraged user.
+    let deposit_spot = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: asset_id,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 10000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_spot);
+
+    // Deposit base collateral to deleverager.
+    let deposit_deleverager = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 200000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_deleverager);
+
+    // Transfer out base collateral to make the deleveraged user's collateral negative.
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10100);
+    state.facade.transfer(:transfer_info);
+
+    // At spot price 100:
+    //   Collateral: -10100
+    //   Spot: 10000 * 100 = 1000000, spot_risk = 10000 * 100 * 0.1 = 100000
+    //   spot_tv = 1000000 - 100000 = 900000
+    //   TV = -10100 + 900000 = 889900, TR = 0 => healthy
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: 889900,
+        );
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+    assert(state.facade.is_healthy(position_id: deleveraged_user.position_id), 'should be healthy');
+
+    // Massive price drop to make position deleveragable (TV < 0).
+    state.facade.price_tick(asset_info: @asset_info, price: 1);
+
+    // At spot price 1:
+    //   Collateral: -10100
+    //   Spot: 10000 * 1 = 10000, spot_risk = 10000 * 1 * 0.1 = 1000
+    //   spot_tv = 10000 - 1000 = 9000 (the only spot, so total_spot_tv = 9000)
+    //   TV = -10100 + 9000 = -1100, TR = 0
+    //   TV < 0 => deleveragable
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: -1100,
+        );
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'should be deleveragable',
+    );
+
+    // Fair spot deleverage: sell all 10000 spot units.
+    // Formula: collateral_diff / |debt| == asset_tv / total_spot_tv
+    // Only one spot asset, so asset_tv == total_spot_tv => ratio = 1.
+    // Therefore collateral_diff / |debt| must == 1, i.e. collateral_diff == |debt| = 10100.
+    // After: collateral = -10100 + 10100 = 0, spot = 0, TV = 0, TR = 0.
+    state
+        .facade
+        .deleverage(
+            :deleveraged_user,
+            :deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: -10000,
+            deleveraged_quote: 10100,
+        );
+
+    // Position fully closed.
+    state
+        .facade
+        .validate_total_value(position_id: deleveraged_user.position_id, expected_total_value: 0);
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+}
+
+#[test]
+#[should_panic(expected: "POSITION_IS_NOT_FAIR_SPOT_DELEVERAGE")]
+fn test_unfair_spot_deleverage() {
+    // Two spot assets: deleverage one with wrong proportional split.
+    // The position becomes healthier overall, but the ratio is unfair.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let strk_token = snforge_std::Token::STRK;
+    let strk_erc20 = strk_token.contract_address();
+    let spot_info_1 = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT_A', :risk_factor_data, oracles_len: 1, erc20_contract_address: strk_erc20,
+    );
+    let spot_id_1 = spot_info_1.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info_1, initial_price: 10);
+
+    let eth_token = snforge_std::Token::ETH;
+    let eth_erc20 = eth_token.contract_address();
+    let spot_info_2 = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT_B', :risk_factor_data, oracles_len: 1, erc20_contract_address: eth_erc20,
+    );
+    let spot_id_2 = spot_info_2.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info_2, initial_price: 10);
+
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+
+    // Deposit 1000 SPOT_A and 3000 SPOT_B.
+    let dep_a = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: spot_id_1,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 1000,
+        );
+    state.facade.process_deposit(deposit_info: dep_a);
+
+    let dep_b = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: spot_id_2,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 3000,
+        );
+    state.facade.process_deposit(deposit_info: dep_b);
+
+    let deposit_deleverager = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 200000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_deleverager);
+
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10000);
+    state.facade.transfer(:transfer_info);
+
+    // Price drop: both spots at price 1.
+    // SPOT_A TV = 900, SPOT_B TV = 2700, total_spot_tv = 3600.
+    // Collateral = -10000, TV = -6400, TR = 0 => deleveragable.
+    state.facade.price_tick(asset_info: @spot_info_1, price: 1);
+    state.facade.price_tick(asset_info: @spot_info_2, price: 1);
+
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'should be deleveragable',
+    );
+
+    // Fair collateral_diff for SPOT_A = 10000 * 900 / 3600 = 2500.
+    // Give 5000 instead (too much) — position is healthier but unfair ratio.
+    state
+        .facade
+        .deleverage(
+            :deleveraged_user,
+            :deleverager_user,
+            base_asset_id: spot_id_1,
+            deleveraged_base: -1000,
+            deleveraged_quote: 5000,
+        );
+}
+
+#[test]
+fn test_partial_spot_deleverage() {
+    // Partial deleverage: sell half the spot, position stays deleveragable.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let asset_id = asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 5000000, :token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 5000000, :token,
+    );
+
+    let deposit_spot = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: asset_id,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 10000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_spot);
+
+    let deposit_deleverager = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 200000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_deleverager);
+
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10100);
+    state.facade.transfer(:transfer_info);
+
+    state.facade.price_tick(asset_info: @asset_info, price: 1);
+
+    // At spot price 1:
+    //   Collateral: -10100, Spot TV = 9000, TV = -1100, TR = 0
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'should be deleveragable',
+    );
+
+    // Partial deleverage: sell 5000 out of 10000 spot units.
+    // Single spot asset so asset_tv / total_spot_tv = 1.
+    // collateral_diff must == |debt| * 1 = 10100. But we're only selling half...
+    // The asset_tv before the deleverage is 9000, total_spot_tv is 9000.
+    // asset_tv/total_spot_tv = 1, so collateral_diff = |debt| = 10100.
+    // After: collateral = -10100 + 10100 = 0, spot = 5000, TV = 0 + 4500 = 4500.
+    state
+        .facade
+        .deleverage(
+            :deleveraged_user,
+            :deleverager_user,
+            base_asset_id: asset_id,
+            deleveraged_base: -5000,
+            deleveraged_quote: 10100,
+        );
+
+    // Position should now be healthy with remaining spot.
+    // Collateral: 0, Spot: 5000 * 1 = 5000, spot_risk = 500, TV = 4500, TR = 0
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: 4500,
+        );
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+    assert(state.facade.is_healthy(position_id: deleveraged_user.position_id), 'should be healthy');
+}
+
+#[test]
+fn test_spot_deleverage_two_spot_assets() {
+    // Two spot assets: deleverage one, fairness check uses proportional ratio.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let strk_token = snforge_std::Token::STRK;
+    let strk_erc20 = strk_token.contract_address();
+    let spot_info_1 = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT_A', :risk_factor_data, oracles_len: 1, erc20_contract_address: strk_erc20,
+    );
+    let spot_id_1 = spot_info_1.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info_1, initial_price: 10);
+
+    let eth_token = snforge_std::Token::ETH;
+    let eth_erc20 = eth_token.contract_address();
+    let spot_info_2 = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT_B', :risk_factor_data, oracles_len: 1, erc20_contract_address: eth_erc20,
+    );
+    let spot_id_2 = spot_info_2.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info_2, initial_price: 10);
+
+    let deleveraged_user = state.new_user_with_position();
+    let deleverager_user = state.new_user_with_position();
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleveraged_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: strk_token,
+    );
+    snforge_std::set_balance(
+        target: deleverager_user.account.address, new_balance: 50000000, token: eth_token,
+    );
+
+    // Deposit 1000 of SPOT_A and 3000 of SPOT_B to deleveraged user.
+    let dep_a = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: spot_id_1,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 1000,
+        );
+    state.facade.process_deposit(deposit_info: dep_a);
+
+    let dep_b = state
+        .facade
+        .deposit_spot(
+            depositor: deleveraged_user.account,
+            asset_id: spot_id_2,
+            position_id: deleveraged_user.position_id,
+            quantized_amount: 3000,
+        );
+    state.facade.process_deposit(deposit_info: dep_b);
+
+    let deposit_deleverager = state
+        .facade
+        .deposit(
+            depositor: deleverager_user.account,
+            position_id: deleverager_user.position_id,
+            quantized_amount: 200000,
+        );
+    state.facade.process_deposit(deposit_info: deposit_deleverager);
+
+    // Transfer out base collateral to create debt (position stays healthy at price 10).
+    // At price 10: SPOT_A TV = 1000*10 - 1000*10*0.1 = 9000, SPOT_B TV = 3000*10 - 3000*10*0.1 =
+    // 27000 total_spot_tv = 36000. Transfer 10000 so collateral = -10000, TV = 26000 (still
+    // healthy).
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10000);
+    state.facade.transfer(:transfer_info);
+
+    assert(state.facade.is_healthy(position_id: deleveraged_user.position_id), 'should be healthy');
+
+    // Price drop to make position deleveragable (TV < 0).
+    // At price 1: SPOT_A value = 1000, risk = 100, TV_A = 900.
+    //             SPOT_B value = 3000, risk = 300, TV_B = 2700.
+    //             total_spot_tv = 900 + 2700 = 3600.
+    //             Collateral = -10000, TV = -10000 + 3600 = -6400, TR = 0.
+    state.facade.price_tick(asset_info: @spot_info_1, price: 1);
+    state.facade.price_tick(asset_info: @spot_info_2, price: 1);
+
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: -6400,
+        );
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
+    assert(
+        state.facade.is_deleveragable(position_id: deleveraged_user.position_id),
+        'should be deleveragable',
+    );
+
+    // Deleverage SPOT_A (asset_tv = 900, total_spot_tv = 3600).
+    // collateral_diff = |debt| * asset_tv / total_spot_tv = 10000 * 900 / 3600 = 2500.
+    state
+        .facade
+        .deleverage(
+            :deleveraged_user,
+            :deleverager_user,
+            base_asset_id: spot_id_1,
+            deleveraged_base: -1000,
+            deleveraged_quote: 2500,
+        );
+
+    // After: Collateral = -10000 + 2500 = -7500, SPOT_A = 0, SPOT_B TV = 2700
+    // TV = -7500 + 2700 = -4800, TR = 0
+    state
+        .facade
+        .validate_total_value(
+            position_id: deleveraged_user.position_id, expected_total_value: -4800,
+        );
+    state
+        .facade
+        .validate_total_risk(position_id: deleveraged_user.position_id, expected_total_risk: 0);
 }
 
 #[test]
