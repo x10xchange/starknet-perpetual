@@ -1154,7 +1154,7 @@ pub mod Core {
             check_signature: bool,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
-            assert(synthetic_asset.asset_type == AssetType::SYNTHETIC, TRADE_ASSET_NOT_SYNTHETIC);
+            assert(synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL, 'VAULT_SHARE_NO_TRADE');
             validate_trade(
                 :order_a,
                 :order_b,
