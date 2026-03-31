@@ -691,16 +691,15 @@ pub(crate) mod VaultsManager {
                 .preview_redeem(unquantized_amount_to_burn.into());
 
             let max_value = ((value_of_shares_from_er4626 * 1100) / 1000);
-
-            if value_to_receive.into() > max_value {
-                let err = format!(
-                    "Redeem value too high. requested={}, actual={}, number_of_shares={}",
-                    value_to_receive,
-                    value_of_shares_from_er4626,
-                    unquantized_amount_to_burn,
-                );
-                panic_with_byte_array(err: @err);
-            }
+            // if value_to_receive.into() > max_value {
+            //     let err = format!(
+            //         "Redeem value too high. requested={}, actual={}, number_of_shares={}",
+            //         value_to_receive,
+            //         value_of_shares_from_er4626,
+            //         unquantized_amount_to_burn,
+            //     );
+            //     panic_with_byte_array(err: @err);
+            // }
             let burn_result = vault_dispatcher
                 .redeem_with_price(
                     shares: unquantized_amount_to_burn.into(),
