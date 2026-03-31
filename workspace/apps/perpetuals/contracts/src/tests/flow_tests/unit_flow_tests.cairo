@@ -7454,5 +7454,6 @@ fn test_liquidate_vault_shares_with_interest() {
             actual_collateral_user: 400,
             interest_amount_vault_position: 50,
             interest_amount_liquidated: -20,
+            other_collaterals: array![].span(),
         );
 }

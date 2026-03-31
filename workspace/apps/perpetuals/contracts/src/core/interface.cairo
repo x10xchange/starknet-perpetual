@@ -144,6 +144,7 @@ pub trait ICore<TContractState> {
         actual_collateral_user: i64,
         interest_amount_vault_position: i64,
         interest_amount_liquidated: i64,
+        other_collaterals: Span<SpotAssetBalanceDiff>,
     );
     fn forced_withdraw_request(
         ref self: TContractState,

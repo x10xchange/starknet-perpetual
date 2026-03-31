@@ -3095,3 +3095,843 @@ fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets_not_enou
             other_collaterals: mixed_collaterals,
         );
 }
+
+#[test]
+fn test_liquidate_vault_shares_with_additional_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    // Add BTC spot collateral to vault
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Deposit 10 BTC into vault
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Vault has 5000 USDC + 10 BTC ($900 after haircut) = $5900
+    state.facade.validate_total_value(vault_config.position_id, 5900);
+
+    // Set vault protection limit high
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    // Redeeming user deposits and buys vault shares
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Create synthetic to make user liquidatable
+    let synth_risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', risk_factor_data: synth_risk_factor_data, oracles_len: 1,
+    );
+    let synth_asset_id = synthetic_info.asset_id;
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 2,
+            base_asset_id: synth_asset_id,
+            quote_amount: -2000,
+            fee_amount: 0,
+        );
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -2,
+            base_asset_id: synth_asset_id,
+            quote_amount: 2000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // redeeming user has:
+    // 1000 vault_shares @ $1 - 10% risk = $900 TV
+    // 2 sBTC @ $1000 = $2000
+    // -$2000 collateral (trade cost)
+    // TR = 2000 * 0.3 = $600
+    // TV = 900 + 2000 - 2000 = $900
+    state.facade.validate_total_value(redeeming_user.position_id, 900);
+    state.facade.validate_total_risk(redeeming_user.position_id, 600);
+
+    // Drop sBTC price to make user liquidatable
+    state.facade.price_tick(@synthetic_info, 600);
+    // TV = 900 + 1200 - 2000 = $100
+    // TR = 1200 * 0.3 = $360
+    // TV/TR = 100/360 < 1 => unhealthy
+    state.facade.validate_total_value(redeeming_user.position_id, 100);
+    state.facade.validate_total_risk(redeeming_user.position_id, 360);
+
+    // Capture balances before liquidation
+    let liquidated_btc_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    // Liquidate with mixed collateral: 300 USDC + 1 BTC @ $100 = $400 total
+    let btc_withdrawal_diff: i64 = 1;
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .liquidate_shares_with_interest(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 400,
+            actual_shares_user: 400,
+            actual_collateral_user: 300,
+            interest_amount_vault_position: 0,
+            interest_amount_liquidated: 0,
+            other_collaterals: mixed_collaterals,
+        );
+
+    // Verify spot asset balances moved correctly
+    let liquidated_btc_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
+    assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
+}
+
+#[test]
+fn test_liquidate_vault_shares_entirely_in_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    // Add BTC spot collateral to vault
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Make user liquidatable via synthetic trade
+    let synth_risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', risk_factor_data: synth_risk_factor_data, oracles_len: 1,
+    );
+    let synth_asset_id = synthetic_info.asset_id;
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 2,
+            base_asset_id: synth_asset_id,
+            quote_amount: -2000,
+            fee_amount: 1,
+        );
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -2,
+            base_asset_id: synth_asset_id,
+            quote_amount: 2000,
+            fee_amount: 1,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    println!("TRADE COMPLETED")
+
+    state.facade.price_tick(@synthetic_info, 600);
+    // TV = 900 + 1200 - 2000 = $100, TR = $360 => unhealthy
+
+    let liquidated_usdc_before = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_before = state.facade.get_position_collateral_balance(vault_config.position_id);
+    let liquidated_btc_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+
+    // Liquidate entirely in BTC: 4 BTC @ $100 = $400, 0 USDC
+    let btc_withdrawal_diff: i64 = 4;
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .liquidate_shares_with_interest(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 400,
+            actual_shares_user: 400,
+            actual_collateral_user: 0,
+            interest_amount_vault_position: 0,
+            interest_amount_liquidated: 0,
+            other_collaterals: mixed_collaterals,
+        );
+
+    // USDC should not change
+    let liquidated_usdc_after = state
+        .facade
+        .get_position_collateral_balance(redeeming_user.position_id);
+    let vault_usdc_after = state.facade.get_position_collateral_balance(vault_config.position_id);
+    assert(liquidated_usdc_after == liquidated_usdc_before, 'user usdc should not change');
+    assert(vault_usdc_after == vault_usdc_before, 'vault usdc should not change');
+
+    // BTC should transfer
+    let liquidated_btc_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
+    assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
+}
+
+#[test]
+#[should_panic(
+    expected: "Spot Balance for asset: AssetId { value: 4346947 } has gone negative. now: Balance { value: -8 }, was: Balance { value: 2 }, position: PositionId { value: 333 }",
+)]
+fn test_liquidate_vault_shares_fails_when_vault_lacks_spot_asset() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 20000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Only deposit 2 BTC into vault
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 2,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Make user liquidatable
+    let synth_risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', risk_factor_data: synth_risk_factor_data, oracles_len: 1,
+    );
+    let synth_asset_id = synthetic_info.asset_id;
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 2,
+            base_asset_id: synth_asset_id,
+            quote_amount: -2000,
+            fee_amount: 0,
+        );
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -2,
+            base_asset_id: synth_asset_id,
+            quote_amount: 2000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 2,
+            quote: -2000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    state.facade.price_tick(@synthetic_info, 600);
+
+    // Try to withdraw 10 BTC but vault only has 2
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: 10,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .liquidate_shares_with_interest(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 1000,
+            value_of_shares_vault: 1000,
+            actual_shares_user: 1000,
+            actual_collateral_user: 0,
+            interest_amount_vault_position: 0,
+            interest_amount_liquidated: 0,
+            other_collaterals: mixed_collaterals,
+        );
+}
+
+#[test]
+fn test_liquidate_vault_shares_with_multiple_spot_assets() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add BTC
+    let btc_token = snforge_std::Token::STRK;
+    let btc_erc20 = btc_token.contract_address();
+    let btc_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'BTC',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: btc_erc20,
+    );
+    let btc_asset_id = btc_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @btc_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: btc_token,
+    );
+
+    // Add ETH
+    let eth_token = snforge_std::Token::ETH;
+    let eth_erc20 = eth_token.contract_address();
+    let eth_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'ETH',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: eth_erc20,
+    );
+    let eth_asset_id = eth_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @eth_asset_info, initial_price: 50);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: eth_token,
+    );
+
+    // Deposit BTC and ETH into vault
+    let deposit_info_btc = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: btc_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_btc);
+
+    let deposit_info_eth = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: eth_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 20,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_eth);
+
+    // Vault has 5000 USDC + 10 BTC ($900) + 20 ETH ($900) = $6800
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.validate_total_value(vault_config.position_id, 6800);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 2000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 2000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 2000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Make user liquidatable
+    let synth_risk_factor_data = RiskFactorTiers {
+        tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', risk_factor_data: synth_risk_factor_data, oracles_len: 1,
+    );
+    let synth_asset_id = synthetic_info.asset_id;
+    state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 1000);
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 4,
+            base_asset_id: synth_asset_id,
+            quote_amount: -4000,
+            fee_amount: 0,
+        );
+    let other_side_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -4,
+            base_asset_id: synth_asset_id,
+            quote_amount: 4000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_side_order,
+            base: 4,
+            quote: -4000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // TV = 1800 (shares) + 4000 (synth) - 4000 (cost) = 1800
+    // TR = 4000 * 0.3 = 1200
+    // Drop price to make liquidatable
+    state.facade.price_tick(@synthetic_info, 400);
+    // TV = 1800 + 1600 - 4000 = -600
+    // TR = 1600 * 0.3 = 480
+
+    let liquidated_btc_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+    let liquidated_eth_before = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, eth_asset_id);
+    let vault_eth_before = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, eth_asset_id);
+
+    // Liquidate with 2 BTC @ $100 + 4 ETH @ $50 = $400, plus 200 USDC = $600 total
+    let btc_withdrawal_diff: i64 = 2;
+    let eth_withdrawal_diff: i64 = 4;
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: btc_asset_id, diff: btc_withdrawal_diff,
+        },
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: eth_asset_id, diff: eth_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .liquidate_shares_with_interest(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 600,
+            value_of_shares_vault: 600,
+            actual_shares_user: 600,
+            actual_collateral_user: 200,
+            interest_amount_vault_position: 0,
+            interest_amount_liquidated: 0,
+            other_collaterals: mixed_collaterals,
+        );
+
+    // Verify spot asset balances
+    let liquidated_btc_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, btc_asset_id);
+    let vault_btc_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, btc_asset_id);
+    let liquidated_eth_after = state
+        .facade
+        .get_position_asset_balance(redeeming_user.position_id, eth_asset_id);
+    let vault_eth_after = state
+        .facade
+        .get_position_asset_balance(vault_config.position_id, eth_asset_id);
+
+    let btc_diff_balance: perpetuals::core::types::balance::Balance = btc_withdrawal_diff.into();
+    assert(liquidated_btc_after == liquidated_btc_before + btc_diff_balance, 'user missing btc');
+    assert(vault_btc_after == vault_btc_before - btc_diff_balance, 'vault surplus btc');
+
+    let eth_diff_balance: perpetuals::core::types::balance::Balance = eth_withdrawal_diff.into();
+    assert(liquidated_eth_after == liquidated_eth_before + eth_diff_balance, 'user missing eth');
+    assert(vault_eth_after == vault_eth_before - eth_diff_balance, 'vault surplus eth');
+}
+
+#[test]
+#[should_panic(
+    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 555 }",
+)]
+fn test_liquidate_vault_shares_fails_when_becoming_more_unhealthy_due_to_asset_haircut() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position_id(333_u32.into());
+    let trade_user = state.new_user_with_position();
+    let redeeming_user = state.new_user_with_position_id(555_u32.into());
+
+    // Vault deposits 5000 USDC
+    let vault_init_deposit = state
+        .facade
+        .deposit(vault_user.account, vault_user.position_id, 5000_u64);
+    state.facade.process_deposit(vault_init_deposit);
+
+    // High risk factor: 50% haircut
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+
+    // Add risky spot asset (DOGE with 50% haircut)
+    let doge_token = snforge_std::Token::STRK;
+    let doge_erc20 = doge_token.contract_address();
+    let doge_asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'DGE',
+        risk_factor_data: risk_factor_data,
+        oracles_len: 1,
+        erc20_contract_address: doge_erc20,
+    );
+    let doge_asset_id = doge_asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @doge_asset_info, initial_price: 100);
+    snforge_std::set_balance(
+        target: vault_user.account.address, new_balance: 5000000, token: doge_token,
+    );
+
+    // Deposit 10 DOGE into Vault
+    let deposit_info_doge = state
+        .facade
+        .deposit_spot(
+            depositor: vault_user.account,
+            asset_id: doge_asset_id,
+            position_id: vault_user.position_id,
+            quantized_amount: 10,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_doge);
+
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    // Redeeming user deposits 1000 USDC and buys 1000 Vault Shares
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(trade_user.account, trade_user.position_id, 1000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 1,
+                    depositing_user: redeeming_user,
+                    receiving_user: redeeming_user,
+                ),
+        );
+
+    // Add synthetic with 90% risk to create TR
+    let risk_factor_tiers = RiskFactorTiers {
+        tiers: array![900].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_btc_info = AssetInfoTrait::new(
+        asset_name: 'sBTC', risk_factor_data: risk_factor_tiers, oracles_len: 1,
+    );
+    state.facade.add_active_synthetic(@synthetic_btc_info, initial_price: 1000);
+    let sbtc_id = synthetic_btc_info.asset_id;
+
+    let user_order = state
+        .facade
+        .create_order(
+            user: redeeming_user,
+            base_amount: 1,
+            base_asset_id: sbtc_id,
+            quote_amount: -1000,
+            fee_amount: 0,
+        );
+    let other_order = state
+        .facade
+        .create_order(
+            user: trade_user,
+            base_amount: -1,
+            base_asset_id: sbtc_id,
+            quote_amount: 1000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: user_order,
+            order_info_b: other_order,
+            base: 1,
+            quote: -1000,
+            fee_a: 0,
+            fee_b: 0,
+        );
+
+    // TV = 900 (shares) + 1000 (sBTC) - 1000 (cost) = 900
+    // TR = 1 * 1000 * 0.9 = 900
+    // Healthy: TV (900) == TR (900)
+    state.facade.validate_total_value(redeeming_user.position_id, 900);
+    state.facade.validate_total_risk(redeeming_user.position_id, 900);
+
+    // Drop sBTC price to make user liquidatable
+    state.facade.price_tick(@synthetic_btc_info, 800);
+    // TV = 900 (shares) + 800 (sBTC) - 1000 (cost) = 700
+    // TR = 1 * 800 * 0.9 = 720
+    // Unhealthy: TV (700) < TR (720)
+    state.facade.validate_total_value(redeeming_user.position_id, 700);
+    state.facade.validate_total_risk(redeeming_user.position_id, 720);
+
+    // Liquidate 1000 shares, receiving 10 DOGE (50% haircut) instead of USDC
+    // User loses 900 TV from shares (10% haircut on $1 shares)
+    // User gains 10 DOGE @ $100 = $1000 face value, but only $500 TV (50% haircut)
+    // TV after = 700 - 900 + 500 = 300
+    // TR after = 720 (unchanged)
+    // TV/TR went from 700/720 to 300/720 — strictly worse, should be rejected
+    let doge_withdrawal_diff: i64 = 10;
+    let mixed_collaterals = array![
+        perpetuals::core::types::asset::synthetic::SpotAssetBalanceDiff {
+            asset_id: doge_asset_id, diff: doge_withdrawal_diff,
+        },
+    ]
+        .span();
+
+    state
+        .facade
+        .liquidate_shares_with_interest(
+            vault: vault_config,
+            liquidated_user: redeeming_user,
+            shares_to_burn_vault: 1000,
+            value_of_shares_vault: 1000,
+            actual_shares_user: 1000,
+            actual_collateral_user: 0,
+            interest_amount_vault_position: 0,
+            interest_amount_liquidated: 0,
+            other_collaterals: mixed_collaterals,
+        );
+}
