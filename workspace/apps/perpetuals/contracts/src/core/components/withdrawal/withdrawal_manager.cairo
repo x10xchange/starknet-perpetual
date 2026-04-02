@@ -82,6 +82,7 @@ pub(crate) mod WithdrawalManager {
     };
     use starkware_utils::time::time::validate_expiration;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
@@ -142,6 +143,8 @@ pub(crate) mod WithdrawalManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);

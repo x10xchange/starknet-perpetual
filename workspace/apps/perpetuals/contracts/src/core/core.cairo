@@ -82,6 +82,7 @@ pub mod Core {
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
     use super::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
+    use treasury::interface::ITreasuryDispatcher;
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -173,6 +174,8 @@ pub mod Core {
         pub vaults: VaultsComponent::Storage,
         // --- USDC Migration ---
         migration_contract: ITokenMigrationDispatcher,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     #[event]
@@ -256,87 +259,6 @@ pub mod Core {
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
-        fn process_old_deposit(
-            ref self: ContractState,
-            operator_nonce: u64,
-            depositor: starknet::ContractAddress,
-            asset_id: AssetId,
-            position_id: PositionId,
-            quantized_amount: u64,
-            salt: felt252,
-        ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-
-            assert(asset_id == self.assets.get_collateral_id(), 'ILLEGAL_ASSET_ID');
-            let usdc_e_contract_address = self.migration_contract.read().get_legacy_token();
-            let quantum = self.assets.get_collateral_quantum();
-            let position_diff = PositionDiff {
-                collateral_diff: quantized_amount.into(), asset_diff: Option::None,
-            };
-
-            let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
-            let deposit_hash = deposit_hash(
-                token_address: usdc_e_contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            let deposit_status = self.get_deposit_status(:deposit_hash);
-            match deposit_status {
-                DepositStatus::NOT_REGISTERED => { panic_with_felt252('DEPOSIT_NOT_REGISTERED') },
-                DepositStatus::PROCESSED => { panic_with_felt252('DEPOSIT_ALREADY_PROCESSED') },
-                DepositStatus::CANCELED => { panic_with_felt252('DEPOSIT_ALREADY_CANCELED') },
-                DepositStatus::PENDING(_) => {},
-            }
-            self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
-            self.positions.apply_diff(:position_id, :position_diff);
-            self
-                .emit(
-                    deposit_events::DepositProcessed {
-                        position_id,
-                        depositing_address: depositor,
-                        collateral_id: asset_id,
-                        quantized_amount,
-                        unquantized_amount,
-                        deposit_request_hash: deposit_hash,
-                        salt,
-                    },
-                );
-        }
-        fn migrate_usdc(ref self: ContractState, amount: u256) {
-            self.roles.only_token_admin();
-
-            let perps_contract = get_contract_address();
-            let migration_contract = self.migration_contract.read();
-            let usdc_e = IERC20Dispatcher {
-                contract_address: migration_contract.get_legacy_token(),
-            };
-            let usdc = IERC20Dispatcher { contract_address: migration_contract.get_new_token() };
-
-            usdc_e.approve(spender: migration_contract.contract_address, :amount);
-
-            // Migrate to new token.
-            migration_contract.swap_to_new(:amount);
-
-            let usdc_e_balance_after = usdc_e.balance_of(account: perps_contract);
-            let usdc_balance_after = usdc.balance_of(account: perps_contract);
-
-            // If USDC balance exceeds 2x USDC_E balance (USDC_E < 1/3 of total), require collateral
-            // token update.
-            if 2 * usdc_e_balance_after < usdc_balance_after {
-                assert!(
-                    self
-                        .assets
-                        .get_collateral_token_contract()
-                        .contract_address == usdc
-                        .contract_address,
-                    "Migration requires collateral update",
-                );
-            }
-        }
         /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
         ///
         /// Validations:
