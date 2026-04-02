@@ -975,7 +975,7 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
 
     let replaceable_dispatcher = IReplaceableDispatcher { contract_address };
 
-    start_cheat_block_timestamp_global(10000);
+    start_cheat_block_timestamp_global(1);
 
     replaceable_dispatcher
         .add_new_implementation(
@@ -990,6 +990,7 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
                 final: false,
             },
         );
+    start_cheat_block_timestamp_global(1 + *cfg.upgrade_delay);
     replaceable_dispatcher
         .replace_to(
             ImplementationData {

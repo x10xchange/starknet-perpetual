@@ -25,15 +25,12 @@ pub mod Core {
     use core::dict::{Felt252Dict, Felt252DictTrait};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
-    use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
-    use perpetuals::core::components::deposit::interface::DepositStatus;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -49,11 +46,9 @@ pub mod Core {
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::{
-        StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
-    };
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::storage::StorageMapReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -84,7 +79,7 @@ pub mod Core {
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
-    use super::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
+    use super::ITokenMigrationDispatcher;
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
