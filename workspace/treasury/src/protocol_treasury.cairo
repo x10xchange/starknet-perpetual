@@ -1,15 +1,20 @@
-use treasury::interface::ITreasury;
 use starkware_utils::constants::DAY;
 use starkware_utils::time::time::TimeDelta;
+use treasury::interface::ITreasury;
 
 const PERCENT_SCALE: u128 = 1000;
 const CHECK_FREQUENCY: TimeDelta = TimeDelta { seconds: DAY };
 
 #[starknet::contract]
 pub mod ProtocolTreasury {
+    use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::introspection::src5::SRC5Component;
+    use starknet::storage::{
+        Map, StorageAsPointer, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
+        StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
+    };
     use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
     use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
@@ -17,14 +22,8 @@ pub mod ProtocolTreasury {
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::mul_wide_and_floor_div;
-    use super::{ITreasury, PERCENT_SCALE, CHECK_FREQUENCY};
-    use starknet::storage::{
-        Map, StorageAsPointer, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
-        StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
-    };
-    use starkware_utils::time::time::{TimeDelta, Time, Timestamp};
-    use core::panics::panic_with_byte_array;
-
+    use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+    use super::{CHECK_FREQUENCY, ITreasury, PERCENT_SCALE};
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -105,14 +104,18 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress, amount: u256,
         ) {
             assert(get_caller_address() == self.perps_contract.read(), 'ONLY_PERPS_CAN_WITHDRAW');
-            self.update_withdrawn_and_verify(collateral_address, amount.try_into().expect('AMOUNT_OVERFLOW'));
+            self
+                .update_withdrawn_and_verify(
+                    collateral_address, amount.try_into().expect('AMOUNT_OVERFLOW'),
+                );
             let collateral_dispatcher = IERC20Dispatcher { contract_address: collateral_address };
-            assert(collateral_dispatcher.transfer(self.perps_contract.read(), amount), 'TRANSFER_FAILED');
+            assert(
+                collateral_dispatcher.transfer(self.perps_contract.read(), amount),
+                'TRANSFER_FAILED',
+            );
         }
 
-        fn reset_protection_limit(
-            ref self: ContractState, collateral_address: ContractAddress,
-        ) {
+        fn reset_protection_limit(ref self: ContractState, collateral_address: ContractAddress) {
             self.roles.only_app_governor();
             self.amount_withdrawn_since_reset.write(collateral_address, 0);
             self.time_of_last_reset.write(collateral_address, Time::now());
@@ -145,6 +148,11 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress,
         ) -> u128 {
             let now = Time::now();
+            println!(
+                "current_time: {:?}, time_of_last_reset: {:?}",
+                now,
+                self.time_of_last_reset.read(collateral_address),
+            );
             let time_of_last_reset = self.time_of_last_reset.read(collateral_address);
             let time_elapsed = now.sub(time_of_last_reset);
             if time_elapsed > CHECK_FREQUENCY {
@@ -156,7 +164,9 @@ pub mod ProtocolTreasury {
                     .expect('BALANCE_OVERFLOW');
                 self.balance_at_last_reset.write(collateral_address, balance);
                 let limit = self.initial_protection_percent.read();
-                let max_withdrawal = mul_wide_and_floor_div(balance, limit.into() * 10, PERCENT_SCALE)
+                let max_withdrawal = mul_wide_and_floor_div(
+                    balance, limit.into() * 10, PERCENT_SCALE,
+                )
                     .expect('MUL_DIV_OVERFLOW');
                 self.max_allowed_withdrawal.write(collateral_address, max_withdrawal);
             }
@@ -170,6 +180,12 @@ pub mod ProtocolTreasury {
             let new_withdrawn = current_withdrawn + amount;
             let max_allowed = self.max_allowed_withdrawal.read(collateral_address);
             if new_withdrawn >= max_allowed {
+                println!(
+                    "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",
+                    self.balance_at_last_reset.read(collateral_address),
+                    new_withdrawn,
+                    max_allowed,
+                )
                 panic_with_byte_array(
                     err: @format!(
                         "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",

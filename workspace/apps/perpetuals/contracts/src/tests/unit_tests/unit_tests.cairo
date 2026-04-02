@@ -105,6 +105,7 @@ fn test_expiration_validation() {
     let position_id = user.position_id;
 
     let contract_address = init_by_dispatcher(cfg: @cfg, token_state: @token_state);
+
     let dispatcher = ICoreSafeDispatcher { contract_address };
     let position_dispatcher = IPositionsDispatcher { contract_address };
     let deposit_dispatcher = IDepositDispatcher { contract_address };

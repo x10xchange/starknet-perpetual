@@ -50,7 +50,9 @@ pub mod Core {
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::event::EventEmitter;
-    use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
+    use starknet::storage::{
+        StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
     use starknet::{ContractAddress, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
@@ -64,6 +66,7 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{TimeDelta, Timestamp};
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -82,7 +85,6 @@ pub mod Core {
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
     use super::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
-    use treasury::interface::ITreasuryDispatcher;
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -175,7 +177,7 @@ pub mod Core {
         // --- USDC Migration ---
         migration_contract: ITokenMigrationDispatcher,
         // --- Treasury ---
-        treasury: ITreasuryDispatcher,
+        pub treasury: ITreasuryDispatcher,
     }
 
     #[event]

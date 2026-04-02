@@ -1,3 +1,4 @@
+use snforge_std::stop_cheat_block_timestamp_global;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::{Pow, Zero};
 use core::poseidon::PoseidonTrait;
@@ -29,10 +30,13 @@ use snforge_std::{
     cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
     test_address,
 };
-use starknet::ContractAddress;
 use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
+use starknet::{ClassHash, ContractAddress};
+use starkware_utils::components::replaceability::interface::{
+    EICData, IReplaceableDispatcher, IReplaceableDispatcherTrait, ImplementationData,
+};
 use starkware_utils::components::roles::interface::{
-    IRoles, IRolesDispatcher, IRolesDispatcherTrait,
+    IRoles, IRolesDispatcher, IRolesDispatcherTrait, UPGRADE_GOVERNOR,
 };
 use starkware_utils::constants::{MAX_U128, TWO_POW_32, TWO_POW_40};
 use starkware_utils::signature::stark::Signature;
@@ -41,6 +45,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use treasury::interface::ITreasuryDispatcher;
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::components::external_components::interface::{
     EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
@@ -153,7 +158,9 @@ pub struct PerpetualsInitConfig {
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
+    fn deploy(
+        self: @PerpetualsInitConfig, token_state: @TokenState,
+    ) -> (ClassHash, ContractAddress) {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -170,7 +177,7 @@ pub impl CoreImpl of CoreTrait {
 
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
-        core_contract_address
+        (*core_contract.class_hash, core_contract_address)
     }
 }
 
@@ -291,6 +298,21 @@ pub fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
     let account_address = declare_and_deploy("AccountUpgradeable", calldata);
 
     account_address
+}
+
+pub fn deploy_treasury(
+    governance_admin: ContractAddress,
+    upgrade_delay: u64,
+    perps_contract: ContractAddress,
+    initial_protection_percent: u64,
+) -> ContractAddress {
+    let calldata: Array<felt252> = array![
+        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+        initial_protection_percent.into(),
+    ];
+    let treasury = declare_and_deploy("DummyTreasury", calldata);
+
+    treasury
 }
 
 // Public functions.
@@ -604,6 +626,19 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         );
 
     stop_cheat_caller_address(contract_address: test_address());
+
+    state
+        .treasury
+        .write(
+            ITreasuryDispatcher {
+                contract_address: deploy_treasury(
+                    governance_admin: *cfg.governance_admin,
+                    upgrade_delay: *cfg.upgrade_delay,
+                    perps_contract: test_address(),
+                    initial_protection_percent: 5,
+                ),
+            },
+        );
 
     state
 }
@@ -920,9 +955,56 @@ pub fn register_external_components_by_dispatcher(
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
-    let contract_address = cfg.deploy(:token_state);
+    let (class_hash, contract_address) = cfg.deploy(:token_state);
     set_roles_by_dispatcher(:contract_address, :cfg);
     register_external_components_by_dispatcher(:contract_address, :cfg);
+    let treasury_address = deploy_treasury(
+        governance_admin: *cfg.governance_admin,
+        upgrade_delay: *cfg.upgrade_delay,
+        perps_contract: contract_address,
+        initial_protection_percent: 5,
+    );
+
+    let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC").unwrap().contract_class();
+
+    cheat_caller_address(
+        contract_address: contract_address,
+        caller_address: *cfg.governance_admin,
+        span: CheatSpan::Indefinite,
+    );
+
+    let replaceable_dispatcher = IReplaceableDispatcher { contract_address };
+
+    start_cheat_block_timestamp_global(10000);
+
+    replaceable_dispatcher
+        .add_new_implementation(
+            ImplementationData {
+                impl_hash: class_hash,
+                eic_data: Some(
+                    EICData {
+                        eic_hash: *set_treasury_eic.class_hash,
+                        eic_init_data: array![treasury_address.into()].span(),
+                    },
+                ),
+                final: false,
+            },
+        );
+    replaceable_dispatcher
+        .replace_to(
+            ImplementationData {
+                impl_hash: class_hash,
+                eic_data: Some(
+                    EICData {
+                        eic_hash: *set_treasury_eic.class_hash,
+                        eic_init_data: array![treasury_address.into()].span(),
+                    },
+                ),
+                final: false,
+            },
+        );
+    stop_cheat_block_timestamp_global();
+    stop_cheat_caller_address(contract_address);
+
     contract_address
 }
-

@@ -1,3 +1,7 @@
+use snforge_std::stop_cheat_block_timestamp_global;
+use starkware_utils::components::replaceability::interface::EICData;
+use starkware_utils::components::replaceability::interface::ImplementationData;
+use starkware_utils::components::replaceability::interface::IReplaceableDispatcherTrait;
 use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::fmt::Debug;
@@ -58,6 +62,7 @@ use snforge_std::{
     start_cheat_block_timestamp_global, stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
+use starkware_utils::components::replaceability::interface::IReplaceableDispatcher;
 use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
@@ -67,7 +72,7 @@ use starkware_utils::hash::message_hash::OffchainMessageHash;
 use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
-    Deployable, TokenState, TokenTrait, cheat_caller_address_once,
+    Deployable, TokenState, TokenTrait, cheat_caller_address_once, set_account_as_upgrade_governor,
 };
 use vault::interface::IProtocolVaultDispatcher;
 use crate::core::components::deposit::events as deposit_events;
@@ -77,6 +82,7 @@ use crate::core::components::external_components::interface::{
 };
 use crate::core::types::funding::FundingIndex;
 use crate::tests::constants::KEY_PAIR_1;
+use crate::tests::test_utils::set_roles_by_dispatcher;
 
 pub const TIME_STEP: u64 = MINUTE;
 const BEGINNING_OF_TIME: u64 = DAY * 365 * 50;
@@ -288,6 +294,21 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
     }
 }
 
+pub fn deploy_treasury(
+    governance_admin: ContractAddress,
+    upgrade_delay: u64,
+    perps_contract: ContractAddress,
+    initial_protection_percent: u64,
+) -> ContractAddress {
+    let calldata: Array<felt252> = array![
+        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+        initial_protection_percent.into(),
+    ];
+    let treasury = declare_and_deploy("DummyTreasury", calldata);
+
+    treasury
+}
+
 impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress> {
     fn deploy(self: @PerpetualsConfig) -> ContractAddress {
         let mut calldata = ArrayTrait::new();
@@ -306,6 +327,58 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 
         let perpetuals_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (address, _) = perpetuals_contract.deploy(@calldata).unwrap();
+        set_account_as_upgrade_governor(
+            contract: address,
+            account: *self.governance_admin,
+            governance_admin: *self.governance_admin,
+        );
+
+        let treasury_address = deploy_treasury(
+            governance_admin: *self.governance_admin,
+            upgrade_delay: *self.upgrade_delay,
+            perps_contract: address,
+            initial_protection_percent: 5,
+        );
+
+        let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC")
+            .unwrap()
+            .contract_class();
+
+        cheat_caller_address(
+            contract_address: address,
+            caller_address: *self.governance_admin,
+            span: CheatSpan::Indefinite,
+        );
+
+        let replaceable_dispatcher = IReplaceableDispatcher { contract_address: address };
+
+        replaceable_dispatcher
+            .add_new_implementation(
+                ImplementationData {
+                    impl_hash: *perpetuals_contract.class_hash,
+                    eic_data: Some(
+                        EICData {
+                            eic_hash: *set_treasury_eic.class_hash,
+                            eic_init_data: array![treasury_address.into()].span(),
+                        },
+                    ),
+                    final: false,
+                },
+            );
+        replaceable_dispatcher
+            .replace_to(
+                ImplementationData {
+                    impl_hash: *perpetuals_contract.class_hash,
+                    eic_data: Some(
+                        EICData {
+                            eic_hash: *set_treasury_eic.class_hash,
+                            eic_init_data: array![treasury_address.into()].span(),
+                        },
+                    ),
+                    final: false,
+                },
+            );
+        stop_cheat_caller_address(contract_address: address);
         address
     }
 }
