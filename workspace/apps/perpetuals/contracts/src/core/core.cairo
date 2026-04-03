@@ -79,6 +79,9 @@ pub mod Core {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::components::vaults::vaults_contract::IVaultExternalDispatcherTrait;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
+    use crate::core::errors::{
+        VAULT_CANNOT_INITIATE_TRANSFER, VAULT_CANNOT_INITIATE_WITHDRAW,
+    };
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
     use super::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
@@ -358,7 +361,7 @@ pub mod Core {
             salt: felt252,
         ) {
             if (self._is_vault(vault_position: position_id)) {
-                panic_with_felt252('VAULT_CANNOT_INITIATE_WITHDRAW');
+                panic_with_felt252(VAULT_CANNOT_INITIATE_WITHDRAW);
             }
             self
                 .external_components
@@ -416,7 +419,7 @@ pub mod Core {
             salt: felt252,
         ) {
             if (self._is_vault(vault_position: position_id)) {
-                panic_with_felt252('VAULT_CANNOT_INITIATE_TRANSFER');
+                panic_with_felt252(VAULT_CANNOT_INITIATE_TRANSFER);
             }
             self
                 .external_components
