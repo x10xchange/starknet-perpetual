@@ -262,25 +262,16 @@ pub mod Vaults {
 
         fn activate_vault(
             ref self: ComponentState<TContractState>,
-            order: ConvertPositionToVault,
-            signature: Signature,
+            position_to_convert: PositionId,
+            vault_asset_id: AssetId,
         ) {
-            let vault_asset_id = order.vault_asset_id;
-            let vault_position = order.position_to_convert;
-            let expiration = order.expiration;
-            validate_expiration(:expiration, err: 'ACTIVATE_ORDER_EXPIRED');
+            let vault_position = position_to_convert;
 
             let mut positions = get_dep_component_mut!(ref self, Positions);
             let assets = get_dep_component!(@self, Assets);
             let position_info = positions.get_position_snapshot(vault_position);
 
             /// Validations:
-
-            validate_signature(
-                public_key: position_info.get_owner_public_key(),
-                message: order,
-                signature: signature,
-            );
 
             let existing_entry = self.registered_vaults_by_asset.read(vault_asset_id);
             assert(existing_entry.version == 0, 'VAULT_ALREADY_ACTIVATED');

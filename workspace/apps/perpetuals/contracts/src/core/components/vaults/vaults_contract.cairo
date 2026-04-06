@@ -8,7 +8,7 @@ use crate::core::types::asset::synthetic::SpotAssetBalanceDiff;
 #[starknet::interface]
 pub trait IVaultExternal<TContractState> {
     fn activate_vault(
-        ref self: TContractState, order: ConvertPositionToVault, signature: Signature,
+        ref self: TContractState, position_to_convert: PositionId, vault_asset_id: AssetId,
     );
     fn invest_in_vault(
         ref self: TContractState,
@@ -202,9 +202,9 @@ pub(crate) mod VaultsManager {
     #[abi(embed_v0)]
     impl VaultsImpl of IVaultExternal<ContractState> {
         fn activate_vault(
-            ref self: ContractState, order: ConvertPositionToVault, signature: Signature,
+            ref self: ContractState, position_to_convert: PositionId, vault_asset_id: AssetId,
         ) {
-            self.vaults.activate_vault(:order, :signature);
+            self.vaults.activate_vault(:position_to_convert, :vault_asset_id);
         }
 
         fn invest_in_vault(

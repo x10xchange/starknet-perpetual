@@ -714,8 +714,8 @@ pub mod Core {
         fn activate_vault(
             ref self: ContractState,
             operator_nonce: u64,
-            order: ConvertPositionToVault,
-            signature: Signature,
+            position_to_convert: PositionId,
+            vault_asset_id: AssetId,
         ) {
             self.assets.validate_assets_integrity();
             self.pausable.assert_not_paused();
@@ -723,7 +723,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .activate_vault(:order, :signature)
+                .activate_vault(position_to_convert, vault_asset_id)
         }
         // TODO: Add cancel invest in vault. Currently, this flow depend on a non-atomic
         // `process_deposit` step. A malicious operator could refuse to process the deposit,
@@ -1156,7 +1156,10 @@ pub mod Core {
             check_signature: bool,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
-            assert(synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL, 'VAULT_SHARE_NO_TRADE');
+            assert(
+                synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL,
+                'VAULT_SHARE_NO_TRADE',
+            );
             validate_trade(
                 :order_a,
                 :order_b,

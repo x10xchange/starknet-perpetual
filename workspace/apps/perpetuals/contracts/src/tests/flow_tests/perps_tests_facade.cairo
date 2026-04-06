@@ -791,7 +791,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.operator.set_as_caller(self.perpetuals_contract);
 
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .activate_vault(operator_nonce: operator_nonce, order: order, signature: signature);
+            .activate_vault(position_vault.position_id);
 
         self.registered_spots.append((asset_id, vault.contract_address));
         return VaultState {
