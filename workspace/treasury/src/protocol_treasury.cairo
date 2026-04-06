@@ -12,17 +12,16 @@ pub mod ProtocolTreasury {
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use starknet::storage::{
-        Map, StorageAsPointer, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
-        StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
     use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::mul_wide_and_floor_div;
-    use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+    use starkware_utils::time::time::{Time, Timestamp};
     use super::{CHECK_FREQUENCY, ITreasury, PERCENT_SCALE};
 
 
@@ -148,11 +147,6 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress,
         ) -> u128 {
             let now = Time::now();
-            println!(
-                "current_time: {:?}, time_of_last_reset: {:?}",
-                now,
-                self.time_of_last_reset.read(collateral_address),
-            );
             let time_of_last_reset = self.time_of_last_reset.read(collateral_address);
             let time_elapsed = now.sub(time_of_last_reset);
             if time_elapsed > CHECK_FREQUENCY {
@@ -180,12 +174,6 @@ pub mod ProtocolTreasury {
             let new_withdrawn = current_withdrawn + amount;
             let max_allowed = self.max_allowed_withdrawal.read(collateral_address);
             if new_withdrawn >= max_allowed {
-                println!(
-                    "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",
-                    self.balance_at_last_reset.read(collateral_address),
-                    new_withdrawn,
-                    max_allowed,
-                )
                 panic_with_byte_array(
                     err: @format!(
                         "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",

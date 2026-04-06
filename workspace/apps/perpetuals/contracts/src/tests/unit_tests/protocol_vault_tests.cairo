@@ -192,6 +192,9 @@ fn test_protocol_vault_initialisation_logic() {
     let tv_tr_of_vault = position_dispatcher.get_position_tv_tr(vault_user.position_id);
     assert_eq!(total_assets, tv_tr_of_vault.total_value.abs().into());
 
+    // Fund perps directly (in production, treasury.withdraw_from provides these tokens).
+    usdc_token_state.fund(recipient: perps_contract_address, amount: 500);
+
     let balance_of_perps_contract_before = usdc_token_state
         .balance_of(account: perps_contract_address);
 

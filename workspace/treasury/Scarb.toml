@@ -36,6 +36,7 @@ panic-backtrace = true
 [[test]]
 name = "treasury_unittest"
 build-external-contracts = [
+    "starkware_utils::erc20::erc20_mocks::DualCaseERC20Mock",
 ]
 
 [lib]

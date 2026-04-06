@@ -45,7 +45,7 @@ use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
-use treasury::interface::ITreasuryDispatcher;
+use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::components::external_components::interface::{
     EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
@@ -310,7 +310,14 @@ pub fn deploy_treasury(
         governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
         initial_protection_percent.into(),
     ];
-    let treasury = declare_and_deploy("DummyTreasury", calldata);
+    let treasury = declare_and_deploy("ProtocolTreasury", calldata);
+
+    // Set up roles on the treasury so reset_protection_limit can be called.
+    let roles = IRolesDispatcher { contract_address: treasury };
+    cheat_caller_address_once(contract_address: treasury, caller_address: governance_admin);
+    roles.register_app_role_admin(APP_ROLE_ADMIN());
+    cheat_caller_address_once(contract_address: treasury, caller_address: APP_ROLE_ADMIN());
+    roles.register_app_governor(APP_GOVERNOR());
 
     treasury
 }
@@ -627,18 +634,22 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
 
     stop_cheat_caller_address(contract_address: test_address());
 
-    state
-        .treasury
-        .write(
-            ITreasuryDispatcher {
-                contract_address: deploy_treasury(
-                    governance_admin: *cfg.governance_admin,
-                    upgrade_delay: *cfg.upgrade_delay,
-                    perps_contract: test_address(),
-                    initial_protection_percent: 5,
-                ),
-            },
-        );
+    let treasury_address = deploy_treasury(
+        governance_admin: *cfg.governance_admin,
+        upgrade_delay: *cfg.upgrade_delay,
+        perps_contract: test_address(),
+        initial_protection_percent: 100,
+    );
+    state.treasury.write(ITreasuryDispatcher { contract_address: treasury_address });
+
+    // Fund treasury so withdrawals have tokens to transfer.
+    (*token_state)
+        .fund(recipient: treasury_address, amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    // Reset protection limit so max_allowed is based on current balance.
+    let treasury_dispatcher = ITreasuryDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_GOVERNOR());
+    treasury_dispatcher.reset_protection_limit((*token_state).address);
 
     state
 }
@@ -962,7 +973,7 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
         governance_admin: *cfg.governance_admin,
         upgrade_delay: *cfg.upgrade_delay,
         perps_contract: contract_address,
-        initial_protection_percent: 5,
+        initial_protection_percent: 100,
     );
 
     let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC").unwrap().contract_class();
@@ -1006,6 +1017,13 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
         );
     stop_cheat_block_timestamp_global();
     stop_cheat_caller_address(contract_address);
+
+    // Fund treasury and reset protection limit.
+    (*token_state)
+        .fund(recipient: treasury_address, amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+    let treasury_dispatcher = ITreasuryDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_GOVERNOR());
+    treasury_dispatcher.reset_protection_limit((*token_state).address);
 
     contract_address
 }

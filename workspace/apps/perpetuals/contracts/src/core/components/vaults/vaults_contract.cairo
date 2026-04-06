@@ -65,6 +65,7 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::types::position::{PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::risk_factor::RiskFactorMulTrait;
+    use starknet::storage::StoragePointerReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -73,6 +74,7 @@ pub(crate) mod VaultsManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::Time;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::deposit::deposit_manager::IDepositExternalDispatcherTrait;
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
@@ -150,6 +152,8 @@ pub(crate) mod VaultsManager {
         pub vaults: VaultsComponent::Storage,
         #[substorage(v0)]
         pub external_components: ExternalComponentsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -261,6 +265,14 @@ pub(crate) mod VaultsManager {
                 .abs()
                 .wide_mul(self.assets.get_collateral_quantum());
 
+            // Withdraw collateral from treasury so perps has tokens for vault deposit.
+            self
+                .treasury
+                .read()
+                .withdraw_from(
+                    collateral_token_dispatcher.contract_address, on_chain_amount.into(),
+                );
+
             collateral_token_dispatcher
                 .approve(
                     spender: vault_dispatcher.contract_address, amount: on_chain_amount.into(),
@@ -270,6 +282,20 @@ pub(crate) mod VaultsManager {
                 .deposit(on_chain_amount.into(), starknet::get_contract_address())
                 .try_into()
                 .unwrap();
+
+            // Deposit collateral back to treasury (vault returns it to perps via after_deposit
+            // hook).
+            collateral_token_dispatcher
+                .approve(
+                    spender: self.treasury.read().contract_address,
+                    amount: on_chain_amount.into(),
+                );
+            self
+                .treasury
+                .read()
+                .deposit_into(
+                    collateral_token_dispatcher.contract_address, on_chain_amount.into(),
+                );
 
             let quantised_minted_shares: u64 = (minted_shares / vault_share_config.quantum.into())
                 .try_into()
@@ -523,6 +549,25 @@ pub(crate) mod VaultsManager {
 
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
 
+            // Withdraw collateral from treasury so perps has tokens for the vault's
+            // before_withdraw hook (which pulls collateral from perps to vault before burning
+            // shares and transferring it back).
+            self
+                .treasury
+                .read()
+                .withdraw_from(
+                    pnl_collateral_dispatcher.contract_address, value_to_receive.abs().into(),
+                );
+
+            // Withdraw vault shares from treasury so perps can burn them.
+            self
+                .treasury
+                .read()
+                .withdraw_from(
+                    vault_asset.token_contract.expect('NOT_ERC20'),
+                    unquantized_amount_to_burn.into(),
+                );
+
             //approve the vault contract to transfer pnl collateral to itself to "send back" to
             //perps
             pnl_collateral_dispatcher
@@ -564,6 +609,19 @@ pub(crate) mod VaultsManager {
                 );
                 panic_with_byte_array(err: @err);
             }
+
+            // Deposit redeemed collateral back into treasury.
+            pnl_collateral_dispatcher
+                .approve(
+                    spender: self.treasury.read().contract_address,
+                    amount: value_to_receive.abs().into(),
+                );
+            self
+                .treasury
+                .read()
+                .deposit_into(
+                    pnl_collateral_dispatcher.contract_address, value_to_receive.abs().into(),
+                );
 
             let vault_position_diff = PositionDiff {
                 collateral_diff: -value_to_receive.into(), asset_diff: None,
