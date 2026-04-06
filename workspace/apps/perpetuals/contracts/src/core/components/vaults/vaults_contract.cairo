@@ -256,46 +256,17 @@ pub(crate) mod VaultsManager {
             let vault_dispatcher = IERC4626Dispatcher {
                 contract_address: vault_share_config.token_contract.expect('NOT_ERC4626'),
             };
-            let collateral_token_dispatcher = self.assets.get_collateral_token_contract();
-            let current_collateral_balance = collateral_token_dispatcher
-                .balance_of(starknet::get_contract_address());
 
             let on_chain_amount: u128 = order
                 .quote_amount
                 .abs()
                 .wide_mul(self.assets.get_collateral_quantum());
 
-            // Withdraw collateral from treasury so perps has tokens for vault deposit.
-            self
-                .treasury
-                .read()
-                .withdraw_from(
-                    collateral_token_dispatcher.contract_address, on_chain_amount.into(),
-                );
-
-            collateral_token_dispatcher
-                .approve(
-                    spender: vault_dispatcher.contract_address, amount: on_chain_amount.into(),
-                );
-
+            // Vault deposit only mints shares; collateral stays in treasury.
             let minted_shares: u128 = vault_dispatcher
                 .deposit(on_chain_amount.into(), starknet::get_contract_address())
                 .try_into()
                 .unwrap();
-
-            // Deposit collateral back to treasury (vault returns it to perps via after_deposit
-            // hook).
-            collateral_token_dispatcher
-                .approve(
-                    spender: self.treasury.read().contract_address,
-                    amount: on_chain_amount.into(),
-                );
-            self
-                .treasury
-                .read()
-                .deposit_into(
-                    collateral_token_dispatcher.contract_address, on_chain_amount.into(),
-                );
 
             let quantised_minted_shares: u64 = (minted_shares / vault_share_config.quantum.into())
                 .try_into()
@@ -325,13 +296,6 @@ pub(crate) mod VaultsManager {
             self
                 .positions
                 .apply_diff(position_id: from_position_id, position_diff: sending_position_diff);
-
-            // 1. check that the collateral balance of the perps contract is returned to the
-            // same amount as before deposit into vault
-            // 2. apply diff to the vault position
-            let new_collateral_balance = collateral_token_dispatcher
-                .balance_of(starknet::get_contract_address());
-            assert(new_collateral_balance == current_collateral_balance, 'COLLATERAL_NOT_RETURNED');
 
             let vault_position_diff = PositionDiff {
                 collateral_diff: order.quote_amount.abs().into(), asset_diff: Option::None,
@@ -539,25 +503,7 @@ pub(crate) mod VaultsManager {
                 contract_address: vault_asset.token_contract.expect('NOT_ERC4626'),
             };
 
-            let vault_erc20Dispatcher = IERC20Dispatcher {
-                contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
-            };
-
-            let pnl_collateral_dispatcher = self.assets.get_collateral_token_contract();
-            let perps_contract_balance_before = pnl_collateral_dispatcher
-                .balance_of(starknet::get_contract_address());
-
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
-
-            // Withdraw collateral from treasury so perps has tokens for the vault's
-            // before_withdraw hook (which pulls collateral from perps to vault before burning
-            // shares and transferring it back).
-            self
-                .treasury
-                .read()
-                .withdraw_from(
-                    pnl_collateral_dispatcher.contract_address, value_to_receive.abs().into(),
-                );
 
             // Withdraw vault shares from treasury so perps can burn them.
             self
@@ -566,21 +512,6 @@ pub(crate) mod VaultsManager {
                 .withdraw_from(
                     vault_asset.token_contract.expect('NOT_ERC20'),
                     unquantized_amount_to_burn.into(),
-                );
-
-            //approve the vault contract to transfer pnl collateral to itself to "send back" to
-            //perps
-            pnl_collateral_dispatcher
-                .approve(
-                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
-                    amount: value_to_receive.abs().into(),
-                );
-
-            //approve the vault contract transferring vault shares to itself for burning
-            vault_erc20Dispatcher
-                .approve(
-                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
-                    amount: unquantized_amount_to_burn.into(),
                 );
 
             let value_of_shares_from_er4626 = vault_erc4626_dispatcher
@@ -609,19 +540,6 @@ pub(crate) mod VaultsManager {
                 );
                 panic_with_byte_array(err: @err);
             }
-
-            // Deposit redeemed collateral back into treasury.
-            pnl_collateral_dispatcher
-                .approve(
-                    spender: self.treasury.read().contract_address,
-                    amount: value_to_receive.abs().into(),
-                );
-            self
-                .treasury
-                .read()
-                .deposit_into(
-                    pnl_collateral_dispatcher.contract_address, value_to_receive.abs().into(),
-                );
 
             let vault_position_diff = PositionDiff {
                 collateral_diff: -value_to_receive.into(), asset_diff: None,
@@ -730,13 +648,6 @@ pub(crate) mod VaultsManager {
                     .positions
                     .apply_diff(position_id: receiving_position_id, position_diff: position_diff);
             }
-
-            let new_perps_contract_balance = pnl_collateral_dispatcher
-                .balance_of(starknet::get_contract_address());
-            assert(
-                new_perps_contract_balance == perps_contract_balance_before,
-                'COLLATERAL_NOT_RETURNED',
-            );
 
             self
                 .emit(

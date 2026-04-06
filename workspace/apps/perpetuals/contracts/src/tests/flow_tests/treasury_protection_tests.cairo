@@ -50,12 +50,9 @@ fn test_treasury_withdrawal_exceeding_limit_fails() {
     state.facade.withdraw(withdraw_request);
 }
 
-// TODO: Vault deposit/redeem round-trips currently double-count against the treasury protection
-// limit because withdraw_from is used for temporary token movements. This needs a flash_withdraw
-// mechanism (callback-based) that bypasses the limit and asserts balance is restored after the
-// callback completes.
+// Vault deposit/redeem no longer round-trip collateral through the treasury, so there is no
+// double-counting against the protection limit.
 #[test]
-#[should_panic(expected: "Treasury Protection Limit Exceeded")]
 fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
@@ -69,6 +66,7 @@ fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
         );
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user);
     state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_config.position_id, 100);
 
     state
         .facade
@@ -91,12 +89,8 @@ fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
                 ),
         );
 
-    // Set a tight 5% limit. Treasury has ~1B, so max withdrawal ≈ 50M.
-    // But with double-counting, each vault round-trip eats into that budget.
-    set_treasury_protection_percent(@state.facade, 5);
-
-    // Redeem 4000 from vault — tokens round-trip through treasury but should NOT
-    // count against the protection limit.
+    // Redeem 4000 from vault — only vault shares are withdrawn from treasury,
+    // no USDC round-trip occurs.
     state
         .facade
         .redeem_from_vault(
@@ -111,7 +105,11 @@ fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
             actual_collateral_user: 4000,
         );
 
-    // Real user withdrawal of 5k should succeed — treasury is fully funded.
-    let withdraw_request = state.facade.withdraw_request(user, 5000_u64);
+    // Set a tight 5% limit AFTER vault operations. Treasury has 60k USDC,
+    // so max withdrawal ≈ 3000. A 2000 withdrawal should succeed because
+    // vault operations did not eat into the USDC protection budget.
+    set_treasury_protection_percent(@state.facade, 5);
+
+    let withdraw_request = state.facade.withdraw_request(user, 2000_u64);
     state.facade.withdraw(withdraw_request);
 }

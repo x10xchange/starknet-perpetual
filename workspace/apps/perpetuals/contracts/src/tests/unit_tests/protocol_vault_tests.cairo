@@ -192,23 +192,13 @@ fn test_protocol_vault_initialisation_logic() {
     let tv_tr_of_vault = position_dispatcher.get_position_tv_tr(vault_user.position_id);
     assert_eq!(total_assets, tv_tr_of_vault.total_value.abs().into());
 
-    // Fund perps directly (in production, treasury.withdraw_from provides these tokens).
-    usdc_token_state.fund(recipient: perps_contract_address, amount: 500);
-
     let balance_of_perps_contract_before = usdc_token_state
         .balance_of(account: perps_contract_address);
 
-    //simulate perps contract approving a transfer
-    usdc_token_state
-        .approve(
-            owner: perps_contract_address,
-            spender: deployed_vault.contract_address,
-            amount: 500_u128,
-        );
     cheat_caller_address_once(
         contract_address: deployed_vault.contract_address, caller_address: perps_contract_address,
     );
-    //simulate the perps contract calling deposit
+    // Vault deposit only mints shares; no collateral is transferred.
     let shares_minted = deployed_vault
         .erc4626
         .deposit(assets: 500_u256, receiver: perps_contract_address);
@@ -220,7 +210,7 @@ fn test_protocol_vault_initialisation_logic() {
     let balance_of_perps_contract_after = usdc_token_state
         .balance_of(account: perps_contract_address);
 
-    // the vault should send back the same amount of tokens it received
+    // No collateral should move during vault deposit.
     assert_eq!(balance_of_perps_contract_before, balance_of_perps_contract_after);
 
     //the perps contract should receive the minted shares
