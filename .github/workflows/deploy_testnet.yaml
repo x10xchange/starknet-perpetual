@@ -35,72 +35,50 @@ jobs:
         run: |
           DEPLOYER_ADDRESS=0x19ec96d4aea6fdc6f0b5f393fec3f186aefa8f0b8356f43d07b921ff48aa5da
           # ./utils/deploy_vault.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }}
-          # CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
-          # echo "core hash $CORE_HASH"
+          CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
 
-          PERP_ADDRESS=$(sncast --account=testnet deploy \
-              --url ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --package perpetuals \
-              --contract-name Core \
-              --constructor-calldata \
-                  ${DEPLOYER_ADDRESS} \
-                  0 \
-                  0x1 \
-                  0x05114ccE0dfb65229284B8EDAb9304a6a53Fe8e80E33b94743993a03dd603A22\
-                  1 \
-                  604800 \
-                  86400 \
-                  604800 \
-                  4294967295 \
-                  86400 \
-                  0x4313efb47c1e488ad57e9b66ff11a941310e23307d8fdbc26b2795199bcb57a \
-                  0x4313efb47c1e488ad57e9b66ff11a941310e23307d8fdbc26b2795199bcb57a \
-                  172800 \
-                  0 \
-                  12000 \
-              | grep "Contract Address:" | awk '{print $NF}') 
-          echo "Deployed Core contract at address: $PERP_ADDRESS"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_upgrade_governor" \
-              --arguments "${DEPLOYER_ADDRESS}"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_app_role_admin" \
-              --arguments "${DEPLOYER_ADDRESS}"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_app_governor" \
-              --arguments "${DEPLOYER_ADDRESS}"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_operator" \
-              --arguments "${DEPLOYER_ADDRESS}" 
-          sleep 30s      
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_upgrade_governor" \
-              --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_app_role_admin" \
-              --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_app_governor" \
-              --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
-          sleep 30s
-          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
-              --contract-address "${PERP_ADDRESS}" \
-              --function "register_operator" \
-              --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"   
-          sleep 30s    
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_upgrade_governor" \
+          #     --arguments "${DEPLOYER_ADDRESS}"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_app_role_admin" \
+          #     --arguments "${DEPLOYER_ADDRESS}"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_app_governor" \
+          #     --arguments "${DEPLOYER_ADDRESS}"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_operator" \
+          #     --arguments "${DEPLOYER_ADDRESS}" 
+          # sleep 30s      
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_upgrade_governor" \
+          #     --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_app_role_admin" \
+          #     --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_app_governor" \
+          #     --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"
+          # sleep 30s
+          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} \
+          #     --contract-address "0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a" \
+          #     --function "register_operator" \
+          #     --arguments "0x030c48A027CCcD0A89262Ac3a0E92973cE206B206160380200FD68FB19B80c88"   
+          # sleep 30s    
 
           VAULT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c VaultsManager -p perpetuals)
           echo "vault hash $VAULT_COMPONENT_HASH"
@@ -122,21 +100,21 @@ jobs:
           VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
           echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
 
-          # echo add_new_implementation ${CORE_HASH} 1 0
-          # echo replace_to             ${CORE_HASH} 1 0
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
 
 
 
 
-          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
-          # # sleep 30s
-          # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
-          # # sleep 30s
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n VAULTS -h ${VAULT_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
-          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c $PERP_ADDRESS -n FORCED_REQUESTS -h ${FORCED_REQUESTS_COMPONENT_HASH}
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          # sleep 30s
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          # sleep 30s
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
+          ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x00641b3671983612e9090c47e49401db25d4753df2dfe3b6d7e2c85527dae85a -n FORCED_REQUESTS -h ${FORCED_REQUESTS_COMPONENT_HASH}
