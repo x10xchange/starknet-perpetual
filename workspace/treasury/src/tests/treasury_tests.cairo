@@ -229,6 +229,114 @@ fn test_change_protection_limit_percent_non_governor_fails() {
     dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
 }
 
+// ===================== Access Control: Only Perps Can Withdraw =====================
+
+#[test]
+#[should_panic(expected: 'ONLY_PERPS_CAN_WITHDRAW')]
+fn test_withdraw_from_app_governor_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.withdraw_from_as_non_perps(APP_GOVERNOR(), 100.into());
+}
+
+#[test]
+#[should_panic(expected: 'ONLY_PERPS_CAN_WITHDRAW')]
+fn test_withdraw_from_governance_admin_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.withdraw_from_as_non_perps(GOVERNANCE_ADMIN(), 100.into());
+}
+
+// ===================== Access Control: Only App Governor Can Call Admin Methods =====================
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_reset_protection_limit_perps_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: PERPS_CONTRACT(),
+    );
+    dispatcher.reset_protection_limit(facade.collateral_address);
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_reset_protection_limit_governance_admin_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: GOVERNANCE_ADMIN(),
+    );
+    dispatcher.reset_protection_limit(facade.collateral_address);
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_change_protection_limit_percent_perps_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: PERPS_CONTRACT(),
+    );
+    dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_change_protection_limit_percent_governance_admin_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: GOVERNANCE_ADMIN(),
+    );
+    dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
+}
+
+// ===================== Protection Limit Is Snapshotted, Not Rolling =====================
+
+#[test]
+#[should_panic(expected: "Treasury Protection Limit Exceeded")]
+fn test_protection_limit_snapshotted_not_rolling_with_deposits() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+
+    // 1. Deposit a small amount and snapshot the protection limit.
+    let small_deposit: u128 = 100_000;
+    facade.fund_treasury(small_deposit);
+    facade.reset_protection_limit();
+    // max_allowed = 100_000 * 5 * 10 / 1000 = 5_000.
+
+    // 2. Withdraw a small amount within the limit.
+    facade.withdraw_from_as_perps(4_000_u128.into());
+
+    // 3. Deposit a much larger amount — treasury balance is now high,
+    //    but the protection limit is still based on the old snapshot.
+    let large_deposit: u128 = 10_000_000;
+    let depositor = NON_PERPS_CALLER();
+    facade.fund_account(depositor, large_deposit);
+    facade.approve_treasury(depositor, large_deposit);
+    facade.deposit_into(depositor, large_deposit.into());
+
+    // 4. Try to withdraw an amount that would be fine under the new balance
+    //    but exceeds the snapshotted limit. Remaining allowance = 5_000 - 4_000 = 1_000.
+    //    Withdrawing 2_000 pushes total to 6_000 >= 5_000 => panic.
+    facade.withdraw_from_as_perps(2_000_u128.into());
+}
+
 // ===================== Auto-Reset After CHECK_FREQUENCY =====================
 
 #[test]
