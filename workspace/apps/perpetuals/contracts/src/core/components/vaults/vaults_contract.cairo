@@ -237,20 +237,20 @@ pub(crate) mod VaultsManager {
 
             let sending_position = self.positions.get_position_mut(position_id: from_position_id);
 
-            let order_hash = validate_signature(
-                public_key: sending_position.into().get_owner_public_key(),
-                message: order,
-                signature: signature,
-            );
+            // let order_hash = validate_signature(
+            //     public_key: sending_position.into().get_owner_public_key(),
+            //     message: order,
+            //     signature: signature,
+            // );
 
-            self
-                .fulfillment_tracking
-                .update_fulfillment(
-                    position_id: from_position_id,
-                    hash: order_hash,
-                    order_base_amount: order.quote_amount,
-                    actual_base_amount: order.quote_amount,
-                );
+            // self
+            //     .fulfillment_tracking
+            //     .update_fulfillment(
+            //         position_id: from_position_id,
+            //         hash: order_hash,
+            //         order_base_amount: order.quote_amount,
+            //         actual_base_amount: order.quote_amount,
+            //     );
 
             assert(!self.vaults.is_vault_position(from_position_id), 'FROM_POSITION_IS_VAULT');
             assert(
