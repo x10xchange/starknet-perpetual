@@ -358,7 +358,7 @@ pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
             initial_protection_percent: 100,
         );
 
-        let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC")
+        let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
             .unwrap()
             .contract_class();
 

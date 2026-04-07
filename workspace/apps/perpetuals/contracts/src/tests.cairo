@@ -5,5 +5,3 @@ mod flow_tests;
 mod test_utils;
 mod unit_tests;
 
-mod register_treasury_eic;
-mod dummy_treasury;

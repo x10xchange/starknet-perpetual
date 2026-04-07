@@ -9,4 +9,5 @@ pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
 pub mod migrate_collateral_eic;
+pub mod migrate_collateral_to_treasury_eic;
 pub mod replace_vault_collateral_eic;

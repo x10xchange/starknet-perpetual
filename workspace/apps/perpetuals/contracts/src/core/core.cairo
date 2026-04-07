@@ -60,6 +60,7 @@ pub mod Core {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
+    use starknet::storage::StoragePointerReadAccess;
     use starkware_utils::time::time::{TimeDelta, Timestamp};
     use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
@@ -715,6 +716,10 @@ pub mod Core {
             ref self: ContractState, vault_position: PositionId, limit: u32,
         ) {
             self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
+
+        fn get_treasury_address(ref self: ContractState) -> ContractAddress {
+            self.treasury.contract_address.read()
         }
     }
 

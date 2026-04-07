@@ -142,4 +142,6 @@ pub trait ICore<TContractState> {
     fn update_vault_protection_limit(
         ref self: TContractState, vault_position: PositionId, limit: u32,
     );
+
+    fn get_treasury_address(ref self: TContractState) -> ContractAddress;
 }

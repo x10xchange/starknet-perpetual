@@ -976,7 +976,9 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
         initial_protection_percent: 100,
     );
 
-    let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC").unwrap().contract_class();
+    let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
+        .unwrap()
+        .contract_class();
 
     cheat_caller_address(
         contract_address: contract_address,
