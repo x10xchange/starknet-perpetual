@@ -55,13 +55,8 @@ mod MigrateCollateralToTreasuryEIC {
             let treasury_contract_address: ContractAddress = (*eic_init_data[0])
                 .try_into()
                 .unwrap();
-            let mut treasury = ITreasuryDispatcher {
-                contract_address: treasury_contract_address,
-            };
-            assert(
-                treasury.get_perps_contract() == perps_address,
-                'TREASURY_PERPS_MISMATCH',
-            );
+            let mut treasury = ITreasuryDispatcher { contract_address: treasury_contract_address };
+            assert(treasury.get_perps_contract() == perps_address, 'TREASURY_PERPS_MISMATCH');
             self.treasury.write(treasury);
 
             // Migrate base collateral.
@@ -84,10 +79,7 @@ mod MigrateCollateralToTreasuryEIC {
                     Option::None => { continue; },
                 };
                 migrate_token(
-                    token_address,
-                    perps_address,
-                    treasury_contract_address,
-                    ref treasury,
+                    token_address, perps_address, treasury_contract_address, ref treasury,
                 );
             };
         }

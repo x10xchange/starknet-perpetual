@@ -7,7 +7,6 @@ pub mod ProtocolVault {
     use ERC4626Component::Fee;
     use core::num::traits::Zero;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::extensions::erc4626::{
         ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
@@ -155,18 +154,16 @@ pub mod ProtocolVault {
             ref self: ERC4626Component::ComponentState<ContractState>,
             from: ContractAddress,
             assets: u256,
-        ) {
-            // No-op: collateral is managed by the treasury, not the vault.
-            // The vault only mints/burns shares; it never holds the underlying asset.
+        ) {// No-op: collateral is managed by the treasury, not the vault.
+        // The vault only mints/burns shares; it never holds the underlying asset.
         }
 
         fn transfer_assets_out(
             ref self: ERC4626Component::ComponentState<ContractState>,
             to: ContractAddress,
             assets: u256,
-        ) {
-            // No-op: collateral is managed by the treasury, not the vault.
-            // The vault only mints/burns shares; it never holds the underlying asset.
+        ) {// No-op: collateral is managed by the treasury, not the vault.
+        // The vault only mints/burns shares; it never holds the underlying asset.
         }
 
         fn get_total_assets(self: @ERC4626Component::ComponentState<ContractState>) -> u256 {

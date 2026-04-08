@@ -53,8 +53,8 @@ pub(crate) mod DeleverageManager {
     };
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DELEVERAGES;
     use crate::core::components::external_components::named_component::ITypedComponent;
+    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
-    use crate::core::components::vaults::vaults::{Vaults as VaultsComponent};
     use crate::core::types::position::{Position, PositionDiff};
     use crate::core::value_risk_calculator::deleveraged_position_validations;
     use super::{AssetId, Deleverage, IDeleverageManager};

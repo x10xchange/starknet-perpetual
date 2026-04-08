@@ -74,12 +74,12 @@ pub(crate) mod DepositManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::Time;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::components::deposit::events;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DEPOSITS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
-    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use super::super::errors;
@@ -278,10 +278,7 @@ pub(crate) mod DepositManager {
                 .approve(
                     spender: self.treasury.read().contract_address, amount: unquantized_amount,
                 );
-            self
-                .treasury
-                .read()
-                .deposit_into(token_contract.contract_address, unquantized_amount);
+            self.treasury.read().deposit_into(token_contract.contract_address, unquantized_amount);
             self
                 .emit(
                     events::DepositProcessed {

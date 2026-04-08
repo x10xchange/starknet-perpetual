@@ -67,9 +67,7 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
         );
         roles_dispatcher.register_upgrade_governor(governance_admin);
 
-        cheat_caller_address_once(
-            contract_address: treasury_address, caller_address: role_admin,
-        );
+        cheat_caller_address_once(contract_address: treasury_address, caller_address: role_admin);
         roles_dispatcher.register_app_governor(app_governor);
 
         TreasuryTestsFacade {
@@ -101,9 +99,7 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
 
     /// Call deposit_into as a given caller.
     fn deposit_into(ref self: TreasuryTestsFacade, caller: ContractAddress, amount: u256) {
-        cheat_caller_address_once(
-            contract_address: self.treasury_address, caller_address: caller,
-        );
+        cheat_caller_address_once(contract_address: self.treasury_address, caller_address: caller);
         self.treasury_dispatcher.deposit_into(self.collateral_address, amount);
     }
 
@@ -119,9 +115,7 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
     fn withdraw_from_as_non_perps(
         ref self: TreasuryTestsFacade, caller: ContractAddress, amount: u256,
     ) {
-        cheat_caller_address_once(
-            contract_address: self.treasury_address, caller_address: caller,
-        );
+        cheat_caller_address_once(contract_address: self.treasury_address, caller_address: caller);
         self.treasury_dispatcher.withdraw_from(self.collateral_address, amount);
     }
 
@@ -138,9 +132,7 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
         cheat_caller_address_once(
             contract_address: self.treasury_address, caller_address: self.app_governor,
         );
-        self
-            .treasury_dispatcher
-            .change_protection_limit_percent(self.collateral_address, percent);
+        self.treasury_dispatcher.change_protection_limit_percent(self.collateral_address, percent);
     }
 
     /// Get the token balance of an address.

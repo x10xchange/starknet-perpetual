@@ -2,12 +2,12 @@ use core::num::traits::Zero;
 use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepositDispatcherTrait};
-use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::core::Core::InternalCoreFunctions;
+use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::position::PositionId;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
