@@ -173,7 +173,7 @@ pub mod ProtocolTreasury {
             let current_withdrawn = self.update_and_get_protection_limit(collateral_address);
             let new_withdrawn = current_withdrawn + amount;
             let max_allowed = self.max_allowed_withdrawal.read(collateral_address);
-            if new_withdrawn >= max_allowed {
+            if new_withdrawn > max_allowed {
                 panic_with_byte_array(
                     err: @format!(
                         "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",
