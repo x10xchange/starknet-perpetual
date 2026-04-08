@@ -60,7 +60,6 @@ pub mod Core {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starknet::storage::StoragePointerReadAccess;
     use starkware_utils::time::time::{TimeDelta, Timestamp};
     use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
