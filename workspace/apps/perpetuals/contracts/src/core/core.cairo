@@ -33,13 +33,11 @@ pub mod Core {
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
-    use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
         StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starknet::get_caller_address;
-    use treasury::interface::ITreasuryDispatcher;
+    use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -55,6 +53,7 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -1164,7 +1163,10 @@ pub mod Core {
             check_signature: bool,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
-            assert(synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL, 'VAULT_SHARE_NO_TRADE');
+            assert(
+                synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL,
+                'VAULT_SHARE_NO_TRADE',
+            );
             validate_trade(
                 :order_a,
                 :order_b,

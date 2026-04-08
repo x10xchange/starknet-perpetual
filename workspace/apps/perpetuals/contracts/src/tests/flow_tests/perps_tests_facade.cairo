@@ -344,9 +344,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 
 #[generate_trait]
 pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
-    fn deploy_and_get_treasury(
-        self: @PerpetualsConfig,
-    ) -> (ContractAddress, ContractAddress) {
+    fn deploy_and_get_treasury(self: @PerpetualsConfig) -> (ContractAddress, ContractAddress) {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -686,8 +684,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
         );
-        let (perpetuals_contract, treasury_address) = perpetuals_config
-            .deploy_and_get_treasury();
+        let (perpetuals_contract, treasury_address) = perpetuals_config.deploy_and_get_treasury();
 
         let perpetual_wrapper = PerpsTestsFacade {
             governance_admin: perpetuals_config.governance_admin,

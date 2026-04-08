@@ -5,9 +5,9 @@ use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepo
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
-use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::core::Core::InternalCoreFunctions;
+use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::position::PositionId;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{

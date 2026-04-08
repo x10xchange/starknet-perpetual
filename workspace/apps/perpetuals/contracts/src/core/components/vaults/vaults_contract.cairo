@@ -823,7 +823,6 @@ pub(crate) mod VaultsManager {
                     position_id: receiving_position_id, tvtr: receiver_tv_tr,
                 );
             }
-
         }
     }
 }

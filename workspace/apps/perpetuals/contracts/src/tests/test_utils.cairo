@@ -24,10 +24,9 @@ use perpetuals::tests::event_test_utils::{
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
-    test_address,
+    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    stop_cheat_caller_address, test_address,
 };
-use snforge_std::stop_cheat_block_timestamp_global;
 use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
 use starkware_utils::components::replaceability::interface::{

@@ -251,7 +251,8 @@ fn test_withdraw_from_governance_admin_fails() {
     facade.withdraw_from_as_non_perps(GOVERNANCE_ADMIN(), 100.into());
 }
 
-// ===================== Access Control: Only App Governor Can Call Admin Methods =====================
+// ===================== Access Control: Only App Governor Can Call Admin Methods
+// =====================
 
 #[test]
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
