@@ -125,6 +125,7 @@ pub(crate) mod WithdrawalManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, validate_expiration};
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
@@ -194,6 +195,8 @@ pub(crate) mod WithdrawalManager {
         forced_action_timelock: TimeDelta,
         // Cost for executing forced actions.
         premium_cost: u64,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -432,6 +435,10 @@ pub(crate) mod WithdrawalManager {
 
             self.positions.apply_diff(:position_id, :position_diff);
             let withdraw_unquantized_amount = quantum * amount;
+            self
+                .treasury
+                .read()
+                .withdraw_from(token_contract.contract_address, withdraw_unquantized_amount.into());
             assert(
                 token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into()),
                 TRANSFER_FAILED,

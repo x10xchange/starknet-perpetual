@@ -33,11 +33,13 @@ pub mod Core {
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{
         StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::get_caller_address;
+    use treasury::interface::ITreasuryDispatcher;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -169,6 +171,8 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        pub treasury: ITreasuryDispatcher,
         /// ------- Core -------
         // Forced action parameters:
         // Timelock before forced actions can be executed.
@@ -1131,6 +1135,10 @@ pub mod Core {
             self.roles.only_app_governor();
             assert(max_interest_rate_per_sec.is_non_zero(), ZERO_MAX_INTEREST_RATE);
             self.positions.max_interest_rate_per_sec.write(max_interest_rate_per_sec);
+        }
+
+        fn get_treasury_address(ref self: ContractState) -> ContractAddress {
+            self.treasury.contract_address.read()
         }
     }
 

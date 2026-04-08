@@ -81,6 +81,7 @@ pub(crate) mod DepositManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use super::super::errors;
@@ -146,6 +147,8 @@ pub(crate) mod DepositManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -295,6 +298,14 @@ pub(crate) mod DepositManager {
                 );
 
             self.positions.apply_diff(:position_id, :position_diff);
+            token_contract
+                .approve(
+                    spender: self.treasury.read().contract_address, amount: unquantized_amount,
+                );
+            self
+                .treasury
+                .read()
+                .deposit_into(token_contract.contract_address, unquantized_amount);
             self
                 .emit(
                     events::DepositProcessed {
