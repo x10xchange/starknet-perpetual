@@ -75,17 +75,20 @@ mod MigrateCollateralToTreasuryEIC {
 
             // Migrate all spot/vault share assets by iterating the asset map.
             for (asset_id, _) in self.assets.timely_data {
-                let asset_config = self.assets.asset_config.read(asset_id);
-                if let Option::Some(config) = asset_config {
-                    if let Option::Some(token_address) = config.token_contract {
-                        migrate_token(
-                            token_address,
-                            perps_address,
-                            treasury_contract_address,
-                            ref treasury,
-                        );
-                    }
-                }
+                let config = match self.assets.asset_config.read(asset_id) {
+                    Option::Some(c) => c,
+                    Option::None => { continue; },
+                };
+                let token_address = match config.token_contract {
+                    Option::Some(addr) => addr,
+                    Option::None => { continue; },
+                };
+                migrate_token(
+                    token_address,
+                    perps_address,
+                    treasury_contract_address,
+                    ref treasury,
+                );
             };
         }
     }
