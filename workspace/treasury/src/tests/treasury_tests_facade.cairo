@@ -1,6 +1,9 @@
 use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, start_cheat_block_timestamp_global};
 use starknet::ContractAddress;
+use starkware_utils::components::pausable::interface::{
+    IPausableDispatcher, IPausableDispatcherTrait,
+};
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
 use starkware_utils::constants::DAY;
 use starkware_utils_testing::test_utils::{
@@ -68,6 +71,16 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
 
         cheat_caller_address_once(contract_address: treasury_address, caller_address: role_admin);
         roles_dispatcher.register_app_governor(app_governor);
+
+        cheat_caller_address_once(
+            contract_address: treasury_address, caller_address: governance_admin,
+        );
+        roles_dispatcher.register_security_admin(SECURITY_ADMIN());
+
+        cheat_caller_address_once(
+            contract_address: treasury_address, caller_address: SECURITY_ADMIN(),
+        );
+        roles_dispatcher.register_security_agent(SECURITY_AGENT());
 
         TreasuryTestsFacade {
             treasury_address,
@@ -149,5 +162,23 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
     fn advance_time(ref self: TreasuryTestsFacade, seconds: u64) {
         let current = starknet::get_block_timestamp();
         start_cheat_block_timestamp_global(current + seconds);
+    }
+
+    /// Pause the treasury as the security agent.
+    fn pause_treasury(ref self: TreasuryTestsFacade) {
+        let pausable = IPausableDispatcher { contract_address: self.treasury_address };
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: SECURITY_AGENT(),
+        );
+        pausable.pause();
+    }
+
+    /// Unpause the treasury as the security admin.
+    fn unpause_treasury(ref self: TreasuryTestsFacade) {
+        let pausable = IPausableDispatcher { contract_address: self.treasury_address };
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: SECURITY_ADMIN(),
+        );
+        pausable.unpause();
     }
 }
