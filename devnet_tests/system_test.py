@@ -6,7 +6,7 @@ from devnet_tests.perpetuals_test_utils import PerpetualsTestUtils
 
 @pytest_asyncio.fixture(autouse=True)
 async def upgade_test_utils(test_utils: PerpetualsTestUtils):
-    """Upgrade the perpetuals contract to the latest version and register the external components."""
+    """Upgrade the perpetuals contract and register the external components."""
 
     # Fund the accounts
     await test_utils.fund_account(

@@ -299,7 +299,9 @@ class PerpetualsTestUtils:
         return nonce
 
     async def get_base_collateral_asset_id(self) -> int:
-        (asset_id,) = await self.known_contracts["operator"].functions["get_base_collateral_id"].call()
+        (asset_id,) = (
+            await self.known_contracts["operator"].functions["get_base_collateral_id"].call()
+        )
         return asset_id["value"]
 
     async def get_base_collateral_token_contract(self) -> int:
@@ -903,9 +905,7 @@ class PerpetualsTestUtils:
         governance_admin = self.known_accounts["governance_admin"]
 
         # Declare and deploy the treasury contract.
-        treasury_declare = await declare_contract(
-            "treasury_ProtocolTreasury", governance_admin
-        )
+        treasury_declare = await declare_contract("treasury_ProtocolTreasury", governance_admin)
         treasury_deploy = await deploy_contract(
             treasury_declare,
             [
@@ -930,9 +930,9 @@ class PerpetualsTestUtils:
         ].invoke_v3(GOVERNANCE_ADMIN_ADDRESS, auto_estimate=True)
         await invocation.wait_for_acceptance(check_interval=0.1)
 
-        invocation = await treasury_contract_as_admin.functions[
-            "register_app_governor"
-        ].invoke_v3(APP_GOVERNOR_ADDRESS, auto_estimate=True)
+        invocation = await treasury_contract_as_admin.functions["register_app_governor"].invoke_v3(
+            APP_GOVERNOR_ADDRESS, auto_estimate=True
+        )
         await invocation.wait_for_acceptance(check_interval=0.1)
 
         self.treasury_address = treasury_address
@@ -973,9 +973,9 @@ class PerpetualsTestUtils:
             provider=app_governor,
             cairo_version=cairo_version,
         )
-        invocation = await treasury_contract.functions[
-            "reset_protection_limit"
-        ].invoke_v3(collateral_token, auto_estimate=True)
+        invocation = await treasury_contract.functions["reset_protection_limit"].invoke_v3(
+            collateral_token, auto_estimate=True
+        )
         await invocation.wait_for_acceptance(check_interval=0.1)
 
     async def invest_in_vault(self, account: Account, min_base_amount: int, quote_amount: int):
