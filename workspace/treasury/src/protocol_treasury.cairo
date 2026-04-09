@@ -4,6 +4,7 @@ use treasury::interface::ITreasury;
 
 const PERCENT_SCALE: u128 = 1000;
 const CHECK_FREQUENCY: TimeDelta = TimeDelta { seconds: DAY };
+const DEFAULT_PROTECTION_PERCENT: u64 = 5;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 struct ProtectionState {
@@ -30,7 +31,9 @@ pub mod ProtocolTreasury {
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::utils::mul_wide_and_floor_div;
     use starkware_utils::time::time::Time;
-    use super::{CHECK_FREQUENCY, ITreasury, PERCENT_SCALE, ProtectionState};
+    use super::{
+        CHECK_FREQUENCY, DEFAULT_PROTECTION_PERCENT, ITreasury, PERCENT_SCALE, ProtectionState,
+    };
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -58,7 +61,7 @@ pub mod ProtocolTreasury {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         perps_contract: ContractAddress,
-        initial_protection_percent: u64,
+        protection_percent_override: Map<ContractAddress, u64>,
         protection: Map<ContractAddress, ProtectionState>,
     }
 
@@ -81,12 +84,10 @@ pub mod ProtocolTreasury {
         governance_admin: ContractAddress,
         upgrade_delay: u64,
         perps_contract: ContractAddress,
-        initial_protection_percent: u64,
     ) {
         self.roles.initialize(:governance_admin);
         self.replaceability.initialize(:upgrade_delay);
         self.perps_contract.write(perps_contract);
-        self.initial_protection_percent.write(initial_protection_percent);
     }
 
     fn compute_max_withdrawal(balance: u128, percent: u64) -> u128 {
@@ -139,7 +140,8 @@ pub mod ProtocolTreasury {
                 .balance_of(starknet::get_contract_address())
                 .try_into()
                 .expect('BALANCE_OVERFLOW');
-            let state = snapshot_protection(balance, self.initial_protection_percent.read());
+            let percent = self.get_protection_percent(collateral_address);
+            let state = snapshot_protection(balance, percent);
             self.protection.write(collateral_address, state);
         }
 
@@ -147,7 +149,7 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress, percent: u64,
         ) {
             self.roles.only_app_governor();
-            self.initial_protection_percent.write(percent);
+            self.protection_percent_override.write(collateral_address, percent);
             let mut state = self.protection.read(collateral_address);
             state
                 .max_allowed_withdrawal =
@@ -158,6 +160,17 @@ pub mod ProtocolTreasury {
 
     #[generate_trait]
     impl PrivateImpl of PrivateTrait {
+        fn get_protection_percent(
+            self: @ContractState, collateral_address: ContractAddress,
+        ) -> u64 {
+            let override_percent = self.protection_percent_override.read(collateral_address);
+            if override_percent != 0 {
+                override_percent
+            } else {
+                DEFAULT_PROTECTION_PERCENT
+            }
+        }
+
         fn update_and_get_protection_limit(
             ref self: ContractState, collateral_address: ContractAddress,
         ) -> ProtectionState {
@@ -169,7 +182,8 @@ pub mod ProtocolTreasury {
                     .balance_of(starknet::get_contract_address())
                     .try_into()
                     .expect('BALANCE_OVERFLOW');
-                state = snapshot_protection(balance, self.initial_protection_percent.read());
+                let percent = self.get_protection_percent(collateral_address);
+                state = snapshot_protection(balance, percent);
                 self.protection.write(collateral_address, state);
             }
             state

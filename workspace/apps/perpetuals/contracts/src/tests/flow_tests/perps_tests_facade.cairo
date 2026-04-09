@@ -298,11 +298,9 @@ pub fn deploy_treasury(
     governance_admin: ContractAddress,
     upgrade_delay: u64,
     perps_contract: ContractAddress,
-    initial_protection_percent: u64,
 ) -> ContractAddress {
     let calldata: Array<felt252> = array![
         governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
-        initial_protection_percent.into(),
     ];
     let treasury = declare_and_deploy("ProtocolTreasury", calldata);
 
@@ -352,7 +350,6 @@ pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
             governance_admin: *self.governance_admin,
             upgrade_delay: *self.upgrade_delay,
             perps_contract: address,
-            initial_protection_percent: 100,
         );
 
         let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
@@ -2016,6 +2013,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.set_app_governor_as_caller();
         ICoreDispatcher { contract_address: self.perpetuals_contract }
             .update_vault_protection_limit(:vault_position, :limit);
+    }
+
+    fn set_treasury_protection_percent_for_token(
+        ref self: PerpsTestsFacade, token_address: ContractAddress, percent: u64,
+    ) {
+        let treasury = ITreasuryDispatcher { contract_address: self.treasury_address };
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        treasury.change_protection_limit_percent(token_address, percent);
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        treasury.reset_protection_limit(token_address);
     }
 }
 

@@ -48,7 +48,6 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
         governance_admin.serialize(ref calldata);
         UPGRADE_DELAY.serialize(ref calldata);
         perps_contract.serialize(ref calldata);
-        INITIAL_PROTECTION_PERCENT.serialize(ref calldata);
 
         let contract_class = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
         let (treasury_address, _) = contract_class.deploy(@calldata).unwrap();
