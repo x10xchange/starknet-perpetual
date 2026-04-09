@@ -154,7 +154,7 @@ pub mod ProtocolVault {
             ref self: ERC4626Component::ComponentState<ContractState>,
             from: ContractAddress,
             assets: u256,
-        ) {// No-op: collateral is managed by the treasury, not the vault.
+        ) { // No-op: collateral is managed by the treasury, not the vault.
         // The vault only mints/burns shares; it never holds the underlying asset.
         }
 
@@ -162,7 +162,7 @@ pub mod ProtocolVault {
             ref self: ERC4626Component::ComponentState<ContractState>,
             to: ContractAddress,
             assets: u256,
-        ) {// No-op: collateral is managed by the treasury, not the vault.
+        ) { // No-op: collateral is managed by the treasury, not the vault.
         // The vault only mints/burns shares; it never holds the underlying asset.
         }
 

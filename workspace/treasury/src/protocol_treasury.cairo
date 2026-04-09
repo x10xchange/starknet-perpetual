@@ -1,18 +1,10 @@
 use starkware_utils::constants::DAY;
-use starkware_utils::time::time::{TimeDelta, Timestamp};
+use starkware_utils::time::time::TimeDelta;
 use treasury::interface::ITreasury;
+use treasury::types::{ProtectionState, ProtectionStateTrait, compute_max_withdrawal};
 
-const PERCENT_SCALE: u128 = 1000;
 const CHECK_FREQUENCY: TimeDelta = TimeDelta { seconds: DAY };
 const DEFAULT_PROTECTION_PERCENT: u64 = 5;
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-struct ProtectionState {
-    time_of_last_reset: Timestamp,
-    amount_withdrawn_since_reset: u128,
-    balance_at_last_reset: u128,
-    max_allowed_withdrawal: u128,
-}
 
 #[starknet::contract]
 pub mod ProtocolTreasury {
@@ -31,10 +23,10 @@ pub mod ProtocolTreasury {
     use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
-    use starkware_utils::math::utils::mul_wide_and_floor_div;
     use starkware_utils::time::time::Time;
     use super::{
-        CHECK_FREQUENCY, DEFAULT_PROTECTION_PERCENT, ITreasury, PERCENT_SCALE, ProtectionState,
+        CHECK_FREQUENCY, DEFAULT_PROTECTION_PERCENT, ITreasury, ProtectionState,
+        ProtectionStateTrait, compute_max_withdrawal,
     };
 
 
@@ -100,20 +92,6 @@ pub mod ProtocolTreasury {
         self.perps_contract.write(perps_contract);
     }
 
-    fn compute_max_withdrawal(balance: u128, percent: u64) -> u128 {
-        mul_wide_and_floor_div(balance, percent.into() * 10, PERCENT_SCALE)
-            .expect('MUL_DIV_OVERFLOW')
-    }
-
-    fn snapshot_protection(balance: u128, percent: u64) -> ProtectionState {
-        ProtectionState {
-            time_of_last_reset: Time::now(),
-            amount_withdrawn_since_reset: 0,
-            balance_at_last_reset: balance,
-            max_allowed_withdrawal: compute_max_withdrawal(balance, percent),
-        }
-    }
-
     #[abi(embed_v0)]
     pub impl Impl of ITreasury<ContractState> {
         fn get_perps_contract(self: @ContractState) -> ContractAddress {
@@ -153,7 +131,7 @@ pub mod ProtocolTreasury {
                 .try_into()
                 .expect('BALANCE_OVERFLOW');
             let percent = self.get_protection_percent(collateral_address);
-            let state = snapshot_protection(balance, percent);
+            let state = ProtectionStateTrait::new(balance, percent);
             self.protection.write(collateral_address, state);
         }
 
@@ -195,7 +173,7 @@ pub mod ProtocolTreasury {
                     .try_into()
                     .expect('BALANCE_OVERFLOW');
                 let percent = self.get_protection_percent(collateral_address);
-                state = snapshot_protection(balance, percent);
+                state = ProtectionStateTrait::new(balance, percent);
                 self.protection.write(collateral_address, state);
             }
             state
