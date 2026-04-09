@@ -1112,7 +1112,7 @@ pub mod Core {
         }
 
         fn enable_escape_hatch(ref self: ContractState) {
-            self.roles.only_app_governor();
+            self.roles.only_upgrade_governor();
             self.forced_actions_enabled.write(true);
         }
         fn get_max_interest_rate_per_sec(self: @ContractState) -> u32 {
