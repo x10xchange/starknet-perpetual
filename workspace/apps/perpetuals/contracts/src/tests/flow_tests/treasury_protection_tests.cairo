@@ -44,7 +44,14 @@ fn test_treasury_withdrawal_exceeding_limit_fails() {
     state.facade.process_deposit(deposit);
 
     // 0% — no withdrawals allowed.
-    set_treasury_protection_percent(@state.facade, 0);
+    // Call change_protection_limit_percent directly (without reset_protection_limit) because
+    // an override of 0 is treated as "no override" by get_protection_percent, so a subsequent
+    // reset would revert to the default 5%.
+    let treasury = ITreasuryDispatcher { contract_address: state.facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: state.facade.treasury_address, caller_address: state.facade.app_governor,
+    );
+    treasury.change_protection_limit_percent(state.facade.token_state.address, 0);
 
     let withdraw_request = state.facade.withdraw_request(user, 1_u64);
     state.facade.withdraw(withdraw_request);
@@ -83,6 +90,13 @@ fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
                     depositing_user: user,
                     receiving_user: user,
                 ),
+        );
+
+    // Allow full withdrawal of vault share tokens from treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     // Redeem 4000 from vault — only vault shares are withdrawn from treasury,

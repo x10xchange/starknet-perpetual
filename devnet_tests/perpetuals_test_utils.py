@@ -897,7 +897,7 @@ class PerpetualsTestUtils:
         )
         await invocation.wait_for_acceptance(check_interval=0.1)
 
-    async def deploy_treasury(self, initial_protection_percent: int = 100) -> int:
+    async def deploy_treasury(self) -> int:
         """
         Deploy the ProtocolTreasury contract and set up roles.
         Returns the treasury contract address.
@@ -912,7 +912,6 @@ class PerpetualsTestUtils:
                 GOVERNANCE_ADMIN_ADDRESS,  # governance_admin
                 0,  # upgrade_delay
                 self.perpetuals_contract_address,  # perps_contract
-                initial_protection_percent,  # initial_protection_percent
             ],
         )
         treasury_address = treasury_deploy.deployed_contract.address

@@ -435,9 +435,9 @@ pub(crate) mod WithdrawalManager {
 
             self.positions.apply_diff(:position_id, :position_diff);
             let withdraw_unquantized_amount = quantum * amount;
-            self
-                .treasury
-                .read()
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            treasury
                 .withdraw_from(token_contract.contract_address, withdraw_unquantized_amount.into());
             assert(
                 token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into()),

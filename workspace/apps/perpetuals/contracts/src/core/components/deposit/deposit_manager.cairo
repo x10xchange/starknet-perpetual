@@ -298,11 +298,10 @@ pub(crate) mod DepositManager {
                 );
 
             self.positions.apply_diff(:position_id, :position_diff);
-            token_contract
-                .approve(
-                    spender: self.treasury.read().contract_address, amount: unquantized_amount,
-                );
-            self.treasury.read().deposit_into(token_contract.contract_address, unquantized_amount);
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            token_contract.approve(spender: treasury.contract_address, amount: unquantized_amount);
+            treasury.deposit_into(token_contract.contract_address, unquantized_amount);
             self
                 .emit(
                     events::DepositProcessed {

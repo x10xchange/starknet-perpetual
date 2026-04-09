@@ -58,6 +58,13 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let redeeming_user_usdc_balance_before_redeem = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
@@ -186,6 +193,13 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_with_9pct_premium() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let redeeming_user_usdc_balance_before_redeem = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
@@ -307,6 +321,14 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_is_rejected_with_11pc
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     const value_of_shares: u64 = 444;
     state
         .facade
@@ -357,6 +379,13 @@ fn test_redeem_from_protocol_vault_impacts_price_as_expected() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let value_of_1000_shares_before_withdrawal = vault_config
@@ -429,6 +458,13 @@ fn test_redeem_from_protocol_vault_unfair__user_redeem() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let value_of_shares: u64 = 399;
 
     state
@@ -478,6 +514,13 @@ fn test_redeem_from_protocol_vault_unfair__vault_redeem() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let value_of_shares: u64 = 399;
@@ -651,6 +694,13 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -795,6 +845,13 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr_of_unhealth
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -925,6 +982,13 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -1047,6 +1111,13 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr_starting_with_negat
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let risk_factor_data = RiskFactorTiers {
@@ -1176,6 +1247,13 @@ fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_nega
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -1299,6 +1377,13 @@ fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let risk_factor_data = RiskFactorTiers {
@@ -1463,6 +1548,13 @@ fn test_redeem_vault_shares_negative() {
                     depositing_user: user,
                     receiving_user: user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     // Redeeming user position before redeem:
@@ -1646,6 +1738,13 @@ fn test_forced_redeem_from_vault_after_timelock() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let redeeming_user_usdc_balance_before = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
@@ -1785,6 +1884,13 @@ fn test_forced_redeem_from_vault_by_operator_before_timelock() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let redeeming_user_usdc_balance_before = state
@@ -1953,6 +2059,13 @@ fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+
     let value_of_shares: u64 = 399;
     let shares_to_redeem: u64 = 400;
 
@@ -2027,6 +2140,13 @@ fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection percent for vault share token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
         );
 
     let value_of_shares: u64 = 399;
@@ -2132,6 +2252,16 @@ fn test_redeem_from_protocol_vault_with_additional_spot_assets() {
                 ),
         );
     println!("Deposited into vault");
+
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(erc20_contract_address, 100);
 
     // Prepare redeem details
     let shares_to_burn = 650; // vault price is currently $1
@@ -2315,6 +2445,15 @@ fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token and spot tokens
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+    state.facade.set_treasury_protection_percent_for_token(eth_erc20, 100);
+
     // Prepare redeem details
     // Value of vault shares = $1
     let shares_to_burn = 1000;
@@ -2481,6 +2620,14 @@ fn test_redeem_entirely_in_other_spot_assets() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+
     let shares_to_burn = 400;
 
     let redeeming_user_usdc_before = state
@@ -2611,6 +2758,14 @@ fn test_redeem_fails_when_vault_lacks_requested_asset() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+
     // Try to withdraw 5 BTC, but the vault only has 2 BTC! This will trigger a negative value
     // error during spot diff apply
     let shares_to_burn = 500;
@@ -2711,6 +2866,14 @@ fn test_redeem_fails_when_user_becomes_unhealthy_due_to_asset_haircut() {
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and DOGE spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(doge_erc20, 100);
 
     // We add a synthetic asset to create TR. Let's add BTC synthetic with 90% risk!
     let risk_factor_tiers = RiskFactorTiers {
@@ -2864,6 +3027,14 @@ fn test_redeem_from_vault_with_interest_different_receiver_and_other_collaterals
                     receiving_user: withdrawing_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and DOGE spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(doge_erc20, 100);
 
     state.facade.advance_time(seconds: starkware_utils::constants::HOUR);
 
@@ -3064,6 +3235,15 @@ fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets_not_enou
                 ),
         );
 
+    // Set treasury protection percent for vault share token and spot tokens
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+    state.facade.set_treasury_protection_percent_for_token(eth_erc20, 100);
+
     let shares_to_burn = 1000;
     let value_of_shares: u64 = 1000;
     let actual_usdc_collateral = 300;
@@ -3170,6 +3350,14 @@ fn test_liquidate_vault_shares_with_additional_spot_assets() {
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
 
     // Create synthetic to make user liquidatable
     let synth_risk_factor_data = RiskFactorTiers {
@@ -3338,6 +3526,14 @@ fn test_liquidate_vault_shares_entirely_in_spot_assets() {
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
 
     // Make user liquidatable via synthetic trade
     let synth_risk_factor_data = RiskFactorTiers {
@@ -3508,6 +3704,14 @@ fn test_liquidate_vault_shares_fails_when_vault_lacks_spot_asset() {
                 ),
         );
 
+    // Set treasury protection percent for vault share token and BTC spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+
     // Make user liquidatable
     let synth_risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
@@ -3668,6 +3872,15 @@ fn test_liquidate_vault_shares_with_multiple_spot_assets() {
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and spot tokens
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20, 100);
+    state.facade.set_treasury_protection_percent_for_token(eth_erc20, 100);
 
     // Make user liquidatable
     let synth_risk_factor_data = RiskFactorTiers {
@@ -3853,6 +4066,14 @@ fn test_liquidate_vault_shares_fails_when_becoming_more_unhealthy_due_to_asset_h
                     receiving_user: redeeming_user,
                 ),
         );
+
+    // Set treasury protection percent for vault share token and DOGE spot token
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state.facade.set_treasury_protection_percent_for_token(doge_erc20, 100);
 
     // Add synthetic with 90% risk to create TR
     let risk_factor_tiers = RiskFactorTiers {

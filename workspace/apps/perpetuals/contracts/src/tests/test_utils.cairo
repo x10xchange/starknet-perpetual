@@ -327,11 +327,9 @@ pub fn deploy_treasury(
     governance_admin: ContractAddress,
     upgrade_delay: u64,
     perps_contract: ContractAddress,
-    initial_protection_percent: u64,
 ) -> ContractAddress {
     let calldata: Array<felt252> = array![
         governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
-        initial_protection_percent.into(),
     ];
     let treasury = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
     let (treasury_address, _) = treasury.deploy(@calldata).unwrap();
@@ -790,7 +788,6 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         governance_admin: *cfg.governance_admin,
         upgrade_delay: *cfg.upgrade_delay,
         perps_contract: test_address(),
-        initial_protection_percent: 100,
     );
     state.treasury.write(ITreasuryDispatcher { contract_address: treasury_address });
 
@@ -1168,7 +1165,6 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
         governance_admin: *cfg.governance_admin,
         upgrade_delay: *cfg.upgrade_delay,
         perps_contract: contract_address,
-        initial_protection_percent: 100,
     );
 
     let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
