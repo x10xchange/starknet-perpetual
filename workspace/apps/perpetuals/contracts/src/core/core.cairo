@@ -1112,7 +1112,10 @@ pub mod Core {
         }
 
         fn enable_escape_hatch(ref self: ContractState) {
-            assert!(self.roles.is_governance_admin(starknet::get_caller_address()), "ONLY_GOVERNANCE_ADMIN");
+            assert!(
+                self.roles.is_governance_admin(starknet::get_caller_address()),
+                "ONLY_GOVERNANCE_ADMIN",
+            );
             self.forced_actions_enabled.write(true);
         }
         fn get_max_interest_rate_per_sec(self: @ContractState) -> u32 {
@@ -1156,7 +1159,10 @@ pub mod Core {
             check_signature: bool,
         ) -> (PositionTVTR, PositionTVTR) {
             let synthetic_asset = self.assets.get_asset_config(order_a.base_asset_id);
-            assert(synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL, 'VAULT_SHARE_NO_TRADE');
+            assert(
+                synthetic_asset.asset_type != AssetType::VAULT_SHARE_COLLATERAL,
+                'VAULT_SHARE_NO_TRADE',
+            );
             validate_trade(
                 :order_a,
                 :order_b,
