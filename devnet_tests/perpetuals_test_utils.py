@@ -15,7 +15,12 @@ from starknet_py.net.models.chains import StarknetChainId
 from starknet_py.proxy.contract_abi_resolver import ContractAbiResolver, ProxyConfig
 from test_utils.starknet_test_utils import StarknetTestUtils
 from typing import Dict, Tuple, Optional
-from devnet_tests.conftest import contracts_inner_fixture, resource_bounds
+from devnet_tests.conftest import (
+    contracts_inner_fixture,
+    resource_bounds,
+    GOVERNANCE_ADMIN_ADDRESS,
+    APP_GOVERNOR_ADDRESS,
+)
 from typing import Union
 from starknet_py.contract import DeclareResult, DeployResult
 from starknet_py.net.account.account import Account
@@ -888,6 +893,89 @@ class PerpetualsTestUtils:
                 auto_estimate=True,
             )
         )
+        await invocation.wait_for_acceptance(check_interval=0.1)
+
+    async def deploy_treasury(self, initial_protection_percent: int = 100) -> int:
+        """
+        Deploy the ProtocolTreasury contract and set up roles.
+        Returns the treasury contract address.
+        """
+        governance_admin = self.known_accounts["governance_admin"]
+
+        # Declare and deploy the treasury contract.
+        treasury_declare = await declare_contract(
+            "treasury_ProtocolTreasury", governance_admin
+        )
+        treasury_deploy = await deploy_contract(
+            treasury_declare,
+            [
+                GOVERNANCE_ADMIN_ADDRESS,  # governance_admin
+                0,  # upgrade_delay
+                self.perpetuals_contract_address,  # perps_contract
+                initial_protection_percent,  # initial_protection_percent
+            ],
+        )
+        treasury_address = treasury_deploy.deployed_contract.address
+
+        # Set up roles: register app_role_admin, then app_governor.
+        treasury_contract_as_admin = Contract(
+            address=treasury_address,
+            abi=treasury_deploy.deployed_contract.data.abi,
+            provider=governance_admin,
+            cairo_version=treasury_deploy.deployed_contract.data.cairo_version,
+        )
+
+        invocation = await treasury_contract_as_admin.functions[
+            "register_app_role_admin"
+        ].invoke_v3(GOVERNANCE_ADMIN_ADDRESS, auto_estimate=True)
+        await invocation.wait_for_acceptance(check_interval=0.1)
+
+        invocation = await treasury_contract_as_admin.functions[
+            "register_app_governor"
+        ].invoke_v3(APP_GOVERNOR_ADDRESS, auto_estimate=True)
+        await invocation.wait_for_acceptance(check_interval=0.1)
+
+        self.treasury_address = treasury_address
+        return treasury_address
+
+    async def get_treasury_eic_data(self) -> dict:
+        """
+        Declare the MigrateCollateralToTreasuryEIC and return eic_data
+        for use with upgrade_perpetuals_contract.
+        Treasury must be deployed first via deploy_treasury().
+        """
+        eic_declare = await declare_contract(
+            "perpetuals_MigrateCollateralToTreasuryEIC",
+            self.known_accounts["upgrade_governor"],
+        )
+        return {
+            "eic_hash": eic_declare.class_hash,
+            "eic_init_data": [self.treasury_address],
+        }
+
+    async def reset_treasury_protection(self):
+        """
+        Reset the treasury protection limit for the base collateral.
+        Must be called after the EIC migration moves tokens into the treasury.
+        """
+        collateral_token = await self.get_base_collateral_token_contract()
+        app_governor = self.known_accounts["app_governor"]
+
+        abi, cairo_version = await ContractAbiResolver(
+            address=self.treasury_address,
+            client=app_governor.client,
+            proxy_config=ProxyConfig(),
+        ).resolve()
+
+        treasury_contract = Contract(
+            address=self.treasury_address,
+            abi=abi,
+            provider=app_governor,
+            cairo_version=cairo_version,
+        )
+        invocation = await treasury_contract.functions[
+            "reset_protection_limit"
+        ].invoke_v3(collateral_token, auto_estimate=True)
         await invocation.wait_for_acceptance(check_interval=0.1)
 
     async def invest_in_vault(self, account: Account, min_base_amount: int, quote_amount: int):
