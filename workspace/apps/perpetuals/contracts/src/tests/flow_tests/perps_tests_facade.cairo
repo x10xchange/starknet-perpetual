@@ -261,7 +261,6 @@ struct PerpetualsConfig {
     governance_admin: ContractAddress,
     role_admin: ContractAddress,
     app_governor: ContractAddress,
-    upgrade_governor: ContractAddress,
     upgrade_delay: u64,
     collateral_id: AssetId,
     collateral_token_address: ContractAddress,
@@ -289,7 +288,6 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
             governance_admin: GOVERNANCE_ADMIN(),
             role_admin: APP_ROLE_ADMIN(),
             app_governor: APP_GOVERNOR(),
-            upgrade_governor: UPGRADE_GOVERNOR(),
             upgrade_delay: UPGRADE_DELAY,
             collateral_id: COLLATERAL_ASSET_ID(),
             collateral_token_address,
@@ -466,7 +464,6 @@ pub struct PerpsTestsFacade {
     pub governance_admin: ContractAddress,
     pub role_admin: ContractAddress,
     pub app_governor: ContractAddress,
-    pub upgrade_governor: ContractAddress,
     pub perpetuals_contract: ContractAddress,
     pub token_state: TokenState,
     pub collateral_quantum: u64,
@@ -515,13 +512,6 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
             contract_address: *self.perpetuals_contract, caller_address: *self.app_governor,
         );
     }
-
-    fn set_upgrade_governor_as_caller(self: @PerpsTestsFacade) {
-        cheat_caller_address_once(
-            contract_address: *self.perpetuals_contract, caller_address: *self.upgrade_governor,
-        );
-    }
-
     fn set_app_role_admin_as_caller(self: @PerpsTestsFacade) {
         cheat_caller_address_once(
             contract_address: *self.perpetuals_contract, caller_address: *self.role_admin,
@@ -539,7 +529,7 @@ impl PrivatePerpsTestsFacadeImpl of PrivatePerpsTestsFacadeTrait {
         self.set_governance_admin_as_caller();
         dispatcher.register_app_role_admin(*self.role_admin);
         self.set_governance_admin_as_caller();
-        dispatcher.register_upgrade_governor(*self.upgrade_governor);
+        dispatcher.register_upgrade_governor(*self.governance_admin);
 
         self.set_app_role_admin_as_caller();
         dispatcher.register_app_governor(*self.app_governor);
@@ -598,7 +588,6 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             governance_admin: perpetuals_config.governance_admin,
             role_admin: perpetuals_config.role_admin,
             app_governor: perpetuals_config.app_governor,
-            upgrade_governor: perpetuals_config.upgrade_governor,
             perpetuals_contract,
             token_state,
             collateral_quantum,
@@ -2881,7 +2870,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn enable_escape_hatch(ref self: PerpsTestsFacade) {
-        self.set_upgrade_governor_as_caller();
+        self.set_app_governor_as_caller();
         ICoreDispatcher { contract_address: self.perpetuals_contract }.enable_escape_hatch();
     }
 

@@ -347,8 +347,8 @@ fn test_activate_new_component_only_upgrade_governor() {
 }
 
 #[test]
-#[should_panic(expected: "ONLY_UPGRADE_GOVERNOR")]
-fn test_escape_hatch_only_upgrade_governor() {
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_escape_hatch_only_app_governor() {
     let (_, contract_address) = setup();
     let dispatcher = ICoreDispatcher { contract_address };
     dispatcher.enable_escape_hatch();
