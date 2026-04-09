@@ -2259,9 +2259,7 @@ fn test_redeem_from_protocol_vault_with_additional_spot_assets() {
         .set_treasury_protection_percent_for_token(
             vault_config.deployed_vault.erc20.contract_address, 100,
         );
-    state
-        .facade
-        .set_treasury_protection_percent_for_token(erc20_contract_address, 100);
+    state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
 
     // Prepare redeem details
     let shares_to_burn = 650; // vault price is currently $1

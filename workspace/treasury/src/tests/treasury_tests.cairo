@@ -432,3 +432,58 @@ fn test_change_protection_limit_to_zero() {
     // Any withdrawal should fail since max_allowed is 0.
     facade.withdraw_from_as_perps(1_u128.into());
 }
+
+// ===================== Pausable =====================
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_deposit_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    let depositor = NON_PERPS_CALLER();
+    facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
+    facade.approve_treasury(depositor, TREASURY_FUND_AMOUNT);
+
+    facade.pause_treasury();
+    facade.deposit_into(depositor, TREASURY_FUND_AMOUNT.into());
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_withdraw_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.pause_treasury();
+    facade.withdraw_from_as_perps(100_u128.into());
+}
+
+#[test]
+fn test_deposit_works_after_unpause() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    let depositor = NON_PERPS_CALLER();
+    facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
+    facade.approve_treasury(depositor, TREASURY_FUND_AMOUNT);
+
+    facade.pause_treasury();
+    facade.unpause_treasury();
+
+    let balance_before = facade.treasury_balance();
+    facade.deposit_into(depositor, TREASURY_FUND_AMOUNT.into());
+    assert!(
+        facade.treasury_balance() == balance_before + TREASURY_FUND_AMOUNT.into(),
+        "deposit should work after unpause",
+    );
+}
+
+#[test]
+fn test_withdraw_works_after_unpause() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.pause_treasury();
+    facade.unpause_treasury();
+
+    facade.withdraw_from_as_perps(100_u128.into());
+}

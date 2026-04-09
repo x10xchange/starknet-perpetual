@@ -25,20 +25,28 @@ pub mod ProtocolTreasury {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
+    use starkware_utils::components::pausable::PausableComponent;
+    use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
     use starkware_utils::components::replaceability::ReplaceabilityComponent::InternalReplaceabilityTrait;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::utils::mul_wide_and_floor_div;
     use starkware_utils::time::time::Time;
-    use super::{CHECK_FREQUENCY, DEFAULT_PROTECTION_PERCENT, ITreasury, PERCENT_SCALE, ProtectionState};
+    use super::{
+        CHECK_FREQUENCY, DEFAULT_PROTECTION_PERCENT, ITreasury, PERCENT_SCALE, ProtectionState,
+    };
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: ReplaceabilityComponent, storage: replaceability, event: ReplaceabilityEvent);
     component!(path: RolesComponent, storage: roles, event: RolesEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
+
+    #[abi(embed_v0)]
+    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl ReplaceabilityImpl =
@@ -52,6 +60,8 @@ pub mod ProtocolTreasury {
     pub struct Storage {
         #[substorage(v0)]
         accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        pausable: PausableComponent::Storage,
         #[substorage(v0)]
         pub replaceability: ReplaceabilityComponent::Storage,
         #[substorage(v0)]
@@ -68,6 +78,8 @@ pub mod ProtocolTreasury {
     enum Event {
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        PausableEvent: PausableComponent::Event,
         #[flat]
         ReplaceabilityEvent: ReplaceabilityComponent::Event,
         #[flat]
@@ -111,6 +123,7 @@ pub mod ProtocolTreasury {
         fn deposit_into(
             ref self: ContractState, collateral_address: ContractAddress, amount: u256,
         ) {
+            self.pausable.assert_not_paused();
             let this = starknet::get_contract_address();
             let caller = get_caller_address();
             let collateral_dispatcher = IERC20Dispatcher { contract_address: collateral_address };
@@ -120,6 +133,7 @@ pub mod ProtocolTreasury {
         fn withdraw_from(
             ref self: ContractState, collateral_address: ContractAddress, amount: u256,
         ) {
+            self.pausable.assert_not_paused();
             assert(get_caller_address() == self.perps_contract.read(), 'ONLY_PERPS_CAN_WITHDRAW');
             self
                 .update_withdrawn_and_verify(
@@ -158,7 +172,9 @@ pub mod ProtocolTreasury {
 
     #[generate_trait]
     impl PrivateImpl of PrivateTrait {
-        fn get_protection_percent(self: @ContractState, collateral_address: ContractAddress) -> u64 {
+        fn get_protection_percent(
+            self: @ContractState, collateral_address: ContractAddress,
+        ) -> u64 {
             let override_percent = self.protection_percent_override.read(collateral_address);
             if override_percent != 0 {
                 override_percent

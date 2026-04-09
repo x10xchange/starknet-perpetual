@@ -324,9 +324,7 @@ pub fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
 }
 
 pub fn deploy_treasury(
-    governance_admin: ContractAddress,
-    upgrade_delay: u64,
-    perps_contract: ContractAddress,
+    governance_admin: ContractAddress, upgrade_delay: u64, perps_contract: ContractAddress,
 ) -> ContractAddress {
     let calldata: Array<felt252> = array![
         governance_admin.into(), upgrade_delay.into(), perps_contract.into(),

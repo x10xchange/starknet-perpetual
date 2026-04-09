@@ -18,6 +18,15 @@ pub fn NON_PERPS_CALLER() -> ContractAddress {
 pub fn COLLATERAL_OWNER() -> ContractAddress {
     'COLLATERAL_OWNER'.try_into().unwrap()
 }
+pub fn SECURITY_ADMIN() -> ContractAddress {
+    'SECURITY_ADMIN'.try_into().unwrap()
+}
+pub fn SECURITY_AGENT() -> ContractAddress {
+    'SECURITY_AGENT'.try_into().unwrap()
+}
+pub fn SECURITY_GOVERNOR() -> ContractAddress {
+    'SECURITY_GOVERNOR'.try_into().unwrap()
+}
 
 pub const UPGRADE_DELAY: u64 = 0_u64;
 pub const INITIAL_PROTECTION_PERCENT: u64 = 5;
