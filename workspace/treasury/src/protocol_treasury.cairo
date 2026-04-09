@@ -1,9 +1,17 @@
 use starkware_utils::constants::DAY;
-use starkware_utils::time::time::TimeDelta;
+use starkware_utils::time::time::{TimeDelta, Timestamp};
 use treasury::interface::ITreasury;
 
 const PERCENT_SCALE: u128 = 1000;
 const CHECK_FREQUENCY: TimeDelta = TimeDelta { seconds: DAY };
+
+#[derive(Copy, Drop, Serde, starknet::Store)]
+struct ProtectionState {
+    time_of_last_reset: Timestamp,
+    amount_withdrawn_since_reset: u128,
+    balance_at_last_reset: u128,
+    max_allowed_withdrawal: u128,
+}
 
 #[starknet::contract]
 pub mod ProtocolTreasury {
@@ -21,8 +29,8 @@ pub mod ProtocolTreasury {
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::math::utils::mul_wide_and_floor_div;
-    use starkware_utils::time::time::{Time, Timestamp};
-    use super::{CHECK_FREQUENCY, ITreasury, PERCENT_SCALE};
+    use starkware_utils::time::time::Time;
+    use super::{CHECK_FREQUENCY, ITreasury, PERCENT_SCALE, ProtectionState};
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -51,10 +59,7 @@ pub mod ProtocolTreasury {
         src5: SRC5Component::Storage,
         perps_contract: ContractAddress,
         initial_protection_percent: u64,
-        time_of_last_reset: Map<ContractAddress, Timestamp>,
-        amount_withdrawn_since_reset: Map<ContractAddress, u128>,
-        balance_at_last_reset: Map<ContractAddress, u128>,
-        max_allowed_withdrawal: Map<ContractAddress, u128>,
+        protection: Map<ContractAddress, ProtectionState>,
     }
 
     #[event]
@@ -82,6 +87,20 @@ pub mod ProtocolTreasury {
         self.replaceability.initialize(:upgrade_delay);
         self.perps_contract.write(perps_contract);
         self.initial_protection_percent.write(initial_protection_percent);
+    }
+
+    fn compute_max_withdrawal(balance: u128, percent: u64) -> u128 {
+        mul_wide_and_floor_div(balance, percent.into() * 10, PERCENT_SCALE)
+            .expect('MUL_DIV_OVERFLOW')
+    }
+
+    fn snapshot_protection(balance: u128, percent: u64) -> ProtectionState {
+        ProtectionState {
+            time_of_last_reset: Time::now(),
+            amount_withdrawn_since_reset: 0,
+            balance_at_last_reset: balance,
+            max_allowed_withdrawal: compute_max_withdrawal(balance, percent),
+        }
     }
 
     #[abi(embed_v0)]
@@ -116,17 +135,12 @@ pub mod ProtocolTreasury {
 
         fn reset_protection_limit(ref self: ContractState, collateral_address: ContractAddress) {
             self.roles.only_app_governor();
-            self.amount_withdrawn_since_reset.write(collateral_address, 0);
-            self.time_of_last_reset.write(collateral_address, Time::now());
             let balance: u128 = IERC20Dispatcher { contract_address: collateral_address }
                 .balance_of(starknet::get_contract_address())
                 .try_into()
                 .expect('BALANCE_OVERFLOW');
-            self.balance_at_last_reset.write(collateral_address, balance);
-            let limit = self.initial_protection_percent.read();
-            let max_withdrawal = mul_wide_and_floor_div(balance, limit.into() * 10, PERCENT_SCALE)
-                .expect('MUL_DIV_OVERFLOW');
-            self.max_allowed_withdrawal.write(collateral_address, max_withdrawal);
+            let state = snapshot_protection(balance, self.initial_protection_percent.read());
+            self.protection.write(collateral_address, state);
         }
 
         fn change_protection_limit_percent(
@@ -134,10 +148,11 @@ pub mod ProtocolTreasury {
         ) {
             self.roles.only_app_governor();
             self.initial_protection_percent.write(percent);
-            let balance = self.balance_at_last_reset.read(collateral_address);
-            let max_withdrawal = mul_wide_and_floor_div(balance, percent.into() * 10, PERCENT_SCALE)
-                .expect('MUL_DIV_OVERFLOW');
-            self.max_allowed_withdrawal.write(collateral_address, max_withdrawal);
+            let mut state = self.protection.read(collateral_address);
+            state
+                .max_allowed_withdrawal =
+                    compute_max_withdrawal(state.balance_at_last_reset, percent);
+            self.protection.write(collateral_address, state);
         }
     }
 
@@ -145,45 +160,38 @@ pub mod ProtocolTreasury {
     impl PrivateImpl of PrivateTrait {
         fn update_and_get_protection_limit(
             ref self: ContractState, collateral_address: ContractAddress,
-        ) -> u128 {
+        ) -> ProtectionState {
+            let mut state = self.protection.read(collateral_address);
             let now = Time::now();
-            let time_of_last_reset = self.time_of_last_reset.read(collateral_address);
-            let time_elapsed = now.sub(time_of_last_reset);
+            let time_elapsed = now.sub(state.time_of_last_reset);
             if time_elapsed > CHECK_FREQUENCY {
-                self.time_of_last_reset.write(collateral_address, now);
-                self.amount_withdrawn_since_reset.write(collateral_address, 0);
                 let balance: u128 = IERC20Dispatcher { contract_address: collateral_address }
                     .balance_of(starknet::get_contract_address())
                     .try_into()
                     .expect('BALANCE_OVERFLOW');
-                self.balance_at_last_reset.write(collateral_address, balance);
-                let limit = self.initial_protection_percent.read();
-                let max_withdrawal = mul_wide_and_floor_div(
-                    balance, limit.into() * 10, PERCENT_SCALE,
-                )
-                    .expect('MUL_DIV_OVERFLOW');
-                self.max_allowed_withdrawal.write(collateral_address, max_withdrawal);
+                state = snapshot_protection(balance, self.initial_protection_percent.read());
+                self.protection.write(collateral_address, state);
             }
-            self.amount_withdrawn_since_reset.read(collateral_address)
+            state
         }
 
         fn update_withdrawn_and_verify(
             ref self: ContractState, collateral_address: ContractAddress, amount: u128,
         ) {
-            let current_withdrawn = self.update_and_get_protection_limit(collateral_address);
-            let new_withdrawn = current_withdrawn + amount;
-            let max_allowed = self.max_allowed_withdrawal.read(collateral_address);
-            if new_withdrawn >= max_allowed {
+            let mut state = self.update_and_get_protection_limit(collateral_address);
+            let new_withdrawn = state.amount_withdrawn_since_reset + amount;
+            if new_withdrawn > state.max_allowed_withdrawal {
                 panic_with_byte_array(
                     err: @format!(
                         "Treasury Protection Limit Exceeded, balance_at_reset: {}, withdrawn: {}, max_allowed: {}",
-                        self.balance_at_last_reset.read(collateral_address),
+                        state.balance_at_last_reset,
                         new_withdrawn,
-                        max_allowed,
+                        state.max_allowed_withdrawal,
                     ),
                 );
             }
-            self.amount_withdrawn_since_reset.write(collateral_address, new_withdrawn);
+            state.amount_withdrawn_since_reset = new_withdrawn;
+            self.protection.write(collateral_address, state);
         }
     }
 }

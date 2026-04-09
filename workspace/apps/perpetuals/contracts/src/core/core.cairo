@@ -48,7 +48,7 @@ pub mod Core {
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::ContractAddress;
     use starknet::event::EventEmitter;
-    use starknet::storage::StorageMapReadAccess;
+    use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -715,6 +715,10 @@ pub mod Core {
             ref self: ContractState, vault_position: PositionId, limit: u32,
         ) {
             self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
+
+        fn get_treasury_address(ref self: ContractState) -> ContractAddress {
+            self.treasury.contract_address.read()
         }
     }
 

@@ -111,8 +111,8 @@ fn test_protection_limit_blocks_excessive_withdrawal() {
     facade.reset_protection_limit();
 
     // With 5% protection limit, max withdrawal = 1_000_000 * 5 * 10 / 1000 = 50_000.
-    // Withdrawing exactly that amount should panic (>= check).
-    facade.withdraw_from_as_perps(50_000_u128.into());
+    // Withdrawing more than that should panic.
+    facade.withdraw_from_as_perps(50_001_u128.into());
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn test_multiple_withdrawals_accumulate() {
     // max = 50_000. Withdraw in two chunks, then a third that exceeds.
     facade.withdraw_from_as_perps(25_000_u128.into());
     facade.withdraw_from_as_perps(24_000_u128.into());
-    // Total so far = 49_000. Next one pushes to 51_000 >= 50_000.
+    // Total so far = 49_000. Next one pushes to 51_000 > 50_000.
     facade.withdraw_from_as_perps(2_000_u128.into());
 }
 
@@ -211,8 +211,8 @@ fn test_change_protection_limit_percent_reduces_limit() {
     // Change percent from 5 to 1. New max = 1_000_000 * 1 * 10 / 1000 = 10_000.
     facade.change_protection_limit_percent(1);
 
-    // Withdrawing 10_000 should fail (>= check).
-    facade.withdraw_from_as_perps(10_000_u128.into());
+    // Withdrawing more than 10_000 should fail.
+    facade.withdraw_from_as_perps(10_001_u128.into());
 }
 
 #[test]
@@ -251,7 +251,8 @@ fn test_withdraw_from_governance_admin_fails() {
     facade.withdraw_from_as_non_perps(GOVERNANCE_ADMIN(), 100.into());
 }
 
-// ===================== Access Control: Only App Governor Can Call Admin Methods =====================
+// ===================== Access Control: Only App Governor Can Call Admin Methods
+// =====================
 
 #[test]
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
@@ -376,7 +377,7 @@ fn test_no_auto_reset_within_one_day() {
     facade.advance_time(DAY - 1);
 
     // Should still be limited by the original protection period.
-    // Total withdrawn would be 49_000 + 2_000 = 51_000 >= 50_000.
+    // Total withdrawn would be 49_000 + 2_000 = 51_000 > 50_000.
     facade.withdraw_from_as_perps(2_000_u128.into());
 }
 
@@ -413,7 +414,7 @@ fn test_no_auto_reset_at_exact_day() {
     // so exactly DAY should NOT trigger auto-reset.
     facade.advance_time(DAY);
 
-    // Total withdrawn = 49_000 + 2_000 = 51_000 >= 50_000 => panic.
+    // Total withdrawn = 49_000 + 2_000 = 51_000 > 50_000 => panic.
     facade.withdraw_from_as_perps(2_000_u128.into());
 }
 

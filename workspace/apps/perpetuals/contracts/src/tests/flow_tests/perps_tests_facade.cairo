@@ -1,7 +1,3 @@
-use snforge_std::stop_cheat_block_timestamp_global;
-use starkware_utils::components::replaceability::interface::EICData;
-use starkware_utils::components::replaceability::interface::ImplementationData;
-use starkware_utils::components::replaceability::interface::IReplaceableDispatcherTrait;
 use core::array;
 use core::dict::{Felt252Dict, Felt252DictTrait};
 use core::fmt::Debug;
@@ -59,10 +55,13 @@ use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilt
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
-    start_cheat_block_timestamp_global, stop_cheat_caller_address,
+    start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
-use starkware_utils::components::replaceability::interface::IReplaceableDispatcher;
+use starkware_utils::components::replaceability::interface::{
+    EICData, IReplaceableDispatcher, IReplaceableDispatcherTrait, ImplementationData,
+};
 use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
@@ -326,9 +325,7 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 
 #[generate_trait]
 pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
-    fn deploy_and_get_treasury(
-        self: @PerpetualsConfig,
-    ) -> (ContractAddress, ContractAddress) {
+    fn deploy_and_get_treasury(self: @PerpetualsConfig) -> (ContractAddress, ContractAddress) {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -358,7 +355,7 @@ pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
             initial_protection_percent: 100,
         );
 
-        let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC")
+        let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
             .unwrap()
             .contract_class();
 
@@ -612,8 +609,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
         );
-        let (perpetuals_contract, treasury_address) = perpetuals_config
-            .deploy_and_get_treasury();
+        let (perpetuals_contract, treasury_address) = perpetuals_config.deploy_and_get_treasury();
 
         let perpetual_wrapper = PerpsTestsFacade {
             governance_admin: perpetuals_config.governance_admin,

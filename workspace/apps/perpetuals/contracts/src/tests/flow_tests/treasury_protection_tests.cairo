@@ -68,11 +68,7 @@ fn test_vault_round_trip_does_not_exhaust_treasury_limit() {
     state.facade.price_tick(@vault_config.asset_info, 1);
     state.facade.update_vault_protection_limit(vault_config.position_id, 100);
 
-    state
-        .facade
-        .process_deposit(
-            state.facade.deposit(user.account, user.position_id, 10000_u64),
-        );
+    state.facade.process_deposit(state.facade.deposit(user.account, user.position_id, 10000_u64));
 
     // Invest 5k into vault.
     state

@@ -1,4 +1,3 @@
-use snforge_std::stop_cheat_block_timestamp_global;
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::{Pow, Zero};
 use core::poseidon::PoseidonTrait;
@@ -27,8 +26,8 @@ use perpetuals::tests::event_test_utils::{
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
-    test_address,
+    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    stop_cheat_caller_address, test_address,
 };
 use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
@@ -976,7 +975,9 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
         initial_protection_percent: 100,
     );
 
-    let set_treasury_eic = snforge_std::declare("RegisterTreasuryEIC").unwrap().contract_class();
+    let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
+        .unwrap()
+        .contract_class();
 
     cheat_caller_address(
         contract_address: contract_address,
