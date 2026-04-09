@@ -136,6 +136,7 @@ pub struct PerpetualsInitConfig {
     pub upgrade_delay: u64,
     pub app_role_admin: ContractAddress,
     pub app_governor: ContractAddress,
+    pub upgrade_governor: ContractAddress,
     pub operator: ContractAddress,
     pub max_funding_interval: TimeDelta,
     pub max_price_interval: TimeDelta,
@@ -220,6 +221,7 @@ impl PerpetualsInitConfigDefault of Default<PerpetualsInitConfig> {
             upgrade_delay: UPGRADE_DELAY,
             app_role_admin: APP_ROLE_ADMIN(),
             app_governor: APP_GOVERNOR(),
+            upgrade_governor: UPGRADE_GOVERNOR(),
             operator: OPERATOR(),
             max_funding_interval: MAX_FUNDING_INTERVAL,
             max_price_interval: MAX_PRICE_INTERVAL,
@@ -336,7 +338,7 @@ pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
     cheat_caller_address_once(
         contract_address: test_address(), caller_address: *cfg.governance_admin,
     );
-    state.register_upgrade_governor(account: *cfg.governance_admin)
+    state.register_upgrade_governor(account: *cfg.upgrade_governor)
 }
 
 pub fn assert_with_error(boolean: bool, array: ByteArray) {
@@ -993,7 +995,7 @@ pub fn set_roles_by_dispatcher(contract_address: ContractAddress, cfg: @Perpetua
     cheat_caller_address_once(:contract_address, caller_address: *cfg.app_role_admin);
     dispatcher.register_operator(account: *cfg.operator);
     cheat_caller_address_once(:contract_address, caller_address: *cfg.governance_admin);
-    dispatcher.register_upgrade_governor(account: *cfg.governance_admin);
+    dispatcher.register_upgrade_governor(account: *cfg.upgrade_governor);
 }
 
 pub fn register_external_components_by_dispatcher(

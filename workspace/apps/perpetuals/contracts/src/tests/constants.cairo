@@ -41,6 +41,10 @@ pub fn APP_ROLE_ADMIN() -> ContractAddress {
 pub fn APP_GOVERNOR() -> ContractAddress {
     'APP_GOVERNOR'.try_into().unwrap()
 }
+// TODO: use a dedicated address once tests are updated.
+pub fn UPGRADE_GOVERNOR() -> ContractAddress {
+    'GOVERNANCE_ADMIN'.try_into().unwrap()
+}
 pub fn OPERATOR() -> ContractAddress {
     'OPERATOR'.try_into().unwrap()
 }
