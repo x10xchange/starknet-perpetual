@@ -1112,7 +1112,7 @@ pub mod Core {
         }
 
         fn enable_escape_hatch(ref self: ContractState) {
-            self.roles.only_upgrade_governor();
+            assert!(self.roles.is_governance_admin(starknet::get_caller_address()), "ONLY_GOVERNANCE_ADMIN");
             self.forced_actions_enabled.write(true);
         }
         fn get_max_interest_rate_per_sec(self: @ContractState) -> u32 {
