@@ -47,6 +47,12 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let redeeming_user_usdc_balance_before_redeem = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
@@ -171,6 +177,12 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_with_9pct_premium() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let redeeming_user_usdc_balance_before_redeem = state
         .facade
         .get_position_collateral_balance(redeeming_user.position_id);
@@ -291,6 +303,11 @@ fn test_redeem_from_protocol_vault_redeem_to_same_position_is_rejected_with_11pc
                     receiving_user: redeeming_user,
                 ),
         );
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
     const value_of_shares: u64 = 444;
     state
         .facade
@@ -337,6 +354,12 @@ fn test_redeem_from_protocol_vault_impacts_price_as_expected() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     let value_of_1000_shares_before_withdrawal = vault_config
@@ -620,6 +643,12 @@ fn test_redeem_from_protocol_vault_allows_redeem_when_improving_tv_tr() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -748,6 +777,12 @@ fn test_redeem_from_protocol_vault_fails_redeem_when_worsening_tv_tr() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -874,6 +909,12 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -993,6 +1034,12 @@ fn test_liquidate_vault_shares_succeeds_when_improving_tv_tr_starting_with_negat
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     let risk_factor_data = RiskFactorTiers {
@@ -1119,6 +1166,12 @@ fn test_liquidate_vault_shares_fails_when_not_improving_tv_tr_starting_with_nega
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let risk_factor_data = RiskFactorTiers {
         tiers: array![300].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -1242,6 +1295,12 @@ fn test_liquidate_vault_shares_fails_when_worsening_tv_tr() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     let risk_factor_data = RiskFactorTiers {

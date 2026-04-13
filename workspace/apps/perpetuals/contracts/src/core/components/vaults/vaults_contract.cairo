@@ -506,9 +506,9 @@ pub(crate) mod VaultsManager {
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
 
             // Withdraw vault shares from treasury so perps can burn them.
-            self
-                .treasury
-                .read()
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            treasury
                 .withdraw_from(
                     vault_asset.token_contract.expect('NOT_ERC20'),
                     unquantized_amount_to_burn.into(),

@@ -252,9 +252,9 @@ pub(crate) mod WithdrawalManager {
             let quantum = self.assets.get_collateral_quantum();
             let withdraw_unquantized_amount = quantum * amount;
             let token_contract = self.assets.get_collateral_token_contract();
-            self
-                .treasury
-                .read()
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            treasury
                 .withdraw_from(token_contract.contract_address, withdraw_unquantized_amount.into());
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
