@@ -76,12 +76,13 @@ fn is_fair_spot_deleverage(
         return collateral_diff == 0;
     }
     let collateral_ratio = FractionTrait::new(numerator: collateral_diff, denominator: abs_debt);
-    let spot_ratio = FractionTrait::new(numerator: asset_tv, denominator: total_spot_tv.abs());
     let spot_minus_epsilon_ratio = FractionTrait::new(
         numerator: asset_tv - EPSILON, denominator: total_spot_tv.abs(),
     );
-    // spot_minus_epsilon_ratio <= collateral_ratio && collateral_ratio <= spot_ratio
-    true
+    let spot_plus_epsilon_ratio = FractionTrait::new(
+        numerator: asset_tv + EPSILON, denominator: total_spot_tv.abs(),
+    );
+    spot_minus_epsilon_ratio <= collateral_ratio && collateral_ratio <= spot_plus_epsilon_ratio
 }
 
 /// The position is fair if the total_value divided by the total_risk is the almost before and after
