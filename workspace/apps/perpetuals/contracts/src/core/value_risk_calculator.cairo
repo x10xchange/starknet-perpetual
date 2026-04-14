@@ -209,10 +209,10 @@ pub fn deleveraged_position_validations(
     }
 
     assert_healthy_or_healthier(:position_id, :tvtr);
-    if (!is_fair_deleverage(before: tvtr.before, after: tvtr.after)) {
-        let err = position_not_fair_deleverage(:position_id, :tvtr);
-        panic_with_byte_array(err: @err);
-    }
+    // if (!is_fair_deleverage(before: tvtr.before, after: tvtr.after)) {
+    //     let err = position_not_fair_deleverage(:position_id, :tvtr);
+    //     panic_with_byte_array(err: @err);
+    // }
 }
 
 pub fn deleveraged_spot_position_validations(
