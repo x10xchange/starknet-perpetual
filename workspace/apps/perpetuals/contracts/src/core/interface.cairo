@@ -208,7 +208,7 @@ pub trait ICore<TContractState> {
     fn set_max_interest_rate_per_sec(ref self: TContractState, max_interest_rate_per_sec: u32);
 
     fn create_prediction_account(
-        ref self: TContractState, client_id: felt252, owning_key: felt252,
+        ref self: TContractState, operator_nonce: u64, client_id: felt252, owning_key: felt252,
     );
     fn deposit_to_prediction_account(
         ref self: TContractState,
@@ -232,12 +232,18 @@ pub trait ICore<TContractState> {
     );
     fn create_prediction_market(
         ref self: TContractState,
+        operator_nonce: u64,
         market_id: felt252,
         oracle: felt252,
         outcomes: Span<felt252>,
     );
     fn finalize_prediction_market(
         ref self: TContractState,
+        operator_nonce: u64,
         signed_outcome: perpetuals::predictions::types::SignedPredictionOutcome,
     );
+    fn prediction_trade(
+        ref self: TContractState, settlement: perpetuals::predictions::types::PredictionSettlement,
+    );
+    fn claim(ref self: TContractState, operator_nonce: u64, client_id: felt252, market_id: felt252);
 }

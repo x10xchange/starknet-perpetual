@@ -31,12 +31,6 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
-use perpetuals::predictions::prediction_positions::{
-    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
-};
-use perpetuals::predictions::types::{
-    PredictionDepositArgs, PredictionWithdrawArgs, SignedPredictionOutcome,
-};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, AssetType};
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
@@ -49,6 +43,13 @@ use perpetuals::core::types::transfer::TransferArgs;
 use perpetuals::core::types::vault::ConvertPositionToVault;
 use perpetuals::core::types::withdraw::WithdrawArgs;
 use perpetuals::core::value_risk_calculator::PositionTVTR;
+use perpetuals::predictions::prediction_positions::{
+    IPredictionPositionsDispatcher, IPredictionPositionsDispatcherTrait,
+};
+use perpetuals::predictions::types::{
+    PredictionDepositArgs, PredictionOrder, PredictionOutcome, PredictionSettlement,
+    PredictionWithdrawArgs, SignedPredictionOutcome,
+};
 use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
     assert_add_spot_event_with_expected, assert_add_synthetic_event_with_expected,
@@ -2908,9 +2909,10 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     fn create_prediction_account(
         ref self: PerpsTestsFacade, client_id: felt252, owning_key: felt252,
     ) {
+        let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .create_prediction_account(:client_id, :owning_key);
+            .create_prediction_account(:operator_nonce, :client_id, :owning_key);
     }
 
     fn deposit_to_prediction_account(
@@ -2974,14 +2976,46 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn create_prediction_market(
-        ref self: PerpsTestsFacade,
-        market_id: felt252,
-        oracle: felt252,
-        outcomes: Span<felt252>,
+        ref self: PerpsTestsFacade, market_id: felt252, oracle: felt252, outcomes: Span<felt252>,
     ) {
+        let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .create_prediction_market(:market_id, :oracle, :outcomes);
+            .create_prediction_market(:operator_nonce, :market_id, :oracle, :outcomes);
+    }
+
+    fn prediction_trade(
+        ref self: PerpsTestsFacade,
+        order_a: PredictionOrder,
+        order_b: PredictionOrder,
+        actual_amount: u64,
+        actual_price: u64,
+        actual_fee_a: u64,
+        actual_fee_b: u64,
+        signing_key_pair_a: StarkKeyPair,
+        signing_key_pair_b: StarkKeyPair,
+    ) {
+        let hash_a = order_a.get_message_hash(public_key: signing_key_pair_a.public_key);
+        let (r_a, s_a) = signing_key_pair_a.sign(hash_a).unwrap();
+        let signature_a = array![r_a, s_a].span();
+
+        let hash_b = order_b.get_message_hash(public_key: signing_key_pair_b.public_key);
+        let (r_b, s_b) = signing_key_pair_b.sign(hash_b).unwrap();
+        let signature_b = array![r_b, s_b].span();
+
+        let settlement = PredictionSettlement {
+            signature_a,
+            signature_b,
+            order_a,
+            order_b,
+            actual_amount,
+            actual_price,
+            actual_fee_a,
+            actual_fee_b,
+        };
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .prediction_trade(:settlement);
     }
 
     fn finalize_prediction_market(
@@ -2990,21 +3024,24 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         outcome: felt252,
         oracle_key_pair: StarkKeyPair,
     ) {
+        let operator_nonce = self.get_nonce();
         let timestamp: u32 = Time::now().seconds.try_into().unwrap();
-        let msg_hash = core::pedersen::pedersen(
-            core::pedersen::pedersen(market_id, outcome),
-            timestamp.into(),
-        );
+        let message = PredictionOutcome { market_id, outcome, timestamp };
+        let msg_hash = message.get_message_hash(public_key: oracle_key_pair.public_key);
         let (r, s) = oracle_key_pair.sign(msg_hash).unwrap();
         let signature = array![r, s].span();
-        let signed_outcome = SignedPredictionOutcome {
-            signature, timestamp, market_id, outcome,
-        };
+        let signed_outcome = SignedPredictionOutcome { signature, timestamp, market_id, outcome };
         self.operator.set_as_caller(self.perpetuals_contract);
         ICoreDispatcher { contract_address: self.perpetuals_contract }
-            .finalize_prediction_market(:signed_outcome);
+            .finalize_prediction_market(:operator_nonce, :signed_outcome);
     }
 
+    fn claim(ref self: PerpsTestsFacade, client_id: felt252, market_id: felt252) {
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .claim(:operator_nonce, :client_id, :market_id);
+    }
 }
 
 

@@ -6,6 +6,7 @@ pub mod ExternalComponents {
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
+    use perpetuals::predictions::predictions::IPredictionsLibraryDispatcher;
     use starknet::ClassHash;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
@@ -28,7 +29,6 @@ pub mod ExternalComponents {
     use crate::core::components::transfer::transfer_manager::ITransferManagerLibraryDispatcher;
     use crate::core::components::vaults::vaults_contract::IVaultExternalLibraryDispatcher;
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerLibraryDispatcher;
-    use perpetuals::predictions::predictions::IPredictionsLibraryDispatcher;
     use super::super::interface::{
         EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DEPOSITS, EXTERNAL_COMPONENT_LIQUIDATIONS,
         EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,

@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod events;
 pub mod prediction_markets;
 pub mod prediction_positions;
 pub mod predictions;

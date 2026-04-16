@@ -4,9 +4,9 @@ mod external_components_tests;
 mod flow_tests;
 mod infra;
 mod perps_tests_facade;
+mod prediction_tests;
 mod procotol_vault_deposit_tests;
 mod procotol_vault_redeem_tests;
-mod prediction_tests;
 mod unit_flow_tests;
 mod vault_share_deposit_flow_tests;
 
