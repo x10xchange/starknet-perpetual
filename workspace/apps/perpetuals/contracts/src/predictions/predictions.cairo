@@ -56,7 +56,7 @@ pub mod Predictions {
         PRICE_SCALE, PredictionDepositArgs, PredictionOrder, PredictionOutcome,
         PredictionSettlement, PredictionWithdrawArgs, SignedPredictionOutcome,
     };
-    use perpetuals::predictions::{PredictionMarketsComponent, PredictionPositionsComponent, errors};
+    use perpetuals::predictions::{PredictionMarketsComponent, PredictionPositionsComponent, errors, events};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -97,6 +97,8 @@ pub mod Predictions {
         PredictionMarketsEvent: PredictionMarketsComponent::Event,
         #[flat]
         FulfillmentEvent: Fulfillement::Event,
+        PredictionDeposit: events::PredictionDeposit,
+        PredictionWithdrawal: events::PredictionWithdrawal,
     }
 
     #[storage]
@@ -215,6 +217,17 @@ pub mod Predictions {
             self.positions.apply_diff(position_id: from_position_id, :position_diff);
 
             self.prediction_positions.deposit_collateral(:client_id, amount: quantized_amount);
+
+            self
+                .emit(
+                    events::PredictionDeposit {
+                        client_id,
+                        from_position_id,
+                        quantized_amount,
+                        deposit_hash: hash,
+                        salt,
+                    },
+                );
         }
 
         fn withdraw_from_prediction_account(
@@ -255,6 +268,17 @@ pub mod Predictions {
             };
 
             self.positions.apply_diff(position_id: to_position_id, :position_diff);
+
+            self
+                .emit(
+                    events::PredictionWithdrawal {
+                        client_id,
+                        to_position_id,
+                        quantized_amount,
+                        withdrawal_hash: hash,
+                        salt,
+                    },
+                );
         }
 
         fn create_prediction_market(
