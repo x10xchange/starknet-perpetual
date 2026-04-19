@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 jobs:
-
   generate-summary:
     name: Diff Summary Generator
     runs-on: ubuntu-latest
@@ -13,7 +12,7 @@ jobs:
       image_hot_path: ${{ steps.image-name.outputs.image_hot_path }}
 
     permissions:
-      contents: 'read'
+      contents: "read"
       actions: read
 
     steps:
@@ -50,7 +49,7 @@ jobs:
             - Verify that mathematical operations handle precision correctly and are safe from underflow/overflow (if applicable to the compiler version).
             If you choose not to request files before and after the diff, please explain your reasoning after the technical change log. 
             If you chose to request files, please explain why you needed to request them. This helps improve the tooling.
-            Please also summarize the use of the grep functionality—whether it was useful or if you encountered any issues using it.          
+            Please also summarize the use of the grep functionality—whether it was useful or if you encountered any issues using it.
 
   CI:
     needs: generate-summary
@@ -75,12 +74,12 @@ jobs:
           asdf set -u starknet-foundry 0.54.0 
           sed -i 's/^starknet-foundry .*/starknet-foundry 0.54.0/' .tool-versions
           cat .tool-versions
-    
+
       - name: Install Voyager Verifier
         run: |
           asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
           asdf install voyager 1.2.4
-          asdf set -u voyager 1.2.4  
+          asdf set -u voyager 1.2.4
 
       - name: install starkli
         run: |
@@ -94,7 +93,7 @@ jobs:
           starkli account fetch --rpc ${{ secrets. RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
           address=$(cat deployer_account.json | jq -r .deployment.address)
           echo address=$address
-          sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}          
+          sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}
 
       - name: Deploy contracts
         id: deploy_contracts
@@ -161,10 +160,6 @@ jobs:
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}    
-          REPLACE_COLLATERAL_VAULT_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ReplaceCollateralVaultEIC -p perpetuals)
-          echo "REPLACE_COLLATERAL_VAULT_EIC_HASH=$REPLACE_COLLATERAL_VAULT_EIC_HASH"      
-          voyager verify --network mainnet --class-hash $REPLACE_COLLATERAL_VAULT_EIC_HASH --contract-name ReplaceCollateralVaultEIC --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "ReplaceCollateralVaultEIC verification might have failed check https://voyager.online/class/$REPLACE_COLLATERAL_VAULT_EIC_HASH"   
-          
-          REPLACE_COLLATERAL_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ReplaceCollateralEIC -p perpetuals)
-          echo "REPLACE_COLLATERAL_EIC_HASH=$REPLACE_COLLATERAL_EIC_HASH"      
-          voyager verify --network mainnet --class-hash $REPLACE_COLLATERAL_EIC_HASH --contract-name ReplaceCollateralEIC --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "ReplaceCollateralEIC verification might have failed check https://voyager.online/class/$REPLACE_COLLATERAL_EIC_HASH" 
+          PROTOCOL_TREASURY_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolTreasury -p treasury)
+          echo "PROTOCOL_TREASURY_HASH=$PROTOCOL_TREASURY_HASH"      
+          voyager verify --network mainnet --class-hash $PROTOCOL_TREASURY_HASH --contract-name ProtocolTreasury --license Apache-2.0  --package treasury --watch --lock-file  || echo "ProtocolTreasury verification might have failed check https://voyager.online/class/$PROTOCOL_TREASURY_HASH"
