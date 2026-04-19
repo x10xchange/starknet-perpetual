@@ -12,6 +12,7 @@ pub mod ProtocolTreasury {
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
+    use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -47,6 +48,34 @@ pub mod ProtocolTreasury {
     #[abi(embed_v0)]
     impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
 
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct Withdrawal {
+        #[key]
+        pub contract_address: ContractAddress,
+        pub amount: u256,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct Deposit {
+        #[key]
+        pub collateral_address: ContractAddress,
+        pub amount: u256,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct AdminLimitChanged {
+        #[key]
+        pub collateral_address: ContractAddress,
+        pub percent: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct AdminLimitReset {
+        #[key]
+        pub collateral_address: ContractAddress,
+    }
 
     #[storage]
     pub struct Storage {
@@ -78,6 +107,10 @@ pub mod ProtocolTreasury {
         RolesEvent: RolesComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
+        Withdrawal: Withdrawal,
+        Deposit: Deposit,
+        AdminLimitChanged: AdminLimitChanged,
+        AdminLimitReset: AdminLimitReset,
     }
 
     #[constructor]
@@ -106,6 +139,7 @@ pub mod ProtocolTreasury {
             let caller = get_caller_address();
             let collateral_dispatcher = IERC20Dispatcher { contract_address: collateral_address };
             assert(collateral_dispatcher.transfer_from(caller, this, amount), 'TRANSFER_FAILED');
+            self.emit(Deposit { collateral_address, amount, timestamp: Time::now().seconds });
         }
 
         fn withdraw_from(
@@ -122,6 +156,14 @@ pub mod ProtocolTreasury {
                 collateral_dispatcher.transfer(self.perps_contract.read(), amount),
                 'TRANSFER_FAILED',
             );
+            self
+                .emit(
+                    Withdrawal {
+                        contract_address: collateral_address,
+                        amount,
+                        timestamp: Time::now().seconds,
+                    },
+                );
         }
 
         fn reset_protection_limit(ref self: ContractState, collateral_address: ContractAddress) {
@@ -133,6 +175,7 @@ pub mod ProtocolTreasury {
             let percent = self.get_protection_percent(collateral_address);
             let state = ProtectionStateTrait::new(balance, percent);
             self.protection.write(collateral_address, state);
+            self.emit(AdminLimitReset { collateral_address });
         }
 
         fn change_protection_limit_percent(
@@ -145,6 +188,7 @@ pub mod ProtocolTreasury {
                 .max_allowed_withdrawal =
                     compute_max_withdrawal(state.balance_at_last_reset, percent);
             self.protection.write(collateral_address, state);
+            self.emit(AdminLimitChanged { collateral_address, percent });
         }
     }
 
