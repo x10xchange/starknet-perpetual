@@ -7,7 +7,6 @@ pub mod ProtocolVault {
     use ERC4626Component::Fee;
     use core::num::traits::Zero;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::extensions::erc4626::{
         ERC4626Component, ERC4626DefaultNoFees, ERC4626DefaultNoLimits,
@@ -155,25 +154,16 @@ pub mod ProtocolVault {
             ref self: ERC4626Component::ComponentState<ContractState>,
             from: ContractAddress,
             assets: u256,
-        ) {
-            let this = starknet::get_contract_address();
-            let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
-            assert(
-                asset_dispatcher.transfer_from(from, this, assets),
-                ERC4626Component::Errors::TOKEN_TRANSFER_FAILED,
-            );
+        ) { // No-op: collateral is managed by the treasury, not the vault.
+        // The vault only mints/burns shares; it never holds the underlying asset.
         }
 
         fn transfer_assets_out(
             ref self: ERC4626Component::ComponentState<ContractState>,
             to: ContractAddress,
             assets: u256,
-        ) {
-            let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
-            assert(
-                asset_dispatcher.transfer(to, assets),
-                ERC4626Component::Errors::TOKEN_TRANSFER_FAILED,
-            );
+        ) { // No-op: collateral is managed by the treasury, not the vault.
+        // The vault only mints/burns shares; it never holds the underlying asset.
         }
 
         fn get_total_assets(self: @ERC4626Component::ComponentState<ContractState>) -> u256 {
@@ -214,15 +204,7 @@ pub mod ProtocolVault {
             assets: u256,
             shares: u256,
             fee: Option<Fee>,
-        ) {
-            // after a deposit we need to send back the underlying asset to the perps contract
-            let perps_contract = self.get_contract().perps_contract.read();
-            let asset_dispatcher = IERC20Dispatcher { contract_address: self.ERC4626_asset.read() };
-            assert(
-                asset_dispatcher.transfer(perps_contract, assets),
-                ERC4626Component::Errors::TOKEN_TRANSFER_FAILED,
-            );
-        }
+        ) {}
         /// Hooks into `InternalImpl::_withdraw`.
         /// Executes logic before burning shares and transferring assets.
         /// The fee is calculated via `FeeConfigTrait`. Assets and shares
@@ -237,17 +219,8 @@ pub mod ProtocolVault {
             shares: u256,
             fee: Option<Fee>,
         ) {
-            // before withdraw we need to pull the underlying asset from the perps contract
             assert(caller == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_WITHDRAW');
             assert(receiver == self.get_contract().perps_contract.read(), 'ONLY_PERPS_CAN_RECEIVE');
-            let this = starknet::get_contract_address();
-            let underlying_asset_dispatcher = IERC20Dispatcher {
-                contract_address: self.ERC4626_asset.read(),
-            };
-            assert(
-                underlying_asset_dispatcher.transfer_from(caller, this, assets),
-                ERC4626Component::Errors::TOKEN_TRANSFER_FAILED,
-            );
         }
         /// Hooks into `InternalImpl::_withdraw`.
         /// Executes logic after burning shares and transferring assets.

@@ -81,6 +81,7 @@ pub(crate) mod WithdrawalManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::validate_expiration;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_WITHDRAWALS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
@@ -142,6 +143,8 @@ pub(crate) mod WithdrawalManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -249,6 +252,10 @@ pub(crate) mod WithdrawalManager {
             let quantum = self.assets.get_collateral_quantum();
             let withdraw_unquantized_amount = quantum * amount;
             let token_contract = self.assets.get_collateral_token_contract();
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            treasury
+                .withdraw_from(token_contract.contract_address, withdraw_unquantized_amount.into());
             token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into());
 
             self

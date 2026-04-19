@@ -74,6 +74,7 @@ pub(crate) mod DepositManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::Time;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::components::deposit::events;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DEPOSITS;
     use crate::core::components::external_components::named_component::ITypedComponent;
@@ -140,6 +141,8 @@ pub(crate) mod DepositManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -271,6 +274,10 @@ pub(crate) mod DepositManager {
             }
             self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
             self.positions.apply_diff(:position_id, :position_diff);
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            token_contract.approve(spender: treasury.contract_address, amount: unquantized_amount);
+            treasury.deposit_into(token_contract.contract_address, unquantized_amount);
             self
                 .emit(
                     events::DepositProcessed {

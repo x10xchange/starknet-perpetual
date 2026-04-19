@@ -1,5 +1,5 @@
 [package]
-name = "perpetuals"
+name = "treasury"
 version = "0.2.0"
 edition = "2024_07"
 
@@ -7,13 +7,11 @@ edition = "2024_07"
 starknet.workspace = true
 starkware_utils.workspace = true
 openzeppelin.workspace = true
-vault = { path = "../../../vault" }
-treasury = { path = "../../../treasury" }
+perpetuals = { path = "../apps/perpetuals/contracts/" }
 
 [dev-dependencies]
 assert_macros.workspace = true
 snforge_std.workspace = true
-openzeppelin_testing.workspace = true
 starkware_utils_testing.workspace = true
 
 [[target.starknet-contract]]
@@ -21,7 +19,7 @@ sierra = true
 casm = true
 
 [scripts]
-test = "SNFORGE_BACKTRACE=1 snforge test -- --run-native"
+test = "SNFORGE_BACKTRACE=1 snforge test"
 
 [tool.fmt]
 sort-module-level-items = true
@@ -35,17 +33,10 @@ unstable-add-statements-functions-debug-info = true
 inlining-strategy = "avoid"
 panic-backtrace = true
 
-[profile.release.cairo]
-inlining-strategy = "avoid"
-casm = true
-
 [[test]]
-name = "perpetuals_unittest"
+name = "treasury_unittest"
 build-external-contracts = [
     "starkware_utils::erc20::erc20_mocks::DualCaseERC20Mock",
-    "openzeppelin_presets::account::AccountUpgradeable",
-    "vault::protocol_vault::ProtocolVault",
-    "treasury::protocol_treasury::ProtocolTreasury",
 ]
 
 [lib]

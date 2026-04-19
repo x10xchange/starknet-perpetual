@@ -7,6 +7,7 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::components::snip::SNIP12MetadataImpl;
 use perpetuals::core::core::Core::InternalCoreFunctions;
+use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait};
 use perpetuals::core::types::position::PositionId;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{
@@ -194,18 +195,14 @@ fn test_protocol_vault_initialisation_logic() {
 
     let balance_of_perps_contract_before = usdc_token_state
         .balance_of(account: perps_contract_address);
+    let core_dispatcher = ICoreDispatcher { contract_address: perps_contract_address };
+    let treasury_address = core_dispatcher.get_treasury_address();
+    let balance_of_treasury_before = usdc_token_state.balance_of(account: treasury_address);
 
-    //simulate perps contract approving a transfer
-    usdc_token_state
-        .approve(
-            owner: perps_contract_address,
-            spender: deployed_vault.contract_address,
-            amount: 500_u128,
-        );
     cheat_caller_address_once(
         contract_address: deployed_vault.contract_address, caller_address: perps_contract_address,
     );
-    //simulate the perps contract calling deposit
+    // Vault deposit only mints shares; no collateral is transferred.
     let shares_minted = deployed_vault
         .erc4626
         .deposit(assets: 500_u256, receiver: perps_contract_address);
@@ -216,9 +213,11 @@ fn test_protocol_vault_initialisation_logic() {
 
     let balance_of_perps_contract_after = usdc_token_state
         .balance_of(account: perps_contract_address);
+    let balance_of_treasury_after = usdc_token_state.balance_of(account: treasury_address);
 
-    // the vault should send back the same amount of tokens it received
+    // No collateral should move during vault deposit.
     assert_eq!(balance_of_perps_contract_before, balance_of_perps_contract_after);
+    assert_eq!(balance_of_treasury_before, balance_of_treasury_after);
 
     //the perps contract should receive the minted shares
     let balance_of_vault_shares = deployed_vault.erc20.balance_of(perps_contract_address);

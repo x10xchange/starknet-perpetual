@@ -25,15 +25,12 @@ pub mod Core {
     use core::dict::{Felt252Dict, Felt252DictTrait};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
-    use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
-    use perpetuals::core::components::deposit::interface::DepositStatus;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
@@ -49,9 +46,9 @@ pub mod Core {
     use perpetuals::core::types::price::PriceMulTrait;
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
+    use starknet::ContractAddress;
     use starknet::event::EventEmitter;
     use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
-    use starknet::{ContractAddress, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::replaceability::ReplaceabilityComponent;
@@ -64,6 +61,7 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{TimeDelta, Timestamp};
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -81,7 +79,7 @@ pub mod Core {
     use crate::core::components::withdrawal::withdrawal_manager::IWithdrawalManagerDispatcherTrait;
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::utils::{validate_signature, validate_trade};
-    use super::{ITokenMigrationDispatcher, ITokenMigrationDispatcherTrait};
+    use super::ITokenMigrationDispatcher;
 
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -173,6 +171,8 @@ pub mod Core {
         pub vaults: VaultsComponent::Storage,
         // --- USDC Migration ---
         migration_contract: ITokenMigrationDispatcher,
+        // --- Treasury ---
+        pub treasury: ITreasuryDispatcher,
     }
 
     #[event]
@@ -256,87 +256,6 @@ pub mod Core {
 
     #[abi(embed_v0)]
     pub impl CoreImpl of ICore<ContractState> {
-        fn process_old_deposit(
-            ref self: ContractState,
-            operator_nonce: u64,
-            depositor: starknet::ContractAddress,
-            asset_id: AssetId,
-            position_id: PositionId,
-            quantized_amount: u64,
-            salt: felt252,
-        ) {
-            /// Validations:
-            self.pausable.assert_not_paused();
-            self.operator_nonce.use_checked_nonce(:operator_nonce);
-
-            assert(asset_id == self.assets.get_collateral_id(), 'ILLEGAL_ASSET_ID');
-            let usdc_e_contract_address = self.migration_contract.read().get_legacy_token();
-            let quantum = self.assets.get_collateral_quantum();
-            let position_diff = PositionDiff {
-                collateral_diff: quantized_amount.into(), asset_diff: Option::None,
-            };
-
-            let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
-            let deposit_hash = deposit_hash(
-                token_address: usdc_e_contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            let deposit_status = self.get_deposit_status(:deposit_hash);
-            match deposit_status {
-                DepositStatus::NOT_REGISTERED => { panic_with_felt252('DEPOSIT_NOT_REGISTERED') },
-                DepositStatus::PROCESSED => { panic_with_felt252('DEPOSIT_ALREADY_PROCESSED') },
-                DepositStatus::CANCELED => { panic_with_felt252('DEPOSIT_ALREADY_CANCELED') },
-                DepositStatus::PENDING(_) => {},
-            }
-            self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
-            self.positions.apply_diff(:position_id, :position_diff);
-            self
-                .emit(
-                    deposit_events::DepositProcessed {
-                        position_id,
-                        depositing_address: depositor,
-                        collateral_id: asset_id,
-                        quantized_amount,
-                        unquantized_amount,
-                        deposit_request_hash: deposit_hash,
-                        salt,
-                    },
-                );
-        }
-        fn migrate_usdc(ref self: ContractState, amount: u256) {
-            self.roles.only_token_admin();
-
-            let perps_contract = get_contract_address();
-            let migration_contract = self.migration_contract.read();
-            let usdc_e = IERC20Dispatcher {
-                contract_address: migration_contract.get_legacy_token(),
-            };
-            let usdc = IERC20Dispatcher { contract_address: migration_contract.get_new_token() };
-
-            usdc_e.approve(spender: migration_contract.contract_address, :amount);
-
-            // Migrate to new token.
-            migration_contract.swap_to_new(:amount);
-
-            let usdc_e_balance_after = usdc_e.balance_of(account: perps_contract);
-            let usdc_balance_after = usdc.balance_of(account: perps_contract);
-
-            // If USDC balance exceeds 2x USDC_E balance (USDC_E < 1/3 of total), require collateral
-            // token update.
-            if 2 * usdc_e_balance_after < usdc_balance_after {
-                assert!(
-                    self
-                        .assets
-                        .get_collateral_token_contract()
-                        .contract_address == usdc
-                        .contract_address,
-                    "Migration requires collateral update",
-                );
-            }
-        }
         /// Requests a withdrawal of a collateral amount from a position to a `recipient`.
         ///
         /// Validations:
@@ -796,6 +715,10 @@ pub mod Core {
             ref self: ContractState, vault_position: PositionId, limit: u32,
         ) {
             self.vaults.update_vault_protection_limit(:vault_position, :limit);
+        }
+
+        fn get_treasury_address(ref self: ContractState) -> ContractAddress {
+            self.treasury.contract_address.read()
         }
     }
 

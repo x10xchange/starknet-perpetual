@@ -43,6 +43,12 @@ fn test_redeem_exceeding_5_percent_limit_fails() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     //trigger loading of TV and setting the limit
     state
         .facade
@@ -113,6 +119,12 @@ fn test_multiple_redeems_cumulative_failure() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     // trigger loading of TV and setting the limit
@@ -211,6 +223,12 @@ fn test_reset_after_24h() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     // trigger loading of TV and setting the limit
     state
         .facade
@@ -296,6 +314,12 @@ fn test_profit_does_not_reset_baseline_until_24h_pass() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     // trigger loading of TV and setting the limit
     state
         .facade
@@ -369,6 +393,12 @@ fn test_profit_then_redeem_over_limit_fails() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     // trigger loading of TV and setting the limit
@@ -446,6 +476,12 @@ fn test_force_reset_protection_limit_allows_redemption() {
                 ),
         );
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     // trigger loading of TV and setting the limit (5% of 60000 = 3000)
     state
         .facade
@@ -512,6 +548,12 @@ fn test_per_vault_protection_limit_override() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     // Initial baseline (5% of 70000 = 3500)
