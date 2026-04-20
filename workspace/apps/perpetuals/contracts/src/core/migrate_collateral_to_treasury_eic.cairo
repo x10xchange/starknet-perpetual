@@ -40,6 +40,9 @@ mod MigrateCollateralToTreasuryEIC {
             assert(token.approve(treasury_address, balance), 'APPROVE_FAILED');
             treasury.deposit_into(token_address, balance);
         }
+
+        assert(token.balance_of(perps_address) == 0, 'MIGRATION_INCOMPLETE');
+        assert(token.balance_of(treasury_address) == balance, 'MIGRATION_INCOMPLETE');
     }
 
     #[abi(embed_v0)]
@@ -48,11 +51,11 @@ mod MigrateCollateralToTreasuryEIC {
         /// into it.
         /// eic_init_data: [treasury_address]
         fn eic_initialize(ref self: ContractState, eic_init_data: Span<felt252>) {
-            assert(eic_init_data.len() == 1, 'EXPECTED_1_ELEMENT');
             let perps_address = get_contract_address();
 
             // Register the treasury.
-            let treasury_contract_address: ContractAddress = (*eic_init_data[0])
+            let treasury_contract_address: ContractAddress =
+                0x060c0f8cdfa28e8a3f719d1e2def2599785d7557a5650794c150d9b557603e48
                 .try_into()
                 .unwrap();
             let mut treasury = ITreasuryDispatcher { contract_address: treasury_contract_address };
