@@ -18,7 +18,7 @@ fn test_get_perps_contract() {
 #[test]
 fn test_deposit_into_transfers_tokens() {
     let mut facade = TreasuryTestsFacadeTrait::new();
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
     let amount: u128 = TREASURY_FUND_AMOUNT;
 
     facade.fund_account(depositor, amount);
@@ -37,7 +37,7 @@ fn test_deposit_into_transfers_tokens() {
 #[test]
 fn test_deposit_into_multiple_deposits() {
     let mut facade = TreasuryTestsFacadeTrait::new();
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
     let amount: u128 = 500_000;
 
     facade.fund_account(depositor, amount * 3);
@@ -48,6 +48,19 @@ fn test_deposit_into_multiple_deposits() {
     facade.deposit_into(depositor, amount.into());
 
     assert!(facade.treasury_balance() == (amount * 3).into(), "should have 3x deposit");
+}
+
+#[test]
+#[should_panic(expected: 'ONLY_PERPS_CAN_DEPOSIT')]
+fn test_deposit_into_non_perps_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    let depositor = NON_PERPS_CALLER();
+    let amount: u128 = TREASURY_FUND_AMOUNT;
+
+    facade.fund_account(depositor, amount);
+    facade.approve_treasury(depositor, amount);
+
+    facade.deposit_into(depositor, amount.into());
 }
 
 // ===================== Withdraw =====================
@@ -327,7 +340,7 @@ fn test_protection_limit_snapshotted_not_rolling_with_deposits() {
     // 3. Deposit a much larger amount — treasury balance is now high,
     //    but the protection limit is still based on the old snapshot.
     let large_deposit: u128 = 10_000_000;
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
     facade.fund_account(depositor, large_deposit);
     facade.approve_treasury(depositor, large_deposit);
     facade.deposit_into(depositor, large_deposit.into());
@@ -386,7 +399,7 @@ fn test_no_auto_reset_within_one_day() {
 #[test]
 fn test_deposit_zero_amount() {
     let mut facade = TreasuryTestsFacadeTrait::new();
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
 
     facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
     facade.approve_treasury(depositor, 0);
@@ -439,7 +452,7 @@ fn test_change_protection_limit_to_zero() {
 #[should_panic(expected: 'PAUSED')]
 fn test_deposit_blocked_when_paused() {
     let mut facade = TreasuryTestsFacadeTrait::new();
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
     facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
     facade.approve_treasury(depositor, TREASURY_FUND_AMOUNT);
 
@@ -461,7 +474,7 @@ fn test_withdraw_blocked_when_paused() {
 #[test]
 fn test_deposit_works_after_unpause() {
     let mut facade = TreasuryTestsFacadeTrait::new();
-    let depositor = NON_PERPS_CALLER();
+    let depositor = PERPS_CONTRACT();
     facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
     facade.approve_treasury(depositor, TREASURY_FUND_AMOUNT);
 
@@ -486,4 +499,25 @@ fn test_withdraw_works_after_unpause() {
     facade.unpause_treasury();
 
     facade.withdraw_from_as_perps(100_u128.into());
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_reset_protection_limit_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.pause_treasury();
+    facade.reset_protection_limit();
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_change_protection_limit_percent_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.pause_treasury();
+    facade.change_protection_limit_percent(10);
 }

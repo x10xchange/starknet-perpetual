@@ -37,8 +37,14 @@ mod MigrateCollateralToTreasuryEIC {
         let token = IERC20Dispatcher { contract_address: token_address };
         let balance = token.balance_of(perps_address);
         if balance > 0 {
+            let treasury_balance_before = token.balance_of(treasury_address);
             assert(token.approve(treasury_address, balance), 'APPROVE_FAILED');
             treasury.deposit_into(token_address, balance);
+            let treasury_balance_after = token.balance_of(treasury_address);
+            assert(
+                treasury_balance_after - treasury_balance_before == balance,
+                'MIGRATION_BALANCE_MISMATCH',
+            );
         }
     }
 
