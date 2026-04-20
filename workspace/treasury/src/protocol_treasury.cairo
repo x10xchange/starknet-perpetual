@@ -16,6 +16,7 @@ pub mod ProtocolTreasury {
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
+    use starknet::event::EventEmitter;
     use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
@@ -47,6 +48,34 @@ pub mod ProtocolTreasury {
     #[abi(embed_v0)]
     impl RolesImpl = RolesComponent::RolesImpl<ContractState>;
 
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct Withdrawal {
+        #[key]
+        pub contract_address: ContractAddress,
+        pub amount: u256,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct Deposit {
+        #[key]
+        pub collateral_address: ContractAddress,
+        pub amount: u256,
+        pub timestamp: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct AdminLimitChanged {
+        #[key]
+        pub collateral_address: ContractAddress,
+        pub percent: u64,
+    }
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct AdminLimitReset {
+        #[key]
+        pub collateral_address: ContractAddress,
+    }
 
     #[storage]
     pub struct Storage {
@@ -78,6 +107,10 @@ pub mod ProtocolTreasury {
         RolesEvent: RolesComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
+        Withdrawal: Withdrawal,
+        Deposit: Deposit,
+        AdminLimitChanged: AdminLimitChanged,
+        AdminLimitReset: AdminLimitReset,
     }
 
     #[constructor]
@@ -102,10 +135,12 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress, amount: u256,
         ) {
             self.pausable.assert_not_paused();
+            assert(get_caller_address() == self.perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
             let this = starknet::get_contract_address();
             let caller = get_caller_address();
             let collateral_dispatcher = IERC20Dispatcher { contract_address: collateral_address };
             assert(collateral_dispatcher.transfer_from(caller, this, amount), 'TRANSFER_FAILED');
+            self.emit(Deposit { collateral_address, amount, timestamp: Time::now().seconds });
         }
 
         fn withdraw_from(
@@ -122,9 +157,18 @@ pub mod ProtocolTreasury {
                 collateral_dispatcher.transfer(self.perps_contract.read(), amount),
                 'TRANSFER_FAILED',
             );
+            self
+                .emit(
+                    Withdrawal {
+                        contract_address: collateral_address,
+                        amount,
+                        timestamp: Time::now().seconds,
+                    },
+                );
         }
 
         fn reset_protection_limit(ref self: ContractState, collateral_address: ContractAddress) {
+            self.pausable.assert_not_paused();
             self.roles.only_app_governor();
             let balance: u128 = IERC20Dispatcher { contract_address: collateral_address }
                 .balance_of(starknet::get_contract_address())
@@ -133,11 +177,13 @@ pub mod ProtocolTreasury {
             let percent = self.get_protection_percent(collateral_address);
             let state = ProtectionStateTrait::new(balance, percent);
             self.protection.write(collateral_address, state);
+            self.emit(AdminLimitReset { collateral_address });
         }
 
         fn change_protection_limit_percent(
             ref self: ContractState, collateral_address: ContractAddress, percent: u64,
         ) {
+            self.pausable.assert_not_paused();
             self.roles.only_app_governor();
             self.protection_percent_override.write(collateral_address, percent);
             let mut state = self.protection.read(collateral_address);
@@ -145,6 +191,7 @@ pub mod ProtocolTreasury {
                 .max_allowed_withdrawal =
                     compute_max_withdrawal(state.balance_at_last_reset, percent);
             self.protection.write(collateral_address, state);
+            self.emit(AdminLimitChanged { collateral_address, percent });
         }
     }
 
