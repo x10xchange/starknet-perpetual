@@ -98,68 +98,60 @@ jobs:
       - name: Deploy contracts
         id: deploy_contracts
         run: |
-          # CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
-          # echo "core hash $CORE_HASH"
-          # VAULT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c VaultsManager -p perpetuals)
-          # echo "vault hash $VAULT_COMPONENT_HASH"
-          # TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TransferManager -p perpetuals)
-          # echo "transfer hash $TRANSFER_COMPONENT_HASH"
-          # WITHDRAWAL_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c WithdrawalManager -p perpetuals)
-          # echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
-          # LIQUIDATION_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c LiquidationManager -p perpetuals)
-          # echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
-          # DELEVERAGE_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DeleverageManager -p perpetuals)
-          # echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
-          # DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DepositManager -p perpetuals)
-          # echo "deposit hash $DEPOSIT_COMPONENT_HASH"
-          # ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c AssetsManager -p perpetuals)
-          # echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
-          # sleep 30s
-
-          # MIGRATE_USDC_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c MigrateTVLEIC -p perpetuals)
-          # echo "MIGRATE_USDC_EIC_HASH=$MIGRATE_USDC_EIC_HASH"
-
-          # VAULT_CLASS_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolVault -p vault)
-          # echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
-
-          # echo "verifying core hash ${CORE_HASH}"
-          # voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "Core verification might have failed check https://voyager.online/class/${CORE_HASH}"
-
-          # echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
-          # voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "VaultsManager verification might have failed check https://voyager.online/class/${VAULT_COMPONENT_HASH}"
-
-          # echo "verifying transfer component hash ${TRANSFER_COMPONENT_HASH}"       
-          # voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "TransferManager verification might have failed check https://voyager.online/class/${TRANSFER_COMPONENT_HASH}"
-
-          # echo "verifying liquidation component hash ${LIQUIDATION_COMPONENT_HASH}"       
-          # voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "LiquidationManager verification might have failed check https://voyager.online/class/${LIQUIDATION_COMPONENT_HASH}"
-
-          # echo "verifying deleverage component hash ${DELEVERAGE_COMPONENT_HASH}"         
-          # voyager verify --network mainnet --class-hash ${DELEVERAGE_COMPONENT_HASH} --contract-name DeleverageManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DeleverageManager verification might have failed check https://voyager.online/class/${DELEVERAGE_COMPONENT_HASH}"
-
-          # echo "verifying deposit component hash ${DEPOSIT_COMPONENT_HASH}"         
-          # voyager verify --network mainnet --class-hash ${DEPOSIT_COMPONENT_HASH} --contract-name DepositManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DepositManager verification might have failed check https://voyager.online/class/${DEPOSIT_COMPONENT_HASH}"
-
-          # echo "verifying asset manager component hash ${ASSET_MANAGER_COMPONENT_HASH}"         
-          # voyager verify --network mainnet --class-hash ${ASSET_MANAGER_COMPONENT_HASH} --contract-name AssetsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "AssetsManager verification might have failed check https://voyager.online/class/${ASSET_MANAGER_COMPONENT_HASH}"
-
-          # echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
-          # voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "WithdrawalManager verification might have failed check https://voyager.online/class/${WITHDRAWAL_COMPONENT_HASH}"
-
-          # echo "verifying vault hash ${VAULT_CLASS_HASH}"          
-          # voyager verify --network mainnet --class-hash ${VAULT_CLASS_HASH} --contract-name ProtocolVault --license Apache-2.0  --package vault --watch --lock-file  || echo "ProtocolVault verification might have failed check https://voyager.online/class/${VAULT_CLASS_HASH}"   
-
-          # echo add_new_implementation ${CORE_HASH} 1 0
-          # echo replace_to             ${CORE_HASH} 1 0
+          CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
+          VAULT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c VaultsManager -p perpetuals)
+          echo "vault hash $VAULT_COMPONENT_HASH"
+          TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TransferManager -p perpetuals)
+          echo "transfer hash $TRANSFER_COMPONENT_HASH"
+          WITHDRAWAL_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c WithdrawalManager -p perpetuals)
+          echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+          LIQUIDATION_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c LiquidationManager -p perpetuals)
+          echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+          DELEVERAGE_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DeleverageManager -p perpetuals)
+          echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+          DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DepositManager -p perpetuals)
+          echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+          ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c AssetsManager -p perpetuals)
+          echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
+          sleep 30s
 
 
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
-          # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}    
-          PROTOCOL_VAULT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolVault -p vault)
-          echo "PROTOCOL_VAULT_HASH=$PROTOCOL_VAULT_HASH"      
-          voyager verify --network mainnet --class-hash $PROTOCOL_VAULT_HASH --contract-name ProtocolVault --license Apache-2.0  --package vault --watch --lock-file  || echo "ProtocolVault verification might have failed check https://voyager.online/class/$PROTOCOL_VAULT_HASH"
+          echo "verifying core hash ${CORE_HASH}"
+          voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "Core verification might have failed check https://voyager.online/class/${CORE_HASH}"
+
+          echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
+          voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "VaultsManager verification might have failed check https://voyager.online/class/${VAULT_COMPONENT_HASH}"
+
+          echo "verifying transfer component hash ${TRANSFER_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "TransferManager verification might have failed check https://voyager.online/class/${TRANSFER_COMPONENT_HASH}"
+
+          echo "verifying liquidation component hash ${LIQUIDATION_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "LiquidationManager verification might have failed check https://voyager.online/class/${LIQUIDATION_COMPONENT_HASH}"
+
+          echo "verifying deleverage component hash ${DELEVERAGE_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DELEVERAGE_COMPONENT_HASH} --contract-name DeleverageManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DeleverageManager verification might have failed check https://voyager.online/class/${DELEVERAGE_COMPONENT_HASH}"
+
+          echo "verifying deposit component hash ${DEPOSIT_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DEPOSIT_COMPONENT_HASH} --contract-name DepositManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DepositManager verification might have failed check https://voyager.online/class/${DEPOSIT_COMPONENT_HASH}"
+
+          echo "verifying asset manager component hash ${ASSET_MANAGER_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${ASSET_MANAGER_COMPONENT_HASH} --contract-name AssetsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "AssetsManager verification might have failed check https://voyager.online/class/${ASSET_MANAGER_COMPONENT_HASH}"
+
+          echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
+          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "WithdrawalManager verification might have failed check https://voyager.online/class/${WITHDRAWAL_COMPONENT_HASH}"
+
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
+
+
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}    
+          # PROTOCOL_VAULT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolVault -p vault)
+          # echo "PROTOCOL_VAULT_HASH=$PROTOCOL_VAULT_HASH"      
+          # voyager verify --network mainnet --class-hash $PROTOCOL_VAULT_HASH --contract-name ProtocolVault --license Apache-2.0  --package vault --watch --lock-file  || echo "ProtocolVault verification might have failed check https://voyager.online/class/$PROTOCOL_VAULT_HASH"
