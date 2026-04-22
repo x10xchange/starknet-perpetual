@@ -430,16 +430,16 @@ pub(crate) mod VaultsManager {
                 format!("INVALID_ACTUAL_COLLATERAL_AMOUNT: {}", actual_collateral_user),
             );
 
-            validate_trade(
-                order_a: order,
-                order_b: vault_approval,
-                actual_amount_base_a: actual_shares_user,
-                actual_amount_quote_a: actual_collateral_user,
-                actual_fee_a: 0_u64,
-                actual_fee_b: 0_u64,
-                asset: Some(vault_asset),
-                collateral_id: self.assets.get_collateral_id(),
-            );
+            // validate_trade(
+            //     order_a: order,
+            //     order_b: vault_approval,
+            //     actual_amount_base_a: actual_shares_user,
+            //     actual_amount_quote_a: actual_collateral_user,
+            //     actual_fee_a: 0_u64,
+            //     actual_fee_b: 0_u64,
+            //     asset: Some(vault_asset),
+            //     collateral_id: self.assets.get_collateral_id(),
+            // );
 
             let vault_position = self.positions.get_position_snapshot(vault_position_id);
             let redeeming_position = self.positions.get_position_snapshot(redeeming_position_id);
