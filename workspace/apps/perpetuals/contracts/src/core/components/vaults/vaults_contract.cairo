@@ -683,16 +683,16 @@ pub(crate) mod VaultsManager {
                 .try_into()
                 .expect('REDEEM_VALUE_TOO_LARGE');
 
-            validate_trade(
-                order_a: order,
-                order_b: vault_approval,
-                actual_amount_base_a: actual_shares_user,
-                actual_amount_quote_a: value_to_receive.try_into().expect('VALUE_TOO_LARGE'),
-                actual_fee_a: 0_u64,
-                actual_fee_b: 0_u64,
-                asset: Some(vault_asset),
-                collateral_id: self.assets.get_base_collateral_id(),
-            );
+            // validate_trade(
+            //     order_a: order,
+            //     order_b: vault_approval,
+            //     actual_amount_base_a: actual_shares_user,
+            //     actual_amount_quote_a: value_to_receive.try_into().expect('VALUE_TOO_LARGE'),
+            //     actual_fee_a: 0_u64,
+            //     actual_fee_b: 0_u64,
+            //     asset: Some(vault_asset),
+            //     collateral_id: self.assets.get_base_collateral_id(),
+            // );
 
             // Risk-adjusted value is used for vault ERC4626 interactions (cap check, redeem).
             // This accounts for spot asset haircuts so high-haircut assets don't block redemption.
