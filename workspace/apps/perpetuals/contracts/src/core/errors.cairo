@@ -43,13 +43,19 @@ pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
 }
 
 pub fn illegal_base_to_quote_ratio_err(
-    position_id: PositionId, numerator: i128, denominator: i128,
+    position_id: PositionId,
+    order_numerator: i128,
+    order_denominator: i128,
+    actual_numerator: i128,
+    actual_denominator: i128,
 ) -> ByteArray {
     format!(
-        "ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?} fraction: {}/{}",
+        "ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?} order_fraction: {}/{} actual_fraction: {}/{}",
         position_id,
-        numerator,
-        denominator,
+        order_numerator,
+        order_denominator,
+        actual_numerator,
+        actual_denominator,
     )
 }
 
