@@ -1,6 +1,7 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::value_risk_calculator::TVTRChange;
+use starkware_utils::math::fraction::Fraction;
 
 pub const AMOUNT_OVERFLOW: felt252 = 'AMOUNT_OVERFLOW';
 pub const ASSET_ID_NOT_COLLATERAL: felt252 = 'QUOTE_ASSET_ID_NOT_COLLATERAL';
@@ -41,8 +42,15 @@ pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {
     format!("FULFILLMENT_EXCEEDED position_id: {:?}", position_id)
 }
 
-pub fn illegal_base_to_quote_ratio_err(position_id: PositionId) -> ByteArray {
-    format!("ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?}", position_id)
+pub fn illegal_base_to_quote_ratio_err(
+    position_id: PositionId, numerator: i128, denominator: i128,
+) -> ByteArray {
+    format!(
+        "ILLEGAL_BASE_TO_QUOTE_RATIO position_id: {:?} fraction: {}/{}",
+        position_id,
+        numerator,
+        denominator,
+    )
 }
 
 pub fn illegal_fee_to_quote_ratio_err(position_id: PositionId) -> ByteArray {

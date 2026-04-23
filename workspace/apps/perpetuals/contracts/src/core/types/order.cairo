@@ -46,7 +46,11 @@ pub trait ValidateableOrderTrait<T> {
             numerator: actual_amount_base.into(), denominator: actual_amount_quote.abs().into(),
         );
         if (order_base_to_quote_ratio > actual_base_to_quote_ratio) {
-            let err = illegal_base_to_quote_ratio_err(position);
+            let err = illegal_base_to_quote_ratio_err(
+                position,
+                numerator: (order_base_amount).into(),
+                denominator: (order_quote_amount).abs().into(),
+            );
             panic_with_byte_array(err: @err);
         }
 
