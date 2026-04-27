@@ -2110,6 +2110,9 @@ fn test_redeem_from_protocol_vault_with_additional_spot_assets() {
     state.facade.price_tick(@vault_config.asset_info, 1);
     state.facade.validate_total_value(vault_config.position_id, 5900);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     // Setup redeeming user
     state
         .facade
@@ -2294,6 +2297,9 @@ fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets() {
     state.facade.price_tick(@vault_config.asset_info, 1);
     state.facade.validate_total_value(vault_config.position_id, 6800);
 
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
     // Setup redeeming user
     state
         .facade
@@ -2460,6 +2466,9 @@ fn test_redeem_entirely_in_other_spot_assets() {
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
     state.facade.validate_total_value(vault_config.position_id, 5900);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     // Setup redeeming user
     state
@@ -2691,6 +2700,9 @@ fn test_redeem_fails_when_user_becomes_unhealthy_due_to_asset_haircut() {
 
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     // Redeeming user deposits 1000 USDC and buys 1000 Vault Shares
     state
@@ -3042,6 +3054,9 @@ fn test_redeem_from_protocol_vault_with_multiple_additional_spot_assets_not_enou
     let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
     state.facade.validate_total_value(vault_config.position_id, 6800);
+
+    // Set vault protection limit high to allow redemptions in this test
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
 
     // Setup redeeming user
     state
