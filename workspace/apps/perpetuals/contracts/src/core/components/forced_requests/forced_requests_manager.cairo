@@ -419,15 +419,17 @@ pub(crate) mod ForcedRequestsManager {
             let premium_cost = self.premium_cost.read();
             let quantum = self.assets.get_collateral_quantum();
             let token_contract = self.assets.get_base_collateral_token_contract();
-            let amount: u256 = (premium_cost * quantum).into();
+            let amount: u128 = premium_cost.into() * quantum.into();
             let outstanding_allowance = token_contract
                 .allowance(owner: caller, spender: get_contract_address());
-            assert(outstanding_allowance >= amount, INSUFFICIENT_APPROVAL);
+            assert(outstanding_allowance >= amount.into(), INSUFFICIENT_APPROVAL);
 
             assert(
                 token_contract
                     .transfer_from(
-                        sender: caller, recipient: get_block_info().sequencer_address, :amount,
+                        sender: caller,
+                        recipient: get_block_info().sequencer_address,
+                        amount: amount.into(),
                     ),
                 TRANSFER_FAILED,
             );

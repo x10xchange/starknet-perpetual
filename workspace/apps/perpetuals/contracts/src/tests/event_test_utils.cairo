@@ -43,7 +43,7 @@ pub fn assert_deposit_event_with_expected(
     collateral_id: AssetId,
     token_address: ContractAddress,
     quantized_amount: u64,
-    unquantized_amount: u64,
+    unquantized_amount: u128,
     deposit_request_hash: felt252,
     salt: felt252,
 ) {
@@ -73,7 +73,7 @@ pub fn assert_deposit_canceled_event_with_expected(
     collateral_id: AssetId,
     token_address: ContractAddress,
     quantized_amount: u64,
-    unquantized_amount: u64,
+    unquantized_amount: u128,
     deposit_request_hash: felt252,
     salt: felt252,
 ) {
@@ -83,7 +83,7 @@ pub fn assert_deposit_canceled_event_with_expected(
         collateral_id,
         token_address,
         quantized_amount,
-        unquantized_amount: unquantized_amount.into(),
+        unquantized_amount,
         deposit_request_hash,
         salt,
     };
@@ -102,7 +102,7 @@ pub fn assert_deposit_processed_event_with_expected(
     collateral_id: AssetId,
     token_address: ContractAddress,
     quantized_amount: u64,
-    unquantized_amount: u64,
+    unquantized_amount: u128,
     deposit_request_hash: felt252,
     salt: felt252,
 ) {
@@ -112,7 +112,7 @@ pub fn assert_deposit_processed_event_with_expected(
         collateral_id,
         token_address,
         quantized_amount,
-        unquantized_amount: unquantized_amount.into(),
+        unquantized_amount,
         deposit_request_hash,
         salt,
     };

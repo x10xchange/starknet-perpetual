@@ -431,7 +431,7 @@ pub(crate) mod WithdrawalManager {
                 );
 
             self.positions.apply_diff(:position_id, :position_diff);
-            let withdraw_unquantized_amount = quantum * amount;
+            let withdraw_unquantized_amount: u128 = quantum.into() * amount.into();
             assert(
                 token_contract.transfer(:recipient, amount: withdraw_unquantized_amount.into()),
                 TRANSFER_FAILED,

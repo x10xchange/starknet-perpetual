@@ -1967,7 +1967,7 @@ fn test_successful_deposit() {
         collateral_id: cfg.collateral_cfg.collateral_id,
         token_address: token_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -2122,7 +2122,7 @@ fn test_successful_process_deposit() {
         collateral_id: cfg.collateral_cfg.collateral_id,
         token_address: token_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -2198,7 +2198,7 @@ fn test_successful_cancel_deposit() {
         collateral_id: cfg.collateral_cfg.collateral_id,
         token_address: token_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -2277,7 +2277,7 @@ fn test_successful_reject_deposit() {
         collateral_id: cfg.collateral_cfg.collateral_id,
         token_address: token_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * COLLATERAL_QUANTUM,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * COLLATERAL_QUANTUM.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -5488,7 +5488,7 @@ fn test_successful_vault_token_deposit() {
         collateral_id: cfg.vault_share_cfg.collateral_id,
         token_address: cfg.vault_share_cfg.contract_address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -5629,7 +5629,7 @@ fn test_successful_vault_token_cancel_deposit() {
         collateral_id: cfg.vault_share_cfg.collateral_id,
         token_address: cfg.vault_share_cfg.contract_address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -5659,7 +5659,7 @@ fn test_successful_vault_token_cancel_deposit() {
         collateral_id: cfg.vault_share_cfg.collateral_id,
         token_address: vault_share_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );
@@ -5740,7 +5740,7 @@ fn test_successful_vault_share_process_deposit() {
         collateral_id: cfg.vault_share_cfg.collateral_id,
         token_address: vault_share_state.address,
         quantized_amount: DEPOSIT_AMOUNT,
-        unquantized_amount: DEPOSIT_AMOUNT * cfg.vault_share_cfg.quantum,
+        unquantized_amount: DEPOSIT_AMOUNT.into() * cfg.vault_share_cfg.quantum.into(),
         deposit_request_hash: deposit_hash,
         salt: user.salt_counter,
     );

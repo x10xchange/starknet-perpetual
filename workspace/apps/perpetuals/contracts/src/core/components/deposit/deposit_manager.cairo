@@ -258,7 +258,7 @@ pub(crate) mod DepositManager {
                 (token_contract, asset_config.quantum, position_diff)
             };
 
-            let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
+            let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
             let deposit_hash = deposit_hash(
                 token_address: token_contract.contract_address,
                 :depositor,
@@ -372,7 +372,7 @@ pub(crate) mod DepositManager {
                 .registered_deposits
                 .write(key: deposit_hash, value: DepositStatus::PENDING(now));
 
-            let unquantized_amount = quantized_amount * quantum.into();
+            let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
 
             assert(
                 token_contract
@@ -422,7 +422,7 @@ pub(crate) mod DepositManager {
                 (token_contract, asset_config.quantum)
             };
 
-            let unquantized_amount: u256 = quantized_amount.into() * quantum.into();
+            let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
 
             let deposit_hash = deposit_hash(
                 token_address: token_contract.contract_address,
