@@ -36,6 +36,10 @@ jobs:
           # ./utils/deploy_vault.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }}
           CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
           echo "core hash $CORE_HASH"
+          TREASURY_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolTreasury -p treasury)
+          echo "treasury hash $TREASURY_HASH"
+          exit 0
+
           VAULT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c VaultsManager -p perpetuals)
           echo "vault hash $VAULT_COMPONENT_HASH"
           TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c TransferManager -p perpetuals)
