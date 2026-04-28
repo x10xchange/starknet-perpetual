@@ -15,9 +15,7 @@ fn test_redeem_exceeding_5_percent_limit_fails() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -88,9 +86,7 @@ fn test_multiple_redeems_cumulative_failure() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -190,9 +186,7 @@ fn test_reset_after_24h() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -280,9 +274,7 @@ fn test_profit_does_not_reset_baseline_until_24h_pass() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -359,9 +351,7 @@ fn test_profit_then_redeem_over_limit_fails() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -437,9 +427,7 @@ fn test_force_reset_protection_limit_allows_redemption() {
         .facade
         .deposit(vault_user.account, vault_user.position_id, 50000_u64);
     state.facade.process_deposit(vault_init_deposit);
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state
@@ -510,9 +498,7 @@ fn test_per_vault_protection_limit_override() {
         .process_deposit(
             state.facade.deposit(vault_user.account, vault_user.position_id, 50000_u64),
         );
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
     state.facade.price_tick(@vault_config.asset_info, 1);
 
     state

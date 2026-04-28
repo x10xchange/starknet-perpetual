@@ -19,9 +19,7 @@ fn test_trading_loss_activates_protection() {
         .process_deposit(
             state.facade.deposit(vault_user.account, vault_user.position_id, 10000_u64),
         );
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
 
     // 2. Setup Trader
     state
@@ -106,9 +104,7 @@ fn test_trading_loss_within_limit() {
         .process_deposit(
             state.facade.deposit(vault_user.account, vault_user.position_id, 10000_u64),
         );
-    let vault_config = state
-        .facade
-        .register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
 
     // 2. Setup Trader
     state
