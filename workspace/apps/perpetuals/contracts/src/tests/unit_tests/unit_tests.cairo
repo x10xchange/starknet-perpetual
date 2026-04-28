@@ -6775,10 +6775,7 @@ fn test_forced_trade_request_panics_when_disabled() {
 
     state
         .forced_trade_request(
-            signature_a: array![].span(),
-            signature_b: array![].span(),
-            :order_a,
-            :order_b,
+            signature_a: array![].span(), signature_b: array![].span(), :order_a, :order_b,
         );
 }
 
