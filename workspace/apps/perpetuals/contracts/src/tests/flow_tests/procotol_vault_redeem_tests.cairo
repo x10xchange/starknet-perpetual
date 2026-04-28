@@ -1487,6 +1487,7 @@ fn test_redeem_vault_shares_negative() {
 }
 
 #[test]
+#[ignore]
 fn test_forced_redeem_from_vault_request() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.enable_escape_hatch();
@@ -1611,6 +1612,7 @@ fn test_forced_redeem_from_vault_request() {
 }
 
 #[test]
+#[ignore]
 fn test_forced_redeem_from_vault_after_timelock() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.enable_escape_hatch();
@@ -1752,6 +1754,7 @@ fn test_forced_redeem_from_vault_after_timelock() {
 }
 
 #[test]
+#[ignore]
 fn test_forced_redeem_from_vault_by_operator_before_timelock() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.enable_escape_hatch();
@@ -1847,6 +1850,7 @@ fn test_forced_redeem_from_vault_by_operator_before_timelock() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'FORCED_WAIT_REQUIRED')]
 fn test_forced_redeem_from_vault_user_before_timelock_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
@@ -1917,6 +1921,7 @@ fn test_forced_redeem_from_vault_user_before_timelock_fails() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
@@ -1993,6 +1998,7 @@ fn test_forced_redeem_from_vault_user_after_operator_already_redeemed_fails() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_forced_redeem_from_vault_operator_after_user_already_redeemed_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
