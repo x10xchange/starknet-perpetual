@@ -11,7 +11,7 @@ pub struct Deposit {
     pub collateral_id: AssetId,
     pub token_address: ContractAddress,
     pub quantized_amount: u64,
-    pub unquantized_amount: u64,
+    pub unquantized_amount: u128,
     #[key]
     pub deposit_request_hash: felt252,
     pub salt: felt252,
@@ -26,7 +26,7 @@ pub struct DepositProcessed {
     pub collateral_id: AssetId,
     pub token_address: ContractAddress,
     pub quantized_amount: u64,
-    pub unquantized_amount: u256,
+    pub unquantized_amount: u128,
     #[key]
     pub deposit_request_hash: felt252,
     pub salt: felt252,
@@ -41,7 +41,7 @@ pub struct DepositCanceled {
     pub collateral_id: AssetId,
     pub token_address: ContractAddress,
     pub quantized_amount: u64,
-    pub unquantized_amount: u256,
+    pub unquantized_amount: u128,
     #[key]
     pub deposit_request_hash: felt252,
     pub salt: felt252,
