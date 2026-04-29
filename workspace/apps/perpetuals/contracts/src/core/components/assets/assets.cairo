@@ -186,7 +186,7 @@ pub mod AssetsComponent {
             let mut operator_nonce_component = get_dep_component_mut!(ref self, OperatorNonce);
             operator_nonce_component.use_checked_nonce(:operator_nonce);
 
-            self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
+            // self._validate_price_tick(:asset_id, :oracle_price, :signed_prices);
             self._set_price(:asset_id, :oracle_price);
         }
 

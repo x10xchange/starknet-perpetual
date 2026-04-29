@@ -34,8 +34,8 @@ jobs:
         id: deploy_contracts
         run: |
           # ./utils/deploy_vault.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }}
-          # CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
-          # echo "core hash $CORE_HASH"
+          CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
           # TREASURY_EIC_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c MigrateCollateralToTreasuryEIC -p perpetuals)
           # echo "treasury eic hash $TREASURY_EIC_HASH"
           # exit 0
@@ -55,16 +55,16 @@ jobs:
           # ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c AssetsManager -p perpetuals)
           # echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
           # sleep 30s
-          VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
-          echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
+          # VAULT_CLASS_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c ProtocolVault -p vault)
+          # echo "Deployed ProtocolVault contract with class hash: $VAULT_CLASS_HASH"
 
           # echo add_new_implementation ${CORE_HASH} 1 0
           # echo replace_to             ${CORE_HASH} 1 0
-
-          # # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
-          # # # sleep 30s
-          # # sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6  --function replace_to             --calldata  ${CORE_HASH} 1 0
-          # # sleep 30s
+          sleep 30s
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6  --function add_new_implementation --calldata  ${CORE_HASH} 1 0
+          sleep 30s
+          sncast --account=testnet invoke -u ${{ secrets.TEST_RPC_09_ADDRESS }} --contract-address 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6  --function replace_to             --calldata  ${CORE_HASH} 1 0
+          sleep 30s
           # ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6 -n VAULTS -h ${VAULT_COMPONENT_HASH}
           # ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
           # ./utils/register_and_activate_external.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c 0x040bbb985f0196039d69e61f4fb9e2e5e488007d94eddcba6d6fc6e4e3113dc6 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
