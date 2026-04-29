@@ -1514,7 +1514,7 @@ fn test_rf_increase_with_request_spot() {
     let asset_dispatcher = IAssetsDispatcher { contract_address };
 
     let spot_asset_id = SYNTHETIC_ASSET_ID_2();
-    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_first_tier_boundary = MAX_U128 - 1;
     let risk_factor_tier_size = 0;
     let risk_factor = 10;
     let risk_factor_tiers_increased = array![15].span();
@@ -1576,7 +1576,7 @@ fn test_rf_increase_with_request_vault() {
     let asset_dispatcher = IAssetsDispatcher { contract_address };
 
     let vault_asset_id = cfg.vault_share_cfg.collateral_id;
-    let risk_factor_first_tier_boundary = MAX_U128;
+    let risk_factor_first_tier_boundary = MAX_U128 - 1;
     let risk_factor_tier_size = 0;
     let risk_factor = 10;
     let risk_factor_tiers_increased = array![15].span();
