@@ -55,7 +55,7 @@ mod MigrateCollateralToTreasuryEIC {
 
             // Register the treasury.
             let treasury_contract_address: ContractAddress =
-                0x06864ff22ff512624a0f344e5dcc0ff44e117f53f5684c974dd0c337397c39b0
+                0x044ee047e8620d360309260057f4d941b1cc3d5e916ae13f1026626fcfc1d421
                 .try_into()
                 .unwrap();
             let mut treasury = ITreasuryDispatcher { contract_address: treasury_contract_address };

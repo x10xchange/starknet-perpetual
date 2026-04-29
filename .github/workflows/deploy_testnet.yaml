@@ -36,8 +36,8 @@ jobs:
           # ./utils/deploy_vault.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }}
           # CORE_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c Core -p perpetuals)
           # echo "core hash $CORE_HASH"
-          FixAssetManagerEIC_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c FixAssetManagerEIC -p perpetuals)
-          echo "fix asset manager eic hash $FixAssetManagerEIC_HASH"
+          TREASURY_EIC_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c MigrateCollateralToTreasuryEIC -p perpetuals)
+          echo "treasury eic hash $TREASURY_EIC_HASH"
           exit 0
 
           VAULT_COMPONENT_HASH=$(./utils/declare.sh -a testnet -u ${{ secrets.TEST_RPC_09_ADDRESS }} -c VaultsManager -p perpetuals)
