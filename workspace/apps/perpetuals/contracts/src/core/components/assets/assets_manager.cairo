@@ -530,13 +530,7 @@ pub(crate) mod AssetsManager {
 
         fn remove_oracle_from_asset(
             ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
-        ) {
-            let mut asset_config = self
-                .assets
-                .asset_config
-                .read(asset_id)
-                .expect(SYNTHETIC_NOT_EXISTS);
-            
+        ) { 
             // Validate the oracle exists.
             let asset_oracle_entry = self
                 .assets
