@@ -6,6 +6,7 @@ pub mod events;
 pub mod interface;
 pub mod migrate_collateral_eic;
 pub mod migrate_collateral_to_treasury_eic;
+pub mod fix_asset_manager;
 pub mod migrate_usdc_eic;
 pub mod replace_vault_collateral_eic;
 pub mod types;
