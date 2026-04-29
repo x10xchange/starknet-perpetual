@@ -676,8 +676,8 @@ pub mod Core {
         fn activate_vault(
             ref self: ContractState,
             operator_nonce: u64,
-            order: ConvertPositionToVault,
-            signature: Signature,
+            vault_position: PositionId,
+            vault_asset_id: AssetId
         ) {
             self.assets.validate_assets_integrity();
             self.pausable.assert_not_paused();
@@ -685,7 +685,7 @@ pub mod Core {
             self
                 .external_components
                 ._get_vault_manager_dispatcher()
-                .activate_vault(operator_nonce: operator_nonce, :order, :signature)
+                .activate_vault(operator_nonce: operator_nonce, vault_position: vault_position, vault_asset_id: vault_asset_id)
         }
         fn invest_in_vault(
             ref self: ContractState,

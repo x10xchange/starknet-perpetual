@@ -10,8 +10,8 @@ pub trait IVaultExternal<TContractState> {
     fn activate_vault(
         ref self: TContractState,
         operator_nonce: u64,
-        order: ConvertPositionToVault,
-        signature: Signature,
+        vault_position: PositionId,
+        vault_asset_id: AssetId,
     );
     fn invest_in_vault(
         ref self: TContractState,
@@ -190,12 +190,16 @@ pub(crate) mod VaultsManager {
         fn activate_vault(
             ref self: ContractState,
             operator_nonce: u64,
-            order: ConvertPositionToVault,
-            signature: Signature,
+            vault_position: PositionId,
+            vault_asset_id: AssetId,
         ) {
             self
                 .vaults
-                .activate_vault(operator_nonce: operator_nonce, order: order, signature: signature);
+                .activate_vault(
+                    operator_nonce: operator_nonce,
+                    vault_position: vault_position,
+                    vault_asset_id: vault_asset_id,
+                );
         }
 
         fn invest_in_vault(

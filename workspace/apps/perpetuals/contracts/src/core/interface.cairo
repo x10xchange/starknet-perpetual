@@ -103,8 +103,8 @@ pub trait ICore<TContractState> {
     fn activate_vault(
         ref self: TContractState,
         operator_nonce: u64,
-        order: ConvertPositionToVault,
-        signature: Signature,
+        vault_position: PositionId,
+        vault_asset_id: AssetId,
     );
     fn invest_in_vault(
         ref self: TContractState,
