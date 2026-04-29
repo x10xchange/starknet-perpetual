@@ -429,7 +429,7 @@ pub(crate) mod AssetsManager {
             // Validate that non-synthetic assets have exactly 1 risk factor tier.
             if old_asset_config.asset_type != AssetType::SYNTHETIC {
                 assert(risk_factor_tiers.len() == 1, INVALID_NON_SYNTHETIC_RF_TIERS);
-                assert(risk_factor_first_tier_boundary == MAX_U128, INVALID_SPOT_RF_BOUNDARY);
+                assert(risk_factor_first_tier_boundary == MAX_U128-1, INVALID_SPOT_RF_BOUNDARY);
                 assert(risk_factor_tier_size.is_zero(), INVALID_SPOT_RF_TIER_SIZE);
             }
 
@@ -531,6 +531,12 @@ pub(crate) mod AssetsManager {
         fn remove_oracle_from_asset(
             ref self: ContractState, asset_id: AssetId, oracle_public_key: PublicKey,
         ) {
+            let mut asset_config = self
+                .assets
+                .asset_config
+                .read(asset_id)
+                .expect(SYNTHETIC_NOT_EXISTS);
+            
             // Validate the oracle exists.
             let asset_oracle_entry = self
                 .assets
