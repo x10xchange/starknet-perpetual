@@ -968,7 +968,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             let dispatcher = IAssetsDispatcher { contract_address: self.perpetuals_contract };
             dispatcher.get_asset_config(asset_id: asset_id).quantum
         };
-        let unquantized_amount = quantized_amount * quantum;
+        let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
         let address = depositor.address;
 
         let token_state = self.find_contract_for_asset_id(:asset_id);
@@ -1047,7 +1047,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             :salt,
         );
 
-        let unquantized_amount = quantized_amount * self.collateral_quantum;
+        let unquantized_amount: u128 = quantized_amount.into() * self.collateral_quantum.into();
 
         validate_balance(
             token_state: token_state,
@@ -1145,7 +1145,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             collateral_id: asset_id,
             token_address: token_state.address,
             :quantized_amount,
-            unquantized_amount: quantized_amount * self.collateral_quantum,
+            unquantized_amount: quantized_amount.into() * self.collateral_quantum.into(),
             deposit_request_hash: deposit_hash,
             :salt,
         );
