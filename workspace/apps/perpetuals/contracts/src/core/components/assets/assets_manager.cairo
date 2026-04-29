@@ -236,7 +236,8 @@ pub(crate) mod AssetsManager {
             // risk_factor_tier_size can be zero only if the boundary is infinite. Means all the
             // values would be mapped to the same risk factor value.
             assert(
-                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128 - 1,
+                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128
+                    - 1,
                 INVALID_ZERO_RF_TIER_SIZE,
             );
             assert(quorum.is_non_zero(), 'INVALID_ZERO_QUORUM');
@@ -417,7 +418,8 @@ pub(crate) mod AssetsManager {
             // risk_factor_tier_size can be zero only if the boundary is infinite. Means all the
             // values would be mapped to the same risk factor value.
             assert(
-                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128 - 1,
+                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128
+                    - 1,
                 INVALID_ZERO_RF_TIER_SIZE,
             );
 
