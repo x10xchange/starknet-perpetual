@@ -1182,6 +1182,9 @@ fn test_withdraw_spot_collateral() {
         );
     state.facade.process_deposit(deposit_info: deposit_info_user);
 
+    // Set treasury protection to 100% for spot token after deposit funds the treasury.
+    state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
+
     // Withdraw.
     let mut withdraw_info = state.facade.withdraw_spot_request(:user, :asset_id, amount: 15000);
     state.facade.withdraw(:withdraw_info);
@@ -2521,6 +2524,9 @@ fn test_spot_collateral_deposit_transfer_withdraw() {
         );
     state.facade.process_deposit(deposit_info: deposit_info_user_1);
 
+    // Set treasury protection to 100% for spot token after deposit funds the treasury.
+    state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
+
     // Transfer partial amount from user_1 to user_2.
     let transfer_info = state
         .facade
@@ -2654,6 +2660,10 @@ fn test_deposit_two_spot_collaterals() {
             quantized_amount: 200000,
         );
     state.facade.process_deposit(deposit_info: deposit_info_eth);
+
+    // Set treasury protection to 100% for both spot tokens after deposits fund the treasury.
+    state.facade.set_treasury_protection_percent_for_token(btc_erc20_contract_address, 100);
+    state.facade.set_treasury_protection_percent_for_token(eth_erc20_contract_address, 100);
 
     // Verify both balances are correct.
     let balance_btc: i64 = state
@@ -4388,6 +4398,9 @@ fn test_withdraw_spot_with_interest() {
         );
     state.facade.process_deposit(deposit_info: deposit_info_user);
 
+    // Set treasury protection to 100% for spot token after deposit funds the treasury.
+    state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
+
     // Advance time by 1 hour
     state.facade.advance_time(seconds: HOUR);
 
@@ -5220,6 +5233,13 @@ fn test_redeem_from_vault_with_mixed_interest_same_position() {
                 ),
         );
 
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     state.facade.advance_time(seconds: HOUR);
 
     let redeeming_collateral_before = state
@@ -5328,6 +5348,13 @@ fn test_redeem_from_vault_with_positive_interest_enables_otherwise_unhealthy_red
                 ),
         );
 
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let user_order = state
         .facade
         .create_order(
@@ -5430,6 +5457,13 @@ fn test_redeem_from_vault_with_negative_interest_makes_redeem_unhealthy() {
                     depositing_user: redeeming_user,
                     receiving_user: redeeming_user,
                 ),
+        );
+
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     let user_order = state
@@ -5586,6 +5620,13 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
                 ),
         );
 
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     state.facade.advance_time(seconds: HOUR);
 
     let sender_collateral_before = state
@@ -5691,6 +5732,13 @@ fn test_redeem_from_vault_negative_interest_on_vault_makes_vault_unhealthy() {
                 ),
         );
 
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     state.facade.advance_time(seconds: HOUR);
 
     state
@@ -5771,6 +5819,13 @@ fn test_redeem_from_vault_negative_interest_makes_receiver_unhealthy() {
                     depositing_user: withdrawing_user,
                     receiving_user: withdrawing_user,
                 ),
+        );
+
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     // Receiver buys 200 BTC@100 => collateral = -10000, TV = 10000, TR = 10000.
@@ -7379,6 +7434,13 @@ fn test_liquidate_vault_shares_with_interest() {
                     depositing_user: liquidated_user,
                     receiving_user: liquidated_user,
                 ),
+        );
+
+    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
         );
 
     let risk_factor_data = RiskFactorTiers {

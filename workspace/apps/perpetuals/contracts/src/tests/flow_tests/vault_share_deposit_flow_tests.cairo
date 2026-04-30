@@ -89,6 +89,13 @@ fn test_withdraw_vault_shares() {
         format!("Unexpected balance: {}, expected: {}", balance, 1000_i64),
     );
 
+    // Allow full withdrawal of vault share tokens from treasury.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
     let withdraw_info = state
         .facade
         .withdraw_spot_request(user: receiving_user, asset_id: vault_config.asset_id, amount: 1000);

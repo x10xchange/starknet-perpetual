@@ -70,6 +70,7 @@ pub(crate) mod VaultsManager {
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::{PositionId, PositionTrait};
+    use starknet::storage::StoragePointerReadAccess;
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -79,6 +80,7 @@ pub(crate) mod VaultsManager {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::Time;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use vault::interface::{IProtocolVaultDispatcher, IProtocolVaultDispatcherTrait};
     use crate::core::components::deposit::deposit_manager::IDepositExternalDispatcherTrait;
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
@@ -167,6 +169,8 @@ pub(crate) mod VaultsManager {
         pub vaults: VaultsComponent::Storage,
         #[substorage(v0)]
         pub external_components: ExternalComponentsComponent::Storage,
+        // --- Treasury ---
+        treasury: ITreasuryDispatcher,
     }
 
     component!(path: FulfillmentComponent, storage: fulfillment_tracking, event: FulfillmentEvent);
@@ -262,20 +266,13 @@ pub(crate) mod VaultsManager {
             let vault_dispatcher = IERC4626Dispatcher {
                 contract_address: vault_share_config.token_contract.expect('NOT_ERC4626'),
             };
-            let collateral_token_dispatcher = self.assets.get_base_collateral_token_contract();
-            let current_collateral_balance = collateral_token_dispatcher
-                .balance_of(starknet::get_contract_address());
 
             let on_chain_amount: u128 = order
                 .quote_amount
                 .abs()
                 .wide_mul(self.assets.get_collateral_quantum());
 
-            collateral_token_dispatcher
-                .approve(
-                    spender: vault_dispatcher.contract_address, amount: on_chain_amount.into(),
-                );
-
+            // Vault deposit only mints shares; collateral stays in treasury.
             let minted_shares: u128 = vault_dispatcher
                 .deposit(on_chain_amount.into(), starknet::get_contract_address())
                 .try_into()
@@ -326,13 +323,6 @@ pub(crate) mod VaultsManager {
             self
                 .positions
                 .apply_diff(position_id: from_position_id, position_diff: sending_position_diff);
-
-            // 1. check that the collateral balance of the perps contract is returned to the
-            // same amount as before deposit into vault
-            // 2. apply diff to the vault position
-            let new_collateral_balance = collateral_token_dispatcher
-                .balance_of(starknet::get_contract_address());
-            assert(new_collateral_balance == current_collateral_balance, 'COLLATERAL_NOT_RETURNED');
 
             let vault_position_diff = PositionDiff {
                 collateral_diff: order.quote_amount.abs().into()
@@ -643,15 +633,16 @@ pub(crate) mod VaultsManager {
                 contract_address: vault_asset.token_contract.expect('NOT_ERC4626'),
             };
 
-            let vault_erc20Dispatcher = IERC20Dispatcher {
-                contract_address: vault_asset.token_contract.expect('NOT_ERC20'),
-            };
-
-            let pnl_collateral_dispatcher = self.assets.get_base_collateral_token_contract();
-            let perps_contract_balance_before = pnl_collateral_dispatcher
-                .balance_of(starknet::get_contract_address());
-
             let unquantized_amount_to_burn = amount_to_burn.abs().wide_mul(vault_asset.quantum);
+
+            // Withdraw vault shares from treasury so perps can burn them.
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            treasury
+                .withdraw_from(
+                    vault_asset.token_contract.expect('NOT_ERC20'),
+                    unquantized_amount_to_burn.into(),
+                );
 
             //calculate total notional value of redemption (for validate_trade fairness check)
             let mut total_notional_value: i128 = actual_collateral_user.into();
@@ -700,21 +691,6 @@ pub(crate) mod VaultsManager {
                 .abs()
                 .try_into()
                 .expect('REDEEM_VALUE_TOO_LARGE');
-
-            //approve the vault contract to transfer pnl collateral to itself to "send back" to
-            //perps
-            pnl_collateral_dispatcher
-                .approve(
-                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
-                    amount: value_to_receive.into(),
-                );
-
-            //approve the vault contract transferring vault shares to itself for burning
-            vault_erc20Dispatcher
-                .approve(
-                    spender: vault_asset.token_contract.expect('NOT_ERC20'),
-                    amount: unquantized_amount_to_burn.into(),
-                );
 
             let value_of_shares_from_er4626 = vault_erc4626_dispatcher
                 .preview_redeem(unquantized_amount_to_burn.into());
@@ -847,13 +823,6 @@ pub(crate) mod VaultsManager {
                     position_id: receiving_position_id, tvtr: receiver_tv_tr,
                 );
             }
-
-            let new_perps_contract_balance = pnl_collateral_dispatcher
-                .balance_of(starknet::get_contract_address());
-            assert(
-                new_perps_contract_balance == perps_contract_balance_before,
-                'COLLATERAL_NOT_RETURNED',
-            );
         }
     }
 }
