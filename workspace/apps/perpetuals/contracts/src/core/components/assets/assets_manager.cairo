@@ -236,7 +236,8 @@ pub(crate) mod AssetsManager {
             // risk_factor_tier_size can be zero only if the boundary is infinite. Means all the
             // values would be mapped to the same risk factor value.
             assert(
-                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128,
+                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128
+                    - 1,
                 INVALID_ZERO_RF_TIER_SIZE,
             );
             assert(quorum.is_non_zero(), 'INVALID_ZERO_QUORUM');
@@ -417,7 +418,8 @@ pub(crate) mod AssetsManager {
             // risk_factor_tier_size can be zero only if the boundary is infinite. Means all the
             // values would be mapped to the same risk factor value.
             assert(
-                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128,
+                risk_factor_tier_size.is_non_zero() || risk_factor_first_tier_boundary == MAX_U128
+                    - 1,
                 INVALID_ZERO_RF_TIER_SIZE,
             );
 
@@ -429,7 +431,7 @@ pub(crate) mod AssetsManager {
             // Validate that non-synthetic assets have exactly 1 risk factor tier.
             if old_asset_config.asset_type != AssetType::SYNTHETIC {
                 assert(risk_factor_tiers.len() == 1, INVALID_NON_SYNTHETIC_RF_TIERS);
-                assert(risk_factor_first_tier_boundary == MAX_U128, INVALID_SPOT_RF_BOUNDARY);
+                assert(risk_factor_first_tier_boundary == MAX_U128 - 1, INVALID_SPOT_RF_BOUNDARY);
                 assert(risk_factor_tier_size.is_zero(), INVALID_SPOT_RF_TIER_SIZE);
             }
 
