@@ -6,15 +6,28 @@ from devnet_tests.perpetuals_test_utils import PerpetualsTestUtils
 
 @pytest_asyncio.fixture(autouse=True)
 async def upgade_test_utils(test_utils: PerpetualsTestUtils):
-    """Upgrade the perpetuals contract to the latest version and register the external components."""
+    """Upgrade the perpetuals contract and register the external components."""
 
     # Fund the accounts
     await test_utils.fund_account(
         test_utils.known_accounts["upgrade_governor"].address, 10_000_000_000 * 10**18
     )
+    await test_utils.fund_account(
+        test_utils.known_accounts["governance_admin"].address, 10_000_000_000 * 10**18
+    )
+    await test_utils.fund_account(
+        test_utils.known_accounts["app_governor"].address, 10_000_000_000 * 10**18
+    )
 
-    # Upgrade the perpetuals contract to the latest version
-    await test_utils.upgrade_perpetuals_contract()
+    # Deploy treasury and get EIC data for the upgrade.
+    await test_utils.deploy_treasury()
+    eic_data = await test_utils.get_treasury_eic_data()
+
+    # Upgrade the perpetuals contract to the latest version with treasury EIC.
+    await test_utils.upgrade_perpetuals_contract(eic_data=eic_data)
+
+    # Reset treasury protection limit so withdrawals work.
+    await test_utils.reset_treasury_protection()
 
     # Register and activate the external components
     await test_utils.register_and_activate_external_component("perpetuals_VaultsManager", "VAULTS")

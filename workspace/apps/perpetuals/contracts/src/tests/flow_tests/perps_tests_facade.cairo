@@ -8,7 +8,7 @@ use external_components::interface::{
     EXTERNAL_COMPONENT_FORCED_REQUESTS, EXTERNAL_COMPONENT_LIQUIDATIONS,
     EXTERNAL_COMPONENT_TRANSFERS, EXTERNAL_COMPONENT_VAULT, EXTERNAL_COMPONENT_WITHDRAWALS,
 };
-use openzeppelin::interfaces::erc20::IERC20Dispatcher;
+use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use openzeppelin::interfaces::erc4626::{IERC4626Dispatcher, IERC4626DispatcherTrait};
 use perpetuals::core::components::assets::assets_manager::{
     IAssetsExternalDispatcher, IAssetsExternalDispatcherTrait,
@@ -61,6 +61,9 @@ use snforge_std::{
     start_cheat_block_timestamp_global, stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
+use starkware_utils::components::replaceability::interface::{
+    EICData, IReplaceableDispatcher, IReplaceableDispatcherTrait, ImplementationData,
+};
 use starkware_utils::components::request_approvals::interface::{
     IRequestApprovalsDispatcher, IRequestApprovalsDispatcherTrait, RequestStatus,
 };
@@ -71,8 +74,9 @@ use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
 use starkware_utils_testing::signing::StarkKeyPair;
 use starkware_utils_testing::test_utils::{
-    Deployable, TokenState, TokenTrait, cheat_caller_address_once,
+    Deployable, TokenState, TokenTrait, cheat_caller_address_once, set_account_as_upgrade_governor,
 };
+use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 use vault::interface::IProtocolVaultDispatcher;
 use crate::core::components::deposit::events as deposit_events;
 use crate::core::components::external_components;
@@ -308,8 +312,35 @@ pub impl PerpetualsConfigImpl of PerpetualsConfigTrait {
     }
 }
 
+pub fn deploy_treasury(
+    governance_admin: ContractAddress, upgrade_delay: u64, perps_contract: ContractAddress,
+) -> ContractAddress {
+    let calldata: Array<felt252> = array![
+        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+    ];
+    let treasury = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
+    let (treasury_address, _) = treasury.deploy(@calldata).unwrap();
+
+    // Set up roles on the treasury so reset_protection_limit can be called.
+    let roles = IRolesDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: governance_admin);
+    roles.register_app_role_admin(APP_ROLE_ADMIN());
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_ROLE_ADMIN());
+    roles.register_app_governor(APP_GOVERNOR());
+
+    treasury_address
+}
+
 impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress> {
     fn deploy(self: @PerpetualsConfig) -> ContractAddress {
+        let (address, _) = self.deploy_and_get_treasury();
+        address
+    }
+}
+
+#[generate_trait]
+pub impl PerpetualsConfigDeployImpl of PerpetualsConfigDeployTrait {
+    fn deploy_and_get_treasury(self: @PerpetualsConfig) -> (ContractAddress, ContractAddress) {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -329,7 +360,72 @@ impl PerpetualsContractStateImpl of Deployable<PerpetualsConfig, ContractAddress
 
         let perpetuals_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (address, _) = perpetuals_contract.deploy(@calldata).unwrap();
-        address
+        set_account_as_upgrade_governor(
+            contract: address,
+            account: *self.governance_admin,
+            governance_admin: *self.governance_admin,
+        );
+
+        let treasury_address = deploy_treasury(
+            governance_admin: *self.governance_admin,
+            upgrade_delay: *self.upgrade_delay,
+            perps_contract: address,
+        );
+
+        let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
+            .unwrap()
+            .contract_class();
+
+        cheat_caller_address(
+            contract_address: address,
+            caller_address: *self.governance_admin,
+            span: CheatSpan::Indefinite,
+        );
+
+        let replaceable_dispatcher = IReplaceableDispatcher { contract_address: address };
+
+        replaceable_dispatcher
+            .add_new_implementation(
+                ImplementationData {
+                    impl_hash: *perpetuals_contract.class_hash,
+                    eic_data: Some(
+                        EICData {
+                            eic_hash: *set_treasury_eic.class_hash,
+                            eic_init_data: array![treasury_address.into()].span(),
+                        },
+                    ),
+                    final: false,
+                },
+            );
+        replaceable_dispatcher
+            .replace_to(
+                ImplementationData {
+                    impl_hash: *perpetuals_contract.class_hash,
+                    eic_data: Some(
+                        EICData {
+                            eic_hash: *set_treasury_eic.class_hash,
+                            eic_init_data: array![treasury_address.into()].span(),
+                        },
+                    ),
+                    final: false,
+                },
+            );
+        stop_cheat_caller_address(contract_address: address);
+
+        // Fund treasury and reset protection limit.
+        let collateral_address = *self.collateral_token_address;
+        cheat_caller_address_once(
+            contract_address: collateral_address, caller_address: COLLATERAL_OWNER(),
+        );
+        IERC20Dispatcher { contract_address: collateral_address }
+            .transfer(treasury_address, CONTRACT_INIT_BALANCE.into());
+        let treasury_dispatcher = ITreasuryDispatcher { contract_address: treasury_address };
+        cheat_caller_address_once(
+            contract_address: treasury_address, caller_address: APP_GOVERNOR(),
+        );
+        treasury_dispatcher.reset_protection_limit(collateral_address);
+
+        (address, treasury_address)
     }
 }
 
@@ -465,6 +561,7 @@ pub struct PerpsTestsFacade {
     pub role_admin: ContractAddress,
     pub app_governor: ContractAddress,
     pub perpetuals_contract: ContractAddress,
+    pub treasury_address: ContractAddress,
     pub token_state: TokenState,
     pub collateral_quantum: u64,
     pub collateral_id: AssetId,
@@ -582,13 +679,14 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         let perpetuals_config: PerpetualsConfig = PerpetualsConfigTrait::new(
             collateral_token_address: token_state.address, :collateral_quantum,
         );
-        let perpetuals_contract = Deployable::deploy(@perpetuals_config);
+        let (perpetuals_contract, treasury_address) = perpetuals_config.deploy_and_get_treasury();
 
         let perpetual_wrapper = PerpsTestsFacade {
             governance_admin: perpetuals_config.governance_admin,
             role_admin: perpetuals_config.role_admin,
             app_governor: perpetuals_config.app_governor,
             perpetuals_contract,
+            treasury_address,
             token_state,
             collateral_quantum,
             collateral_id: perpetuals_config.collateral_id,
@@ -1125,7 +1223,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         let token_state = self.find_contract_for_asset_id(:asset_id);
         let user_balance_before = token_state.balance_of(account: address);
-        let contract_balance_before = token_state.balance_of(self.perpetuals_contract);
+        let treasury_balance_before = token_state.balance_of(self.treasury_address);
 
         let base_collateral_balance_before = self.get_position_collateral_balance(position_id);
         let position_balance_before = if (asset_id == self.collateral_id) {
@@ -1185,8 +1283,8 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
         validate_balance(
             token_state: token_state,
-            address: self.perpetuals_contract,
-            expected_balance: contract_balance_before - unquantized_amount,
+            address: self.treasury_address,
+            expected_balance: treasury_balance_before - unquantized_amount,
         );
 
         self.validate_request_approval(:request_hash, expected_status: RequestStatus::PROCESSED);
@@ -2886,6 +2984,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         self.set_app_governor_as_caller();
         IVaultsDispatcher { contract_address: self.perpetuals_contract }
             .update_vault_protection_limit(:vault_position, :percentage);
+    }
+
+    fn set_treasury_protection_percent_for_token(
+        ref self: PerpsTestsFacade, token_address: ContractAddress, percent: u64,
+    ) {
+        let treasury = ITreasuryDispatcher { contract_address: self.treasury_address };
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        treasury.change_protection_limit_percent(token_address, percent);
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        treasury.reset_protection_limit(token_address);
     }
 }
 

@@ -157,6 +157,7 @@ dependencies = [
  "snforge_std",
  "starkware_utils",
  "starkware_utils_testing",
+ "treasury",
  "vault",
 ]
 
@@ -198,6 +199,16 @@ name = "test_utils"
 version = "0.0.1"
 dependencies = [
  "openzeppelin",
+]
+
+[[package]]
+name = "treasury"
+version = "0.2.0"
+dependencies = [
+ "openzeppelin",
+ "snforge_std",
+ "starkware_utils",
+ "starkware_utils_testing",
 ]
 
 [[package]]

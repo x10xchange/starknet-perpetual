@@ -53,6 +53,7 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -169,6 +170,8 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        // --- Treasury ---
+        pub treasury: ITreasuryDispatcher,
         /// ------- Core -------
         // Forced action parameters:
         // Timelock before forced actions can be executed.
@@ -1134,6 +1137,10 @@ pub mod Core {
             self.roles.only_app_governor();
             assert(max_interest_rate_per_sec.is_non_zero(), ZERO_MAX_INTEREST_RATE);
             self.positions.max_interest_rate_per_sec.write(max_interest_rate_per_sec);
+        }
+
+        fn get_treasury_address(ref self: ContractState) -> ContractAddress {
+            self.treasury.contract_address.read()
         }
     }
 

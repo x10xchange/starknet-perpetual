@@ -24,11 +24,14 @@ use perpetuals::tests::event_test_utils::{
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
-    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_caller_address,
-    test_address,
+    cheat_caller_address, start_cheat_block_timestamp_global, stop_cheat_block_timestamp_global,
+    stop_cheat_caller_address, test_address,
 };
-use starknet::ContractAddress;
-use starknet::storage::{StorageMapReadAccess, StoragePointerWriteAccess};
+use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
+use starknet::{ClassHash, ContractAddress};
+use starkware_utils::components::replaceability::interface::{
+    EICData, IReplaceableDispatcher, IReplaceableDispatcherTrait, ImplementationData,
+};
 use starkware_utils::components::roles::interface::{
     IRoles, IRolesDispatcher, IRolesDispatcherTrait,
 };
@@ -40,6 +43,7 @@ use starkware_utils_testing::signing::StarkKeyPair;
 use starkware_utils_testing::test_utils::{
     Deployable, TokenConfig, TokenState, TokenTrait, cheat_caller_address_once,
 };
+use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 use crate::core::components::deposit::interface::IDeposit;
 use crate::core::components::external_components::interface::{
     EXTERNAL_COMPONENT_ASSETS, EXTERNAL_COMPONENT_DELEVERAGES, EXTERNAL_COMPONENT_DEPOSITS,
@@ -157,7 +161,9 @@ pub struct PerpetualsInitConfig {
 
 #[generate_trait]
 pub impl CoreImpl of CoreTrait {
-    fn deploy(self: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
+    fn deploy(
+        self: @PerpetualsInitConfig, token_state: @TokenState,
+    ) -> (ClassHash, ContractAddress) {
         let mut calldata = ArrayTrait::new();
         self.governance_admin.serialize(ref calldata);
         self.upgrade_delay.serialize(ref calldata);
@@ -177,7 +183,7 @@ pub impl CoreImpl of CoreTrait {
 
         let core_contract = snforge_std::declare("Core").unwrap().contract_class();
         let (core_contract_address, _) = core_contract.deploy(@calldata).unwrap();
-        core_contract_address
+        (*core_contract.class_hash, core_contract_address)
     }
 }
 
@@ -317,6 +323,25 @@ pub fn deploy_account(key_pair: StarkKeyPair) -> ContractAddress {
     account_address
 }
 
+pub fn deploy_treasury(
+    governance_admin: ContractAddress, upgrade_delay: u64, perps_contract: ContractAddress,
+) -> ContractAddress {
+    let calldata: Array<felt252> = array![
+        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+    ];
+    let treasury = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
+    let (treasury_address, _) = treasury.deploy(@calldata).unwrap();
+
+    // Set up roles on the treasury so reset_protection_limit can be called.
+    let roles = IRolesDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: governance_admin);
+    roles.register_app_role_admin(APP_ROLE_ADMIN());
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_ROLE_ADMIN());
+    roles.register_app_governor(APP_GOVERNOR());
+
+    treasury_address
+}
+
 // Public functions.
 
 pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
@@ -337,6 +362,17 @@ pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
         contract_address: test_address(), caller_address: *cfg.governance_admin,
     );
     state.register_upgrade_governor(account: *cfg.governance_admin)
+}
+
+pub fn get_treasury_address(state: @Core::ContractState) -> ContractAddress {
+    state.treasury.contract_address.read()
+}
+
+pub fn fund_treasury_with_token(
+    state: @Core::ContractState, token_state: @TokenState, amount: u128,
+) {
+    let treasury_address = get_treasury_address(state);
+    (*token_state).fund(recipient: treasury_address, amount: amount.try_into().unwrap());
 }
 
 pub fn assert_with_error(boolean: bool, array: ByteArray) {
@@ -411,7 +447,7 @@ pub fn setup_state_with_pending_spot_asset(
             risk_factor: RISK_FACTOR,
             quorum: *cfg.spot_cfg.quorum,
         );
-    cfg.spot_cfg.token_state.fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE);
+    fund_treasury_with_token(@state, cfg.spot_cfg.token_state, CONTRACT_INIT_BALANCE);
     state
 }
 
@@ -430,10 +466,7 @@ pub fn setup_state_with_multiple_spot_assets(
             risk_factor: RISK_FACTOR,
             quorum: *cfg.spot_cfg.quorum,
         );
-    cfg
-        .spot_cfg
-        .token_state
-        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+    fund_treasury_with_token(@state, cfg.spot_cfg.token_state, CONTRACT_INIT_BALANCE);
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.app_governor);
     state
@@ -446,10 +479,7 @@ pub fn setup_state_with_multiple_spot_assets(
             risk_factor: RISK_FACTOR,
             quorum: *cfg.vault_share_cfg.quorum,
         );
-    cfg
-        .vault_share_cfg
-        .token_state
-        .fund(recipient: test_address(), amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+    fund_treasury_with_token(@state, cfg.vault_share_cfg.token_state, CONTRACT_INIT_BALANCE);
 
     state
 }
@@ -751,6 +781,22 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         );
 
     stop_cheat_caller_address(contract_address: test_address());
+
+    let treasury_address = deploy_treasury(
+        governance_admin: *cfg.governance_admin,
+        upgrade_delay: *cfg.upgrade_delay,
+        perps_contract: test_address(),
+    );
+    state.treasury.write(ITreasuryDispatcher { contract_address: treasury_address });
+
+    // Fund treasury so withdrawals have tokens to transfer.
+    (*token_state)
+        .fund(recipient: treasury_address, amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+
+    // Reset protection limit so max_allowed is based on current balance.
+    let treasury_dispatcher = ITreasuryDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_GOVERNOR());
+    treasury_dispatcher.reset_protection_limit((*token_state).address);
 
     state
 }
@@ -1110,9 +1156,66 @@ pub fn register_external_components_by_dispatcher(
 }
 
 pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> ContractAddress {
-    let contract_address = cfg.deploy(:token_state);
+    let (class_hash, contract_address) = cfg.deploy(:token_state);
     set_roles_by_dispatcher(:contract_address, :cfg);
     register_external_components_by_dispatcher(:contract_address, :cfg);
+    let treasury_address = deploy_treasury(
+        governance_admin: *cfg.governance_admin,
+        upgrade_delay: *cfg.upgrade_delay,
+        perps_contract: contract_address,
+    );
+
+    let set_treasury_eic = snforge_std::declare("MigrateCollateralToTreasuryEIC")
+        .unwrap()
+        .contract_class();
+
+    cheat_caller_address(
+        contract_address: contract_address,
+        caller_address: *cfg.governance_admin,
+        span: CheatSpan::Indefinite,
+    );
+
+    let replaceable_dispatcher = IReplaceableDispatcher { contract_address };
+
+    start_cheat_block_timestamp_global(1);
+
+    replaceable_dispatcher
+        .add_new_implementation(
+            ImplementationData {
+                impl_hash: class_hash,
+                eic_data: Some(
+                    EICData {
+                        eic_hash: *set_treasury_eic.class_hash,
+                        eic_init_data: array![treasury_address.into()].span(),
+                    },
+                ),
+                final: false,
+            },
+        );
+    start_cheat_block_timestamp_global(1 + *cfg.upgrade_delay);
+    replaceable_dispatcher
+        .replace_to(
+            ImplementationData {
+                impl_hash: class_hash,
+                eic_data: Some(
+                    EICData {
+                        eic_hash: *set_treasury_eic.class_hash,
+                        eic_init_data: array![treasury_address.into()].span(),
+                    },
+                ),
+                final: false,
+            },
+        );
+    stop_cheat_block_timestamp_global();
+    stop_cheat_caller_address(contract_address);
+
+    // Fund treasury and reset protection limit.
+    (*token_state)
+        .fund(recipient: treasury_address, amount: CONTRACT_INIT_BALANCE.try_into().unwrap());
+    let treasury_dispatcher = ITreasuryDispatcher { contract_address: treasury_address };
+    cheat_caller_address_once(contract_address: treasury_address, caller_address: APP_GOVERNOR());
+    treasury_dispatcher.reset_protection_limit((*token_state).address);
+
     contract_address
 }
 
