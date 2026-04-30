@@ -86,7 +86,7 @@ pub mod ExchangeTimeComponent {
             assert(new_timestamp > current_exchange_time, NON_MONOTONIC_TIME);
 
             let now = Time::now();
-            // The new exchange time cannot be more than a day in the past.
+            // The new exchange time cannot be more than a week in the past.
             let min_acceptable_time = now.sub_delta(Time::seconds(WEEK));
             assert(new_timestamp > min_acceptable_time, TIMESTAMP_TOO_OLD);
 

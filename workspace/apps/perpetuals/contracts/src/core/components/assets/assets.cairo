@@ -509,10 +509,10 @@ pub mod AssetsComponent {
 
         /// Get the risk factor of a synthetic asset.
         ///   - synthetic_value = |price * balance|
-        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   - If the synthetic value is strictly less than the first tier boundary, return the
         ///   first risk factor.
-        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
-        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - index = 1 + (synthetic_value - risk_factor_first_tier_boundary) /
+        ///   risk_factor_tier_size - risk_factor = risk_factor_tiers[index]
         ///   - If the index is out of bounds, return the last risk factor.
         /// - If the asset is not synthetic, panic.
         fn get_asset_risk_factor(
@@ -534,10 +534,10 @@ pub mod AssetsComponent {
 
         /// Get the risk factor of a synthetic asset.
         ///   - synthetic_value = |price * balance|
-        ///   - If the synthetic value is less than or equal to the first tier boundary, return the
+        ///   - If the synthetic value is strictly less than the first tier boundary, return the
         ///   first risk factor.
-        ///   - index = (synthetic_value - risk_factor_first_tier_boundary) / risk_factor_tier_size
-        ///   - risk_factor = risk_factor_tiers[index]
+        ///   - index = 1 + (synthetic_value - risk_factor_first_tier_boundary) /
+        ///   risk_factor_tier_size - risk_factor = risk_factor_tiers[index]
         ///   - If the index is out of bounds, return the last risk factor.
         /// - If the asset is not synthetic, panic.
         fn get_synthetic_risk_factor_for_value(
