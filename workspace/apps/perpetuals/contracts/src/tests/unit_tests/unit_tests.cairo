@@ -23,8 +23,8 @@ use perpetuals::core::interface::{
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
-use perpetuals::core::types::order::{ForcedTrade, Order};
-use perpetuals::core::types::position::{POSITION_VERSION, PositionMutableTrait};
+use perpetuals::core::types::order::{ForcedTrade, LimitOrder, Order};
+use perpetuals::core::types::position::{POSITION_VERSION, PositionId, PositionMutableTrait};
 use perpetuals::core::types::price::{
     PRICE_SCALE, PriceTrait, SignedPrice, convert_oracle_to_perps_price,
 };
@@ -2743,6 +2743,7 @@ fn test_successful_withdraw_request_with_public_key() {
 // Forced withdraw tests.
 
 #[test]
+#[ignore]
 fn test_successful_forced_withdraw_request() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -2839,6 +2840,7 @@ fn test_successful_forced_withdraw_request() {
 }
 
 #[test]
+#[ignore]
 fn test_successful_forced_withdraw_operator_executes() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -2994,6 +2996,7 @@ fn test_successful_forced_withdraw_operator_executes() {
 }
 
 #[test]
+#[ignore]
 fn test_successful_forced_withdraw_user_executes() {
     // Setup:
     let cfg: PerpetualsInitConfig = Default::default();
@@ -3163,6 +3166,7 @@ fn test_successful_forced_withdraw_user_executes() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'FORCED_WAIT_REQUIRED')]
 fn test_forced_withdraw_before_timeout() {
     // Setup:
@@ -3265,6 +3269,7 @@ fn test_forced_withdraw_before_timeout() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_forced_withdraw_after_operator_processed_withdraw() {
     // Setup:
@@ -3391,6 +3396,7 @@ fn test_forced_withdraw_after_operator_processed_withdraw() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
 fn test_withdraw_after_user_forced_withdraw_executed() {
     // Setup:
@@ -3525,6 +3531,7 @@ fn test_withdraw_after_user_forced_withdraw_executed() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected: 'INVALID_ZERO_AMOUNT')]
 fn test_forced_withdraw_request_zero_amount() {
     // Setup state, token and user:
@@ -6680,4 +6687,143 @@ fn test_withdraw_non_existent_asset() {
             salt: withdraw_args.salt,
             interest_amount: 0,
         );
+}
+
+// Forced requests disabled tests.
+
+fn dummy_order(position_id: PositionId, base_asset_id: AssetId, quote_asset_id: AssetId) -> Order {
+    Order {
+        position_id,
+        salt: 0,
+        base_asset_id,
+        base_amount: 1,
+        quote_asset_id,
+        quote_amount: -1,
+        fee_asset_id: quote_asset_id,
+        fee_amount: 0,
+        expiration: Time::now().add(delta: Time::days(1)),
+    }
+}
+
+fn dummy_limit_order(
+    position_id: PositionId, base_asset_id: AssetId, quote_asset_id: AssetId,
+) -> LimitOrder {
+    LimitOrder {
+        source_position: position_id,
+        receive_position: position_id,
+        base_asset_id,
+        base_amount: -1,
+        quote_asset_id,
+        quote_amount: 1,
+        fee_asset_id: quote_asset_id,
+        fee_amount: 0,
+        expiration: Time::now().add(delta: Time::days(1)),
+        salt: 0,
+    }
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_withdraw_request_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+
+    state
+        .forced_withdraw_request(
+            signature: array![].span(),
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            recipient: user.address,
+            position_id: user.position_id,
+            amount: 1,
+            expiration: Time::now().add(delta: Time::days(1)),
+            salt: 0,
+        );
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_withdraw_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+
+    state
+        .forced_withdraw(
+            collateral_id: cfg.collateral_cfg.collateral_id,
+            recipient: user.address,
+            position_id: user.position_id,
+            amount: 1,
+            expiration: Time::now().add(delta: Time::days(1)),
+            salt: 0,
+        );
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_trade_request_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    let order_a = dummy_order(
+        user.position_id, cfg.synthetic_cfg.synthetic_id, cfg.collateral_cfg.collateral_id,
+    );
+    let order_b = order_a;
+
+    state
+        .forced_trade_request(
+            signature_a: array![].span(), signature_b: array![].span(), :order_a, :order_b,
+        );
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_trade_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    let order_a = dummy_order(
+        user.position_id, cfg.synthetic_cfg.synthetic_id, cfg.collateral_cfg.collateral_id,
+    );
+    let order_b = order_a;
+
+    state.forced_trade(operator_nonce: 0, :order_a, :order_b);
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_redeem_from_vault_request_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    let order = dummy_limit_order(
+        user.position_id, cfg.synthetic_cfg.synthetic_id, cfg.collateral_cfg.collateral_id,
+    );
+
+    state
+        .forced_redeem_from_vault_request(
+            signature: array![].span(),
+            vault_signature: array![].span(),
+            :order,
+            vault_approval: order,
+        );
+}
+
+#[test]
+#[should_panic(expected: "forced requests are disabled")]
+fn test_forced_redeem_from_vault_panics_when_disabled() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user: User = Default::default();
+    let order = dummy_limit_order(
+        user.position_id, cfg.synthetic_cfg.synthetic_id, cfg.collateral_cfg.collateral_id,
+    );
+
+    state.forced_redeem_from_vault(operator_nonce: 0, :order, vault_approval: order);
 }

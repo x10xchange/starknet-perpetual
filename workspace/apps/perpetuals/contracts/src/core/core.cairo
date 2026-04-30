@@ -811,6 +811,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
+            panic!("forced requests are disabled");
             self
                 .external_components
                 ._get_withdrawal_manager_dispatcher()
@@ -857,6 +858,7 @@ pub mod Core {
         fn forced_trade(
             ref self: ContractState, operator_nonce: u64, order_a: Order, order_b: Order,
         ) {
+            panic!("forced requests are disabled");
             let position_a = self.positions.get_position_snapshot(position_id: order_a.position_id);
             let position_b = self.positions.get_position_snapshot(position_id: order_b.position_id);
             let public_key_a = position_a.get_owner_public_key();
@@ -973,6 +975,7 @@ pub mod Core {
             order: LimitOrder,
             vault_approval: LimitOrder,
         ) {
+            panic!("forced requests are disabled");
             let redeeming_position = self
                 .positions
                 .get_position_snapshot(position_id: order.source_position);

@@ -182,6 +182,7 @@ pub(crate) mod ForcedRequestsManager {
             expiration: Timestamp,
             salt: felt252,
         ) -> HashType {
+            panic!("forced requests are disabled");
             assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
             assert(!self.vaults.is_vault_position(position_id), 'VAULT_CANNOT_INITIATE_WITHDRAW');
 
@@ -267,6 +268,7 @@ pub(crate) mod ForcedRequestsManager {
             order_a: Order,
             order_b: Order,
         ) {
+            panic!("forced requests are disabled");
             assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
             let position_a = self.positions.get_position_snapshot(position_id: order_a.position_id);
             let position_b = self.positions.get_position_snapshot(position_id: order_b.position_id);
@@ -341,6 +343,7 @@ pub(crate) mod ForcedRequestsManager {
             order: LimitOrder,
             vault_approval: LimitOrder,
         ) {
+            panic!("forced requests are disabled");
             assert(self._is_escape_hatch_enabled(), ESCAPE_HATCH_DISABLED);
 
             let redeeming_position = self
