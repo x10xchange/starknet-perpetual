@@ -5,6 +5,7 @@ pub mod errors;
 pub mod events;
 pub mod interface;
 pub mod migrate_collateral_to_treasury_eic;
+pub mod interest_RateSetEIC;
 pub mod replace_vault_collateral_eic;
 pub mod types;
 pub mod utils;
