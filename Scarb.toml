@@ -12,7 +12,7 @@ openzeppelin_testing = "4.7.0"
 
 
 [scripts]
-test = "snforge test --run-native"
+test = "bash scripts/check-coverage-env.sh && snforge test --run-native"
 
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
