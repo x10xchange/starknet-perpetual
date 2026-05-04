@@ -135,7 +135,6 @@ pub mod ProtocolTreasury {
             ref self: ContractState, collateral_address: ContractAddress, amount: u256,
         ) {
             self.pausable.assert_not_paused();
-            assert(get_caller_address() == self.perps_contract.read(), 'ONLY_PERPS_CAN_DEPOSIT');
             let this = starknet::get_contract_address();
             let caller = get_caller_address();
             let collateral_dispatcher = IERC20Dispatcher { contract_address: collateral_address };
