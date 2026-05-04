@@ -134,11 +134,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
         let order_a = self
             .facade
             .create_order(
-                :user,
-                base_amount: 300,
-                :base_asset_id,
-                quote_amount: -30_000,
-                fee_amount: 23,
+                :user, base_amount: 300, :base_asset_id, quote_amount: -30_000, fee_amount: 23,
             );
         let order_b = self
             .facade

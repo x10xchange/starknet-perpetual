@@ -4658,7 +4658,8 @@ fn test_multi_trade_with_mixed_interest() {
     state.facade.advance_time(seconds: HOUR);
 
     // PnL for both = 100000 (collateral only, no synthetics yet). max_allowed for an hour ~ 100.
-    // Both users have positive collateral → both receive positive interest (different magnitudes).
+    // Both users have positive collateral → both receive positive interest (different
+    // magnitudes).
     let interest_a: i64 = 50_i64;
     let interest_b: i64 = 75_i64;
 
@@ -4794,14 +4795,10 @@ fn test_multi_trade_negative_interest_makes_trade_unhealthy() {
 
     state
         .facade
-        .process_deposit(
-            state.facade.deposit(user_a.account, user_a.position_id, 100_000_u64),
-        );
+        .process_deposit(state.facade.deposit(user_a.account, user_a.position_id, 100_000_u64));
     state
         .facade
-        .process_deposit(
-            state.facade.deposit(user_b.account, user_b.position_id, 1_000_000_u64),
-        );
+        .process_deposit(state.facade.deposit(user_b.account, user_b.position_id, 1_000_000_u64));
 
     // Setup trade: user_a buys 2000 BTC at price 100 → collateral = -100_000, BTC = 2000.
     // TV = -100_000 + 2000*100 = 100_000. TR = 2000*100*0.5 = 100_000. Just healthy.
