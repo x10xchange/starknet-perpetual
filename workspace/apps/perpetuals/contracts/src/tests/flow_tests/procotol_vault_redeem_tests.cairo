@@ -3059,8 +3059,9 @@ fn test_redeem_from_vault_with_interest_different_receiver_and_other_collaterals
         .facade
         .get_position_asset_balance(vault_config.position_id, doge_asset_id);
 
+    // All three positions have positive collateral → all receive (positive) interest.
     let interest_vault: i64 = 3;
-    let interest_sender: i64 = -2;
+    let interest_sender: i64 = 2;
     let interest_receiver: i64 = 4;
     let value_of_shares: u64 = 399;
 

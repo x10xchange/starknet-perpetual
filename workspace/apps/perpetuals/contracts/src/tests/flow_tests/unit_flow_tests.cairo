@@ -3783,33 +3783,23 @@ fn test_apply_non_zero_interest_to_zero_balance() {
 
 #[test]
 fn test_apply_negative_interest() {
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let user = state.new_user_with_position();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Deposit collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
-
-    // Advance time by 1 hour
+    state.facade.validate_collateral_balance(user.position_id, (-10_000_i64).into());
     state.facade.advance_time(seconds: HOUR);
 
-    // Calculate valid interest amount (negative)
-    let balance: u128 = 10_000;
-    let time_diff: u128 = HOUR.into();
-    let max_rate: u128 = 1200;
-    let scale: u128 = 2_u128.pow(32);
-    let max_allowed: u128 = (balance * time_diff * max_rate) / scale;
-
-    // Apply valid negative interest
-    let valid_interest: i64 = -(max_allowed / 2).try_into().unwrap();
-    let position_interest_amounts = array![(user.position_id, valid_interest)].span();
+    // Negative-balance position pays interest (negative amount).
+    let position_interest_amounts = array![(user.position_id, -1_i64)].span();
     state.facade.apply_interests(:position_interest_amounts);
 
-    // Balance should decrease
-    let expected_balance: i64 = 10_000 + valid_interest;
-    state.facade.validate_collateral_balance(user.position_id, expected_balance.into());
+    state.facade.validate_collateral_balance(user.position_id, (-10_001_i64).into());
 }
 
 #[test]
@@ -3968,25 +3958,26 @@ fn test_apply_interest_unhealthy_becomes_healthier_but_still_unhealthy() {
                 ),
         );
 
-    // Trade: user_a buys 200 BTC at price 100
-    // After trade: user_a collateral = 10000 - 20000 = -10000, BTC = 200
-    // At price 100: TV = -10000 + 200*100 = 10000, TR = 200*100*0.1 = 2000, ratio = 5.0 (healthy)
+    // Trade: user_a SHORTS 200 BTC at price 100 (sign-rule-friendly inversion of the long case).
+    // After trade: user_a collateral = 10_000 + 20_000 = 30_000, BTC = -200.
+    // At price 100: TV = 30_000 + (-200)*100 = 10_000, TR = 200*100*0.1 = 2_000, ratio = 5
+    // (healthy).
     let order_a = state
         .facade
         .create_order(
             user: user_a,
-            base_amount: 300,
+            base_amount: -300,
             base_asset_id: asset_id,
-            quote_amount: -30000,
+            quote_amount: 30_000,
             fee_amount: 23,
         );
     let order_b = state
         .facade
         .create_order(
             user: user_b,
-            base_amount: -200,
+            base_amount: 200,
             base_asset_id: asset_id,
-            quote_amount: 10000,
+            quote_amount: -20_000,
             fee_amount: 15,
         );
     state
@@ -3994,17 +3985,17 @@ fn test_apply_interest_unhealthy_becomes_healthier_but_still_unhealthy() {
         .trade(
             order_info_a: order_a,
             order_info_b: order_b,
-            base: 200,
-            quote: -20000,
+            base: -200,
+            quote: 20_000,
             fee_a: 0,
             fee_b: 0,
         );
 
-    // Price drop makes position unhealthy (liquidatable)
-    state.facade.price_tick(asset_info: @synthetic_info, price: 40);
+    // Price RISE makes the short unhealthy.
+    state.facade.price_tick(asset_info: @synthetic_info, price: 200);
 
-    // Now: TV = -10000 + 200*40 = -2000, TR = 200*40*0.1 = 800, ratio = -2.5 (Deleveragable, TV <
-    // TR)
+    // Now: TV = 30_000 + (-200)*200 = -10_000, TR = 200*200*0.1 = 4_000, ratio negative
+    // (deleveragable).
     assert(
         state.facade.is_deleveragable(position_id: user_a.position_id),
         'user should be deleveragable',
@@ -4013,44 +4004,40 @@ fn test_apply_interest_unhealthy_becomes_healthier_but_still_unhealthy() {
     // Advance time by 23 hours to allow larger interest amounts
     state.facade.advance_time(seconds: 23 * HOUR);
 
-    // Use a small positive interest that improves TV/TR ratio but keeps it unhealthy
+    // Positive collateral → receives interest (positive). New TV = -9_977, still deleveragable
+    // but strictly less so → "healthy or healthier" check passes.
     let position_interest_amounts = array![(user_a.position_id, 23)].span();
     state.facade.apply_interests(:position_interest_amounts);
 
-    // Verify position is still liquidatable but healthier
+    // Verify position is still deleveragable but healthier
     assert(
         state.facade.is_deleveragable(position_id: user_a.position_id), 'should be liquidatable',
     );
 
     // Verify collateral balance increased by interest amount
-    let expected_balance: i64 = -10000 + 23;
+    let expected_balance: i64 = 30_000 + 23;
     state.facade.validate_collateral_balance(user_a.position_id, expected_balance.into());
 }
 
 #[test]
 #[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
 fn test_apply_interest_healthy_becomes_unhealthy_should_fail() {
+    // Sign-rule-friendly reframe: helper user with negative collateral, 50% risk factor lands
+    // TV exactly at TR (just healthy). A small negative interest pushes TV below TR.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    let user_a = state.new_user_with_position();
-    state
-        .facade
-        .process_deposit(
-            deposit_info: state
-                .facade
-                .deposit(
-                    depositor: user_a.account,
-                    position_id: user_a.position_id,
-                    quantized_amount: 1000,
-                ),
-        );
+    state.facade.advance_time(seconds: HOUR);
 
-    state.facade.advance_time(seconds: 8 * WEEK);
-    // Dummy funding, needed since funding limit was passed.
-    state.facade.funding_tick(funding_ticks: array![].span());
-
-    // This should fail: healthy position cannot become unhealthy
-    let position_interest_amounts = array![(user_a.position_id, -1200)].span();
+    // Pre: TV=10000, TR=10000 (healthy). |PnL|=10000, max_allowed for HOUR ≈ 10.
+    // -1 interest → TV=9999, TR=10000 → Liquidatable. Health check rejects.
+    let position_interest_amounts = array![(user.position_id, -1_i64)].span();
     state.facade.apply_interests(:position_interest_amounts);
 }
 
@@ -4302,33 +4289,47 @@ fn test_protocol_vault_transfer_vault_shares_to_vault_position() {
 }
 
 #[test]
-#[should_panic(
-    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 101 } TV before 10000, TR before 0, TV after -5, TR after 0",
-)]
+#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
 fn test_withdraw_with_negative_interest_becomes_unhealthy() {
+    // Sign-rule-friendly reframe: helper gives the user negative USDC. Use a 50% risk factor on
+    // BTC so the position lands at the TV=TR boundary; a small spot deposit makes it just
+    // healthy; spot withdrawal + tiny negative interest pushes TV < TR.
+    //
+    // After helper (50% risk):     collateral=-10000, BTC=200@100. TV=10000, TR=10000 (healthy).
+    // After spot deposit (2@100):  TV adds 200 - 200*0.5 = 100. TV=10100, TR=10000.
+    // After withdraw 2 spot + -1 interest:
+    //                              collateral=-10001, spot=0. TV=9999, TR=10000 → Liquidatable.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let user = state.new_user_with_position();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Deposit collateral
-    let deposit_info = state
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let spot_info = AssetInfoTrait::new_collateral(
+        asset_name: 'COL', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let asset_id = spot_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info, initial_price: 100);
+    snforge_std::set_balance(target: user.account.address, new_balance: 5_000_000, :token);
+
+    let deposit_info_user = state
         .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
-    state.facade.validate_collateral_balance(user.position_id, 10_000_u64.into());
+        .deposit_spot(
+            depositor: user.account, :asset_id, position_id: user.position_id, quantized_amount: 2,
+        );
+    state.facade.process_deposit(deposit_info: deposit_info_user);
+    state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
 
-    // Advance time by 1 hour
     state.facade.advance_time(seconds: HOUR);
 
-    // Calculate and apply interest
-    let balance: u64 = 10_000;
-    let time_diff: u64 = HOUR.into();
-    let scale: u64 = 2_u64.pow(32);
-    let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
-    let interest_amount: i64 = -(max_allowed).try_into().unwrap();
-
-    // Withdraw with interest
-    let withdraw_info = state.facade.withdraw_request(user: user, amount: 9_995);
-    state.facade.withdraw_with_interest(:withdraw_info, :interest_amount);
+    // |PnL| = 10000. max_allowed for HOUR ≈ 10. -1 fits and pushes TV from 10100 → 9999.
+    let withdraw_info = state.facade.withdraw_spot_request(:user, :asset_id, amount: 2);
+    state.facade.withdraw_with_interest(:withdraw_info, interest_amount: -1);
 }
 
 #[test]
@@ -4363,34 +4364,29 @@ fn test_withdraw_with_positive_interest_allows_to_withdraw() {
 
 #[test]
 fn test_withdraw_spot_with_interest() {
-    // Setup.
+    // Sign-rule-friendly setup: helper gives the user negative USDC collateral (-10_000) and a
+    // 200-BTC long, then we add spot collateral and exercise spot withdrawal with negative
+    // interest. Negative collateral → negative interest is allowed by the sign rule.
     let risk_factor_data = RiskFactorTiers {
         tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    state.facade.token_state.fund(state.facade.perpetuals_contract, 1_000_000);
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Create a custom asset configuration.
+    // Register a spot collateral asset and give the user STRK to deposit.
     let token = snforge_std::Token::STRK;
     let erc20_contract_address = token.contract_address();
-    let asset_info = AssetInfoTrait::new_collateral(
+    let spot_info = AssetInfoTrait::new_collateral(
         asset_name: 'COL', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
     );
-    let asset_id = asset_info.asset_id;
-    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+    let asset_id = spot_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info, initial_price: 100);
+    snforge_std::set_balance(target: user.account.address, new_balance: 5_000_000, :token);
 
-    // Create user
-    let user = state.new_user_with_position();
-    snforge_std::set_balance(target: user.account.address, new_balance: 5000000, :token);
-
-    // Deposit base collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
-    state.facade.validate_collateral_balance(user.position_id, 10_000_u64.into());
-
-    // Deposit spot collateral to user.
+    // Deposit 2 units of spot collateral.
     let deposit_info_user = state
         .facade
         .deposit_spot(
@@ -4398,20 +4394,17 @@ fn test_withdraw_spot_with_interest() {
         );
     state.facade.process_deposit(deposit_info: deposit_info_user);
 
-    // Set treasury protection to 100% for spot token after deposit funds the treasury.
     state.facade.set_treasury_protection_percent_for_token(erc20_contract_address, 100);
-
-    // Advance time by 1 hour
     state.facade.advance_time(seconds: HOUR);
 
-    // Calculate and apply interest
+    // |PnL| = |-10_000 + 200*100| = 10_000. max_allowed for HOUR ≈ 10.
     let balance: u64 = 10_000;
     let time_diff: u64 = HOUR.into();
     let scale: u64 = 2_u64.pow(32);
     let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
     let interest_amount: i64 = -(max_allowed).try_into().unwrap();
 
-    // Withdraw with interest
+    // Withdraw 1 spot unit + apply negative interest.
     let withdraw_info = state.facade.withdraw_spot_request(:user, :asset_id, amount: 1);
     state.facade.withdraw_with_interest(:withdraw_info, :interest_amount);
     state
@@ -4419,7 +4412,8 @@ fn test_withdraw_spot_with_interest() {
         .validate_asset_balance(
             position_id: user.position_id, :asset_id, expected_balance: 1_u64.into(),
         );
-    state.facade.validate_collateral_balance(user.position_id, 9_990_u64.into());
+    let expected_collateral: i64 = -10_000 + interest_amount;
+    state.facade.validate_collateral_balance(user.position_id, expected_collateral.into());
 }
 
 #[test]
@@ -4486,34 +4480,27 @@ fn test_deposit_spot_with_positive_interest() {
 
 #[test]
 fn test_deposit_spot_with_negative_interest() {
-    // Setup.
+    // Sign-rule-friendly reframe: helper user has negative collateral. We add a spot asset,
+    // deposit some, then deposit more spot with negative interest applied to base collateral.
     let risk_factor_data = RiskFactorTiers {
         tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    state.facade.token_state.fund(state.facade.perpetuals_contract, 1_000_000);
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Create a custom asset configuration.
     let token = snforge_std::Token::STRK;
     let erc20_contract_address = token.contract_address();
-    let asset_info = AssetInfoTrait::new_collateral(
+    let spot_info = AssetInfoTrait::new_collateral(
         asset_name: 'COL', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
     );
-    let asset_id = asset_info.asset_id;
-    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+    let asset_id = spot_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info, initial_price: 100);
+    snforge_std::set_balance(target: user.account.address, new_balance: 5_000_000, :token);
 
-    // Create user
-    let user = state.new_user_with_position();
-    snforge_std::set_balance(target: user.account.address, new_balance: 5000000, :token);
-
-    // Deposit base collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
-    state.facade.validate_collateral_balance(user.position_id, 10_000_u64.into());
-
-    // Deposit spot collateral to user.
+    // Deposit 2 spot first (no interest).
     let deposit_info_user = state
         .facade
         .deposit_spot(
@@ -4521,17 +4508,10 @@ fn test_deposit_spot_with_negative_interest() {
         );
     state.facade.process_deposit(deposit_info: deposit_info_user);
 
-    // Advance time by 1 hour
     state.facade.advance_time(seconds: HOUR);
 
-    // Calculate negative interest
-    let balance: u64 = 10_000;
-    let time_diff: u64 = HOUR.into();
-    let scale: u64 = 2_u64.pow(32);
-    let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
-    let interest_amount: i64 = -(max_allowed).try_into().unwrap();
-
-    // Second spot deposit with negative interest
+    // |PnL| = 10000, max_allowed for HOUR ≈ 10. Sign rule (negative collateral) allows negative.
+    let interest_amount: i64 = -10;
     let deposit_info_2 = state
         .facade
         .deposit_spot(
@@ -4543,119 +4523,108 @@ fn test_deposit_spot_with_negative_interest() {
         .validate_asset_balance(
             position_id: user.position_id, :asset_id, expected_balance: 3_u64.into(),
         );
-    state.facade.validate_collateral_balance(user.position_id, (10_000_u64 - max_allowed).into());
+    // Base collateral = -10000 + interest = -10010.
+    state.facade.validate_collateral_balance(user.position_id, (-10_010_i64).into());
 }
 
 #[test]
-#[should_panic(
-    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 101 } TV before 10000, TR before 0, TV after -53, TR after 0",
-)]
+#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
 fn test_deposit_base_with_negative_interest_becomes_unhealthy() {
+    // Sign-rule-friendly reframe: helper user with 50% risk → TV exactly at TR after the trade.
+    // A small base deposit + negative interest larger than the deposit pushes TV below TR.
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let user = state.new_user_with_position();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Deposit collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
+    state.facade.advance_time(seconds: HOUR);
 
-    // Advance time by ~42 days so max interest exceeds collateral
-    let long_duration: u64 = 3_600_000;
-    state.facade.advance_time(seconds: long_duration);
-
-    // Calculate large negative interest
-    let balance: u64 = 10_000;
-    let time_diff: u64 = long_duration;
-    let scale: u64 = 2_u64.pow(32);
-    let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
-    let interest_amount: i64 = -(max_allowed).try_into().unwrap();
-
-    // Deposit with large negative interest that exceeds deposit amount
+    // Pre: TV=10000, TR=10000. |PnL|=10000, max_allowed ≈ 10.
+    // Deposit 5 + interest -10: collateral=-10005, TV=9995 < TR=10000 → Liquidatable.
     let deposit_info_2 = state
         .facade
         .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 5);
-    state.facade.process_deposit_with_interest(deposit_info: deposit_info_2, :interest_amount);
+    state.facade.process_deposit_with_interest(deposit_info: deposit_info_2, interest_amount: -10);
 }
 
 #[test]
 fn test_deposit_base_with_negative_interest_exceeds_deposit_but_healthy() {
+    // Sign-rule-friendly reframe: helper user has negative collateral, so the sign rule allows
+    // negative interest. We deposit 5 base collateral and apply negative interest of magnitude
+    // larger than the deposit; the position stays healthy (1% risk → 50x overcollateralized).
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let user = state.new_user_with_position();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Deposit collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
-    state.facade.validate_collateral_balance(user.position_id, 10_000_u64.into());
-
-    // Advance time by 1 hour
     state.facade.advance_time(seconds: HOUR);
 
-    // Calculate negative interest
-    let balance: u64 = 10_000;
-    let time_diff: u64 = HOUR.into();
-    let scale: u64 = 2_u64.pow(32);
-    let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
-    let interest_amount: i64 = -(max_allowed).try_into().unwrap();
-
-    // Deposit with negative interest (|interest| > deposit amount, but position stays healthy)
+    // |PnL| = 10000, max_allowed for HOUR ≈ 10.
+    let interest_amount: i64 = -10;
     let deposit_info_2 = state
         .facade
         .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 5);
     state.facade.process_deposit_with_interest(deposit_info: deposit_info_2, :interest_amount);
-    state
-        .facade
-        .validate_collateral_balance(user.position_id, (10_000_u64 + 5_u64 - max_allowed).into());
+    // collateral = -10000 + 5 + (-10) = -10005.
+    state.facade.validate_collateral_balance(user.position_id, (-10_005_i64).into());
 }
 
 #[test]
 #[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
 fn test_deposit_spot_with_negative_interest_becomes_unhealthy() {
-    // Setup.
+    // Sign-rule-friendly reframe: helper user with 50% risk → TV exactly at TR. A spot deposit
+    // with high spot risk gives little TV cushion; a small negative interest pushes TV<TR.
     let risk_factor_data = RiskFactorTiers {
-        tiers: array![10].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
+    let synthetic_info = AssetInfoTrait::new(
+        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
+    );
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
 
-    // Create a custom asset configuration.
+    // Spot collateral asset with 50% risk: 1 unit @ price 100 contributes 100 - 50 = 50 to TV.
     let token = snforge_std::Token::STRK;
     let erc20_contract_address = token.contract_address();
-    let asset_info = AssetInfoTrait::new_collateral(
+    let spot_info = AssetInfoTrait::new_collateral(
         asset_name: 'COL', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
     );
-    let asset_id = asset_info.asset_id;
-    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 50);
+    let asset_id = spot_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @spot_info, initial_price: 100);
+    snforge_std::set_balance(target: user.account.address, new_balance: 5_000_000, :token);
 
-    // Create user
-    let user = state.new_user_with_position();
-    snforge_std::set_balance(target: user.account.address, new_balance: 5000000, :token);
+    state.facade.advance_time(seconds: HOUR);
 
-    // Deposit base collateral
-    let deposit_info = state
-        .facade
-        .deposit(depositor: user.account, position_id: user.position_id, quantized_amount: 10_000);
-    state.facade.process_deposit(deposit_info: deposit_info);
+    // Pre: TV=10000, TR=10000. |PnL|=10000, max_allowed ≈ 10.
+    // Spot deposit 1 adds 50 to TV. + interest -10 reduces collateral by 10.
+    // Net TV change: +50 - 10 = +40. New TV=10040, TR=10000. Wait — that's healthier!
+    //
+    // We need interest > spot TV contribution to push unhealthy. Use larger negative interest
+    // by depositing more spot to bump max_allowed... but that's circular. Better: keep spot
+    // deposit at 1 and use spot's own value haircut to make the contribution smaller.
+    //
+    // Actually with 50% risk on spot, value=100, risk=50 → TV contribution=50. To push TV<TR
+    // with -10 interest: 50 - 10 = 40 net positive change → 10040 not unhealthy.
+    //
+    // Use lower spot price so contribution is smaller than |interest|:
+    //   spot @ price 5: TV contrib = 5 - 5*0.5 = 2.5 → 2 (truncation).
+    //   With interest -10: net change = 2 - 10 = -8. TV=9992 < TR=10000 → Liquidatable. ✓
+    state.facade.price_tick(asset_info: @spot_info, price: 5);
 
-    // Advance time by ~42 days so max interest exceeds collateral
-    let long_duration: u64 = 3_600_000;
-    state.facade.advance_time(seconds: long_duration);
-
-    // Calculate large negative interest
-    let balance: u64 = 10_000;
-    let time_diff: u64 = long_duration;
-    let scale: u64 = 2_u64.pow(32);
-    let max_allowed: u64 = (balance * time_diff * MAX_INTEREST_RATE_PER_SEC.into()) / scale;
-    let interest_amount: i64 = -(max_allowed).try_into().unwrap();
-
-    // Spot deposit with large negative interest that makes position unhealthy
     let deposit_info_2 = state
         .facade
         .deposit_spot(
             depositor: user.account, :asset_id, position_id: user.position_id, quantized_amount: 1,
         );
-    state.facade.process_deposit_with_interest(deposit_info: deposit_info_2, :interest_amount);
+    state.facade.process_deposit_with_interest(deposit_info: deposit_info_2, interest_amount: -10);
 }
 
 #[test]
@@ -4688,10 +4657,10 @@ fn test_multi_trade_with_mixed_interest() {
 
     state.facade.advance_time(seconds: HOUR);
 
-    // PnL for both = 100000 (collateral only, no synthetics yet).
-    // max_allowed for an hour ~ 100
+    // PnL for both = 100000 (collateral only, no synthetics yet). max_allowed for an hour ~ 100.
+    // Both users have positive collateral → both receive positive interest (different magnitudes).
     let interest_a: i64 = 50_i64;
-    let interest_b: i64 = -75_i64;
+    let interest_b: i64 = 75_i64;
 
     let order_a = state
         .facade
@@ -4805,11 +4774,11 @@ fn test_multi_trade_positive_interest_enables_unhealthy_trade() {
 }
 
 #[test]
-#[should_panic(
-    expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER position_id: PositionId { value: 101 } TV before 5001, TR before 0, TV after 4999, TR after 5000",
-)]
+#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
 fn test_multi_trade_negative_interest_makes_trade_unhealthy() {
-    // Without interest the trade is barely healthy. Negative interest tips it unhealthy.
+    // Sign-rule-friendly reframe: scale the helper-style setup 10x so |PnL|=100k, allowing
+    // interest magnitudes up to ~100 within the HOUR cap. Pre-trade user_a sits exactly at
+    // TV=TR=100k. A small sell + interest -51 pushes TV below the (slightly-reduced) TR.
     let risk_factor_data = RiskFactorTiers {
         tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -4823,44 +4792,69 @@ fn test_multi_trade_negative_interest_makes_trade_unhealthy() {
     let user_a = state.new_user_with_position();
     let user_b = state.new_user_with_position();
 
-    let deposit_a = state
+    state
         .facade
-        .deposit(
-            depositor: user_a.account, position_id: user_a.position_id, quantized_amount: 5_001,
+        .process_deposit(
+            state.facade.deposit(user_a.account, user_a.position_id, 100_000_u64),
         );
-    state.facade.process_deposit(deposit_info: deposit_a);
-    let deposit_b = state
+    state
         .facade
-        .deposit(
-            depositor: user_b.account, position_id: user_b.position_id, quantized_amount: 100_000,
+        .process_deposit(
+            state.facade.deposit(user_b.account, user_b.position_id, 1_000_000_u64),
         );
-    state.facade.process_deposit(deposit_info: deposit_b);
+
+    // Setup trade: user_a buys 2000 BTC at price 100 → collateral = -100_000, BTC = 2000.
+    // TV = -100_000 + 2000*100 = 100_000. TR = 2000*100*0.5 = 100_000. Just healthy.
+    let setup_a = state
+        .facade
+        .create_order(
+            user: user_a,
+            base_amount: 3000,
+            base_asset_id: asset_id,
+            quote_amount: -300_000,
+            fee_amount: 0,
+        );
+    let setup_b = state
+        .facade
+        .create_order(
+            user: user_b,
+            base_amount: -2000,
+            base_asset_id: asset_id,
+            quote_amount: 100_000,
+            fee_amount: 0,
+        );
+    state
+        .facade
+        .trade(
+            order_info_a: setup_a,
+            order_info_b: setup_b,
+            base: 2000,
+            quote: -200_000,
+            fee_a: 0,
+            fee_b: 0,
+        );
 
     state.facade.advance_time(seconds: HOUR);
 
-    // user_a PnL = 5001. max_allowed = floor(5001 * 3600 * 1200 / 2^32) = 5.
-    // Without interest: user_a sells 100 BTC, gets 10000 quote, no fees.
-    //   collateral = 5001 + 10000 = 15001, BTC = -100
-    //   TV = 15001 - 10000 = 5001, TR = 5000 -> healthy by 1
-    // With interest_a = -2:
-    //   collateral = 5001 + 10000 - 2 = 14999
-    //   TV = 14999 - 10000 = 4999, TR = 5000 -> UNHEALTHY
+    // |PnL_a| = 100_000. max_allowed for HOUR ≈ 100.
+    // Sell 1 BTC at quote 100 (price-perfect): TV stays 100_000, TR = 1999*100*0.5 = 99_950.
+    // Interest_a = -51: TV = 99_949 < TR = 99_950 → Liquidatable.
     let order_a = state
         .facade
         .create_order(
             user: user_a,
-            base_amount: -100,
+            base_amount: -1,
             base_asset_id: asset_id,
-            quote_amount: 10000,
+            quote_amount: 100,
             fee_amount: 0,
         );
     let order_b = state
         .facade
         .create_order(
             user: user_b,
-            base_amount: 100,
+            base_amount: 1,
             base_asset_id: asset_id,
-            quote_amount: -10000,
+            quote_amount: -100,
             fee_amount: 0,
         );
 
@@ -4869,11 +4863,11 @@ fn test_multi_trade_negative_interest_makes_trade_unhealthy() {
         .create_settlement_with_interest(
             :order_a,
             :order_b,
-            base: -100,
-            quote: 10000,
+            base: -1,
+            quote: 100,
             fee_a: 0,
             fee_b: 0,
-            interest_amount_a: -2,
+            interest_amount_a: -51,
             interest_amount_b: 0,
         );
 
@@ -5249,10 +5243,8 @@ fn test_redeem_from_vault_with_mixed_interest_same_position() {
         .facade
         .get_position_collateral_balance(vault_config.position_id);
 
-    // Vault PnL = 5000 (collateral only). max_allowed ~ 5.
-    // Redeeming user PnL = 9000 (collateral only). max_allowed ~ 9.
-    // Arbitrary amounts within bounds: sender = -3, vault = +2.
-    let interest_sender: i64 = -3;
+    // Vault PnL = 6000, sender PnL = 9000 (both positive collateral → positive interest).
+    let interest_sender: i64 = 3;
     let interest_vault: i64 = 2;
     let value_of_shares: u64 = 399;
 
@@ -5294,14 +5286,18 @@ fn test_redeem_from_vault_with_mixed_interest_same_position() {
 
 #[test]
 fn test_redeem_from_vault_with_positive_interest_enables_otherwise_unhealthy_redeem() {
-    // Deposit 10000, invest 1000 => collateral = 9000. Buy 190 BTC@100 => collateral = -10000.
-    // PnL = -10000 + 190*100 = 9000. max_allowed = floor(9000*3600*1200/2^32) = 9.
-    // TV = -10000 + 900(shares) + 19000(BTC) = 9900, TR = 9500. Healthy.
+    // Sign-rule-friendly inversion: redeeming_user goes SHORT 190 BTC instead of long, keeping
+    // collateral positive so the operator-supplied positive interest is allowed.
+    //
+    // Deposit 10000, invest 1000 => collateral = 9000. Sell 190 BTC@100 => collateral = +28000,
+    // BTC = -190.
+    // PnL = 28000 + (-190)*100 = 9000. max_allowed = floor(9000*3600*1200/2^32) = 9.
+    // TV = 28000 + 1000(shares) - 19000(BTC short) = 10000, TR = 190*100*0.5 = 9500. Healthy.
     //
     // Redeem all 1000 shares for $499, interest = 0:
-    //   TV = -10000 + 499 + 0 + 19000 = 9499, TR = 9500. Unhealthy by 1!
+    //   TV = 28000 + 499 + 0 - 19000 = 9499, TR = 9500. Unhealthy by 1!
     // Redeem all 1000 shares for $499, interest = +1:
-    //   TV = -10000 + 499 + 1 + 19000 = 9500 = TR. Just healthy!
+    //   TV = 28000 + 499 + 1 - 19000 = 9500 = TR. Just healthy!
     let risk_factor_data = RiskFactorTiers {
         tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
     };
@@ -5359,18 +5355,18 @@ fn test_redeem_from_vault_with_positive_interest_enables_otherwise_unhealthy_red
         .facade
         .create_order(
             user: redeeming_user,
-            base_amount: 190,
+            base_amount: -190,
             base_asset_id: asset_id,
-            quote_amount: -19000,
+            quote_amount: 19000,
             fee_amount: 0,
         );
     let other_side_order = state
         .facade
         .create_order(
             user: trade_user,
-            base_amount: -190,
+            base_amount: 190,
             base_asset_id: asset_id,
-            quote_amount: 19000,
+            quote_amount: -19000,
             fee_amount: 0,
         );
     state
@@ -5378,8 +5374,8 @@ fn test_redeem_from_vault_with_positive_interest_enables_otherwise_unhealthy_red
         .trade(
             order_info_a: user_order,
             order_info_b: other_side_order,
-            base: 190,
-            quote: -19000,
+            base: -190,
+            quote: 19000,
             fee_a: 0,
             fee_b: 0,
         );
@@ -5639,10 +5635,11 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
         .facade
         .get_position_collateral_balance(vault_config.position_id);
 
-    // Vault PnL = 5000, max_allowed ~ 5. Sender PnL = 9000, max ~ 9.
+    // All three positions have positive collateral → all receive (positive) interest.
+    // Vault PnL = 6000, max_allowed ~ 6. Sender PnL = 9000, max ~ 9.
     // Receiver PnL = 10000, max ~ 10.
     let interest_vault: i64 = 3;
-    let interest_sender: i64 = -2;
+    let interest_sender: i64 = 2;
     let interest_receiver: i64 = 4;
     let value_of_shares: u64 = 399;
 
@@ -5694,71 +5691,11 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
     println!("Vault verified")
 }
 
-#[test]
-#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
-fn test_redeem_from_vault_negative_interest_on_vault_makes_vault_unhealthy() {
-    // Vault deposits 100, user invests 1000 => vault position collateral = 1100.
-    // Redeem all 1000 shares for $1100 (10% premium over fair value ~$1000).
-    // Vault collateral_diff = -1100 + interest_vault.
-    // With interest_vault = -1: vault collateral = 1100 - 1100 - 1 = -1. Negative!
-    // TV_before = 1100, TR = 0. TV_after = -1 < 0. Unhealthy.
-    // Vault PnL = 1100. max_allowed = floor(1100 * 3600 * 1200 / 2^32) = 1.
-    let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let vault_user = state.new_user_with_position();
-    let redeeming_user = state.new_user_with_position();
-
-    state
-        .facade
-        .process_deposit(state.facade.deposit(vault_user.account, vault_user.position_id, 100_u64));
-    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
-    state.facade.price_tick(@vault_config.asset_info, 1);
-
-    state
-        .facade
-        .process_deposit(
-            state.facade.deposit(redeeming_user.account, redeeming_user.position_id, 10_000_u64),
-        );
-    state
-        .facade
-        .process_deposit(
-            state
-                .facade
-                .deposit_into_vault(
-                    vault: vault_config,
-                    amount_to_invest: 1000,
-                    min_shares_to_receive: 500,
-                    depositing_user: redeeming_user,
-                    receiving_user: redeeming_user,
-                ),
-        );
-
-    // Set treasury protection to 100% for vault share token after deposits fund the treasury.
-    state
-        .facade
-        .set_treasury_protection_percent_for_token(
-            vault_config.deployed_vault.contract_address, 100,
-        );
-
-    state.facade.advance_time(seconds: HOUR);
-
-    state
-        .facade
-        .redeem_from_vault_with_interest(
-            vault: vault_config,
-            withdrawing_user: redeeming_user,
-            receiving_user: redeeming_user,
-            shares_to_burn_user: 1000,
-            value_of_shares_user: 1100,
-            shares_to_burn_vault: 1000,
-            value_of_shares_vault: 1100,
-            actual_shares_user: 1000,
-            actual_collateral_user: 1100,
-            interest_amount_vault_position: -1,
-            interest_amount_sender: 0,
-            interest_amount_receiver: 0,
-            other_collaterals: array![].span(),
-        );
-}
+// Removed `test_redeem_from_vault_negative_interest_on_vault_makes_vault_unhealthy`: its
+// scenario (operator passes negative interest to a vault position) is now rejected upstream
+// by the sign rule (vault positions always hold positive collateral, so interest must be
+// non-negative). The analogous sender/receiver-leg variants below cover the
+// "negative interest tips an unhealthy redeem" semantic on user positions.
 
 #[test]
 #[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
@@ -7084,7 +7021,10 @@ fn test_liquidate_spot_with_interest_different_receiver() {
             receive_position_id: Option::Some(liquidator_receive_user.position_id),
         );
 
-    // Three distinct interest amounts: positive, negative, positive (different magnitude).
+    // Sign rule per pre-liquidation collateral:
+    //   liquidated has -9500 (negative) → pays interest;
+    //   liquidator_source has +209500 (positive) → receives interest;
+    //   liquidator_receiver has +200000 (positive) → receives interest.
     state
         .facade
         .liquidate_spot_asset_with_interest(
@@ -7094,8 +7034,8 @@ fn test_liquidate_spot_with_interest_different_receiver() {
             actual_amount_base_collateral: 9600,
             actual_liquidator_fee: 100,
             liquidated_fee_amount: 100,
-            interest_amount_liquidated: 3,
-            interest_amount_liquidator: -2,
+            interest_amount_liquidated: -3,
+            interest_amount_liquidator: 2,
             interest_amount_liquidator_receiver: 1,
         );
 
@@ -7128,10 +7068,11 @@ fn test_transfer_with_interest() {
     let transfer_info = state
         .facade
         .transfer_request(sender: user_1, recipient: user_2, amount: 40_000);
+    // Both have positive collateral → both receive (positive) interest.
     state
         .facade
         .transfer_with_interest(
-            :transfer_info, interest_amount_sender: 50, interest_amount_recipient: -30,
+            :transfer_info, interest_amount_sender: 50, interest_amount_recipient: 30,
         );
 }
 
@@ -7344,7 +7285,9 @@ fn test_deleverage_with_interest() {
     state.facade.advance_time(seconds: 10 * HOUR);
 
     // Full close. Collateral balance: -2,900,000 - 120,000 = -3,020,000.
-    // For fair deleverage (TR=0 requires TV=0): quote_amount = 3,020,000 - interest = 3,019,990.
+    // Sign rule: deleveraged has negative balance → pays interest (negative); deleverager has
+    // positive balance → receives interest (positive).
+    // For fair deleverage (TR=0 requires TV=0): quote_amount = 3,020,000 + |interest| = 3,020,010.
     state
         .facade
         .deleverage_with_interest(
@@ -7352,9 +7295,9 @@ fn test_deleverage_with_interest() {
             :deleverager_user,
             base_asset_id: asset_id,
             deleveraged_base: -30_000,
-            deleveraged_quote: 3_019_990,
-            interest_amount_deleveraged: 10,
-            interest_amount_deleverager: -50,
+            deleveraged_quote: 3_020_010,
+            interest_amount_deleveraged: -10,
+            interest_amount_deleverager: 50,
         );
 }
 
@@ -7390,8 +7333,9 @@ fn test_invest_in_vault_with_interest() {
                     min_shares_to_receive: 500,
                     depositing_user: investing_user,
                     receiving_user: investing_user,
+                    // Both positions have positive collateral → both receive (positive) interest.
                     interest_amount_vault_position: 50,
-                    interest_amount_sender: -30,
+                    interest_amount_sender: 30,
                 ),
         );
 }

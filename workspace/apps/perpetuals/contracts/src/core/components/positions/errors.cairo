@@ -12,6 +12,7 @@ pub const INVALID_ZERO_PUBLIC_KEY: felt252 = 'INVALID_ZERO_PUBLIC_KEY';
 pub const INVALID_ZERO_OWNER_ACCOUNT: felt252 = 'INVALID_ZERO_OWNER_ACCOUNT';
 pub const SAME_PUBLIC_KEY: felt252 = 'SAME_PUBLIC_KEY';
 pub const ZERO_MAX_INTEREST_RATE: felt252 = 'ZERO_MAX_INTEREST_RATE';
+pub const INTEREST_SIGN_MISMATCH: felt252 = 'INTEREST_SIGN_MISMATCH';
 
 pub fn invalid_interest_rate_err(position_id: PositionId) -> ByteArray {
     format!("INVALID_INTEREST_RATE position_id: {:?}", position_id)
