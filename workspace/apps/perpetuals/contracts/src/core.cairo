@@ -9,3 +9,4 @@ pub mod replace_vault_collateral_eic;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
+pub mod init_interest_rate_eic;

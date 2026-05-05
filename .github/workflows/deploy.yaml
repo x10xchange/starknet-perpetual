@@ -1,0 +1,161 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-summary:
+    name: Diff Summary Generator
+    runs-on: ubuntu-latest
+    outputs:
+      image_misc: ${{ steps.image-name.outputs.image_misc }}
+      image_hot_path: ${{ steps.image-name.outputs.image_hot_path }}
+
+    permissions:
+      contents: "read"
+      actions: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Security Check
+        uses: x10xchange/gemini-pr-check@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          custom_prompt: |
+            You are an expert Smart Contract Auditor and Web3 Security Engineer.
+            Analyze the following git diff for a smart contract deployment/update.
+            Your primary goal is to identify **security vulnerabilities**, **logic flaws**, and **gas inefficiencies** introduced or modified by these changes. Smart contract bugs can lead to catastrophic loss of funds, so treat security with the absolute highest priority.
+            You should use the tools provided to you to understand the changes and their impact on the wider protocol. 
+            Please provide output in **GitHub Flavored Markdown**.
+            Use emojis (e.g., 🚨, ⚠️, ⛽, 🟢) to make it visually scannable.
+            Include the following sections:
+            1. **Executive Summary**: A concise overview of the protocol changes and their purpose.
+            2. **Critical Security Analysis** (Zero Tolerance):
+              - 🚨 **High/Critical Risk**: (e.g., Reentrancy, broken access control, flash loan vulnerabilities, unchecked external calls, unsafe math/precision loss).
+              - ⚠️ **Medium/Low Risk**: (e.g., Missing zero-address checks, front-running possibilities, logic bugs that don't directly drain funds, centralization risks).
+            3. **Gas & Optimization**:
+              - ⛽ **Inefficiencies**: (e.g., Unnecessary storage reads/writes, suboptimal loops, unused variables).
+            4. **Technical Change Log**:
+              - 🔄 **Logic Changes**: (Core protocol modifications, interface updates).
+              - 🟢 **Safe Changes**: (NatSpec/Documentation updates, refactoring without logic changes).
+            **Important Audit Guidelines:**
+            - If you see state variables being updated *after* external calls, flag it immediately (CEI pattern violation).
+            - Check if newly added functions have the correct visibility and access modifiers (e.g., `onlyOwner`).
+            - Verify that mathematical operations handle precision correctly and are safe from underflow/overflow (if applicable to the compiler version).
+            If you choose not to request files before and after the diff, please explain your reasoning after the technical change log. 
+            If you chose to request files, please explain why you needed to request them. This helps improve the tooling.
+            Please also summarize the use of the grep functionality—whether it was useful or if you encountered any issues using it.
+
+  CI:
+    needs: generate-summary
+    runs-on: ubuntu-latest
+    environment: starknet-prod
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.54.0
+          asdf set -u starknet-foundry 0.54.0 
+          sed -i 's/^starknet-foundry .*/starknet-foundry 0.54.0/' .tool-versions
+          cat .tool-versions
+
+      - name: Install Voyager Verifier
+        run: |
+          asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
+          asdf install voyager 1.2.4
+          asdf set -u voyager 1.2.4
+
+      - name: install starkli
+        run: |
+          curl https://get.starkli.sh | sh
+          . /home/runner/.config/.starkli/env
+          starkliup
+
+      - name: Retrieve account info
+        run: |
+          . /home/runner/.config/.starkli/env
+          starkli account fetch --rpc ${{ secrets. RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
+          address=$(cat deployer_account.json | jq -r .deployment.address)
+          echo address=$address
+          sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}
+
+      - name: Deploy contracts
+        id: deploy_contracts
+        run: |
+          CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
+          VAULT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c VaultsManager -p perpetuals)
+          echo "vault hash $VAULT_COMPONENT_HASH"
+          TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TransferManager -p perpetuals)
+          echo "transfer hash $TRANSFER_COMPONENT_HASH"
+          WITHDRAWAL_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c WithdrawalManager -p perpetuals)
+          echo "withdrawal hash $WITHDRAWAL_COMPONENT_HASH"
+          LIQUIDATION_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c LiquidationManager -p perpetuals)
+          echo "liquidation hash $LIQUIDATION_COMPONENT_HASH"
+          DELEVERAGE_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DeleverageManager -p perpetuals)
+          echo "deleverage hash $DELEVERAGE_COMPONENT_HASH"
+          DEPOSIT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c DepositManager -p perpetuals)
+          echo "deposit hash $DEPOSIT_COMPONENT_HASH"
+          ASSET_MANAGER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c AssetsManager -p perpetuals)
+          echo "asset manager hash $ASSET_MANAGER_COMPONENT_HASH"
+          FORCED_REQUESTS_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ForcedRequestsManager -p perpetuals)
+          echo "forced requests hash $FORCED_REQUESTS_COMPONENT_HASH"
+
+          INIT_INTEREST_RATE_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c SetEICInterestRateEIC -p perpetuals)
+          echo "init interest rate eic hash $INIT_INTEREST_RATE_EIC_HASH"
+          sleep 30s
+
+
+
+          echo "verifying core hash ${CORE_HASH}"
+          voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "Core verification might have failed check https://voyager.online/class/${CORE_HASH}"
+
+          echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
+          voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "VaultsManager verification might have failed check https://voyager.online/class/${VAULT_COMPONENT_HASH}"
+
+          echo "verifying transfer component hash ${TRANSFER_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${TRANSFER_COMPONENT_HASH} --contract-name TransferManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "TransferManager verification might have failed check https://voyager.online/class/${TRANSFER_COMPONENT_HASH}"
+
+          echo "verifying liquidation component hash ${LIQUIDATION_COMPONENT_HASH}"       
+          voyager verify --network mainnet --class-hash ${LIQUIDATION_COMPONENT_HASH} --contract-name LiquidationManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "LiquidationManager verification might have failed check https://voyager.online/class/${LIQUIDATION_COMPONENT_HASH}"
+
+          echo "verifying deleverage component hash ${DELEVERAGE_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DELEVERAGE_COMPONENT_HASH} --contract-name DeleverageManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DeleverageManager verification might have failed check https://voyager.online/class/${DELEVERAGE_COMPONENT_HASH}"
+
+          echo "verifying deposit component hash ${DEPOSIT_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${DEPOSIT_COMPONENT_HASH} --contract-name DepositManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "DepositManager verification might have failed check https://voyager.online/class/${DEPOSIT_COMPONENT_HASH}"
+
+          echo "verifying asset manager component hash ${ASSET_MANAGER_COMPONENT_HASH}"         
+          voyager verify --network mainnet --class-hash ${ASSET_MANAGER_COMPONENT_HASH} --contract-name AssetsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "AssetsManager verification might have failed check https://voyager.online/class/${ASSET_MANAGER_COMPONENT_HASH}"
+
+          echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
+          voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "WithdrawalManager verification might have failed check https://voyager.online/class/${WITHDRAWAL_COMPONENT_HASH}"
+
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
+
+
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n TRANSFERS -h ${TRANSFER_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n WITHDRAWALS -h ${WITHDRAWAL_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n LIQUIDATIONS -h ${LIQUIDATION_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DELEVERAGES -h ${DELEVERAGE_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
+          ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n FORCED_REQUESTS -h ${FORCED_REQUESTS_COMPONENT_HASH}
