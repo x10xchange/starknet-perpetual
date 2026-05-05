@@ -3,6 +3,7 @@ pub mod constants;
 pub mod core;
 pub mod errors;
 pub mod events;
+pub mod init_interest_rate_eic;
 pub mod interface;
 pub mod migrate_collateral_to_treasury_eic;
 pub mod replace_vault_collateral_eic;
