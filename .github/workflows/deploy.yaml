@@ -90,7 +90,7 @@ jobs:
       - name: Retrieve account info
         run: |
           . /home/runner/.config/.starkli/env
-          starkli account fetch --rpc ${{ secrets. RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
+          starkli account fetch --rpc ${{ secrets.RPC_V8 }} --output deployer_account.json 0x785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58
           address=$(cat deployer_account.json | jq -r .deployment.address)
           echo address=$address
           sncast account import --name mainnet --address $address --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}
