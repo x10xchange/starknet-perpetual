@@ -60,6 +60,8 @@ pub(crate) mod DepositManager {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::interface::IAssets;
     use perpetuals::core::components::deposit::Deposit as DepositComponent;
+    use perpetuals::core::components::deposit_limits::DepositLimits as DepositLimitsComponent;
+    use perpetuals::core::components::deposit_limits::deposit_limits::DepositLimits::InternalTrait as DepositLimitsInternal;
     use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::fulfillment::fulfillment::Fulfillement as FulfillmentComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -115,6 +117,8 @@ pub(crate) mod DepositManager {
         RolesEvent: RolesComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        DepositLimitsEvent: DepositLimitsComponent::Event,
         Deposit: events::Deposit,
         DepositCanceled: events::DepositCanceled,
         DepositProcessed: events::DepositProcessed,
@@ -147,6 +151,8 @@ pub(crate) mod DepositManager {
         pub request_approvals: RequestApprovalsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        pub deposit_limits: DepositLimitsComponent::Storage,
         // --- Treasury ---
         treasury: ITreasuryDispatcher,
     }
@@ -165,6 +171,11 @@ pub(crate) mod DepositManager {
         path: RequestApprovalsComponent, storage: request_approvals, event: RequestApprovalsEvent,
     );
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(path: DepositLimitsComponent, storage: deposit_limits, event: DepositLimitsEvent);
+
+    #[abi(embed_v0)]
+    impl DepositLimitsImpl =
+        DepositLimitsComponent::DepositLimitsImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl TypedComponent of ITypedComponent<ContractState> {
@@ -381,6 +392,15 @@ pub(crate) mod DepositManager {
                 .write(key: deposit_hash, value: DepositStatus::PENDING(now));
 
             let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
+
+            let treasury_address = self.treasury.read().contract_address;
+            self
+                .deposit_limits
+                .validate_deposit_within_limit(
+                    token_address: token_contract.contract_address,
+                    :treasury_address,
+                    amount: unquantized_amount.into(),
+                );
 
             assert(
                 token_contract
