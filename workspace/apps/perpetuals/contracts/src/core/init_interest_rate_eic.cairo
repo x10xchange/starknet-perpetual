@@ -44,8 +44,8 @@ mod SetEICInterestRateEIC {
             // Maximum interest rate per second (32-bit fixed-point with 32-bit fractional part).
             // Example: max_interest_rate_per_sec = 10 means the rate is 10 / 2^32 ≈ 0.000000232
             // per second, which is approximately 7.4% per year.
-            // (136000/2^32) * 60 * 60 * 24 * 365 = 998.586416245% per year
-            self.positions.max_interest_rate_per_sec.write(136000);
+            // (1360/2^32) * 60 * 60 * 24 * 365 = 998.586416245% per year
+            self.positions.max_interest_rate_per_sec.write(1360);
         }
     }
 }
