@@ -2,7 +2,7 @@
 pub mod Positions {
     use core::dict::Felt252Dict;
     use core::nullable::{FromNullableResult, match_nullable};
-    use core::num::traits::Zero;
+    use core::num::traits::{CheckedAdd, Zero};
     use core::panic_with_felt252;
     use core::panics::panic_with_byte_array;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
@@ -49,6 +49,7 @@ pub mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::constants::DAY;
+    use starkware_utils::math::abs;
     use starkware_utils::math::abs::Abs;
     use starkware_utils::math::utils::have_same_sign;
     use starkware_utils::signature::stark::{PublicKey, Signature};
@@ -69,12 +70,16 @@ pub mod Positions {
     use crate::core::types::position::{
         AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
     };
+    use crate::core::types::price::SN_PERPS_SCALE;
     use crate::core::value_risk_calculator::{
         TVTRChange, assert_healthy_or_healthier, calculate_asset_value_and_risk,
         calculate_position_tvtr_before, calculate_position_tvtr_change,
     };
     pub const FEE_POSITION: PositionId = PositionId { value: 0 };
     pub const INSURANCE_FUND_POSITION: PositionId = PositionId { value: 1 };
+
+    // 100,000 of base collateral at units of 10^-6
+    const MAX_INTEREST_DIVERGENCE: u128 = 100_000 * SN_PERPS_SCALE;
 
     impl SnipImpl = SNIP12MetadataImpl;
 
@@ -85,6 +90,7 @@ pub mod Positions {
         // Example: max_interest_rate_per_sec = 10 means the rate is 10 / 2^32 ≈ 0.000000232 per
         // second, which is approximately 7.4% per year.
         pub max_interest_rate_per_sec: u32,
+        pub interest_divergence: i64,
     }
 
     #[event]
@@ -691,7 +697,22 @@ pub mod Positions {
                     :max_interest_rate_per_sec,
                 );
 
+            let current_divergence = self.interest_divergence.read();
+            let new_divergence = current_divergence
+                .checked_add(interest_amount)
+                .expect('divergence overflow');
+
+            if new_divergence.abs().into() > MAX_INTEREST_DIVERGENCE {
+                let err = format!(
+                    "Interest divergence of {:?} exceeds the maximum allowed divergence of {:?}",
+                    new_divergence,
+                    MAX_INTEREST_DIVERGENCE,
+                );
+                panic_with_byte_array(err: @err);
+            }
+
             position.last_interest_applied_time.write(current_time);
+            self.interest_divergence.write(new_divergence);
         }
 
         fn get_position_snapshot(
