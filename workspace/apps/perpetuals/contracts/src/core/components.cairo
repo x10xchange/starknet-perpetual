@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod deleverage;
 pub mod deposit;
+pub mod deposit_limits;
 pub mod exchange_time;
 pub mod external_components;
 pub mod forced_requests;

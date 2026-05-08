@@ -10,6 +10,7 @@ pub mod Core {
     use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
+    use perpetuals::core::components::deposit_limits::DepositLimits as DepositLimitsComponent;
     use perpetuals::core::components::exchange_time::ExchangeTimeComponent;
     use perpetuals::core::components::exchange_time::ExchangeTimeComponent::InternalTrait as ExchangeInternal;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
@@ -95,7 +96,11 @@ pub mod Core {
     );
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
+    component!(path: DepositLimitsComponent, storage: deposit_limits, event: DepositLimitsEvent);
 
+    #[abi(embed_v0)]
+    impl DepositLimitsImpl =
+        DepositLimitsComponent::DepositLimitsImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl OperatorNonceImpl =
@@ -170,6 +175,8 @@ pub mod Core {
         pub external_components: ExternalComponentsComponent::Storage,
         #[substorage(v0)]
         pub vaults: VaultsComponent::Storage,
+        #[substorage(v0)]
+        pub deposit_limits: DepositLimitsComponent::Storage,
         // --- Treasury ---
         pub treasury: ITreasuryDispatcher,
         /// ------- Core -------
@@ -204,6 +211,8 @@ pub mod Core {
         AssetsEvent: AssetsComponent::Event,
         #[flat]
         DepositEvent: Deposit::Event,
+        #[flat]
+        DepositLimitsEvent: DepositLimitsComponent::Event,
         #[flat]
         RequestApprovalsEvent: RequestApprovalsComponent::Event,
         #[flat]

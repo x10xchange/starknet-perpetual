@@ -7,6 +7,7 @@ use perpetuals::core::components::deposit::deposit_manager::deposit_hash;
 use perpetuals::core::components::deposit::interface::{
     DepositStatus, IDeposit, IDepositDispatcher, IDepositDispatcherTrait,
 };
+use perpetuals::core::components::deposit_limits::interface::IDepositLimits;
 use perpetuals::core::components::operator_nonce::interface::IOperatorNonce;
 use perpetuals::core::components::positions::Positions::{
     FEE_POSITION, INSURANCE_FUND_POSITION, InternalTrait as PositionsInternal,
@@ -2129,6 +2130,74 @@ fn test_successful_process_deposit() {
 
     let status = state.deposits.get_deposit_status(:deposit_hash);
     assert!(status == DepositStatus::PROCESSED, "Deposit not processed");
+}
+
+// Deposit-limits tests.
+
+#[test]
+fn test_deposit_under_max_succeeds() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // treasury_balance + perps_balance + amount = 2_000_000_010 raw. Token has 6 decimals.
+    // 2001 whole units = 2_001_000_000 raw — enough room for the deposit.
+    let whole_amount: u256 = 2001;
+    let expected_raw: u256 = whole_amount * 10_u256.pow(COLLATERAL_DECIMALS.into());
+    cheat_caller_address_once(contract_address: test_address(), caller_address: APP_GOVERNOR());
+    state.set_max_deposit(token_address: token_state.address, :whole_amount);
+    assert!(
+        state.get_max_deposit(token_address: token_state.address) == Option::Some(expected_raw),
+    );
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
+
+    // Confirm the transfer actually happened (perps balance grew by the deposit).
+    validate_balance(
+        token_state,
+        test_address(),
+        (CONTRACT_INIT_BALANCE + user_deposit_amount).try_into().unwrap(),
+    );
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_LIMIT_EXCEEDED')]
+fn test_deposit_over_max_reverts() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    let user_deposit_amount = DEPOSIT_AMOUNT.into() * cfg.collateral_cfg.quantum.into();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    token_state.fund(recipient: user.address, amount: USER_INIT_BALANCE.try_into().unwrap());
+    token_state.approve(owner: user.address, spender: test_address(), amount: user_deposit_amount);
+
+    // 2000 whole units = 2_000_000_000 raw, but treasury+perps+amount = 2_000_000_010 raw.
+    // Should revert.
+    let whole_amount: u256 = 2000;
+    cheat_caller_address_once(contract_address: test_address(), caller_address: APP_GOVERNOR());
+    state.set_max_deposit(token_address: token_state.address, :whole_amount);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state
+        .deposit(
+            position_id: user.position_id,
+            quantized_amount: DEPOSIT_AMOUNT,
+            salt: user.salt_counter,
+        );
 }
 
 // Cancel deposit tests.
