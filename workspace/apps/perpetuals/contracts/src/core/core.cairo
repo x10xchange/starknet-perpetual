@@ -1066,15 +1066,6 @@ pub mod Core {
                     let position_diff = PositionDiff {
                         collateral_diff: interest_amount.into(), asset_diff: Option::None,
                     };
-                    self
-                        .positions
-                        .validate_healthy_or_healthier_position(
-                            :position_id,
-                            position: position.into(),
-                            position_diff: position_diff,
-                            tvtr_before: Default::default(),
-                        );
-
                     self.positions.apply_diff(:position_id, :position_diff);
                 }
 
