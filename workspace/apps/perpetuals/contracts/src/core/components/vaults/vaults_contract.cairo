@@ -725,7 +725,9 @@ pub(crate) mod VaultsManager {
             for item in other_amounts {
                 vault_spot_diffs.append((*item).invert());
             }
-
+            let vault_protection_config = self
+                .vaults
+                .get_vault_protection_config(vault_position_id);
             //vault
             let vault_tv_tr = self
                 .positions
@@ -743,9 +745,7 @@ pub(crate) mod VaultsManager {
                 .positions
                 .validate_against_vault_limits(
                     position_id: vault_position_id,
-                    vault_protection_config: self
-                        .vaults
-                        .get_vault_protection_config(vault_position_id),
+                    vault_protection_config: vault_protection_config,
                     tvtr: vault_tv_tr.after,
                 );
 

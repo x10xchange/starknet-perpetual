@@ -7,6 +7,7 @@ use perpetuals::core::components::deposit::interface::{IDepositDispatcher, IDepo
 use perpetuals::core::components::positions::interface::{
     IPositionsDispatcher, IPositionsDispatcherTrait,
 };
+use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
 use perpetuals::core::types::order::Order;
 use perpetuals::tests::constants::*;
@@ -352,4 +353,20 @@ fn test_escape_hatch_only_app_governor() {
     let (_, contract_address) = setup();
     let dispatcher = ICoreDispatcher { contract_address };
     dispatcher.enable_escape_hatch();
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_force_reset_daily_protection_limit_only_app_governor() {
+    let (_, contract_address) = setup();
+    let dispatcher = IVaultsDispatcher { contract_address };
+    dispatcher.force_reset_daily_protection_limit(vault_position: POSITION_ID_100);
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_update_vault_protection_limit_only_app_governor() {
+    let (_, contract_address) = setup();
+    let dispatcher = IVaultsDispatcher { contract_address };
+    dispatcher.update_vault_protection_limit(vault_position: POSITION_ID_100, percentage: 0);
 }
