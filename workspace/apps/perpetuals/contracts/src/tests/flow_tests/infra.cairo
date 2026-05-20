@@ -92,6 +92,72 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
             );
         user
     }
+
+    /// Creates a user position with a negative collateral balance via a synthetic trade.
+    ///
+    /// Setup: registers `synthetic_info` at price 100, deposits 10_000 collateral for the
+    /// returned user and 100_000 for an internal counterparty, then trades 200 base at
+    /// quote=-20_000, leaving the user with collateral=-10_000 and 200 units of synthetic
+    /// (TV=10_000, TR=2_000 — healthy). Used to exercise interest-sign rules that require
+    /// a debt-side position.
+    fn new_user_with_negative_collateral(
+        ref self: FlowTestBase, synthetic_info: @AssetInfo,
+    ) -> User {
+        self.facade.add_active_synthetic(:synthetic_info, initial_price: 100);
+        let user = self.new_user_with_position();
+        let counterparty = self.new_user_with_position();
+
+        self
+            .facade
+            .process_deposit(
+                deposit_info: self
+                    .facade
+                    .deposit(
+                        depositor: user.account,
+                        position_id: user.position_id,
+                        quantized_amount: 10_000,
+                    ),
+            );
+        self
+            .facade
+            .process_deposit(
+                deposit_info: self
+                    .facade
+                    .deposit(
+                        depositor: counterparty.account,
+                        position_id: counterparty.position_id,
+                        quantized_amount: 100_000,
+                    ),
+            );
+
+        let base_asset_id = *synthetic_info.asset_id;
+        let order_a = self
+            .facade
+            .create_order(
+                :user, base_amount: 300, :base_asset_id, quote_amount: -30_000, fee_amount: 23,
+            );
+        let order_b = self
+            .facade
+            .create_order(
+                user: counterparty,
+                base_amount: -200,
+                :base_asset_id,
+                quote_amount: 10_000,
+                fee_amount: 15,
+            );
+        self
+            .facade
+            .trade(
+                order_info_a: order_a,
+                order_info_b: order_b,
+                base: 200,
+                quote: -20_000,
+                fee_a: 0,
+                fee_b: 0,
+            );
+
+        user
+    }
 }
 
 #[derive(Copy, Drop)]
