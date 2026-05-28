@@ -17,8 +17,9 @@ pub mod Positions {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INTEREST_SIGN_MISMATCH,
-        INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT,
-        POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
+        INVALID_ZERO_EVM_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY,
+        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_REQUIRED, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
+        POSITION_HAS_EVM_ACCOUNT, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, ZERO_MAX_INTEREST_RATE,
         invalid_interest_rate_err,
     };
@@ -32,17 +33,22 @@ pub mod Positions {
         AssetBalance, POSITION_VERSION, Position, PositionData, PositionDiff, PositionId,
         PositionMutableTrait, PositionTrait,
     };
+    use perpetuals::core::types::set_evm_account::{
+        SetEvmAccountArgs, set_evm_account_eip712_digest,
+    };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::value_risk_calculator::{
         PositionState, PositionTVTR, calculate_max_allowed_change, calculate_pnl,
         calculate_position_tvtr, evaluate_position,
     };
+    use starknet::eth_signature::verify_eth_signature;
+    use starknet::secp256_trait::Signature as EvmSignature;
     use starknet::storage::{
         Map, Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ContractAddress, EthAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -71,6 +77,7 @@ pub mod Positions {
         AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
     };
     use crate::core::types::price::SN_PERPS_SCALE;
+    use crate::core::utils::validate_signature;
     use crate::core::value_risk_calculator::{
         TVTRChange, assert_healthy_or_healthier, calculate_asset_value_and_risk,
         calculate_position_tvtr_before, calculate_position_tvtr_change,
@@ -97,6 +104,8 @@ pub mod Positions {
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
         NewPosition: events::NewPosition,
+        OwnerOnlyWithdrawalSet: events::OwnerOnlyWithdrawalSet,
+        SetEvmAccount: events::SetEvmAccount,
         SetOwnerAccount: events::SetOwnerAccount,
         SetOwnerAccountRequest: events::SetOwnerAccountRequest,
         SetPublicKey: events::SetPublicKey,
@@ -235,6 +244,63 @@ pub mod Positions {
             signature: Signature,
         ) {
             panic_with_felt252('TODO')
+        }
+
+        /// Attaches an EVM address to a position. Set-once.
+        ///
+        /// Both signatures are over the message (position_id, new_evm_account):
+        ///   - STARK side: Poseidon hash, verified against the position's owner_public_key.
+        ///   - EVM side:   EIP-712 typed-data digest, verified against new_evm_account.
+        ///                 Domain is name+version only, so any EVM wallet can sign via
+        ///                 eth_signTypedData_v4 with no chainId match or Starknet plugin.
+        ///
+        /// Replay protection is structural — the POSITION_HAS_EVM_ACCOUNT assert prevents
+        /// a second successful call on the same position.
+        fn set_evm_account(
+            ref self: ComponentState<TContractState>,
+            position_id: PositionId,
+            new_evm_account: EthAddress,
+            stark_signature: Signature,
+            evm_signature: EvmSignature,
+        ) {
+            let position = self.get_position_mut(:position_id);
+            assert(position.get_owner_evm_account().is_none(), POSITION_HAS_EVM_ACCOUNT);
+            let evm_felt: felt252 = new_evm_account.into();
+            assert(evm_felt.is_non_zero(), INVALID_ZERO_EVM_ACCOUNT);
+
+            let public_key = position.get_owner_public_key();
+
+            // STARK side: SNIP-12 typed message verified against the owner public key.
+            validate_signature(
+                :public_key,
+                message: SetEvmAccountArgs { position_id, new_evm_account },
+                signature: stark_signature,
+            );
+
+            // EVM side: EIP-712 typed-data digest verified against the new EVM account.
+            let evm_msg_hash = set_evm_account_eip712_digest(:position_id, :new_evm_account);
+            verify_eth_signature(
+                msg_hash: evm_msg_hash, signature: evm_signature, eth_address: new_evm_account,
+            );
+
+            position.owner_evm_account.write(Option::Some(new_evm_account));
+            self.emit(events::SetEvmAccount { position_id, new_evm_account });
+        }
+
+        /// Toggles the "owner-only withdrawal" flag. When enabled, withdrawals from this
+        /// position can only target the owner_account. Caller must be owner_account.
+        fn set_owner_only_withdrawal(
+            ref self: ComponentState<TContractState>, position_id: PositionId, enabled: bool,
+        ) {
+            let position = self.get_position_mut(:position_id);
+            let owner_account = position.get_owner_account();
+            let owner = match owner_account {
+                Option::Some(addr) => addr,
+                Option::None => panic_with_felt252(OWNER_ACCOUNT_REQUIRED),
+            };
+            assert(get_caller_address() == owner, CALLER_IS_NOT_OWNER_ACCOUNT);
+            position.owner_only_withdrawal_enabled.write(enabled);
+            self.emit(events::OwnerOnlyWithdrawalSet { position_id, enabled });
         }
 
         /// Registers a request to set the position's owner_account.

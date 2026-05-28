@@ -1,5 +1,5 @@
 use perpetuals::core::types::position::PositionId;
-use starknet::ContractAddress;
+use starknet::{ContractAddress, EthAddress};
 use starkware_utils::signature::stark::PublicKey;
 use starkware_utils::time::time::Timestamp;
 
@@ -34,6 +34,21 @@ pub struct SetOwnerAccount {
     #[key]
     pub new_owner_account: ContractAddress,
     pub set_owner_account_hash: felt252,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct SetEvmAccount {
+    #[key]
+    pub position_id: PositionId,
+    #[key]
+    pub new_evm_account: EthAddress,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct OwnerOnlyWithdrawalSet {
+    #[key]
+    pub position_id: PositionId,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]

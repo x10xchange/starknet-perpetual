@@ -5,8 +5,8 @@ use perpetuals::core::types::asset::synthetic::{
 };
 use perpetuals::core::types::balance::{Balance, BalanceDiff};
 use perpetuals::core::types::funding::FundingIndex;
-use starknet::ContractAddress;
 use starknet::storage::{Mutable, StoragePath, StoragePointerReadAccess};
+use starknet::{ContractAddress, EthAddress};
 use starkware_utils::signature::stark::PublicKey;
 use starkware_utils::storage::iterable_map::{
     IterableMap, IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
@@ -25,6 +25,8 @@ pub struct Position {
     pub asset_balances: IterableMap<AssetId, AssetBalance>,
     pub owner_protection_enabled: bool,
     pub last_interest_applied_time: Timestamp,
+    pub owner_evm_account: Option<EthAddress>,
+    pub owner_only_withdrawal_enabled: bool,
 }
 
 /// Synthetic asset in a position.
@@ -141,6 +143,12 @@ pub impl PositionImpl of PositionTrait {
     fn get_owner_public_key(self: StoragePath<Position>) -> PublicKey {
         self.owner_public_key.read()
     }
+    fn get_owner_evm_account(self: StoragePath<Position>) -> Option<EthAddress> {
+        self.owner_evm_account.read()
+    }
+    fn get_owner_only_withdrawal_enabled(self: StoragePath<Position>) -> bool {
+        self.owner_only_withdrawal_enabled.read()
+    }
     fn get_version(self: StoragePath<Position>) -> u8 {
         self.version.read()
     }
@@ -154,6 +162,12 @@ pub impl PositionMutableImpl of PositionMutableTrait {
 
     fn get_owner_public_key(self: StoragePath<Mutable<Position>>) -> PublicKey {
         self.owner_public_key.read()
+    }
+    fn get_owner_evm_account(self: StoragePath<Mutable<Position>>) -> Option<EthAddress> {
+        self.owner_evm_account.read()
+    }
+    fn get_owner_only_withdrawal_enabled(self: StoragePath<Mutable<Position>>) -> bool {
+        self.owner_only_withdrawal_enabled.read()
     }
     fn get_version(self: StoragePath<Mutable<Position>>) -> u8 {
         self.version.read()
