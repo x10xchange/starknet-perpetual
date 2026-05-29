@@ -35,6 +35,7 @@ pub fn spot_deleverage_non_spot_asset(asset_id: AssetId) -> ByteArray {
 pub const SPOT_DELEVERAGE_POSITIVE_COLLATERAL: felt252 = 'SPOT_DELEV_POSITIVE_COLLATERAL';
 pub const NOT_TRANSFERABLE_ASSET: felt252 = 'NOT_TRANSFERABLE_ASSET';
 pub const VAULT_CANNOT_HOLD_SHARES: felt252 = 'VAULT_CANNOT_HOLD_SHARES';
+pub const VAULT_APPROVAL_POSITION_MISMATCH: felt252 = 'VAULT_APPROVAL_POS_MISMATCH';
 pub const ESCAPE_HATCH_DISABLED: felt252 = 'ESCAPE_HATCH_DISABLED';
 
 pub fn fulfillment_exceeded_err(position_id: PositionId) -> ByteArray {

@@ -92,7 +92,7 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::events;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
-    use crate::core::errors::order_expired_err;
+    use crate::core::errors::{VAULT_APPROVAL_POSITION_MISMATCH, order_expired_err};
     use crate::core::types::asset::synthetic::{
         AssetType, SpotAssetBalanceDiff, SpotAssetBalanceDiffTrait,
     };
@@ -537,6 +537,11 @@ pub(crate) mod VaultsManager {
             let vault_position_id: PositionId = vault_config.position_id.into();
             let redeeming_position_id = order.source_position;
             let receiving_position_id = order.receive_position;
+
+            assert(
+                vault_approval.source_position == vault_position_id,
+                VAULT_APPROVAL_POSITION_MISMATCH,
+            );
 
             //validate three way interest amounts
             if (redeeming_position_id == receiving_position_id && interest_amount_receiver != 0) {
