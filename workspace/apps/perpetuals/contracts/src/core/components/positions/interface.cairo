@@ -63,6 +63,7 @@ pub trait IPositions<TContractState> {
         ref self: TContractState,
         position_id: PositionId,
         new_evm_account: EthAddress,
+        expiration: Timestamp,
         stark_signature: Signature,
         evm_signature: EvmSignature,
     );

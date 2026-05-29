@@ -6978,15 +6978,16 @@ fn test_set_owner_only_withdrawal_toggle_off() {
 // EVM test vector — Hardhat dev account #0. Never use this key for anything
 // real. Pregenerated EIP-712 signature (eth_signTypedData_v4 equivalent) over:
 //   domain  = { name: "Perpetuals", version: "v0" }   (no chainId / verifyingContract)
-//   message = SetEvmAccount { positionId: 100, newEvmAccount: 0xf39F...2266 }
+//   message = SetEvmAccount { positionId: 100, newEvmAccount: 0xf39F...2266, expiration: 2000000000 }
 // Regenerate with /tmp/gen_eip712_set_evm_account.py.
-//   digest = 0x54661c5d3ecff870d0383429e41499cbe45b2b85b72c6053c396fcb30abb27a6
+//   digest = 0x413dcb989e262175c252196ad97bb56341f27a7822170ec5901ea23955953b84
 // ============================================================================
 
-const EVM_SIG_R: u256 = 0x775a17164126e968a901bd722bbda7eb73e5c4e2b9e6747930ed4a542de930f8;
-const EVM_SIG_S: u256 = 0x2427f836a0b6c8f86ec53fde5c5ea5578dc81d134e8741ff7c61c9db17653aba;
-const EVM_SIG_Y_PARITY: bool = true;
+const EVM_SIG_R: u256 = 0x567d71e393aec8ad5384086c82ba869e655a4e405302e634056c4d4a638c20a4;
+const EVM_SIG_S: u256 = 0x329e345a78ac8ecc270a551bb2e2cd0b7b548d4b29330235476d5788d7d4623d;
+const EVM_SIG_Y_PARITY: bool = false;
 const EVM_ADDRESS_FELT: felt252 = 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266;
+const EVM_EXPIRATION_SECONDS: u64 = 2000000000;
 
 #[test]
 fn test_successful_set_evm_account() {
@@ -6997,9 +6998,10 @@ fn test_successful_set_evm_account() {
     init_position(cfg: @cfg, ref :state, :user);
 
     let new_evm_account: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
+    let expiration = Timestamp { seconds: EVM_EXPIRATION_SECONDS };
 
     // STARK sig over the SNIP-12 message hash — same hash validate_signature builds on-chain.
-    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account };
+    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account, expiration };
     let stark_msg_hash = args.get_message_hash(public_key: user.get_public_key());
     let stark_signature = user.sign_message(message: stark_msg_hash);
 
@@ -7008,7 +7010,11 @@ fn test_successful_set_evm_account() {
     state
         .positions
         .set_evm_account(
-            position_id: user.position_id, :new_evm_account, :stark_signature, :evm_signature,
+            position_id: user.position_id,
+            :new_evm_account,
+            :expiration,
+            :stark_signature,
+            :evm_signature,
         );
 
     assert!(
@@ -7039,6 +7045,7 @@ fn test_set_evm_account_zero_address() {
         .set_evm_account(
             position_id: user.position_id,
             new_evm_account: zero_addr,
+            expiration: Timestamp { seconds: EVM_EXPIRATION_SECONDS },
             stark_signature: dummy_stark,
             evm_signature: dummy_evm,
         );
@@ -7068,6 +7075,7 @@ fn test_set_evm_account_already_set() {
         .set_evm_account(
             position_id: user.position_id,
             :new_evm_account,
+            expiration: Timestamp { seconds: EVM_EXPIRATION_SECONDS },
             stark_signature: dummy_stark,
             evm_signature: dummy_evm,
         );
@@ -7085,9 +7093,10 @@ fn test_set_evm_account_bad_evm_signature() {
     init_position(cfg: @cfg, ref :state, :user);
 
     let new_evm_account: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
+    let expiration = Timestamp { seconds: EVM_EXPIRATION_SECONDS };
 
     // Valid STARK sig so we reach the EVM check.
-    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account };
+    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account, expiration };
     let stark_msg_hash = args.get_message_hash(public_key: user.get_public_key());
     let stark_signature = user.sign_message(message: stark_msg_hash);
 
@@ -7097,7 +7106,11 @@ fn test_set_evm_account_bad_evm_signature() {
     state
         .positions
         .set_evm_account(
-            position_id: user.position_id, :new_evm_account, :stark_signature, :evm_signature,
+            position_id: user.position_id,
+            :new_evm_account,
+            :expiration,
+            :stark_signature,
+            :evm_signature,
         );
 }
 

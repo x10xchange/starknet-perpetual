@@ -20,8 +20,8 @@ pub mod Positions {
         INVALID_ZERO_EVM_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY,
         NO_OWNER_ACCOUNT, OWNER_ACCOUNT_REQUIRED, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
         POSITION_HAS_EVM_ACCOUNT, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
-        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, ZERO_MAX_INTEREST_RATE,
-        invalid_interest_rate_err,
+        SET_EVM_ACCOUNT_EXPIRED, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
+        ZERO_MAX_INTEREST_RATE, invalid_interest_rate_err,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -246,20 +246,14 @@ pub mod Positions {
             panic_with_felt252('TODO')
         }
 
-        /// Attaches an EVM address to a position. Set-once.
-        ///
-        /// Both signatures are over the message (position_id, new_evm_account):
-        ///   - STARK side: Poseidon hash, verified against the position's owner_public_key.
-        ///   - EVM side:   EIP-712 typed-data digest, verified against new_evm_account.
-        ///                 Domain is name+version only, so any EVM wallet can sign via
-        ///                 eth_signTypedData_v4 with no chainId match or Starknet plugin.
-        ///
-        /// Replay protection is structural — the POSITION_HAS_EVM_ACCOUNT assert prevents
-        /// a second successful call on the same position.
+        /// Attaches an EVM address to a position (set-once). Requires a STARK signature from the
+        /// position owner and an EVM (EIP-712) signature from the new account; `expiration` bounds
+        /// signature validity.
         fn set_evm_account(
             ref self: ComponentState<TContractState>,
             position_id: PositionId,
             new_evm_account: EthAddress,
+            expiration: Timestamp,
             stark_signature: Signature,
             evm_signature: EvmSignature,
         ) {
@@ -267,18 +261,19 @@ pub mod Positions {
             assert(position.get_owner_evm_account().is_none(), POSITION_HAS_EVM_ACCOUNT);
             let evm_felt: felt252 = new_evm_account.into();
             assert(evm_felt.is_non_zero(), INVALID_ZERO_EVM_ACCOUNT);
+            validate_expiration(:expiration, err: SET_EVM_ACCOUNT_EXPIRED);
 
             let public_key = position.get_owner_public_key();
 
-            // STARK side: SNIP-12 typed message verified against the owner public key.
             validate_signature(
                 :public_key,
-                message: SetEvmAccountArgs { position_id, new_evm_account },
+                message: SetEvmAccountArgs { position_id, new_evm_account, expiration },
                 signature: stark_signature,
             );
 
-            // EVM side: EIP-712 typed-data digest verified against the new EVM account.
-            let evm_msg_hash = set_evm_account_eip712_digest(:position_id, :new_evm_account);
+            let evm_msg_hash = set_evm_account_eip712_digest(
+                :position_id, :new_evm_account, :expiration,
+            );
             verify_eth_signature(
                 msg_hash: evm_msg_hash, signature: evm_signature, eth_address: new_evm_account,
             );
