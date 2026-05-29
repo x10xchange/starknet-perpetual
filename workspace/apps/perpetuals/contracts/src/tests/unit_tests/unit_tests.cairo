@@ -6978,7 +6978,8 @@ fn test_set_owner_only_withdrawal_toggle_off() {
 // EVM test vector — Hardhat dev account #0. Never use this key for anything
 // real. Pregenerated EIP-712 signature (eth_signTypedData_v4 equivalent) over:
 //   domain  = { name: "Perpetuals", version: "v0" }   (no chainId / verifyingContract)
-//   message = SetEvmAccount { positionId: 100, newEvmAccount: 0xf39F...2266, expiration: 2000000000 }
+//   message = SetEvmAccount { positionId: 100, newEvmAccount: 0xf39F...2266, expiration: 2000000000
+//   }
 // Regenerate with /tmp/gen_eip712_set_evm_account.py.
 //   digest = 0x413dcb989e262175c252196ad97bb56341f27a7822170ec5901ea23955953b84
 // ============================================================================
