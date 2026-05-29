@@ -7007,6 +7007,7 @@ fn test_successful_set_evm_account() {
 
     let evm_signature = EvmSignature { r: EVM_SIG_R, s: EVM_SIG_S, y_parity: EVM_SIG_Y_PARITY };
 
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .positions
         .set_evm_account(
@@ -7040,41 +7041,12 @@ fn test_set_evm_account_zero_address() {
     let dummy_stark = user.sign_message(message: 0);
     let dummy_evm = EvmSignature { r: 0_u256, s: 0_u256, y_parity: false };
 
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .positions
         .set_evm_account(
             position_id: user.position_id,
             new_evm_account: zero_addr,
-            expiration: Timestamp { seconds: EVM_EXPIRATION_SECONDS },
-            stark_signature: dummy_stark,
-            evm_signature: dummy_evm,
-        );
-}
-
-#[test]
-#[should_panic(expected: 'POSITION_HAS_EVM_ACCOUNT')]
-fn test_set_evm_account_already_set() {
-    let cfg: PerpetualsInitConfig = Default::default();
-    let token_state = cfg.collateral_cfg.token_cfg.deploy();
-    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
-    let user = Default::default();
-    init_position(cfg: @cfg, ref :state, :user);
-
-    // Pre-populate the field directly via storage.
-    let pos = state.positions.get_position_mut(position_id: user.position_id);
-    let prefilled: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
-    pos.owner_evm_account.write(Option::Some(prefilled));
-
-    // Second call should fail at the set-once assert before reaching sig verification.
-    let new_evm_account: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
-    let dummy_stark = user.sign_message(message: 0);
-    let dummy_evm = EvmSignature { r: 0_u256, s: 0_u256, y_parity: false };
-
-    state
-        .positions
-        .set_evm_account(
-            position_id: user.position_id,
-            :new_evm_account,
             expiration: Timestamp { seconds: EVM_EXPIRATION_SECONDS },
             stark_signature: dummy_stark,
             evm_signature: dummy_evm,
@@ -7103,6 +7075,7 @@ fn test_set_evm_account_bad_evm_signature() {
     // Flip the recovery parity → ecrecover yields a different address → mismatch.
     let evm_signature = EvmSignature { r: EVM_SIG_R, s: EVM_SIG_S, y_parity: !EVM_SIG_Y_PARITY };
 
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
     state
         .positions
         .set_evm_account(

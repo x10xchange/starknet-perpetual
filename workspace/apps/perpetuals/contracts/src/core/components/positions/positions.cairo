@@ -19,9 +19,9 @@ pub mod Positions {
         ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INTEREST_SIGN_MISMATCH,
         INVALID_ZERO_EVM_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY,
         NO_OWNER_ACCOUNT, OWNER_ACCOUNT_REQUIRED, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
-        POSITION_HAS_EVM_ACCOUNT, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
-        SET_EVM_ACCOUNT_EXPIRED, SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED,
-        ZERO_MAX_INTEREST_RATE, invalid_interest_rate_err,
+        POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_EVM_ACCOUNT_EXPIRED,
+        SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, ZERO_MAX_INTEREST_RATE,
+        invalid_interest_rate_err,
     };
     use perpetuals::core::components::positions::events;
     use perpetuals::core::components::positions::interface::IPositions;
@@ -54,6 +54,7 @@ pub mod Positions {
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::constants::DAY;
     use starkware_utils::math::abs;
     use starkware_utils::math::abs::Abs;
@@ -246,9 +247,9 @@ pub mod Positions {
             panic_with_felt252('TODO')
         }
 
-        /// Attaches an EVM address to a position (set-once). Requires a STARK signature from the
-        /// position owner and an EVM (EIP-712) signature from the new account; `expiration` bounds
-        /// signature validity.
+        /// Sets/updates the EVM address on a position. Operator-only. Requires a STARK signature
+        /// from the position owner and an EVM (EIP-712) signature from the new account;
+        /// `expiration` bounds signature validity.
         fn set_evm_account(
             ref self: ComponentState<TContractState>,
             position_id: PositionId,
@@ -257,8 +258,8 @@ pub mod Positions {
             stark_signature: Signature,
             evm_signature: EvmSignature,
         ) {
+            get_dep_component!(@self, Roles).only_operator();
             let position = self.get_position_mut(:position_id);
-            assert(position.get_owner_evm_account().is_none(), POSITION_HAS_EVM_ACCOUNT);
             let evm_felt: felt252 = new_evm_account.into();
             assert(evm_felt.is_non_zero(), INVALID_ZERO_EVM_ACCOUNT);
             validate_expiration(:expiration, err: SET_EVM_ACCOUNT_EXPIRED);
