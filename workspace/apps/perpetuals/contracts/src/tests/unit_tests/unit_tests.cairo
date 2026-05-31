@@ -6896,3 +6896,74 @@ fn test_forced_redeem_from_vault_panics_when_disabled() {
 
     state.forced_redeem_from_vault(operator_nonce: 0, :order, vault_approval: order);
 }
+
+// ============================================================================
+// set_owner_only_withdrawal tests
+// ============================================================================
+
+#[test]
+fn test_successful_set_owner_only_withdrawal_enable() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.positions.set_owner_only_withdrawal(position_id: user.position_id, enabled: true);
+
+    assert!(
+        state
+            .positions
+            .get_position_mut(position_id: user.position_id)
+            .get_owner_only_withdrawal_enabled(),
+    );
+}
+
+#[test]
+#[should_panic(expected: 'CALLER_IS_NOT_OWNER_ACCOUNT')]
+fn test_set_owner_only_withdrawal_wrong_caller() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state.positions.set_owner_only_withdrawal(position_id: user.position_id, enabled: true);
+}
+
+#[test]
+#[should_panic(expected: 'OWNER_ACCOUNT_REQUIRED')]
+fn test_set_owner_only_withdrawal_no_owner() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.positions.set_owner_only_withdrawal(position_id: user.position_id, enabled: true);
+}
+
+#[test]
+fn test_set_owner_only_withdrawal_toggle_off() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position_with_owner(cfg: @cfg, ref :state, :user);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.positions.set_owner_only_withdrawal(position_id: user.position_id, enabled: true);
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: user.address);
+    state.positions.set_owner_only_withdrawal(position_id: user.position_id, enabled: false);
+
+    assert!(
+        !state
+            .positions
+            .get_position_mut(position_id: user.position_id)
+            .get_owner_only_withdrawal_enabled(),
+    );
+}

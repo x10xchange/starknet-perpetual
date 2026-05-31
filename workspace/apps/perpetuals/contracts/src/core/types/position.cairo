@@ -25,6 +25,7 @@ pub struct Position {
     pub asset_balances: IterableMap<AssetId, AssetBalance>,
     pub owner_protection_enabled: bool,
     pub last_interest_applied_time: Timestamp,
+    pub owner_only_withdrawal_enabled: bool,
 }
 
 /// Synthetic asset in a position.
@@ -141,6 +142,9 @@ pub impl PositionImpl of PositionTrait {
     fn get_owner_public_key(self: StoragePath<Position>) -> PublicKey {
         self.owner_public_key.read()
     }
+    fn get_owner_only_withdrawal_enabled(self: StoragePath<Position>) -> bool {
+        self.owner_only_withdrawal_enabled.read()
+    }
     fn get_version(self: StoragePath<Position>) -> u8 {
         self.version.read()
     }
@@ -154,6 +158,9 @@ pub impl PositionMutableImpl of PositionMutableTrait {
 
     fn get_owner_public_key(self: StoragePath<Mutable<Position>>) -> PublicKey {
         self.owner_public_key.read()
+    }
+    fn get_owner_only_withdrawal_enabled(self: StoragePath<Mutable<Position>>) -> bool {
+        self.owner_only_withdrawal_enabled.read()
     }
     fn get_version(self: StoragePath<Mutable<Position>>) -> u8 {
         self.version.read()
