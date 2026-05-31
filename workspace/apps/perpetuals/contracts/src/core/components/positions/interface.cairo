@@ -63,5 +63,4 @@ pub trait IPositions<TContractState> {
         stark_signature: Signature,
         evm_signature: EvmSignature,
     );
-    fn set_owner_only_withdrawal(ref self: TContractState, position_id: PositionId, enabled: bool);
 }

@@ -26,7 +26,6 @@ pub struct Position {
     pub owner_protection_enabled: bool,
     pub last_interest_applied_time: Timestamp,
     pub owner_evm_account: Option<EthAddress>,
-    pub owner_only_withdrawal_enabled: bool,
 }
 
 /// Synthetic asset in a position.
@@ -146,9 +145,6 @@ pub impl PositionImpl of PositionTrait {
     fn get_owner_evm_account(self: StoragePath<Position>) -> Option<EthAddress> {
         self.owner_evm_account.read()
     }
-    fn get_owner_only_withdrawal_enabled(self: StoragePath<Position>) -> bool {
-        self.owner_only_withdrawal_enabled.read()
-    }
     fn get_version(self: StoragePath<Position>) -> u8 {
         self.version.read()
     }
@@ -165,9 +161,6 @@ pub impl PositionMutableImpl of PositionMutableTrait {
     }
     fn get_owner_evm_account(self: StoragePath<Mutable<Position>>) -> Option<EthAddress> {
         self.owner_evm_account.read()
-    }
-    fn get_owner_only_withdrawal_enabled(self: StoragePath<Mutable<Position>>) -> bool {
-        self.owner_only_withdrawal_enabled.read()
     }
     fn get_version(self: StoragePath<Mutable<Position>>) -> u8 {
         self.version.read()

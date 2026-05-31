@@ -99,9 +99,6 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::positions::errors::{
-        OWNER_ACCOUNT_REQUIRED, WITHDRAWAL_RECIPIENT_NOT_OWNER,
-    };
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
@@ -377,14 +374,6 @@ pub(crate) mod WithdrawalManager {
         ) -> (HashType, ContractAddress) {
             assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
-
-            // Owner-only withdrawal: if enabled on the position, recipient must be owner_account.
-            // Defense-in-depth against STARK-key compromise on the same chokepoint used by both
-            // regular `withdraw` and `forced_withdraw`.
-            if position.into().get_owner_only_withdrawal_enabled() {
-                let owner = position.into().get_owner_account().expect(OWNER_ACCOUNT_REQUIRED);
-                assert(recipient == owner, WITHDRAWAL_RECIPIENT_NOT_OWNER);
-            }
 
             let hash = self
                 .request_approvals

@@ -18,7 +18,7 @@ pub mod Positions {
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INTEREST_SIGN_MISMATCH,
         INVALID_ZERO_EVM_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY,
-        NO_OWNER_ACCOUNT, OWNER_ACCOUNT_REQUIRED, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
+        NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
         POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_EVM_ACCOUNT_EXPIRED,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, ZERO_MAX_INTEREST_RATE,
         invalid_interest_rate_err,
@@ -105,7 +105,6 @@ pub mod Positions {
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
         NewPosition: events::NewPosition,
-        OwnerOnlyWithdrawalSet: events::OwnerOnlyWithdrawalSet,
         SetEvmAccount: events::SetEvmAccount,
         SetOwnerAccount: events::SetOwnerAccount,
         SetOwnerAccountRequest: events::SetOwnerAccountRequest,
@@ -281,22 +280,6 @@ pub mod Positions {
 
             position.owner_evm_account.write(Option::Some(new_evm_account));
             self.emit(events::SetEvmAccount { position_id, new_evm_account });
-        }
-
-        /// Toggles the "owner-only withdrawal" flag. When enabled, withdrawals from this
-        /// position can only target the owner_account. Caller must be owner_account.
-        fn set_owner_only_withdrawal(
-            ref self: ComponentState<TContractState>, position_id: PositionId, enabled: bool,
-        ) {
-            let position = self.get_position_mut(:position_id);
-            let owner_account = position.get_owner_account();
-            let owner = match owner_account {
-                Option::Some(addr) => addr,
-                Option::None => panic_with_felt252(OWNER_ACCOUNT_REQUIRED),
-            };
-            assert(get_caller_address() == owner, CALLER_IS_NOT_OWNER_ACCOUNT);
-            position.owner_only_withdrawal_enabled.write(enabled);
-            self.emit(events::OwnerOnlyWithdrawalSet { position_id, enabled });
         }
 
         /// Registers a request to set the position's owner_account.

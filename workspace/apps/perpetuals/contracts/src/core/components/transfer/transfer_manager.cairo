@@ -93,7 +93,7 @@ pub(crate) mod TransferManager {
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::{
         AMOUNT_OVERFLOW, INVALID_SAME_POSITIONS, INVALID_ZERO_AMOUNT, NOT_TRANSFERABLE_ASSET,
-        SIGNED_TX_EXPIRED, TRANSFER_NOT_TO_SAME_OWNER, VAULT_CANNOT_HOLD_SHARES,
+        SIGNED_TX_EXPIRED, VAULT_CANNOT_HOLD_SHARES,
     };
     use crate::core::types::position::PositionDiff;
     use crate::core::types::transfer::TransferArgs;
@@ -276,19 +276,6 @@ pub(crate) mod TransferManager {
                 );
             let sender_position = self.positions.get_position_mut(:position_id);
             let recipient_position = self.positions.get_position_mut(position_id: recipient);
-
-            // Owner-only withdrawal protection: a protected sender can only transfer to a position
-            // with the same owner_account (otherwise transfer is a withdrawal-protection bypass).
-            if sender_position.into().get_owner_only_withdrawal_enabled() {
-                assert(
-                    recipient_position
-                        .into()
-                        .get_owner_account() == sender_position
-                        .into()
-                        .get_owner_account(),
-                    TRANSFER_NOT_TO_SAME_OWNER,
-                );
-            }
 
             // Validate interest in range
             self

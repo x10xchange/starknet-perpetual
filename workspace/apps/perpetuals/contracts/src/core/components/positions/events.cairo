@@ -45,13 +45,6 @@ pub struct SetEvmAccount {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct OwnerOnlyWithdrawalSet {
-    #[key]
-    pub position_id: PositionId,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct SetPublicKeyRequest {
     #[key]
     pub position_id: PositionId,
