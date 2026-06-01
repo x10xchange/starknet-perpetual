@@ -279,7 +279,9 @@ pub(crate) mod TransferManager {
 
             if sender_position.into().get_owner_only_withdrawal_enabled() {
                 assert(
-                    recipient_position.into().get_owner_account() == sender_position
+                    recipient_position
+                        .into()
+                        .get_owner_account() == sender_position
                         .into()
                         .get_owner_account(),
                     TRANSFER_NOT_TO_SAME_OWNER,
