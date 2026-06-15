@@ -912,6 +912,8 @@ class PerpetualsTestUtils:
                 GOVERNANCE_ADMIN_ADDRESS,  # governance_admin
                 0,  # upgrade_delay
                 self.perpetuals_contract_address,  # perps_contract
+                0,  # reset_cooldown_seconds (disabled in tests)
+                0,  # change_timelock_seconds (disabled in tests)
             ],
         )
         treasury_address = treasury_deploy.deployed_contract.address
