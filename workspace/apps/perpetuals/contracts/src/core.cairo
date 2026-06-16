@@ -7,6 +7,7 @@ pub mod init_interest_rate_eic;
 pub mod interface;
 pub mod migrate_collateral_to_treasury_eic;
 pub mod replace_vault_collateral_eic;
+pub mod treasury_timelock_eic;
 pub mod types;
 pub mod utils;
 pub mod value_risk_calculator;
