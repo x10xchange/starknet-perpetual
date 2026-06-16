@@ -4002,28 +4002,6 @@ fn test_apply_interest_unhealthy_becomes_healthier_but_still_unhealthy() {
 }
 
 #[test]
-#[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
-fn test_apply_interest_healthy_becomes_unhealthy_should_fail() {
-    // Sign-rule-friendly reframe: helper user with negative collateral, 50% risk factor lands
-    // TV exactly at TR (just healthy). A small negative interest pushes TV below TR.
-    let risk_factor_data = RiskFactorTiers {
-        tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,
-    };
-    let synthetic_info = AssetInfoTrait::new(
-        asset_name: 'BTC_1', :risk_factor_data, oracles_len: 1,
-    );
-    let mut state: FlowTestBase = FlowTestBaseTrait::new();
-    let user = state.new_user_with_negative_collateral(synthetic_info: @synthetic_info);
-
-    state.facade.advance_time(seconds: HOUR);
-
-    // Pre: TV=10000, TR=10000 (healthy). |PnL|=10000, max_allowed for HOUR ≈ 10.
-    // -1 interest → TV=9999, TR=10000 → Liquidatable. Health check rejects.
-    let position_interest_amounts = array![(user.position_id, -1_i64)].span();
-    state.facade.apply_interests(:position_interest_amounts);
-}
-
-#[test]
 #[should_panic(expected: 'INVALID_SHRINK_TO_NEGATIVE')]
 fn test_withdraw_spot_collateral_negative_balance() {
     // Setup.

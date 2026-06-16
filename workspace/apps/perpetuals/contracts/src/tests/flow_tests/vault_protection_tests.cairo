@@ -41,6 +41,11 @@ fn test_redeem_exceeding_5_percent_limit_fails() {
     // trigger loading of TV and setting the limit
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -57,6 +62,11 @@ fn test_redeem_exceeding_5_percent_limit_fails() {
     let shares_to_burn: u64 = 3000;
     let value_of_shares: u64 = 3000;
 
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -112,6 +122,11 @@ fn test_multiple_redeems_cumulative_failure() {
     // trigger loading of TV and setting the limit
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -130,6 +145,11 @@ fn test_multiple_redeems_cumulative_failure() {
     // 1st redeem: 1500 USDC (ok)
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -146,6 +166,11 @@ fn test_multiple_redeems_cumulative_failure() {
     // 2nd redeem: 1498 USDC (ok, total = 2999)
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -160,6 +185,11 @@ fn test_multiple_redeems_cumulative_failure() {
         );
 
     // 3rd redeem: 2 USDC (should fail, total would be 3001)
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -212,6 +242,11 @@ fn test_reset_after_24h() {
     // trigger loading of TV and setting the limit
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -227,6 +262,11 @@ fn test_reset_after_24h() {
 
     // Baseline TV = 60000. Limit = 3000 loss.
     // Redeem 2900 USDC (ok)
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -248,6 +288,11 @@ fn test_reset_after_24h() {
     state.facade.funding_tick(array![].span());
     // Now baseline should be ~57100. New limit ~2855.
     // Redeem another 2000 USDC (should be ok)
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -300,6 +345,11 @@ fn test_profit_does_not_reset_baseline_until_24h_pass() {
     // trigger loading of TV and setting the limit
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -322,6 +372,11 @@ fn test_profit_does_not_reset_baseline_until_24h_pass() {
     // vault has 69999, but last check was at 60000
     // limit is 3000, but we have additional 10000
     // redeem up to 12999 should succeed
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -377,6 +432,11 @@ fn test_profit_then_redeem_over_limit_fails() {
     // trigger loading of TV and setting the limit
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -401,6 +461,11 @@ fn test_profit_then_redeem_over_limit_fails() {
     // Redeem 13501.
     // Delta = 80000 - 13501 - 70000 = -3501.
     // Loss = 3501. Limit = 3500. Should fail.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -453,6 +518,11 @@ fn test_force_reset_protection_limit_allows_redemption() {
     // trigger loading of TV and setting the limit (5% of 60000 = 3000)
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -471,6 +541,11 @@ fn test_force_reset_protection_limit_allows_redemption() {
     state.facade.force_reset_daily_protection_limit(vault_config.position_id);
 
     // Now redeem 4000, should succeed.
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
@@ -523,6 +598,11 @@ fn test_per_vault_protection_limit_override() {
     // Initial baseline (5% of 70000 = 3500)
     state
         .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
+    state
+        .facade
         .redeem_from_vault(
             vault: vault_config,
             withdrawing_user: redeeming_user,
@@ -547,6 +627,11 @@ fn test_per_vault_protection_limit_override() {
     // New baseline should be (70000 - 1) = 69999.
     // New max loss (with override) = 69999 * 20 / 100 = 13999.
     // Redeeming 10000 should now succeed (would have failed with default 5% limit)
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.erc20.contract_address, 100,
+        );
     state
         .facade
         .redeem_from_vault(
