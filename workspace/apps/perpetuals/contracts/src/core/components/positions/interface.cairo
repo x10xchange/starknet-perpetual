@@ -54,5 +54,4 @@ pub trait IPositions<TContractState> {
         position_id: PositionId,
         signature: Signature,
     );
-    fn set_owner_only_withdrawal(ref self: TContractState, position_id: PositionId, enabled: bool);
 }

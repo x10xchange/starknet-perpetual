@@ -2980,7 +2980,8 @@ fn test_redeem_from_vault_with_interest_different_receiver_and_other_collaterals
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
     let withdrawing_user = state.new_user_with_position();
-    let receiving_user = state.new_user_with_position();
+    // Receiver is a second position under the same owner, so the redeem is allowed.
+    let receiving_user = state.new_sibling_position(withdrawing_user);
 
     let risk_factor_tiers_doge = RiskFactorTiers {
         tiers: array![500].span(), first_tier_boundary: MAX_U128, tier_size: 1,

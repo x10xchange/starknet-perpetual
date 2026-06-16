@@ -277,13 +277,14 @@ pub(crate) mod TransferManager {
             let sender_position = self.positions.get_position_mut(:position_id);
             let recipient_position = self.positions.get_position_mut(position_id: recipient);
 
-            if sender_position.into().get_owner_only_withdrawal_enabled() {
+            // Owner-account positions are protected: value may only move to a position under the
+            // same owner_account. This prevents a compromised Stark key from transferring funds
+            // to an attacker-controlled position (and withdrawing there). Positions without an
+            // owner_account (Stark-key-only) are unrestricted.
+            let sender_owner = sender_position.into().get_owner_account();
+            if sender_owner.is_some() {
                 assert(
-                    recipient_position
-                        .into()
-                        .get_owner_account() == sender_position
-                        .into()
-                        .get_owner_account(),
+                    recipient_position.into().get_owner_account() == sender_owner,
                     TRANSFER_NOT_TO_SAME_OWNER,
                 );
             }

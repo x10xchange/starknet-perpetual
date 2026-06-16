@@ -973,10 +973,12 @@ fn test_transfer() {
     // Setup.
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
-    // Create users.
+    // Create users. user_2 and user_3 are additional positions under the same owner as user_1,
+    // so the cross-position transfers below satisfy the same-owner guard. (Cross-owner transfers
+    // are covered by test_transfer_to_different_owner_fails.)
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
-    let user_3 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
+    let user_3 = state.new_sibling_position(user_1);
 
     // Deposit to users.
     let deposit_info_user_1 = state
@@ -1127,11 +1129,8 @@ fn test_transfer_withdraw_with_negative_collateral() {
             fee_b: 0,
         );
 
-    // Transfer.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: user_1, recipient: user_2, amount: 20);
-    state.facade.transfer(:transfer_info);
+    // Drain base collateral out of user_1 (to a same-owner sink) to make it negative.
+    state.drain_collateral(user_1, 20);
 
     //                    TV                                  TR                 TV / TR
     //         COLLATERAL*1 + SYNTHETIC*PRICE        |SYNTHETIC*PRICE*RISK|
@@ -1731,9 +1730,10 @@ fn test_status_change_by_transfer() {
     let asset_id = synthetic_info.asset_id;
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
-    // Create users.
+    // Create users. support_user funds primary_user via transfer, so it must share
+    // primary_user's owner_account (the same-owner transfer guard now applies to all owners).
     let primary_user = state.new_user_with_position();
-    let support_user = state.new_user_with_position();
+    let support_user = state.new_sibling_position(primary_user);
     // Deposit to users.
     let deposit_info_user = state
         .facade
@@ -2507,11 +2507,11 @@ fn test_spot_collateral_deposit_transfer_withdraw() {
     let asset_id = asset_info.asset_id;
     state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
 
-    // Create users.
+    // Create users. user_2 is a second position under the same owner as user_1, so the spot
+    // transfer between them satisfies the same-owner guard.
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
-    snforge_std::set_balance(target: user_2.account.address, new_balance: 5000000, :token);
 
     // Deposit spot collateral asset to user_1.
     let deposit_info_user_1 = state
@@ -2576,9 +2576,8 @@ fn test_spot_collateral_deposit_transfer_withdraw_fails() {
     state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
 
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
-    snforge_std::set_balance(target: user_2.account.address, new_balance: 5000000, :token);
 
     // Deposit.
     let deposit_info_user_1 = state
@@ -2732,9 +2731,10 @@ fn test_spot_collateral_deposit_buy_synthetic_transfer_then_withdraw_fails() {
     let synthetic_id = synthetic_info.asset_id;
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
 
-    // Create users.
+    // Create users. user_2 shares user_1's owner so the BTC spot transfer below is same-owner;
+    // it still acts as an independent trade counterparty (trades are not owner-restricted).
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
 
     // Deposit 2 BTC spot collateral to user_1.
@@ -2860,10 +2860,7 @@ fn test_liquidate_spot_collateral_after_price_drop() {
     state.facade.process_deposit(deposit_info: deposit_info_liquidator);
 
     // Create negative base collateral for liquidated user via transfer.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 9500);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 9500);
 
     // Position state after transfer (at price = 100):
     // Balances:
@@ -2999,10 +2996,7 @@ fn test_liquidate_spot_collateral_multiple_steps() {
     state.facade.process_deposit(deposit_info: deposit_info_liquidator);
 
     // Create negative base collateral for liquidated user.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 9500);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 9500);
 
     // Price drop makes position liquidatable.
     state.facade.price_tick(asset_info: @asset_info, price: 1);
@@ -3168,10 +3162,7 @@ fn test_liquidate_spot_exact_position_amount() {
     // Create negative base collateral for liquidated user via transfer.
     // At price 100: TV = -9700 + 10000*100 = 990300, TR = 10000*100*0.1 = 100000, ratio = 9.9
     // (healthy)
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 9700);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 9700);
 
     // Price drop makes position liquidatable.
     // At price 1: TV = -9700 + 10000*1 = 300, TR = 10000*1*0.1 = 1000, ratio = 0.3 (liquidatable)
@@ -3276,10 +3267,7 @@ fn test_liquidate_to_empty_position() {
     // Create negative base collateral for liquidated user via transfer.
     // At price 100: TV = -10000 + 10000*100 = 990000, TR = 10000*100*0.1 = 100000, ratio = 9.9
     // (healthy)
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 10000);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 10000);
 
     // Price drop makes position liquidatable.
     // At price 1: TV = -10000 + 10000*1 = 0, TR = 10000*1*0.1 = 1000, (liquidatable)
@@ -3384,10 +3372,7 @@ fn test_liquidate_spot_very_small_amount() {
     state.facade.process_deposit(deposit_info: deposit_info_liquidator);
 
     // Create negative base collateral for liquidated user via transfer.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 1900);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 1900);
 
     // Price drop makes position liquidatable.
     // At price 1: TV = -1900 + 2000*1 = 100, TR = 2000*1*0.1 = 200, ratio = 0.5 (liquidatable)
@@ -3538,10 +3523,7 @@ fn test_liquidate_spot_with_different_source_and_receive_positions() {
     state.facade.process_deposit(deposit_info: deposit_info_liquidator);
 
     // Create negative base collateral for liquidated user via transfer.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_source_user, amount: 9500);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 9500);
 
     // Position state after transfer (at price = 100):
     // TV = -9500 + (9800 * 100) - 9800 * 100 *  0.1 = 872500
@@ -4112,9 +4094,10 @@ fn test_transfer_synthetic_asset_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
 
-    // Create users.
+    // Create users. user_2 shares user_1's owner so the transfer reaches the intended
+    // NOT_TRANSFERABLE_ASSET check rather than the same-owner guard.
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
 
     // Deposit to users - give user_1 plenty of collateral to stay healthy.
     let deposit_info_user_1 = state
@@ -4201,9 +4184,10 @@ fn test_transfer_spot_collateral_negative_balance_fails() {
     let asset_id = asset_info.asset_id;
     state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
 
-    // Create users.
+    // Create users. user_2 shares user_1's owner so the transfer reaches the intended
+    // INVALID_SHRINK_TO_NEGATIVE check rather than the same-owner guard.
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
 
     // User 1 deposits plenty of base collateral to ensure position stays healthy.
@@ -4253,7 +4237,9 @@ fn test_protocol_vault_transfer_vault_shares_to_vault_position() {
     // Setup:
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
-    let user = state.new_user_with_position();
+    // `user` shares vault_user's owner so the transfer reaches the intended
+    // VAULT_CANNOT_HOLD_SHARES check rather than the same-owner guard.
+    let user = state.new_sibling_position(vault_user);
 
     let vault_init_deposit = state
         .facade
@@ -5574,7 +5560,8 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
     let withdrawing_user = state.new_user_with_position();
-    let receiving_user = state.new_user_with_position();
+    // Receiver is a second position under the same owner, so the redeem is allowed.
+    let receiving_user = state.new_sibling_position(withdrawing_user);
 
     state
         .facade
@@ -5688,6 +5675,257 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
     println!("Vault verified")
 }
 
+// ============================================================================
+// owner-account protection for value-exit flows
+//
+// Any position with an `owner_account` is protected: a compromised Stark key must not be able to
+// route value out of it. Transfers and vault invest/redeem may only move value to a position
+// under the SAME owner_account, and withdrawals may only target the owner_account address.
+// Operator-driven liquidation / forced redeem are exempt. Positions created via the flow-test
+// helpers always have an owner_account, so the protection is active by default.
+// ============================================================================
+
+#[test]
+#[should_panic(expected: 'TRANSFER_NOT_TO_SAME_OWNER')]
+fn test_transfer_to_different_owner_fails() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user_1 = state.new_user_with_position();
+    // A genuinely different owner (its own owner_account), not a sibling.
+    let attacker = state.new_user_with_position();
+
+    state
+        .facade
+        .process_deposit(state.facade.deposit(user_1.account, user_1.position_id, 10_000_u64));
+
+    // user_1 has an owner_account, so a transfer to a different owner's position must revert.
+    let transfer_info = state
+        .facade
+        .transfer_request(sender: user_1, recipient: attacker, amount: 1000);
+    state.facade.transfer(:transfer_info);
+}
+
+#[test]
+#[should_panic(expected: 'WITHDRAWAL_RECIPIENT_NOT_OWNER')]
+fn test_withdraw_to_non_owner_fails() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+    let attacker = state.new_user_with_position();
+
+    state.facade.process_deposit(state.facade.deposit(user.account, user.position_id, 10_000_u64));
+
+    // user has an owner_account, so withdrawals may only target the owner_account address.
+    state.facade.withdraw_to_recipient(user, 1000, attacker.account.address);
+}
+
+#[test]
+#[should_panic(expected: 'INVEST_NOT_TO_SAME_OWNER')]
+fn test_invest_in_vault_owner_only_blocks_different_owner_receiver() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let investing_user = state.new_user_with_position();
+    let attacker = state.new_user_with_position();
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(vault_user.account, vault_user.position_id, 100_000_u64),
+        );
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(investing_user.account, investing_user.position_id, 100_000_u64),
+        );
+
+    // investing_user has an owner_account, so the protection is active by default.
+    // Routing the minted shares into a position owned by a different account must revert.
+    state
+        .facade
+        .deposit_into_vault(
+            vault: vault_config,
+            amount_to_invest: 1000,
+            min_shares_to_receive: 500,
+            depositing_user: investing_user,
+            receiving_user: attacker,
+        );
+}
+
+#[test]
+fn test_invest_in_vault_owner_only_allows_same_owner_receiver() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let investing_user = state.new_user_with_position();
+    // A second position controlled by the same owner_account as `investing_user`.
+    let sibling = state.new_sibling_position(investing_user);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(vault_user.account, vault_user.position_id, 100_000_u64),
+        );
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(investing_user.account, investing_user.position_id, 100_000_u64),
+        );
+
+    // investing_user has an owner_account, so the protection is active by default.
+    // Shares may still be credited to a different position under the same owner.
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: investing_user,
+                    receiving_user: sibling,
+                ),
+        );
+}
+
+#[test]
+#[should_panic(expected: 'REDEEM_NOT_TO_SAME_OWNER')]
+fn test_redeem_from_vault_owner_only_blocks_different_owner_receiver() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let withdrawing_user = state.new_user_with_position();
+    let attacker = state.new_user_with_position();
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(vault_user.account, vault_user.position_id, 5000_u64),
+        );
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit(withdrawing_user.account, withdrawing_user.position_id, 10_000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: withdrawing_user,
+                    receiving_user: withdrawing_user,
+                ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
+    // withdrawing_user has an owner_account, so the protection is active by default.
+    // Redeeming into a different owner's position must revert.
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: withdrawing_user,
+            receiving_user: attacker,
+            shares_to_burn_user: 400,
+            value_of_shares_user: 399,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 399,
+            actual_shares_user: 400,
+            actual_collateral_user: 399,
+            other_collaterals: array![].span(),
+        );
+}
+
+#[test]
+fn test_redeem_from_vault_owner_only_allows_same_owner_receiver() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let vault_user = state.new_user_with_position();
+    let withdrawing_user = state.new_user_with_position();
+    // A second position controlled by the same owner_account as `withdrawing_user`.
+    let sibling = state.new_sibling_position(withdrawing_user);
+
+    state
+        .facade
+        .process_deposit(
+            state.facade.deposit(vault_user.account, vault_user.position_id, 5000_u64),
+        );
+    let vault_config = state.facade.register_vault_share_spot_asset(vault_user, asset_name: 'VS_1');
+    state.facade.price_tick(@vault_config.asset_info, 1);
+    state.facade.update_vault_protection_limit(vault_user.position_id, 100);
+
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit(withdrawing_user.account, withdrawing_user.position_id, 10_000_u64),
+        );
+    state
+        .facade
+        .process_deposit(
+            state
+                .facade
+                .deposit_into_vault(
+                    vault: vault_config,
+                    amount_to_invest: 1000,
+                    min_shares_to_receive: 500,
+                    depositing_user: withdrawing_user,
+                    receiving_user: withdrawing_user,
+                ),
+        );
+
+    state
+        .facade
+        .set_treasury_protection_percent_for_token(
+            vault_config.deployed_vault.contract_address, 100,
+        );
+
+    // withdrawing_user has an owner_account, so the protection is active by default.
+    let receiver_collateral_before = state
+        .facade
+        .get_position_collateral_balance(sibling.position_id);
+
+    // Collateral may still be redeemed into a different position under the same owner.
+    state
+        .facade
+        .redeem_from_vault(
+            vault: vault_config,
+            withdrawing_user: withdrawing_user,
+            receiving_user: sibling,
+            shares_to_burn_user: 400,
+            value_of_shares_user: 399,
+            shares_to_burn_vault: 400,
+            value_of_shares_vault: 399,
+            actual_shares_user: 400,
+            actual_collateral_user: 399,
+            other_collaterals: array![].span(),
+        );
+
+    state
+        .facade
+        .validate_collateral_balance(
+            position_id: sibling.position_id,
+            expected_balance: receiver_collateral_before + 399_u64.into(),
+        );
+}
+
 // Removed `test_redeem_from_vault_negative_interest_on_vault_makes_vault_unhealthy`: its
 // scenario (operator passes negative interest to a vault position) is now rejected upstream
 // by the sign rule (vault positions always hold positive collateral, so interest must be
@@ -5713,7 +5951,8 @@ fn test_redeem_from_vault_negative_interest_makes_receiver_unhealthy() {
 
     let vault_user = state.new_user_with_position();
     let withdrawing_user = state.new_user_with_position();
-    let receiving_user = state.new_user_with_position();
+    // Receiver is a second position under the same owner, so the redeem is allowed.
+    let receiving_user = state.new_sibling_position(withdrawing_user);
     let trade_user = state.new_user_with_position();
 
     state
@@ -5822,7 +6061,8 @@ fn test_redeem_from_vault_receiver_interest_exceeds_max_allowed() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
     let withdrawing_user = state.new_user_with_position();
-    let receiving_user = state.new_user_with_position();
+    // Receiver is a second position under the same owner, so the redeem is allowed.
+    let receiving_user = state.new_sibling_position(withdrawing_user);
 
     state
         .facade
@@ -5976,10 +6216,7 @@ fn test_liquidate_spot_with_synthetics_tr_nonzero() {
         );
 
     // Create negative base collateral via transfer.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 4900);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 4900);
 
     // At spot price 100:
     //   Collateral: -200 (trade) - 4900 (transfer) = -5100
@@ -6248,10 +6485,7 @@ fn test_spot_deleverage() {
     state.facade.process_deposit(deposit_info: deposit_deleverager);
 
     // Transfer out base collateral to make the deleveraged user's collateral negative.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10100);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(deleveraged_user, 10100);
 
     // At spot price 100:
     //   Collateral: -10100
@@ -6385,10 +6619,7 @@ fn test_unfair_spot_deleverage() {
         );
     state.facade.process_deposit(deposit_info: deposit_deleverager);
 
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10000);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(deleveraged_user, 10000);
 
     // Price drop: both spots at price 1.
     // SPOT_A TV = 900, SPOT_B TV = 2700, total_spot_tv = 3600.
@@ -6458,10 +6689,7 @@ fn test_partial_spot_deleverage() {
         );
     state.facade.process_deposit(deposit_info: deposit_deleverager);
 
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10100);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(deleveraged_user, 10100);
 
     state.facade.price_tick(asset_info: @asset_info, price: 1);
 
@@ -6574,10 +6802,7 @@ fn test_spot_deleverage_two_spot_assets() {
     // At price 10: SPOT_A TV = 1000*10 - 1000*10*0.1 = 9000, SPOT_B TV = 3000*10 - 3000*10*0.1 =
     // 27000 total_spot_tv = 36000. Transfer 10000 so collateral = -10000, TV = 26000 (still
     // healthy).
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: deleveraged_user, recipient: deleverager_user, amount: 10000);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(deleveraged_user, 10000);
 
     assert(state.facade.is_healthy(position_id: deleveraged_user.position_id), 'should be healthy');
 
@@ -6669,10 +6894,7 @@ fn test_liquidate_spot_deleveraged_stays_deleveraged() {
     state.facade.process_deposit(deposit_info: deposit_liquidator);
 
     // Transfer out a large amount of base collateral.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 10100);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 10100);
 
     // At spot price 100:
     //   Collateral: -10100
@@ -6904,10 +7126,7 @@ fn test_liquidate_spot_too_many_spots() {
         );
     state.facade.process_deposit(deposit_info: deposit_liquidator);
 
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_user, amount: 4900);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 4900);
 
     state.facade.price_tick(asset_info: @asset_info, price: 1);
 
@@ -6992,10 +7211,7 @@ fn test_liquidate_spot_with_interest_different_receiver() {
     state.facade.process_deposit(deposit_info: deposit_receive);
 
     // Create negative base collateral for liquidated user.
-    let transfer_info = state
-        .facade
-        .transfer_request(sender: liquidated_user, recipient: liquidator_source_user, amount: 9500);
-    state.facade.transfer(:transfer_info);
+    state.drain_collateral(liquidated_user, 9500);
 
     state.facade.price_tick(asset_info: @asset_info, price: 1);
 
@@ -7044,7 +7260,8 @@ fn test_transfer_with_interest() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
     let user_1 = state.new_user_with_position();
-    let user_2 = state.new_user_with_position();
+    // Same owner as user_1 so the transfer is allowed; interest still applies to both.
+    let user_2 = state.new_sibling_position(user_1);
 
     let deposit_info = state
         .facade

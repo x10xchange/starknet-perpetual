@@ -99,9 +99,7 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
-    use perpetuals::core::components::positions::errors::{
-        OWNER_ACCOUNT_REQUIRED, WITHDRAWAL_RECIPIENT_NOT_OWNER,
-    };
+    use perpetuals::core::components::positions::errors::WITHDRAWAL_RECIPIENT_NOT_OWNER;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
@@ -378,8 +376,10 @@ pub(crate) mod WithdrawalManager {
             assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
-            if position.into().get_owner_only_withdrawal_enabled() {
-                let owner = position.into().get_owner_account().expect(OWNER_ACCOUNT_REQUIRED);
+            // Owner-account positions are protected: withdrawals may only target the
+            // owner_account address, so a compromised Stark key cannot withdraw elsewhere.
+            // Positions without an owner_account (Stark-key-only) are unrestricted.
+            if let Option::Some(owner) = position.into().get_owner_account() {
                 assert(recipient == owner, WITHDRAWAL_RECIPIENT_NOT_OWNER);
             }
 
