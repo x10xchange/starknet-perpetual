@@ -6,20 +6,18 @@ use starkware_utils::components::replaceability::interface::{
     EICData, IReplaceableDispatcher, IReplaceableDispatcherTrait, ImplementationData,
 };
 use starkware_utils::components::roles::interface::{IRolesDispatcher, IRolesDispatcherTrait};
-use starkware_utils::constants::DAY;
+use starkware_utils::constants::{DAY, HOUR};
 use starkware_utils_testing::test_utils::cheat_caller_address_once;
 use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 
-// A non-zero block timestamp so the added implementation has a non-zero activation time.
+// Non-zero so the upgraded implementation's activation time is non-zero.
 const TS: u64 = 1_000_000_000;
 
 fn dummy_address(value: felt252) -> ContractAddress {
     value.try_into().unwrap()
 }
 
-/// Deploys a treasury with both timelock delays disabled (0), then upgrades it via the
-/// `TreasuryTimelockEIC`, which configures both delays to one day. `UPGRADE_DELAY` is 0, so the
-/// implementation is immediately active.
+/// Deploys a treasury with the timelocks disabled, then upgrades it via the `TreasuryTimelockEIC`.
 fn deploy_treasury_and_upgrade_with_eic() -> ITreasuryDispatcher {
     start_cheat_block_timestamp_global(TS);
     let treasury_address = deploy_treasury(
@@ -28,7 +26,6 @@ fn deploy_treasury_and_upgrade_with_eic() -> ITreasuryDispatcher {
         perps_contract: dummy_address('PERPS'),
     );
 
-    // Register the governance admin as upgrade governor so it can drive the upgrade.
     let roles = IRolesDispatcher { contract_address: treasury_address };
     cheat_caller_address_once(
         contract_address: treasury_address, caller_address: GOVERNANCE_ADMIN(),
@@ -40,7 +37,6 @@ fn deploy_treasury_and_upgrade_with_eic() -> ITreasuryDispatcher {
         .unwrap()
         .contract_class()
         .class_hash;
-    // The EIC hardcodes the timelock values, so it takes no init data.
     let eic_data = EICData { eic_hash, eic_init_data: array![].span() };
     let implementation_data = ImplementationData {
         impl_hash, eic_data: Option::Some(eic_data), final: false,
@@ -62,7 +58,6 @@ fn deploy_treasury_and_upgrade_with_eic() -> ITreasuryDispatcher {
 #[test]
 fn test_treasury_timelock_eic_configures_params_on_upgrade() {
     start_cheat_block_timestamp_global(TS);
-    // A treasury deployed before the timelock feature: both delays default to zero.
     let treasury_address = deploy_treasury(
         governance_admin: GOVERNANCE_ADMIN(),
         upgrade_delay: 0,
@@ -78,8 +73,8 @@ fn test_treasury_timelock_eic_configures_params_on_upgrade() {
 
     assert!(treasury.get_reset_cooldown().seconds == DAY, "EIC did not configure reset cooldown");
     assert!(
-        treasury.get_protection_limit_timelock().seconds == DAY,
-        "EIC did not configure change timelock",
+        treasury.get_protection_limit_timelock().seconds == 12 * HOUR,
+        "EIC did not configure change timelock to 12 hours",
     );
 }
 
@@ -89,7 +84,6 @@ fn test_treasury_timelock_eic_enables_change_timelock_enforcement() {
     let treasury = deploy_treasury_and_upgrade_with_eic();
     let collateral = dummy_address('COLLATERAL');
 
-    // With the EIC-configured one-day timelock, a just-requested change cannot be applied yet.
     cheat_caller_address_once(
         contract_address: treasury.contract_address, caller_address: APP_GOVERNOR(),
     );
