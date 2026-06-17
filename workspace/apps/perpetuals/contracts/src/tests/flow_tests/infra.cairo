@@ -93,9 +93,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
         user
     }
 
-    /// Creates an additional position controlled by `owner`'s account: same owner_account and
-    /// signing key, distinct position id. Models the real "one owner, multiple positions" case,
-    /// so the sibling can receive same-owner transfers/redeems and withdraw to the owner.
+    /// A second position under `owner`'s account (same owner_account and signing key).
     fn new_sibling_position(ref self: FlowTestBase, owner: User) -> User {
         let position_id = self.generate_position_id();
         self
@@ -108,9 +106,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
         UserTrait::for_account(owner.account, position_id)
     }
 
-    /// Drains `amount` base collateral out of `user` into a throwaway same-owner sibling, so the
-    /// position's collateral can be driven negative for test setup without tripping the
-    /// same-owner transfer guard (which now applies to every position with an owner_account).
+    /// Drains `amount` base collateral out of `user` into a same-owner sink (to make it negative).
     fn drain_collateral(ref self: FlowTestBase, user: User, amount: u64) {
         let sink = self.new_sibling_position(user);
         let transfer_info = self.facade.transfer_request(sender: user, recipient: sink, :amount);

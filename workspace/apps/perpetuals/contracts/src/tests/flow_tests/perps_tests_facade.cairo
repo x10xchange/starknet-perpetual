@@ -227,9 +227,7 @@ pub impl UserTraitImpl of UserTrait {
 
         User { position_id, account, initial_balance }
     }
-    /// Builds a `User` for an additional position controlled by an EXISTING account, i.e. a
-    /// second position under the same owner (same owner_account and signing key). The account
-    /// is already funded, so no new funding is performed.
+    /// Builds a `User` for a second position sharing an existing (already-funded) account.
     fn for_account(account: Account, position_id: PositionId) -> User {
         User { position_id, account, initial_balance: 0 }
     }
@@ -1215,10 +1213,8 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         }
     }
 
-    /// Requests and processes a base-collateral withdrawal from `user`'s position to an explicit
-    /// `recipient` address. Used to exercise the owner-only withdrawal guard: when the position
-    /// has an owner_account, this panics with WITHDRAWAL_RECIPIENT_NOT_OWNER unless
-    /// `recipient == owner_account`. No balance assertions are made (intended for revert tests).
+    /// Requests and processes a base-collateral withdrawal from `user`'s position to `recipient`
+    /// (no balance assertions; for exercising the owner-only withdrawal guard).
     fn withdraw_to_recipient(
         ref self: PerpsTestsFacade, user: User, amount: u64, recipient: ContractAddress,
     ) {

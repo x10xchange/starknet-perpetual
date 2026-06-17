@@ -376,9 +376,7 @@ pub(crate) mod WithdrawalManager {
             assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
-            // Owner-account positions are protected: withdrawals may only target the
-            // owner_account address, so a compromised Stark key cannot withdraw elsewhere.
-            // Positions without an owner_account (Stark-key-only) are unrestricted.
+            // Owner-account positions may only withdraw to the owner_account address.
             if let Option::Some(owner) = position.into().get_owner_account() {
                 assert(recipient == owner, WITHDRAWAL_RECIPIENT_NOT_OWNER);
             }

@@ -6896,8 +6896,4 @@ fn test_forced_redeem_from_vault_panics_when_disabled() {
 
     state.forced_redeem_from_vault(operator_nonce: 0, :order, vault_approval: order);
 }
-// Note: the previous opt-in `set_owner_only_withdrawal` setter was removed. The protection is
-// now implicit — any position with an `owner_account` is restricted to same-owner value movement.
-// Enforcement is covered by flow tests in unit_flow_tests.cairo.
-
 

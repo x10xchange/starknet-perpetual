@@ -973,9 +973,7 @@ fn test_transfer() {
     // Setup.
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
 
-    // Create users. user_2 and user_3 are additional positions under the same owner as user_1,
-    // so the cross-position transfers below satisfy the same-owner guard. (Cross-owner transfers
-    // are covered by test_transfer_to_different_owner_fails.)
+    // Same-owner siblings so the cross-position transfers are allowed.
     let user_1 = state.new_user_with_position();
     let user_2 = state.new_sibling_position(user_1);
     let user_3 = state.new_sibling_position(user_1);
@@ -1730,8 +1728,7 @@ fn test_status_change_by_transfer() {
     let asset_id = synthetic_info.asset_id;
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
-    // Create users. support_user funds primary_user via transfer, so it must share
-    // primary_user's owner_account (the same-owner transfer guard now applies to all owners).
+    // support_user funds primary_user via transfer, so it must be a same-owner sibling.
     let primary_user = state.new_user_with_position();
     let support_user = state.new_sibling_position(primary_user);
     // Deposit to users.
@@ -2507,8 +2504,7 @@ fn test_spot_collateral_deposit_transfer_withdraw() {
     let asset_id = asset_info.asset_id;
     state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
 
-    // Create users. user_2 is a second position under the same owner as user_1, so the spot
-    // transfer between them satisfies the same-owner guard.
+    // Same-owner sibling so the spot transfer between them is allowed.
     let user_1 = state.new_user_with_position();
     let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
@@ -2731,8 +2727,7 @@ fn test_spot_collateral_deposit_buy_synthetic_transfer_then_withdraw_fails() {
     let synthetic_id = synthetic_info.asset_id;
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
 
-    // Create users. user_2 shares user_1's owner so the BTC spot transfer below is same-owner;
-    // it still acts as an independent trade counterparty (trades are not owner-restricted).
+    // Same-owner sibling so the BTC spot transfer is allowed; still a valid trade counterparty.
     let user_1 = state.new_user_with_position();
     let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
@@ -4072,8 +4067,7 @@ fn test_transfer_synthetic_asset_fails() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     state.facade.add_active_synthetic(synthetic_info: @synthetic_info, initial_price: 100);
 
-    // Create users. user_2 shares user_1's owner so the transfer reaches the intended
-    // NOT_TRANSFERABLE_ASSET check rather than the same-owner guard.
+    // Same-owner sibling so the transfer reaches the intended NOT_TRANSFERABLE_ASSET check.
     let user_1 = state.new_user_with_position();
     let user_2 = state.new_sibling_position(user_1);
 
@@ -4162,8 +4156,7 @@ fn test_transfer_spot_collateral_negative_balance_fails() {
     let asset_id = asset_info.asset_id;
     state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
 
-    // Create users. user_2 shares user_1's owner so the transfer reaches the intended
-    // INVALID_SHRINK_TO_NEGATIVE check rather than the same-owner guard.
+    // Same-owner sibling so the transfer reaches the intended INVALID_SHRINK_TO_NEGATIVE check.
     let user_1 = state.new_user_with_position();
     let user_2 = state.new_sibling_position(user_1);
     snforge_std::set_balance(target: user_1.account.address, new_balance: 5000000, :token);
@@ -4215,8 +4208,7 @@ fn test_protocol_vault_transfer_vault_shares_to_vault_position() {
     // Setup:
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
-    // `user` shares vault_user's owner so the transfer reaches the intended
-    // VAULT_CANNOT_HOLD_SHARES check rather than the same-owner guard.
+    // Same-owner sibling so the transfer reaches the intended VAULT_CANNOT_HOLD_SHARES check.
     let user = state.new_sibling_position(vault_user);
 
     let vault_init_deposit = state
@@ -5654,13 +5646,7 @@ fn test_redeem_from_vault_with_interest_different_receiver() {
 }
 
 // ============================================================================
-// owner-account protection for value-exit flows
-//
-// Any position with an `owner_account` is protected: a compromised Stark key must not be able to
-// route value out of it. Transfers and vault invest/redeem may only move value to a position
-// under the SAME owner_account, and withdrawals may only target the owner_account address.
-// Operator-driven liquidation / forced redeem are exempt. Positions created via the flow-test
-// helpers always have an owner_account, so the protection is active by default.
+// owner-account protection for value-exit flows (transfer / withdraw / vault invest / redeem)
 // ============================================================================
 
 #[test]
@@ -5717,8 +5703,7 @@ fn test_invest_in_vault_owner_only_blocks_different_owner_receiver() {
             state.facade.deposit(investing_user.account, investing_user.position_id, 100_000_u64),
         );
 
-    // investing_user has an owner_account, so the protection is active by default.
-    // Routing the minted shares into a position owned by a different account must revert.
+    // Routing minted shares to a different owner's position must revert.
     state
         .facade
         .deposit_into_vault(
@@ -5752,8 +5737,7 @@ fn test_invest_in_vault_owner_only_allows_same_owner_receiver() {
             state.facade.deposit(investing_user.account, investing_user.position_id, 100_000_u64),
         );
 
-    // investing_user has an owner_account, so the protection is active by default.
-    // Shares may still be credited to a different position under the same owner.
+    // Shares may still be credited to a same-owner position.
     state
         .facade
         .process_deposit(
@@ -5813,7 +5797,6 @@ fn test_redeem_from_vault_owner_only_blocks_different_owner_receiver() {
             vault_config.deployed_vault.contract_address, 100,
         );
 
-    // withdrawing_user has an owner_account, so the protection is active by default.
     // Redeeming into a different owner's position must revert.
     state
         .facade
@@ -5875,7 +5858,6 @@ fn test_redeem_from_vault_owner_only_allows_same_owner_receiver() {
             vault_config.deployed_vault.contract_address, 100,
         );
 
-    // withdrawing_user has an owner_account, so the protection is active by default.
     let receiver_collateral_before = state
         .facade
         .get_position_collateral_balance(sibling.position_id);

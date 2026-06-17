@@ -93,7 +93,8 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::errors::{
-        INVEST_NOT_TO_SAME_OWNER, REDEEM_NOT_TO_SAME_OWNER, VAULT_APPROVAL_POSITION_MISMATCH, order_expired_err,
+        INVEST_NOT_TO_SAME_OWNER, REDEEM_NOT_TO_SAME_OWNER, VAULT_APPROVAL_POSITION_MISMATCH,
+        order_expired_err,
     };
     use crate::core::types::asset::synthetic::{
         AssetType, SpotAssetBalanceDiff, SpotAssetBalanceDiffTrait,
@@ -243,10 +244,7 @@ pub(crate) mod VaultsManager {
 
             let sending_position = self.positions.get_position_mut(position_id: from_position_id);
 
-            // Owner-account positions are protected: the minted shares may only be credited to a
-            // position under the same owner_account. This blocks a compromised Stark key from
-            // routing value into an attacker-controlled position via the vault invest flow.
-            // Positions without an owner_account (Stark-key-only) are unrestricted.
+            // Owner-account positions may only mint shares to a same-owner position.
             let sending_owner = sending_position.into().get_owner_account();
             if sending_owner.is_some() {
                 let receiving_position = self
@@ -582,13 +580,8 @@ pub(crate) mod VaultsManager {
             let redeeming_position = self.positions.get_position_mut(redeeming_position_id);
             let receiving_position = self.positions.get_position_mut(receiving_position_id);
 
-            // Owner-account positions are protected: a user-signed redeem may only credit
-            // collateral to a position under the same owner_account, blocking a compromised
-            // Stark key from routing value into an attacker-controlled position via the vault
-            // redeem flow. Positions without an owner_account (Stark-key-only) are unrestricted.
-            // Liquidation and forced redeem are operator-authorized (no user signature,
-            // `validate_user_order == false`) and are therefore exempt; liquidation also always
-            // redeems into the same position.
+            // Owner-account positions may only redeem to a same-owner position. Only the
+            // user-signed path is guarded; operator liquidation/forced redeem are exempt.
             let redeeming_owner = redeeming_position.into().get_owner_account();
             if validate_user_order && redeeming_owner.is_some() {
                 assert(
