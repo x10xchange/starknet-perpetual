@@ -95,6 +95,7 @@ pub(crate) mod LiquidationManager {
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::errors::{
         CANT_LIQUIDATE_IF_POSITION, CANT_LIQUIDATE_WITH_FP, INVALID_SAME_POSITIONS,
+        LIQUIDATION_NOT_TO_SAME_OWNER,
     };
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::order::ValidateableOrderTrait;
@@ -347,6 +348,20 @@ pub(crate) mod LiquidationManager {
             assert(
                 liquidator_order.receive_position != liquidated_position_id, INVALID_SAME_POSITIONS,
             );
+
+            // Owner-account liquidator may only route the liquidated asset to a same-owner
+            // position.
+            let source_owner = liquidator_position.get_owner_account();
+            if source_owner.is_some()
+                && liquidator_order.receive_position != liquidator_position_id {
+                let receive_position = self
+                    .positions
+                    .get_position_snapshot(liquidator_order.receive_position);
+                assert(
+                    receive_position.get_owner_account() == source_owner,
+                    LIQUIDATION_NOT_TO_SAME_OWNER,
+                );
+            }
 
             let liquidated_order = LimitOrder {
                 source_position: liquidated_position_id,

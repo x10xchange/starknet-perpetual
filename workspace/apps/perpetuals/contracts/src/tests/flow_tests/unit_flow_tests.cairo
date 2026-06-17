@@ -3493,7 +3493,8 @@ fn test_liquidate_spot_with_different_source_and_receive_positions() {
     // Create users.
     let liquidated_user = state.new_user_with_position();
     let liquidator_source_user = state.new_user_with_position(); // Pays base collateral
-    let liquidator_receive_user = state.new_user_with_position(); // Receives spot collateral
+    // Same owner as the source so the receiver is allowed.
+    let liquidator_receive_user = state.new_sibling_position(liquidator_source_user);
     snforge_std::set_balance(target: liquidated_user.account.address, new_balance: 5000000, :token);
 
     // Deposit spot collateral to liquidated user.
@@ -3616,6 +3617,51 @@ fn test_liquidate_spot_with_different_source_and_receive_positions() {
         .validate_total_risk(position_id: liquidated_user.position_id, expected_total_risk: 0);
 
     assert(state.facade.is_healthy(position_id: liquidated_user.position_id), 'should be healthy');
+}
+
+#[test]
+#[should_panic(expected: 'LIQUIDATION_NOT_TO_SAME_OWNER')]
+fn test_liquidate_spot_to_different_owner_receiver_fails() {
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
+    };
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+
+    let token = snforge_std::Token::STRK;
+    let erc20_contract_address = token.contract_address();
+    let asset_info = AssetInfoTrait::new_collateral(
+        asset_name: 'SPOT', :risk_factor_data, oracles_len: 1, :erc20_contract_address,
+    );
+    let asset_id = asset_info.asset_id;
+    state.facade.add_active_collateral(asset_info: @asset_info, initial_price: 100);
+
+    let liquidated_user = state.new_user_with_position();
+    let liquidator_source_user = state.new_user_with_position();
+    // A genuinely different owner, not a sibling.
+    let attacker = state.new_user_with_position();
+
+    // The owner-protected liquidator source directing the spot asset to a different owner reverts.
+    let liquidator_order_info = state
+        .facade
+        .create_limit_order(
+            user: liquidator_source_user,
+            base_asset_id: asset_id,
+            base_amount: 9500,
+            quote_amount: -9600,
+            fee_amount: 100,
+            receive_position_id: Option::Some(attacker.position_id),
+        );
+
+    state
+        .facade
+        .liquidate_spot_asset(
+            :liquidated_user,
+            liquidator_order_info: liquidator_order_info,
+            actual_amount_spot_collateral: -9500,
+            actual_amount_base_collateral: 9600,
+            actual_liquidator_fee: 100,
+            liquidated_fee_amount: 100,
+        );
 }
 
 #[test]
@@ -7137,7 +7183,8 @@ fn test_liquidate_spot_with_interest_different_receiver() {
 
     let liquidated_user = state.new_user_with_position();
     let liquidator_source_user = state.new_user_with_position();
-    let liquidator_receive_user = state.new_user_with_position();
+    // Same owner as the source so the receiver is allowed.
+    let liquidator_receive_user = state.new_sibling_position(liquidator_source_user);
     snforge_std::set_balance(target: liquidated_user.account.address, new_balance: 5000000, :token);
 
     // Deposit spot collateral to liquidated user.
