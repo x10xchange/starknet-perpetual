@@ -10,15 +10,19 @@ use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 fn set_treasury_protection_percent(facade: @PerpsTestsFacade, percent: u64) {
     let treasury = ITreasuryDispatcher { contract_address: *facade.treasury_address };
 
-    cheat_caller_address_once(
-        contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
-    );
-    treasury.request_protection_limit_percent_change(*facade.token_state.address, percent);
+    // The treasury rejects no-op percent requests, so only request/apply when the percent actually
+    // changes; the reset below re-snapshots the limit either way.
+    if treasury.get_protection_limit_percent(*facade.token_state.address) != percent {
+        cheat_caller_address_once(
+            contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
+        );
+        treasury.request_protection_limit_percent_change(*facade.token_state.address, percent);
 
-    cheat_caller_address_once(
-        contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
-    );
-    treasury.apply_protection_limit_percent_change(*facade.token_state.address);
+        cheat_caller_address_once(
+            contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
+        );
+        treasury.apply_protection_limit_percent_change(*facade.token_state.address);
+    }
 
     cheat_caller_address_once(
         contract_address: *facade.treasury_address, caller_address: *facade.app_governor,

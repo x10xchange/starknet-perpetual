@@ -293,6 +293,12 @@ pub mod ProtocolTreasury {
         fn get_protection_limit_timelock(self: @ContractState) -> TimeDelta {
             self.change_timelock.read()
         }
+
+        fn get_protection_limit_percent(
+            self: @ContractState, collateral_address: ContractAddress,
+        ) -> u64 {
+            self.get_protection_percent(collateral_address)
+        }
     }
 
     #[generate_trait]

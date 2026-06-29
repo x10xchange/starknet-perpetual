@@ -793,6 +793,28 @@ fn test_request_percent_exactly_100_allowed() {
     assert!(pending.percent == 100, "percent 100 should be accepted");
 }
 
+// ===================== Effective Percent Getter =====================
+
+#[test]
+fn test_get_protection_limit_percent_defaults_then_reflects_override() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    // With no override set, the effective percent is the default (5).
+    assert!(
+        facade.treasury_dispatcher.get_protection_limit_percent(facade.collateral_address) == 5,
+        "effective percent should default to 5",
+    );
+
+    // After applying an override, the getter reflects it.
+    facade.change_protection_limit_percent(10);
+    assert!(
+        facade.treasury_dispatcher.get_protection_limit_percent(facade.collateral_address) == 10,
+        "effective percent should reflect the applied override",
+    );
+}
+
 // ===================== Reject No-Op Percent Requests =====================
 
 #[test]

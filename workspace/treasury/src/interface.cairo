@@ -35,4 +35,8 @@ pub trait ITreasury<TState> {
     fn get_reset_cooldown(self: @TState) -> TimeDelta;
     /// Returns the timelock that must elapse between requesting and applying a percent change.
     fn get_protection_limit_timelock(self: @TState) -> TimeDelta;
+    /// Returns the protection-limit percent currently in effect for `collateral_address`: the
+    /// override if one is set, otherwise the default. This is the value a percent-change request
+    /// is rejected for matching.
+    fn get_protection_limit_percent(self: @TState, collateral_address: ContractAddress) -> u64;
 }
