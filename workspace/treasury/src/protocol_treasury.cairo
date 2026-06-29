@@ -225,10 +225,19 @@ pub mod ProtocolTreasury {
             self.pausable.assert_not_paused();
             self.roles.only_app_governor();
             assert(percent <= 100, 'PERCENT_TOO_HIGH');
-            let applicable_at = Time::now().add(self.change_timelock.read());
+
+            let current_percent = self.get_protection_percent(collateral_address);
+            assert(percent != current_percent, 'PERCENT_UNCHANGED');
+
             let mut admin = self.protection_admin.read(collateral_address);
+            if admin.pending.applicable_at.is_non_zero() {
+                assert(percent != admin.pending.percent, 'PENDING_PERCENT_UNCHANGED');
+            }
+
+            let applicable_at = Time::now().add(self.change_timelock.read());
             admin.pending = PendingPercentChange { percent, applicable_at };
             self.protection_admin.write(collateral_address, admin);
+
             self.emit(AdminLimitChangeRequested { collateral_address, percent, applicable_at });
         }
 

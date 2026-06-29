@@ -793,6 +793,71 @@ fn test_request_percent_exactly_100_allowed() {
     assert!(pending.percent == 100, "percent 100 should be accepted");
 }
 
+// ===================== Reject No-Op Percent Requests =====================
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_default_effective_percent_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // No override has been set, so the effective percent is the default (5).
+    // Requesting it again is a no-op and must be rejected.
+    facade.request_protection_limit_percent_change(5);
+}
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_applied_override_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    // Apply an override of 10, then request 10 again — the effective percent is unchanged.
+    facade.change_protection_limit_percent(10);
+    facade.request_protection_limit_percent_change(10);
+}
+
+#[test]
+#[should_panic(expected: 'PENDING_PERCENT_UNCHANGED')]
+fn test_request_matching_pending_percent_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // First request records a pending change to 10. Re-requesting the same pending percent
+    // would only push the apply window out, so it must be rejected.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(10);
+}
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_effective_percent_with_different_pending_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // A pending change to 10 exists, but the effective percent is still the default (5).
+    // Requesting 5 (the effective percent) is a no-op and must be rejected.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(5);
+}
+
+#[test]
+fn test_request_differing_from_pending_is_allowed() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // Re-requesting a value that differs from both the effective and the pending percent
+    // overwrites the pending change as usual.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(20);
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.percent == 20, "differing re-request should overwrite the pending percent");
+}
+
 // ===================== Apply Uses The Snapshot, Not Current Balance =====================
 
 #[test]
