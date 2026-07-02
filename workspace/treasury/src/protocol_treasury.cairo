@@ -264,7 +264,6 @@ pub mod ProtocolTreasury {
         fn cancel_protection_limit_percent_change(
             ref self: ContractState, collateral_address: ContractAddress,
         ) {
-            self.pausable.assert_not_paused();
             self.roles.only_app_governor();
             let mut admin = self.protection_admin.read(collateral_address);
             assert(admin.pending.applicable_at.is_non_zero(), 'NO_PENDING_CHANGE');
