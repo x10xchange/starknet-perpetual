@@ -327,7 +327,9 @@ pub fn deploy_treasury(
     governance_admin: ContractAddress, upgrade_delay: u64, perps_contract: ContractAddress,
 ) -> ContractAddress {
     let calldata: Array<felt252> = array![
-        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+        governance_admin.into(), upgrade_delay.into(),
+        perps_contract.into(), // Reset cooldown and change timelock disabled (0) in tests.
+        0, 0,
     ];
     let treasury = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
     let (treasury_address, _) = treasury.deploy(@calldata).unwrap();

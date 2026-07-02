@@ -29,6 +29,14 @@ pub struct TreasuryTestsFacade {
 #[generate_trait]
 pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
     fn new() -> TreasuryTestsFacade {
+        // Default to a one-day reset cooldown and a one-day change timelock, so the
+        // cooldown/timelock tests exercise real delays.
+        Self::new_with_delays(reset_cooldown_seconds: DAY, change_timelock_seconds: DAY)
+    }
+
+    fn new_with_delays(
+        reset_cooldown_seconds: u64, change_timelock_seconds: u64,
+    ) -> TreasuryTestsFacade {
         start_cheat_block_timestamp_global(BEGINNING_OF_TIME);
 
         let token_cfg = TokenConfig {
@@ -51,6 +59,8 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
         governance_admin.serialize(ref calldata);
         UPGRADE_DELAY.serialize(ref calldata);
         perps_contract.serialize(ref calldata);
+        reset_cooldown_seconds.serialize(ref calldata);
+        change_timelock_seconds.serialize(ref calldata);
 
         let contract_class = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
         let (treasury_address, _) = contract_class.deploy(@calldata).unwrap();
@@ -144,12 +154,38 @@ pub impl TreasuryTestsFacadeImpl of TreasuryTestsFacadeTrait {
         self.treasury_dispatcher.reset_protection_limit(self.collateral_address);
     }
 
-    /// Call change_protection_limit_percent as the app governor.
-    fn change_protection_limit_percent(ref self: TreasuryTestsFacade, percent: u64) {
+    /// Call request_protection_limit_percent_change as the app governor.
+    fn request_protection_limit_percent_change(ref self: TreasuryTestsFacade, percent: u64) {
         cheat_caller_address_once(
             contract_address: self.treasury_address, caller_address: self.app_governor,
         );
-        self.treasury_dispatcher.change_protection_limit_percent(self.collateral_address, percent);
+        self
+            .treasury_dispatcher
+            .request_protection_limit_percent_change(self.collateral_address, percent);
+    }
+
+    /// Call apply_protection_limit_percent_change as the app governor.
+    fn apply_protection_limit_percent_change(ref self: TreasuryTestsFacade) {
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        self.treasury_dispatcher.apply_protection_limit_percent_change(self.collateral_address);
+    }
+
+    /// Call cancel_protection_limit_percent_change as the app governor.
+    fn cancel_protection_limit_percent_change(ref self: TreasuryTestsFacade) {
+        cheat_caller_address_once(
+            contract_address: self.treasury_address, caller_address: self.app_governor,
+        );
+        self.treasury_dispatcher.cancel_protection_limit_percent_change(self.collateral_address);
+    }
+
+    /// Convenience: request a percent change, advance past the timelock (exactly one day, which
+    /// also avoids triggering the treasury's auto-reset on the following withdrawal), then apply.
+    fn change_protection_limit_percent(ref self: TreasuryTestsFacade, percent: u64) {
+        self.request_protection_limit_percent_change(percent);
+        self.advance_time(DAY);
+        self.apply_protection_limit_percent_change();
     }
 
     /// Get the token balance of an address.

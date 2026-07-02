@@ -5,13 +5,24 @@ use starkware_utils_testing::test_utils::cheat_caller_address_once;
 use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
 
 /// Helper: set a specific treasury protection percent and reset the limit so it takes effect.
+/// The percent change is timelocked, but the flow-test treasury is deployed with a zero timelock,
+/// so the request can be applied in the same block.
 fn set_treasury_protection_percent(facade: @PerpsTestsFacade, percent: u64) {
     let treasury = ITreasuryDispatcher { contract_address: *facade.treasury_address };
 
-    cheat_caller_address_once(
-        contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
-    );
-    treasury.change_protection_limit_percent(*facade.token_state.address, percent);
+    // The treasury rejects no-op percent requests, so only request/apply when the percent actually
+    // changes; the reset below re-snapshots the limit either way.
+    if treasury.get_protection_limit_percent(*facade.token_state.address) != percent {
+        cheat_caller_address_once(
+            contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
+        );
+        treasury.request_protection_limit_percent_change(*facade.token_state.address, percent);
+
+        cheat_caller_address_once(
+            contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
+        );
+        treasury.apply_protection_limit_percent_change(*facade.token_state.address);
+    }
 
     cheat_caller_address_once(
         contract_address: *facade.treasury_address, caller_address: *facade.app_governor,
@@ -44,14 +55,18 @@ fn test_treasury_withdrawal_exceeding_limit_fails() {
     state.facade.process_deposit(deposit);
 
     // 0% — no withdrawals allowed.
-    // Call change_protection_limit_percent directly (without reset_protection_limit) because
-    // an override of 0 is treated as "no override" by get_protection_percent, so a subsequent
-    // reset would revert to the default 5%.
+    // Request/apply the 0% change directly (without reset_protection_limit) because an override of
+    // 0 is treated as "no override" by get_protection_percent, so a subsequent reset would revert
+    // to the default 5%. The flow-test treasury has a zero timelock, so apply succeeds immediately.
     let treasury = ITreasuryDispatcher { contract_address: state.facade.treasury_address };
     cheat_caller_address_once(
         contract_address: state.facade.treasury_address, caller_address: state.facade.app_governor,
     );
-    treasury.change_protection_limit_percent(state.facade.token_state.address, 0);
+    treasury.request_protection_limit_percent_change(state.facade.token_state.address, 0);
+    cheat_caller_address_once(
+        contract_address: state.facade.treasury_address, caller_address: state.facade.app_governor,
+    );
+    treasury.apply_protection_limit_percent_change(state.facade.token_state.address);
 
     let withdraw_request = state.facade.withdraw_request(user, 1_u64);
     state.facade.withdraw(withdraw_request);

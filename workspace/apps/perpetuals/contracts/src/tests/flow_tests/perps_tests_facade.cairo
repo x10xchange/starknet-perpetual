@@ -316,7 +316,11 @@ pub fn deploy_treasury(
     governance_admin: ContractAddress, upgrade_delay: u64, perps_contract: ContractAddress,
 ) -> ContractAddress {
     let calldata: Array<felt252> = array![
-        governance_admin.into(), upgrade_delay.into(), perps_contract.into(),
+        governance_admin.into(), upgrade_delay.into(),
+        perps_contract
+            .into(), // Reset cooldown and change timelock disabled (0) in flow tests so percent changes apply
+        // immediately and resets are not rate-limited.
+        0, 0,
     ];
     let treasury = snforge_std::declare("ProtocolTreasury").unwrap().contract_class();
     let (treasury_address, _) = treasury.deploy(@calldata).unwrap();
@@ -2990,10 +2994,20 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ref self: PerpsTestsFacade, token_address: ContractAddress, percent: u64,
     ) {
         let treasury = ITreasuryDispatcher { contract_address: self.treasury_address };
-        cheat_caller_address_once(
-            contract_address: self.treasury_address, caller_address: self.app_governor,
-        );
-        treasury.change_protection_limit_percent(token_address, percent);
+        // The treasury is deployed with a zero protection timelock in flow tests, so the percent
+        // change can be requested and applied in the same block and resets are not rate-limited.
+        // The treasury rejects no-op percent requests, so only request/apply when the percent
+        // actually changes; the reset below re-snapshots the limit either way.
+        if treasury.get_protection_limit_percent(token_address) != percent {
+            cheat_caller_address_once(
+                contract_address: self.treasury_address, caller_address: self.app_governor,
+            );
+            treasury.request_protection_limit_percent_change(token_address, percent);
+            cheat_caller_address_once(
+                contract_address: self.treasury_address, caller_address: self.app_governor,
+            );
+            treasury.apply_protection_limit_percent_change(token_address);
+        }
         cheat_caller_address_once(
             contract_address: self.treasury_address, caller_address: self.app_governor,
         );

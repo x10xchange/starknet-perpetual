@@ -1,6 +1,8 @@
-use starkware_utils::constants::DAY;
+use snforge_std::EventSpyAssertionsTrait;
+use starkware_utils::constants::{DAY, WEEK};
 use starkware_utils_testing::test_utils::cheat_caller_address_once;
 use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
+use treasury::protocol_treasury::ProtocolTreasury;
 use treasury::tests::constants::*;
 use treasury::tests::treasury_tests_facade::TreasuryTestsFacadeTrait;
 
@@ -158,6 +160,9 @@ fn test_reset_protection_limit_resets_withdrawn_counter() {
     // Withdraw almost to the limit.
     facade.withdraw_from_as_perps(49_000_u128.into());
 
+    // Reset is rate-limited to once per day; advance past the cooldown before resetting again.
+    facade.advance_time(DAY + 1);
+
     // Reset and withdraw again — should succeed.
     facade.reset_protection_limit();
     // New balance = 951_000, max = 951_000 * 50 / 1000 = 47_550.
@@ -217,7 +222,7 @@ fn test_change_protection_limit_percent_reduces_limit() {
 
 #[test]
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
-fn test_change_protection_limit_percent_non_governor_fails() {
+fn test_request_protection_limit_percent_change_non_governor_fails() {
     let mut facade = TreasuryTestsFacadeTrait::new();
     facade.fund_treasury(TREASURY_FUND_AMOUNT);
     facade.reset_protection_limit();
@@ -226,7 +231,7 @@ fn test_change_protection_limit_percent_non_governor_fails() {
     cheat_caller_address_once(
         contract_address: facade.treasury_address, caller_address: NON_PERPS_CALLER(),
     );
-    dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
+    dispatcher.request_protection_limit_percent_change(facade.collateral_address, 10);
 }
 
 // ===================== Access Control: Only Perps Can Withdraw =====================
@@ -282,7 +287,7 @@ fn test_reset_protection_limit_governance_admin_fails() {
 
 #[test]
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
-fn test_change_protection_limit_percent_perps_fails() {
+fn test_request_protection_limit_percent_change_perps_fails() {
     let mut facade = TreasuryTestsFacadeTrait::new();
     facade.fund_treasury(TREASURY_FUND_AMOUNT);
     facade.reset_protection_limit();
@@ -291,12 +296,12 @@ fn test_change_protection_limit_percent_perps_fails() {
     cheat_caller_address_once(
         contract_address: facade.treasury_address, caller_address: PERPS_CONTRACT(),
     );
-    dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
+    dispatcher.request_protection_limit_percent_change(facade.collateral_address, 10);
 }
 
 #[test]
 #[should_panic(expected: "ONLY_APP_GOVERNOR")]
-fn test_change_protection_limit_percent_governance_admin_fails() {
+fn test_request_protection_limit_percent_change_governance_admin_fails() {
     let mut facade = TreasuryTestsFacadeTrait::new();
     facade.fund_treasury(TREASURY_FUND_AMOUNT);
     facade.reset_protection_limit();
@@ -305,7 +310,7 @@ fn test_change_protection_limit_percent_governance_admin_fails() {
     cheat_caller_address_once(
         contract_address: facade.treasury_address, caller_address: GOVERNANCE_ADMIN(),
     );
-    dispatcher.change_protection_limit_percent(facade.collateral_address, 10);
+    dispatcher.request_protection_limit_percent_change(facade.collateral_address, 10);
 }
 
 // ===================== Protection Limit Is Snapshotted, Not Rolling =====================
@@ -486,4 +491,547 @@ fn test_withdraw_works_after_unpause() {
     facade.unpause_treasury();
 
     facade.withdraw_from_as_perps(100_u128.into());
+}
+
+// ===================== Reset Cooldown (once per day) =====================
+
+#[test]
+#[should_panic(expected: 'RESET_COOLDOWN_ACTIVE')]
+fn test_reset_protection_limit_cooldown_blocks_within_day() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // First reset is always allowed; a second reset on the same day is blocked.
+    facade.reset_protection_limit();
+    facade.reset_protection_limit();
+}
+
+#[test]
+#[should_panic(expected: 'RESET_COOLDOWN_ACTIVE')]
+fn test_reset_protection_limit_cooldown_blocks_just_under_a_day() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.reset_protection_limit();
+    facade.advance_time(DAY - 1);
+    facade.reset_protection_limit();
+}
+
+#[test]
+fn test_reset_protection_limit_cooldown_allows_at_exactly_one_day() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.reset_protection_limit();
+    // Cooldown boundary is inclusive: exactly one day later is allowed.
+    facade.advance_time(DAY);
+    facade.reset_protection_limit();
+
+    assert!(
+        facade.treasury_balance() == TREASURY_FUND_AMOUNT.into(), "balance should be unchanged",
+    );
+}
+
+#[test]
+fn test_reset_protection_limit_cooldown_allows_after_a_day() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.reset_protection_limit();
+    facade.advance_time(DAY + 1);
+    facade.reset_protection_limit();
+
+    assert!(
+        facade.treasury_balance() == TREASURY_FUND_AMOUNT.into(), "balance should be unchanged",
+    );
+}
+
+// ===================== Request / Apply / Cancel Percent Change =====================
+
+#[test]
+fn test_request_records_pending_change() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.request_protection_limit_percent_change(10);
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.percent == 10, "pending percent mismatch");
+    assert!(pending.applicable_at.seconds != 0, "pending should have an applicable_at set");
+}
+
+#[test]
+#[should_panic(expected: "Treasury Protection Limit Exceeded")]
+fn test_request_does_not_apply_immediately() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    // Request an increase to 10% (max would become 100_000), but do NOT apply it.
+    facade.request_protection_limit_percent_change(10);
+
+    // The old 5% limit (max 50_000) is still in force, so 50_001 must still fail.
+    facade.withdraw_from_as_perps(50_001_u128.into());
+}
+
+#[test]
+#[should_panic(expected: 'TIMELOCK_NOT_PASSED')]
+fn test_apply_before_timelock_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.request_protection_limit_percent_change(10);
+    facade.advance_time(DAY - 1);
+    facade.apply_protection_limit_percent_change();
+}
+
+#[test]
+fn test_apply_after_timelock_succeeds() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    let deposit_amount: u128 = TREASURY_FUND_AMOUNT;
+    facade.fund_treasury(deposit_amount);
+    facade.reset_protection_limit();
+
+    facade.request_protection_limit_percent_change(10);
+    facade.advance_time(DAY);
+    facade.apply_protection_limit_percent_change();
+
+    // New max = 1_000_000 * 10 * 10 / 1000 = 100_000.
+    facade.withdraw_from_as_perps(99_000_u128.into());
+    assert!(facade.treasury_balance() == (deposit_amount - 99_000).into(), "balance mismatch");
+}
+
+#[test]
+fn test_apply_clears_pending_change() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    facade.request_protection_limit_percent_change(10);
+    facade.advance_time(DAY);
+    facade.apply_protection_limit_percent_change();
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.applicable_at.seconds == 0, "pending should be cleared after apply");
+}
+
+#[test]
+#[should_panic(expected: 'NO_PENDING_CHANGE')]
+fn test_apply_with_no_pending_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.apply_protection_limit_percent_change();
+}
+
+#[test]
+fn test_cancel_clears_pending_change() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.request_protection_limit_percent_change(10);
+    facade.cancel_protection_limit_percent_change();
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.applicable_at.seconds == 0, "pending should be cleared after cancel");
+    assert!(pending.percent == 0, "pending percent should be cleared after cancel");
+}
+
+#[test]
+#[should_panic(expected: 'NO_PENDING_CHANGE')]
+fn test_cancel_with_no_pending_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.cancel_protection_limit_percent_change();
+}
+
+#[test]
+#[should_panic(expected: 'NO_PENDING_CHANGE')]
+fn test_apply_after_cancel_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.request_protection_limit_percent_change(10);
+    facade.cancel_protection_limit_percent_change();
+    facade.advance_time(DAY);
+    facade.apply_protection_limit_percent_change();
+}
+
+#[test]
+fn test_request_overwrites_pending_change() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(20);
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.percent == 20, "re-request should overwrite the pending percent");
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_apply_protection_limit_percent_change_non_governor_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: NON_PERPS_CALLER(),
+    );
+    dispatcher.apply_protection_limit_percent_change(facade.collateral_address);
+}
+
+#[test]
+#[should_panic(expected: "ONLY_APP_GOVERNOR")]
+fn test_cancel_protection_limit_percent_change_non_governor_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    let dispatcher = ITreasuryDispatcher { contract_address: facade.treasury_address };
+    cheat_caller_address_once(
+        contract_address: facade.treasury_address, caller_address: NON_PERPS_CALLER(),
+    );
+    dispatcher.cancel_protection_limit_percent_change(facade.collateral_address);
+}
+
+// ===================== Reset Cooldown / Change Timelock Are Independent =====================
+
+#[test]
+fn test_getters_return_configured_delays() {
+    let facade = TreasuryTestsFacadeTrait::new_with_delays(
+        reset_cooldown_seconds: DAY, change_timelock_seconds: WEEK,
+    );
+    assert!(
+        facade.treasury_dispatcher.get_reset_cooldown().seconds == DAY, "reset cooldown mismatch",
+    );
+    assert!(
+        facade.treasury_dispatcher.get_protection_limit_timelock().seconds == WEEK,
+        "change timelock mismatch",
+    );
+}
+
+#[test]
+fn test_reset_cooldown_independent_of_longer_change_timelock() {
+    // A long (one week) change timelock must not slow down the once-per-day reset cadence.
+    let mut facade = TreasuryTestsFacadeTrait::new_with_delays(
+        reset_cooldown_seconds: DAY, change_timelock_seconds: WEEK,
+    );
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.reset_protection_limit();
+    facade.advance_time(DAY + 1);
+    // Allowed one day later, despite the week-long change timelock.
+    facade.reset_protection_limit();
+
+    assert!(
+        facade.treasury_balance() == TREASURY_FUND_AMOUNT.into(), "balance should be unchanged",
+    );
+}
+
+#[test]
+#[should_panic(expected: 'TIMELOCK_NOT_PASSED')]
+fn test_change_timelock_independent_of_shorter_reset_cooldown() {
+    // The change timelock (one week) is enforced independently of the shorter reset cooldown.
+    let mut facade = TreasuryTestsFacadeTrait::new_with_delays(
+        reset_cooldown_seconds: DAY, change_timelock_seconds: WEEK,
+    );
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    facade.request_protection_limit_percent_change(10);
+    // Past the reset cooldown (a day) but not the change timelock (a week).
+    facade.advance_time(DAY + 1);
+    facade.apply_protection_limit_percent_change();
+}
+
+#[test]
+fn test_change_timelock_applies_after_full_timelock() {
+    let mut facade = TreasuryTestsFacadeTrait::new_with_delays(
+        reset_cooldown_seconds: DAY, change_timelock_seconds: WEEK,
+    );
+    let deposit_amount: u128 = TREASURY_FUND_AMOUNT;
+    facade.fund_treasury(deposit_amount);
+    facade.reset_protection_limit();
+
+    facade.request_protection_limit_percent_change(10);
+    facade.advance_time(WEEK);
+    facade.apply_protection_limit_percent_change();
+
+    // New max = 1_000_000 * 10 * 10 / 1000 = 100_000.
+    facade.withdraw_from_as_perps(99_000_u128.into());
+    assert!(facade.treasury_balance() == (deposit_amount - 99_000).into(), "balance mismatch");
+}
+
+// ===================== Percent Bound =====================
+
+#[test]
+#[should_panic(expected: 'PERCENT_TOO_HIGH')]
+fn test_request_percent_above_100_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.request_protection_limit_percent_change(101);
+}
+
+#[test]
+fn test_request_percent_exactly_100_allowed() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.request_protection_limit_percent_change(100);
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.percent == 100, "percent 100 should be accepted");
+}
+
+// ===================== Effective Percent Getter =====================
+
+#[test]
+fn test_get_protection_limit_percent_defaults_then_reflects_override() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    // With no override set, the effective percent is the default (5).
+    assert!(
+        facade.treasury_dispatcher.get_protection_limit_percent(facade.collateral_address) == 5,
+        "effective percent should default to 5",
+    );
+
+    // After applying an override, the getter reflects it.
+    facade.change_protection_limit_percent(10);
+    assert!(
+        facade.treasury_dispatcher.get_protection_limit_percent(facade.collateral_address) == 10,
+        "effective percent should reflect the applied override",
+    );
+}
+
+// ===================== Reject No-Op Percent Requests =====================
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_default_effective_percent_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // No override has been set, so the effective percent is the default (5).
+    // Requesting it again is a no-op and must be rejected.
+    facade.request_protection_limit_percent_change(5);
+}
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_applied_override_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.reset_protection_limit();
+
+    // Apply an override of 10, then request 10 again — the effective percent is unchanged.
+    facade.change_protection_limit_percent(10);
+    facade.request_protection_limit_percent_change(10);
+}
+
+#[test]
+#[should_panic(expected: 'PENDING_PERCENT_UNCHANGED')]
+fn test_request_matching_pending_percent_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // First request records a pending change to 10. Re-requesting the same pending percent
+    // would only push the apply window out, so it must be rejected.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(10);
+}
+
+#[test]
+#[should_panic(expected: 'PERCENT_UNCHANGED')]
+fn test_request_matching_effective_percent_with_different_pending_fails() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // A pending change to 10 exists, but the effective percent is still the default (5).
+    // Requesting 5 (the effective percent) is a no-op and must be rejected.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(5);
+}
+
+#[test]
+fn test_request_differing_from_pending_is_allowed() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+
+    // Re-requesting a value that differs from both the effective and the pending percent
+    // overwrites the pending change as usual.
+    facade.request_protection_limit_percent_change(10);
+    facade.request_protection_limit_percent_change(20);
+
+    let pending = facade
+        .treasury_dispatcher
+        .get_pending_protection_limit_change(facade.collateral_address);
+    assert!(pending.percent == 20, "differing re-request should overwrite the pending percent");
+}
+
+// ===================== Apply Uses The Snapshot, Not Current Balance =====================
+
+#[test]
+#[should_panic(expected: "Treasury Protection Limit Exceeded")]
+fn test_apply_recomputes_max_on_existing_snapshot_not_current_balance() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT); // 1_000_000
+    facade.reset_protection_limit(); // snapshot balance = 1_000_000
+
+    // Deposit more AFTER the snapshot; this must not affect the snapshotted limit.
+    let depositor = NON_PERPS_CALLER();
+    facade.fund_account(depositor, TREASURY_FUND_AMOUNT);
+    facade.approve_treasury(depositor, TREASURY_FUND_AMOUNT);
+    facade.deposit_into(depositor, TREASURY_FUND_AMOUNT.into()); // balance now 2_000_000
+
+    // Apply 10%. Against the 1_000_000 snapshot, max = 100_000 (not 200_000 of current balance).
+    facade.change_protection_limit_percent(10);
+
+    // 150_000 is under a rolling 200_000 limit but over the snapshotted 100_000 — must fail.
+    facade.withdraw_from_as_perps(150_000_u128.into());
+}
+
+// ===================== New Admin Functions Are Pausable =====================
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_reset_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.pause_treasury();
+    facade.reset_protection_limit();
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_request_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.pause_treasury();
+    facade.request_protection_limit_percent_change(10);
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_apply_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.request_protection_limit_percent_change(10);
+    facade.advance_time(DAY);
+    facade.pause_treasury();
+    facade.apply_protection_limit_percent_change();
+}
+
+#[test]
+#[should_panic(expected: 'PAUSED')]
+fn test_cancel_blocked_when_paused() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    facade.request_protection_limit_percent_change(10);
+    facade.pause_treasury();
+    facade.cancel_protection_limit_percent_change();
+}
+
+// ===================== Events =====================
+
+#[test]
+fn test_request_and_apply_emit_events() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    let collateral = facade.collateral_address;
+    let treasury_address = facade.treasury_address;
+
+    let mut spy = snforge_std::spy_events();
+
+    facade.request_protection_limit_percent_change(10);
+    let pending = facade.treasury_dispatcher.get_pending_protection_limit_change(collateral);
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    treasury_address,
+                    ProtocolTreasury::Event::AdminLimitChangeRequested(
+                        ProtocolTreasury::AdminLimitChangeRequested {
+                            collateral_address: collateral,
+                            percent: 10,
+                            applicable_at: pending.applicable_at,
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    facade.advance_time(DAY);
+    facade.apply_protection_limit_percent_change();
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    treasury_address,
+                    ProtocolTreasury::Event::AdminLimitChanged(
+                        ProtocolTreasury::AdminLimitChanged {
+                            collateral_address: collateral, percent: 10,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_cancel_emits_event() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    let collateral = facade.collateral_address;
+    let treasury_address = facade.treasury_address;
+
+    facade.request_protection_limit_percent_change(10);
+    let mut spy = snforge_std::spy_events();
+    facade.cancel_protection_limit_percent_change();
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    treasury_address,
+                    ProtocolTreasury::Event::AdminLimitChangeCancelled(
+                        ProtocolTreasury::AdminLimitChangeCancelled {
+                            collateral_address: collateral, percent: 10,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_reset_emits_event() {
+    let mut facade = TreasuryTestsFacadeTrait::new();
+    facade.fund_treasury(TREASURY_FUND_AMOUNT);
+    let collateral = facade.collateral_address;
+    let treasury_address = facade.treasury_address;
+
+    let mut spy = snforge_std::spy_events();
+    facade.reset_protection_limit();
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    treasury_address,
+                    ProtocolTreasury::Event::AdminLimitReset(
+                        ProtocolTreasury::AdminLimitReset { collateral_address: collateral },
+                    ),
+                ),
+            ],
+        );
 }
