@@ -2972,7 +2972,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
     }
 
     fn enable_escape_hatch(ref self: PerpsTestsFacade) {
-        self.set_app_governor_as_caller();
+        self.set_governance_admin_as_caller();
         ICoreDispatcher { contract_address: self.perpetuals_contract }.enable_escape_hatch();
     }
 
