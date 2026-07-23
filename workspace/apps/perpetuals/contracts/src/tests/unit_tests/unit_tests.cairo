@@ -6896,3 +6896,4 @@ fn test_forced_redeem_from_vault_panics_when_disabled() {
 
     state.forced_redeem_from_vault(operator_nonce: 0, :order, vault_approval: order);
 }
+

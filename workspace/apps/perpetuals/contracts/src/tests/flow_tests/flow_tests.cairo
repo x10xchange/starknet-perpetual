@@ -100,7 +100,8 @@ fn test_two_users_two_synthetics() {
 fn test_two_users_ten_synthetics_flow() {
     let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
     let user_a = test.new_user();
-    let user_b = test.new_user();
+    // Same owner as user_a so the collateral transfer between them is allowed.
+    let user_b = test.new_sibling(user_a);
 
     test.process_deposit(test.deposit(user_a, 2_000_000));
     test.process_deposit(test.deposit(user_b, 2_000_000));
@@ -840,7 +841,8 @@ fn test_multi_trade_with_price_and_funding_ticks() {
     let mut test = FlowTestExtendedTrait::new(fee_percentage: 1);
     let mut trades: Array<(OrderRequest, OrderRequest)> = ArrayTrait::new();
     let user_a = test.new_user();
-    let user_b = test.new_user();
+    // Same owner as user_a so the collateral transfer between them is allowed.
+    let user_b = test.new_sibling(user_a);
 
     test.process_deposit(test.deposit(user_a, 2_000_000));
     test.process_deposit(test.deposit(user_b, 2_000_000));

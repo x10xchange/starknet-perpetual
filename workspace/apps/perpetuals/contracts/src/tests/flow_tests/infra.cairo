@@ -93,6 +93,26 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
         user
     }
 
+    /// A second position under `owner`'s account (same owner_account and signing key).
+    fn new_sibling_position(ref self: FlowTestBase, owner: User) -> User {
+        let position_id = self.generate_position_id();
+        self
+            .facade
+            .new_position(
+                :position_id,
+                owner_public_key: owner.account.key_pair.public_key,
+                owner_account: owner.account.address,
+            );
+        UserTrait::for_account(owner.account, position_id)
+    }
+
+    /// Drains `amount` base collateral out of `user` into a same-owner sink (to make it negative).
+    fn drain_collateral(ref self: FlowTestBase, user: User, amount: u64) {
+        let sink = self.new_sibling_position(user);
+        let transfer_info = self.facade.transfer_request(sender: user, recipient: sink, :amount);
+        self.facade.transfer(:transfer_info);
+    }
+
     /// Creates a user position with a negative collateral balance via a synthetic trade.
     ///
     /// Setup: registers `synthetic_info` at price 100, deposits 10_000 collateral for the
@@ -217,6 +237,11 @@ pub impl FlowTestImpl of FlowTestExtendedTrait {
 
     fn new_user(ref self: FlowTestExtended) -> User {
         self.flow_test_base.new_user_with_position()
+    }
+
+    /// An additional position under `owner`'s account (same owner, distinct position).
+    fn new_sibling(ref self: FlowTestExtended, owner: User) -> User {
+        self.flow_test_base.new_sibling_position(owner)
     }
 
     fn deposit(ref self: FlowTestExtended, user: User, amount: u64) -> DepositInfo {

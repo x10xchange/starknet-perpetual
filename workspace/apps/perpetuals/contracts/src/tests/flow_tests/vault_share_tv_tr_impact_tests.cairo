@@ -48,7 +48,8 @@ fn position_should_be_usable_with_inactive_vault_shares() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let vault_user = state.new_user_with_position();
     let depositing_user = state.new_user_with_position();
-    let receiving_user = state.new_user_with_position();
+    // Receiver is a second position under the same owner, so the transfer below is allowed.
+    let receiving_user = state.new_sibling_position(depositing_user);
     let vault_init_deposit = state
         .facade
         .deposit(vault_user.account, vault_user.position_id, 5000_u64);

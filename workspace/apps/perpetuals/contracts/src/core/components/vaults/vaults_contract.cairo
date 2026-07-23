@@ -92,7 +92,10 @@ pub(crate) mod VaultsManager {
     use crate::core::components::vaults::events;
     use crate::core::components::vaults::vaults::Vaults::InternalTrait as VaultsInternal;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
-    use crate::core::errors::{VAULT_APPROVAL_POSITION_MISMATCH, order_expired_err};
+    use crate::core::errors::{
+        INVEST_NOT_TO_SAME_OWNER, REDEEM_NOT_TO_SAME_OWNER, VAULT_APPROVAL_POSITION_MISMATCH,
+        order_expired_err,
+    };
     use crate::core::types::asset::synthetic::{
         AssetType, SpotAssetBalanceDiff, SpotAssetBalanceDiffTrait,
     };
@@ -240,6 +243,18 @@ pub(crate) mod VaultsManager {
             let salt = order.salt;
 
             let sending_position = self.positions.get_position_mut(position_id: from_position_id);
+
+            // Owner-account positions may only mint shares to a same-owner position.
+            let sending_owner = sending_position.into().get_owner_account();
+            if sending_owner.is_some() {
+                let receiving_position = self
+                    .positions
+                    .get_position_mut(position_id: receiving_position_id);
+                assert(
+                    receiving_position.into().get_owner_account() == sending_owner,
+                    INVEST_NOT_TO_SAME_OWNER,
+                );
+            }
 
             let order_hash = validate_signature(
                 public_key: sending_position.into().get_owner_public_key(),
@@ -564,6 +579,16 @@ pub(crate) mod VaultsManager {
             let vault_position = self.positions.get_position_mut(vault_position_id);
             let redeeming_position = self.positions.get_position_mut(redeeming_position_id);
             let receiving_position = self.positions.get_position_mut(receiving_position_id);
+
+            // Owner-account positions may only redeem to a same-owner position. Only the
+            // user-signed path is guarded; operator liquidation/forced redeem are exempt.
+            let redeeming_owner = redeeming_position.into().get_owner_account();
+            if validate_user_order && redeeming_owner.is_some() {
+                assert(
+                    receiving_position.into().get_owner_account() == redeeming_owner,
+                    REDEEM_NOT_TO_SAME_OWNER,
+                );
+            }
 
             // Validate interest amounts in range
             self

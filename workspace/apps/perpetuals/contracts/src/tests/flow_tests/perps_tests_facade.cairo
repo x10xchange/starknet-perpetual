@@ -227,6 +227,10 @@ pub impl UserTraitImpl of UserTrait {
 
         User { position_id, account, initial_balance }
     }
+    /// Builds a `User` for a second position sharing an existing (already-funded) account.
+    fn for_account(account: Account, position_id: PositionId) -> User {
+        User { position_id, account, initial_balance: 0 }
+    }
     fn set_as_caller(self: @User, contract_address: ContractAddress) {
         self.account.set_as_caller(:contract_address);
     }
@@ -1211,6 +1215,50 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         RequestInfo {
             asset_id, recipient: user, position_id, amount, expiration, salt, request_hash,
         }
+    }
+
+    /// Requests and processes a base-collateral withdrawal from `user`'s position to `recipient`
+    /// (no balance assertions; for exercising the owner-only withdrawal guard).
+    fn withdraw_to_recipient(
+        ref self: PerpsTestsFacade, user: User, amount: u64, recipient: ContractAddress,
+    ) {
+        let account = user.account;
+        let position_id = user.position_id;
+        let asset_id = self.collateral_id;
+        let expiration = Time::now().add(Time::seconds(10));
+        let salt = self.generate_salt();
+
+        let request_hash = WithdrawArgs {
+            recipient, position_id, collateral_id: asset_id, amount, expiration, salt,
+        }
+            .get_message_hash(public_key: account.key_pair.public_key);
+        let signature = account.sign_message(message: request_hash);
+
+        account.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw_request(
+                :signature,
+                collateral_id: asset_id,
+                :recipient,
+                :position_id,
+                :amount,
+                :expiration,
+                :salt,
+            );
+
+        let operator_nonce = self.get_nonce();
+        self.operator.set_as_caller(self.perpetuals_contract);
+        ICoreDispatcher { contract_address: self.perpetuals_contract }
+            .withdraw(
+                :operator_nonce,
+                collateral_id: asset_id,
+                :recipient,
+                :position_id,
+                :amount,
+                :expiration,
+                :salt,
+                interest_amount: 0,
+            );
     }
 
     fn withdraw(ref self: PerpsTestsFacade, withdraw_info: RequestInfo) {
