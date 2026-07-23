@@ -17,8 +17,9 @@ pub mod Positions {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::components::positions::errors::{
         ALREADY_INITIALIZED, CALLER_IS_NOT_OWNER_ACCOUNT, INTEREST_SIGN_MISMATCH,
-        INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY, NO_OWNER_ACCOUNT,
-        POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST, POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY,
+        INVALID_ZERO_EVM_ACCOUNT, INVALID_ZERO_OWNER_ACCOUNT, INVALID_ZERO_PUBLIC_KEY,
+        NO_OWNER_ACCOUNT, POSITION_ALREADY_EXISTS, POSITION_DOESNT_EXIST,
+        POSITION_HAS_OWNER_ACCOUNT, SAME_PUBLIC_KEY, SET_EVM_ACCOUNT_EXPIRED,
         SET_POSITION_OWNER_EXPIRED, SET_PUBLIC_KEY_EXPIRED, ZERO_MAX_INTEREST_RATE,
         invalid_interest_rate_err,
     };
@@ -32,22 +33,28 @@ pub mod Positions {
         AssetBalance, POSITION_VERSION, Position, PositionData, PositionDiff, PositionId,
         PositionMutableTrait, PositionTrait,
     };
+    use perpetuals::core::types::set_evm_account::{
+        SetEvmAccountArgs, set_evm_account_eip712_digest,
+    };
     use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
     use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
     use perpetuals::core::value_risk_calculator::{
         PositionState, PositionTVTR, calculate_max_allowed_change, calculate_pnl,
         calculate_position_tvtr, evaluate_position,
     };
+    use starknet::eth_signature::verify_eth_signature;
+    use starknet::secp256_trait::Signature as EvmSignature;
     use starknet::storage::{
         Map, Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ContractAddress, EthAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::constants::DAY;
     use starkware_utils::math::abs;
     use starkware_utils::math::abs::Abs;
@@ -71,6 +78,7 @@ pub mod Positions {
         AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
     };
     use crate::core::types::price::SN_PERPS_SCALE;
+    use crate::core::utils::validate_signature;
     use crate::core::value_risk_calculator::{
         TVTRChange, assert_healthy_or_healthier, calculate_asset_value_and_risk,
         calculate_position_tvtr_before, calculate_position_tvtr_change,
@@ -97,6 +105,7 @@ pub mod Positions {
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
         NewPosition: events::NewPosition,
+        SetEvmAccount: events::SetEvmAccount,
         SetOwnerAccount: events::SetOwnerAccount,
         SetOwnerAccountRequest: events::SetOwnerAccountRequest,
         SetPublicKey: events::SetPublicKey,
@@ -235,6 +244,42 @@ pub mod Positions {
             signature: Signature,
         ) {
             panic_with_felt252('TODO')
+        }
+
+        /// Sets/updates the EVM address on a position. Operator-only. Requires a STARK signature
+        /// from the position owner and an EVM (EIP-712) signature from the new account;
+        /// `expiration` bounds signature validity.
+        fn set_evm_account(
+            ref self: ComponentState<TContractState>,
+            position_id: PositionId,
+            new_evm_account: EthAddress,
+            expiration: Timestamp,
+            stark_signature: Signature,
+            evm_signature: EvmSignature,
+        ) {
+            get_dep_component!(@self, Roles).only_operator();
+            let position = self.get_position_mut(:position_id);
+            let evm_felt: felt252 = new_evm_account.into();
+            assert(evm_felt.is_non_zero(), INVALID_ZERO_EVM_ACCOUNT);
+            validate_expiration(:expiration, err: SET_EVM_ACCOUNT_EXPIRED);
+
+            let public_key = position.get_owner_public_key();
+
+            validate_signature(
+                :public_key,
+                message: SetEvmAccountArgs { position_id, new_evm_account, expiration },
+                signature: stark_signature,
+            );
+
+            let evm_msg_hash = set_evm_account_eip712_digest(
+                :position_id, :new_evm_account, :expiration,
+            );
+            verify_eth_signature(
+                msg_hash: evm_msg_hash, signature: evm_signature, eth_address: new_evm_account,
+            );
+
+            position.owner_evm_account.write(Option::Some(new_evm_account));
+            self.emit(events::SetEvmAccount { position_id, new_evm_account });
         }
 
         /// Registers a request to set the position's owner_account.

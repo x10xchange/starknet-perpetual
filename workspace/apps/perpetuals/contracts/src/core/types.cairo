@@ -5,6 +5,7 @@ pub mod order;
 pub mod position;
 pub mod price;
 pub mod risk_factor;
+pub mod set_evm_account;
 pub mod set_owner_account;
 pub mod set_public_key;
 pub mod transfer;

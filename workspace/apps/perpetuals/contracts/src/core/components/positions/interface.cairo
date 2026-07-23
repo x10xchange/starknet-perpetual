@@ -1,6 +1,7 @@
 use perpetuals::core::types::position::{PositionData, PositionId};
 use perpetuals::core::value_risk_calculator::PositionTVTR;
-use starknet::ContractAddress;
+use starknet::secp256_trait::Signature as EvmSignature;
+use starknet::{ContractAddress, EthAddress};
 use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::Timestamp;
 
@@ -53,5 +54,13 @@ pub trait IPositions<TContractState> {
         operator_nonce: u64,
         position_id: PositionId,
         signature: Signature,
+    );
+    fn set_evm_account(
+        ref self: TContractState,
+        position_id: PositionId,
+        new_evm_account: EthAddress,
+        expiration: Timestamp,
+        stark_signature: Signature,
+        evm_signature: EvmSignature,
     );
 }

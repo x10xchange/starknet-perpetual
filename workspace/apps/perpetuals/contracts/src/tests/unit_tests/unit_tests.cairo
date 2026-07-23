@@ -1,4 +1,6 @@
+use core::hash::{HashStateExTrait, HashStateTrait};
 use core::num::traits::{Pow, Zero};
+use core::poseidon::PoseidonTrait;
 use perpetuals::core::components::assets::interface::{
     IAssets, IAssetsDispatcher, IAssetsDispatcherTrait, IAssetsManager, IAssetsManagerDispatcher,
     IAssetsManagerDispatcherTrait,
@@ -30,6 +32,7 @@ use perpetuals::core::types::price::{
     PRICE_SCALE, PriceTrait, SignedPrice, convert_oracle_to_perps_price,
 };
 use perpetuals::core::types::risk_factor::RiskFactorTrait;
+use perpetuals::core::types::set_evm_account::SetEvmAccountArgs;
 use perpetuals::core::types::set_owner_account::SetOwnerAccountArgs;
 use perpetuals::core::types::set_public_key::SetPublicKeyArgs;
 use perpetuals::core::types::transfer::TransferArgs;
@@ -60,8 +63,9 @@ use snforge_std::cheatcodes::events::{EventSpyTrait, EventsFilterTrait};
 use snforge_std::{
     TokenTrait as SnforgeTokenTrait, start_cheat_block_timestamp_global, test_address,
 };
-use starknet::storage::{StoragePathEntry, StoragePointerReadAccess};
-use starknet::{SyscallResultTrait, get_block_info};
+use starknet::secp256_trait::Signature as EvmSignature;
+use starknet::storage::{StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
+use starknet::{EthAddress, SyscallResultTrait, get_block_info};
 use starkware_utils::components::replaceability::interface::IReplaceable;
 use starkware_utils::components::request_approvals::interface::{IRequestApprovals, RequestStatus};
 use starkware_utils::components::roles::interface::IRoles;
@@ -6896,3 +6900,120 @@ fn test_forced_redeem_from_vault_panics_when_disabled() {
 
     state.forced_redeem_from_vault(operator_nonce: 0, :order, vault_approval: order);
 }
+
+// ============================================================================
+// set_evm_account tests
+//
+// EVM test vector — Hardhat dev account #0. Never use this key for anything
+// real. Pregenerated EIP-712 signature (eth_signTypedData_v4 equivalent) over:
+//   domain  = { name: "Perpetuals", version: "v0" }   (no chainId / verifyingContract)
+//   message = SetEvmAccount { positionId: 100, newEvmAccount: 0xf39F...2266, expiration: 2000000000
+//   }
+// Regenerate with /tmp/gen_eip712_set_evm_account.py.
+//   digest = 0x413dcb989e262175c252196ad97bb56341f27a7822170ec5901ea23955953b84
+// ============================================================================
+
+const EVM_SIG_R: u256 = 0x567d71e393aec8ad5384086c82ba869e655a4e405302e634056c4d4a638c20a4;
+const EVM_SIG_S: u256 = 0x329e345a78ac8ecc270a551bb2e2cd0b7b548d4b29330235476d5788d7d4623d;
+const EVM_SIG_Y_PARITY: bool = false;
+const EVM_ADDRESS_FELT: felt252 = 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266;
+const EVM_EXPIRATION_SECONDS: u64 = 2000000000;
+
+#[test]
+fn test_successful_set_evm_account() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default(); // position_id = POSITION_ID_100 (value=100)
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let new_evm_account: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
+    let expiration = Timestamp { seconds: EVM_EXPIRATION_SECONDS };
+
+    // STARK sig over the SNIP-12 message hash — same hash validate_signature builds on-chain.
+    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account, expiration };
+    let stark_msg_hash = args.get_message_hash(public_key: user.get_public_key());
+    let stark_signature = user.sign_message(message: stark_msg_hash);
+
+    let evm_signature = EvmSignature { r: EVM_SIG_R, s: EVM_SIG_S, y_parity: EVM_SIG_Y_PARITY };
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_evm_account(
+            position_id: user.position_id,
+            :new_evm_account,
+            :expiration,
+            :stark_signature,
+            :evm_signature,
+        );
+
+    assert!(
+        state
+            .positions
+            .get_position_mut(position_id: user.position_id)
+            .get_owner_evm_account()
+            .unwrap() == new_evm_account,
+    );
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_ZERO_EVM_ACCOUNT')]
+fn test_set_evm_account_zero_address() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let zero_addr: EthAddress = 0_felt252.try_into().unwrap();
+    // Sigs are never reached — the zero check happens first. Use dummies.
+    let dummy_stark = user.sign_message(message: 0);
+    let dummy_evm = EvmSignature { r: 0_u256, s: 0_u256, y_parity: false };
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_evm_account(
+            position_id: user.position_id,
+            new_evm_account: zero_addr,
+            expiration: Timestamp { seconds: EVM_EXPIRATION_SECONDS },
+            stark_signature: dummy_stark,
+            evm_signature: dummy_evm,
+        );
+}
+
+// A valid EIP-712 signature with the wrong recovery parity must not verify — proves the
+// EVM signature is genuinely bound to the signer address, not just well-formed.
+#[test]
+#[should_panic(expected: 'Invalid signature')]
+fn test_set_evm_account_bad_evm_signature() {
+    let cfg: PerpetualsInitConfig = Default::default();
+    let token_state = cfg.collateral_cfg.token_cfg.deploy();
+    let mut state = setup_state_with_active_synthetic(cfg: @cfg, token_state: @token_state);
+    let user = Default::default();
+    init_position(cfg: @cfg, ref :state, :user);
+
+    let new_evm_account: EthAddress = EVM_ADDRESS_FELT.try_into().unwrap();
+    let expiration = Timestamp { seconds: EVM_EXPIRATION_SECONDS };
+
+    // Valid STARK sig so we reach the EVM check.
+    let args = SetEvmAccountArgs { position_id: user.position_id, new_evm_account, expiration };
+    let stark_msg_hash = args.get_message_hash(public_key: user.get_public_key());
+    let stark_signature = user.sign_message(message: stark_msg_hash);
+
+    // Flip the recovery parity → ecrecover yields a different address → mismatch.
+    let evm_signature = EvmSignature { r: EVM_SIG_R, s: EVM_SIG_S, y_parity: !EVM_SIG_Y_PARITY };
+
+    cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    state
+        .positions
+        .set_evm_account(
+            position_id: user.position_id,
+            :new_evm_account,
+            :expiration,
+            :stark_signature,
+            :evm_signature,
+        );
+}
+
