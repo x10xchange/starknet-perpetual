@@ -5,9 +5,44 @@ use perpetuals::core::types::funding::FundingTick;
 use perpetuals::core::types::price::SignedPrice;
 use perpetuals::core::types::risk_factor::RiskFactor;
 use starknet::ContractAddress;
-use starkware_utils::signature::stark::PublicKey;
+use starkware_utils::signature::stark::{HashType, PublicKey};
 use starkware_utils::time::time::{TimeDelta, Timestamp};
 
+/// Raw per-asset record for state export: everything stored about one asset
+/// except the oracle registry (whose keys are not enumerable on-chain).
+#[derive(Drop, Serde)]
+pub struct AssetDump {
+    pub asset_id: AssetId,
+    /// The raw `asset_config` slot. `None` means "enumerated (a `timely_data`
+    /// entry exists) but unconfigured" — distinct from the asset being absent
+    /// from `AssetsDump.assets` entirely. Every registration path writes
+    /// `asset_config` together with the `timely_data` entry, so `None` is not
+    /// expected in practice; a copier must treat it as unconfigured, not as
+    /// zero-valued config.
+    pub config: Option<AssetConfig>,
+    pub timely_data: TimelyData,
+    pub risk_factor_tiers: Array<RiskFactor>,
+}
+
+/// Complete raw dump of the assets component in one call: all component
+/// scalars plus every asset (enumerated on-chain from the timely-data map,
+/// which contains every registered asset — including deactivated ones — and
+/// never loses entries; see `export_assets`).
+#[derive(Drop, Serde)]
+pub struct AssetsDump {
+    pub max_funding_rate: u32,
+    pub max_price_interval: TimeDelta,
+    pub max_funding_interval: TimeDelta,
+    pub last_price_validation: Timestamp,
+    pub last_funding_tick: Timestamp,
+    pub collateral_token_address: ContractAddress,
+    pub collateral_quantum: u64,
+    pub num_of_active_synthetic_assets: usize,
+    pub max_oracle_price_validity: TimeDelta,
+    pub collateral_id: Option<AssetId>,
+    pub risk_factor_request_hash: HashType,
+    pub assets: Array<AssetDump>,
+}
 
 #[starknet::interface]
 pub trait IAssets<TContractState> {

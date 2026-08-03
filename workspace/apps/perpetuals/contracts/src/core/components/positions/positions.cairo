@@ -23,7 +23,7 @@ pub mod Positions {
         invalid_interest_rate_err,
     };
     use perpetuals::core::components::positions::events;
-    use perpetuals::core::components::positions::interface::IPositions;
+    use perpetuals::core::components::positions::interface::{IPositions, PositionDump};
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, SyntheticTrait};
     use perpetuals::core::types::balance::Balance;
@@ -1116,6 +1116,50 @@ pub mod Positions {
             // Check: |interest_amount| <= max_allowed_change
             if interest_amount.abs().into() > max_allowed_change {
                 panic_with_byte_array(@invalid_interest_rate_err(:position_id));
+            }
+        }
+    }
+
+    /// Read-only state-dump surface: raw dump of position storage for
+    /// replicating a live contract's state (`get_position_assets` returns
+    /// funding-adjusted — not raw — balances, so a dedicated raw dump is
+    /// needed). Batched: one call dumps a page of positions.
+    #[generate_trait]
+    pub impl DumpImpl<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of DumpTrait<TContractState> {
+        /// Dump a batch of positions in one call. Page size is bounded by the
+        /// node's per-call step limit, not by this code.
+        fn export_positions(
+            self: @ComponentState<TContractState>, position_ids: Array<PositionId>,
+        ) -> Array<PositionDump> {
+            let mut out = array![];
+            let mut ids = position_ids;
+            while let Option::Some(position_id) = ids.pop_front() {
+                out.append(self.export_position(position_id));
+            }
+            out
+        }
+
+        /// Dump every stored field of a single position, including the full set
+        /// of per-asset balances (enumerated via the inner IterableMap).
+        fn export_position(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> PositionDump {
+            let position = self.positions.entry(position_id);
+            let mut asset_balances = array![];
+            for (asset_id, balance) in position.asset_balances {
+                asset_balances.append((asset_id, balance));
+            }
+            PositionDump {
+                position_id,
+                version: position.version.read(),
+                owner_account: position.owner_account.read(),
+                owner_public_key: position.owner_public_key.read(),
+                collateral_balance: position.collateral_balance.read(),
+                owner_protection_enabled: position.owner_protection_enabled.read(),
+                last_interest_applied_time: position.last_interest_applied_time.read(),
+                asset_balances,
             }
         }
     }

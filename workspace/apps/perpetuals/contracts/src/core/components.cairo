@@ -1,4 +1,5 @@
 pub mod assets;
+pub mod core_fields;
 pub mod deleverage;
 pub mod deposit;
 pub mod deposit_limits;

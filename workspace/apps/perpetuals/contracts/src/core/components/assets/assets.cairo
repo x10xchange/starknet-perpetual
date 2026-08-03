@@ -19,7 +19,9 @@ pub mod AssetsComponent {
         ZERO_MAX_PRICE_INTERVAL, oracle_public_key_not_registered,
     };
     use perpetuals::core::components::assets::events;
-    use perpetuals::core::components::assets::interface::{IAssets, IAssetsManager};
+    use perpetuals::core::components::assets::interface::{
+        AssetDump, AssetsDump, IAssets, IAssetsManager,
+    };
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
     use perpetuals::core::types::asset::synthetic::{
@@ -800,6 +802,70 @@ pub mod AssetsComponent {
                     );
                 }
             };
+        }
+    }
+
+    /// Read-only state-dump surface for replicating this component's storage.
+    /// Everything is batched to minimize dump calls: `export_assets` returns
+    /// the entire component (scalars + every asset) in one call; only the
+    /// oracle registry needs input keys (not enumerable on-chain).
+    #[generate_trait]
+    pub impl DumpImpl<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of DumpTrait<TContractState> {
+        /// Complete raw dump of the component. Asset ids are enumerated from
+        /// the timely-data map, so no key input is needed. This enumeration is
+        /// COMPLETE: every registration path in the assets manager (synthetic,
+        /// vault share, spot) writes a `timely_data` entry alongside
+        /// `asset_config`, no path ever removes one, and deactivation only
+        /// flips `asset_config.status` — so deactivated assets are included.
+        /// Collateral lives in neither map; it round-trips via the
+        /// `AssetsDump` scalars. (Enforced by the dump flow tests.)
+        fn export_assets(self: @ComponentState<TContractState>) -> AssetsDump {
+            let mut assets = array![];
+            for (asset_id, timely_data) in self.timely_data {
+                let tiers = self.risk_factor_tiers.entry(asset_id);
+                let mut risk_factor_tiers = array![];
+                for i in 0..tiers.len() {
+                    risk_factor_tiers.append(tiers.at(i).read());
+                }
+                assets
+                    .append(
+                        AssetDump {
+                            asset_id,
+                            config: self.asset_config.entry(asset_id).read(),
+                            timely_data,
+                            risk_factor_tiers,
+                        },
+                    );
+            }
+            AssetsDump {
+                max_funding_rate: self.max_funding_rate.read(),
+                max_price_interval: self.max_price_interval.read(),
+                max_funding_interval: self.max_funding_interval.read(),
+                last_price_validation: self.last_price_validation.read(),
+                last_funding_tick: self.last_funding_tick.read(),
+                collateral_token_address: self.collateral_token_contract.read().contract_address,
+                collateral_quantum: self.collateral_quantum.read(),
+                num_of_active_synthetic_assets: self.num_of_active_synthetic_assets.read(),
+                max_oracle_price_validity: self.max_oracle_price_validity.read(),
+                collateral_id: self.collateral_id.read(),
+                risk_factor_request_hash: self.risk_factor_request_hash.read(),
+                assets,
+            }
+        }
+
+        /// Batched oracle-registry read: one `(asset_id, oracle_key)` pair per
+        /// entry, any mix of assets in a single call.
+        fn export_asset_oracle(
+            self: @ComponentState<TContractState>, entries: Array<(AssetId, PublicKey)>,
+        ) -> Array<felt252> {
+            let mut out = array![];
+            let mut entries = entries;
+            while let Option::Some((asset_id, key)) = entries.pop_front() {
+                out.append(self.asset_oracle.entry(asset_id).entry(key).read());
+            }
+            out
         }
     }
 }

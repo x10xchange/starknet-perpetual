@@ -367,7 +367,7 @@ pub fn set_roles(ref state: Core::ContractState, cfg: @PerpetualsInitConfig) {
 }
 
 pub fn get_treasury_address(state: @Core::ContractState) -> ContractAddress {
-    state.treasury.contract_address.read()
+    state.core_fields.treasury.contract_address.read()
 }
 
 pub fn fund_treasury_with_token(
@@ -789,7 +789,7 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         upgrade_delay: *cfg.upgrade_delay,
         perps_contract: test_address(),
     );
-    state.treasury.write(ITreasuryDispatcher { contract_address: treasury_address });
+    state.core_fields.treasury.write(ITreasuryDispatcher { contract_address: treasury_address });
 
     // Fund treasury so withdrawals have tokens to transfer.
     (*token_state)
