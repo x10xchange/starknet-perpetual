@@ -9,27 +9,28 @@ use starkware_utils::signature::stark::{HashType, PublicKey};
 use starkware_utils::time::time::{TimeDelta, Timestamp};
 
 /// Raw per-asset record for state export: everything stored about one asset
-/// except the oracle registry (whose keys are not enumerable on-chain).
+/// except the oracle registry (whose keys are not enumerable on-chain). Both
+/// optional fields mirror the raw storage slots exactly (`asset_config` is a
+/// `Map<AssetId, Option<AssetConfig>>`; `timely_data` is an `IterableMap`,
+/// which reads `None` for a key it never held). Every registration path
+/// writes both together and nothing ever clears them, so for a registered id
+/// (deactivated or not) both are `Some`; for an id that was never registered
+/// both are `None` and `risk_factor_tiers` is empty. A copier must treat a
+/// `None` as "no such slot", never as zero-valued config/data.
 #[derive(Drop, Serde)]
 pub struct AssetDump {
     pub asset_id: AssetId,
-    /// The raw `asset_config` slot. `None` means "enumerated (a `timely_data`
-    /// entry exists) but unconfigured" — distinct from the asset being absent
-    /// from `AssetsDump.assets` entirely. Every registration path writes
-    /// `asset_config` together with the `timely_data` entry, so `None` is not
-    /// expected in practice; a copier must treat it as unconfigured, not as
-    /// zero-valued config.
     pub config: Option<AssetConfig>,
-    pub timely_data: TimelyData,
+    pub timely_data: Option<TimelyData>,
     pub risk_factor_tiers: Array<RiskFactor>,
 }
 
-/// Complete raw dump of the assets component in one call: all component
-/// scalars plus every asset (enumerated on-chain from the timely-data map,
-/// which contains every registered asset — including deactivated ones — and
-/// never loses entries; see `export_assets`).
+/// The assets component's scalars (everything not keyed by asset id) in one
+/// record; the per-asset records are exported separately, per page of ids,
+/// via `export_assets`. Collateral lives in no per-asset map; it round-trips
+/// entirely through these scalars.
 #[derive(Drop, Serde)]
-pub struct AssetsDump {
+pub struct AssetsDumpScalars {
     pub max_funding_rate: u32,
     pub max_price_interval: TimeDelta,
     pub max_funding_interval: TimeDelta,
@@ -41,7 +42,6 @@ pub struct AssetsDump {
     pub max_oracle_price_validity: TimeDelta,
     pub collateral_id: Option<AssetId>,
     pub risk_factor_request_hash: HashType,
-    pub assets: Array<AssetDump>,
 }
 
 #[starknet::interface]

@@ -9,8 +9,12 @@
 //! - Full round trip: populate a live Core through normal entrypoints,
 //!   `replace_to` DumpCore, export everything, assert every exported
 //!   value, `replace_to` back to Core, and verify trading still works.
-//! - Deactivated synthetics stay in `export_assets` (they are enumerated from
-//!   `timely_data`, which deactivation does not touch).
+//! - Deactivated synthetics stay enumerable via `export_asset_ids` (the
+//!   `timely_data` key list, which deactivation does not touch) and export
+//!   their full record via `export_assets`; an unregistered id exports as an
+//!   all-`None` record rather than a zeroed one.
+//! - `export_asset_ids` returns every registered id in registration order and
+//!   `export_assets` records are index-aligned with any id subset.
 
 use core::num::traits::Zero;
 use perpetuals::core::components::assets::assets_manager::{
@@ -330,7 +334,8 @@ fn test_dump_core_round_trip() {
     assert!(config.core.forced_actions_enabled);
     assert_eq!(config.core.interest_divergence, interest_amount);
 
-    // Assets component scalars.
+    // Assets component scalars (config is scalar-only; per-asset records are
+    // paged separately).
     let assets_dump = config.assets;
     assert_eq!(assets_dump.max_funding_rate, MAX_FUNDING_RATE);
     assert_eq!(assets_dump.max_price_interval, MAX_PRICE_INTERVAL);
@@ -344,20 +349,30 @@ fn test_dump_core_round_trip() {
     assert_eq!(assets_dump.num_of_active_synthetic_assets, expected_num_active);
     assert!(assets_dump.risk_factor_request_hash.is_zero());
 
-    // Per-asset dumps: both synthetics and the vault-share asset enumerated.
-    assert_eq!(assets_dump.assets.len(), 3);
-    let btc_dump = find_asset_dump(assets: @assets_dump.assets, asset_id: btc_info.asset_id);
+    // Asset ids enumerated on-chain: both synthetics and the vault-share
+    // asset, in registration order.
+    let asset_ids = dump_extra.export_asset_ids();
+    assert_eq!(asset_ids, array![btc_info.asset_id, eth_info.asset_id, vault_state.asset_id]);
+
+    // Per-asset dumps for that id page, index-aligned with the input.
+    let assets = dump_extra.export_assets(asset_ids: asset_ids.clone());
+    assert_eq!(assets.len(), 3);
+    for i in 0..assets.len() {
+        assert_eq!(*assets.at(i).asset_id, *asset_ids.at(i));
+    }
+    let btc_dump = find_asset_dump(assets: @assets, asset_id: btc_info.asset_id);
     let btc_dump_config = (*btc_dump.config).expect('BTC config missing from dump');
     assert_eq!(btc_dump_config.status, live_btc_config.status);
     assert_eq!(btc_dump_config.quorum, live_btc_config.quorum);
     assert_eq!(btc_dump_config.resolution_factor, live_btc_config.resolution_factor);
     assert_eq!(btc_dump_config.asset_type, live_btc_config.asset_type);
-    assert_eq!(*btc_dump.timely_data.price, live_btc_timely.price);
-    assert_eq!(*btc_dump.timely_data.last_price_update, live_btc_timely.last_price_update);
-    assert_eq!(*btc_dump.timely_data.funding_index, live_btc_timely.funding_index);
+    let btc_dump_timely = (*btc_dump.timely_data).expect('BTC timely data missing');
+    assert_eq!(btc_dump_timely.price, live_btc_timely.price);
+    assert_eq!(btc_dump_timely.last_price_update, live_btc_timely.last_price_update);
+    assert_eq!(btc_dump_timely.funding_index, live_btc_timely.funding_index);
     assert!(btc_dump.risk_factor_tiers.span() == live_btc_tiers);
-    find_asset_dump(assets: @assets_dump.assets, asset_id: eth_info.asset_id);
-    find_asset_dump(assets: @assets_dump.assets, asset_id: vault_state.asset_id);
+    find_asset_dump(assets: @assets, asset_id: eth_info.asset_id);
+    find_asset_dump(assets: @assets, asset_id: vault_state.asset_id);
 
     // External component registry: fixed key set, one entry per component.
     assert_eq!(config.external_components.len(), 8);
@@ -454,11 +469,13 @@ fn test_dump_core_round_trip() {
     state.facade.validate_collateral_balance(user_a.position_id, 9_254_i64.into());
 }
 
-/// Finding 4: `export_assets` enumerates asset ids from the `timely_data`
-/// map. Deactivation must NOT remove an asset from the dump — positions may
-/// still hold balances in it. Also pins the invariant that every enumerated
-/// asset has a populated config (`AssetDump.config` of `None` means
-/// "enumerated but unconfigured" and is currently unreachable).
+/// Finding 4: `export_asset_ids` enumerates asset ids from the `timely_data`
+/// key list. Deactivation must NOT remove an asset from that list or from its
+/// `export_assets` record — positions may still hold balances in it. Also pins
+/// the invariants that every enumerated asset has a populated config and
+/// timely data (a `None` there would mean "enumerated but unconfigured", which
+/// is currently unreachable), and that an unregistered id exports as an
+/// all-`None` record — distinguishable from a real asset, never zero-valued.
 #[test]
 fn test_export_assets_includes_deactivated_synthetic() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
@@ -523,28 +540,82 @@ fn test_export_assets_includes_deactivated_synthetic() {
 
     replace_contract_class(facade: @state.facade, class_hash: declared_class_hash("DumpCore"));
 
-    let config = IDumpExtraDispatcher { contract_address }.export_config();
-    let assets_dump = config.assets;
-    assert_eq!(assets_dump.num_of_active_synthetic_assets, expected_num_active);
-    assert_eq!(assets_dump.assets.len(), 2);
+    let dump_extra = IDumpExtraDispatcher { contract_address };
+    let config = dump_extra.export_config();
+    assert_eq!(config.assets.num_of_active_synthetic_assets, expected_num_active);
 
-    // The deactivated synthetic is still enumerated, with its full record.
-    let btc_dump = find_asset_dump(assets: @assets_dump.assets, asset_id: btc_info.asset_id);
+    // The deactivated synthetic is still enumerated ...
+    let asset_ids = dump_extra.export_asset_ids();
+    assert_eq!(asset_ids, array![btc_info.asset_id, eth_info.asset_id]);
+
+    // ... with its full record.
+    let assets = dump_extra.export_assets(asset_ids: asset_ids.clone());
+    assert_eq!(assets.len(), 2);
+    let btc_dump = find_asset_dump(assets: @assets, asset_id: btc_info.asset_id);
     let btc_dump_config = (*btc_dump.config).expect('BTC config missing from dump');
     assert_eq!(btc_dump_config.status, AssetStatus::INACTIVE);
     assert_eq!(btc_dump.risk_factor_tiers.len(), 3);
-    assert!((*btc_dump.timely_data.price).is_non_zero());
+    let btc_dump_timely = (*btc_dump.timely_data).expect('BTC timely data missing');
+    assert!(btc_dump_timely.price.is_non_zero());
 
-    // Invariant: every enumerated asset has a populated config. If a future
-    // assets-manager change makes config-less enumeration reachable, this
-    // makes the gap visible.
-    for asset in assets_dump.assets.span() {
+    // Invariant: every enumerated asset has a populated config and timely
+    // data. If a future assets-manager change makes config-less enumeration
+    // reachable, this makes the gap visible.
+    for asset in assets.span() {
         assert!(asset.config.is_some(), "enumerated asset without config");
+        assert!(asset.timely_data.is_some(), "enumerated asset without timely data");
     }
+
+    // An id that was never registered exports as an all-`None` record (raw
+    // storage mirror), not as a zeroed asset — a copier can tell it apart.
+    let unknown_id: AssetId = 'NEVER_REGISTERED'.into();
+    let unknown = dump_extra.export_assets(asset_ids: array![unknown_id]);
+    assert_eq!(unknown.len(), 1);
+    assert_eq!(*unknown.at(0).asset_id, unknown_id);
+    assert!(unknown.at(0).config.is_none());
+    assert!(unknown.at(0).timely_data.is_none());
+    assert_eq!(unknown.at(0).risk_factor_tiers.len(), 0);
 
     // The position still holds a balance in the deactivated asset — the
     // reason dropping it from the dump would corrupt a replica built from it.
     let positions = IDumpDispatcher { contract_address }
         .export_positions(position_ids: array![user_a.position_id]);
     assert_eq!(dumped_asset_balance(dump: positions.at(0), asset_id: btc_info.asset_id), 10);
+}
+
+/// `export_asset_ids` lists every registered id in registration order, and
+/// `export_assets` returns records index-aligned with whatever id subset it is
+/// given — so a copier can split the id list into pages of any size.
+#[test]
+fn test_export_asset_ids_and_paged_records() {
+    let mut state: FlowTestBase = FlowTestBaseTrait::new();
+    let contract_address = state.facade.perpetuals_contract;
+    let risk_factor_data = RiskFactorTiers {
+        tiers: array![100].span(), first_tier_boundary: 10_000, tier_size: 10_000,
+    };
+    let names = array!['A_MIG', 'B_MIG', 'C_MIG', 'D_MIG', 'E_MIG'];
+    let mut expected_ids = array![];
+    for name in names.span() {
+        let info = AssetInfoTrait::new(asset_name: *name, :risk_factor_data, oracles_len: 1);
+        state.facade.add_active_synthetic(synthetic_info: @info, initial_price: 100);
+        expected_ids.append(info.asset_id);
+    }
+
+    replace_contract_class(facade: @state.facade, class_hash: declared_class_hash("DumpCore"));
+    let dump_extra = IDumpExtraDispatcher { contract_address };
+
+    let all_ids = dump_extra.export_asset_ids();
+    assert_eq!(all_ids, expected_ids);
+
+    // Records for a page of ids (a middle slice), index-aligned with the input.
+    let page = array![*all_ids.at(1), *all_ids.at(2), *all_ids.at(3)];
+    let records = dump_extra.export_assets(asset_ids: page.clone());
+    assert_eq!(records.len(), 3);
+    for i in 0..records.len() {
+        assert_eq!(*records.at(i).asset_id, *page.at(i));
+        assert!(records.at(i).config.is_some());
+        assert!(records.at(i).timely_data.is_some());
+    }
+    // Empty page is fine.
+    assert_eq!(dump_extra.export_assets(asset_ids: array![]).len(), 0);
 }

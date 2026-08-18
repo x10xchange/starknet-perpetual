@@ -2,7 +2,8 @@
 //! batched export surface (`IDump` + `IDumpExtra`), which does not
 //! fit inside `Core` next to the trading logic (Core is near Starknet's max
 //! class size). A full dump is `export_config()` (one call) +
-//! `export_positions` pages + `export_keyed` pages — see dump.cairo. The
+//! `export_asset_ids()` (one call) + `export_assets` pages + `export_positions` pages +
+//! `export_keyed` pages — see dump.cairo. The
 //! only state NOT covered is the request-approvals maps (upstream component
 //! internals are private): read `approved_requests` per-hash via
 //! `get_request_status` on the live Core class, and `forced_action_requests`
@@ -28,6 +29,7 @@ pub mod DumpCore {
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::DumpTrait as AssetsDumpTrait;
+    use perpetuals::core::components::assets::interface::AssetDump;
     use perpetuals::core::components::core_fields::CoreFieldsComponent;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit_limits::DepositLimits as DepositLimitsComponent;
@@ -46,6 +48,7 @@ pub mod DumpCore {
     use perpetuals::core::dump::{
         ConfigDump, CoreDumpScalars, ExternalComponentEntry, IDump, IDumpExtra, KeySets, KeyedDump,
     };
+    use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::PositionId;
     use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
     use starkware_utils::components::pausable::PausableComponent;
@@ -193,7 +196,7 @@ pub mod DumpCore {
 
     #[abi(embed_v0)]
     pub impl DumpExtraImpl of IDumpExtra<ContractState> {
-        /// The entire config plane in one call.
+        /// The entire scalar config plane in one constant-cost call.
         fn export_config(self: @ContractState) -> ConfigDump {
             let mut external_components = array![];
             for component_type in array![
@@ -230,9 +233,17 @@ pub mod DumpCore {
                 max_interest_rate_per_sec: self.positions.max_interest_rate_per_sec.read(),
                 treasury_address: self.core_fields.treasury.contract_address.read(),
                 core: self.export_core_scalars(),
-                assets: self.assets.export_assets(),
+                assets: self.assets.export_assets_scalars(),
                 external_components,
             }
+        }
+
+        fn export_asset_ids(self: @ContractState) -> Array<AssetId> {
+            self.assets.export_asset_ids()
+        }
+
+        fn export_assets(self: @ContractState, asset_ids: Array<AssetId>) -> Array<AssetDump> {
+            self.assets.export_assets(:asset_ids)
         }
 
         /// Every event-keyed map in one call per page of keys.

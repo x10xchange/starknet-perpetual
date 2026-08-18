@@ -20,7 +20,7 @@ pub mod AssetsComponent {
     };
     use perpetuals::core::components::assets::events;
     use perpetuals::core::components::assets::interface::{
-        AssetDump, AssetsDump, IAssets, IAssetsManager,
+        AssetDump, AssetsDumpScalars, IAssets, IAssetsManager,
     };
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent;
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as NonceInternal;
@@ -806,40 +806,20 @@ pub mod AssetsComponent {
     }
 
     /// Read-only state-dump surface for replicating this component's storage.
-    /// Everything is batched to minimize dump calls: `export_assets` returns
-    /// the entire component (scalars + every asset) in one call; only the
-    /// oracle registry needs input keys (not enumerable on-chain).
+    /// Scalars come in one call (`export_assets_scalars`); per-asset records
+    /// are read per page of ids (`export_assets`), the oracle registry per
+    /// page of `(asset_id, key)` pairs (`export_asset_oracle`). Nothing here
+    /// iterates an unbounded set: every call's cost is proportional to the
+    /// caller-supplied page, so the page size — not the asset count — is what
+    /// must fit the node's per-call step limit.
     #[generate_trait]
     pub impl DumpImpl<
         TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
     > of DumpTrait<TContractState> {
-        /// Complete raw dump of the component. Asset ids are enumerated from
-        /// the timely-data map, so no key input is needed. This enumeration is
-        /// COMPLETE: every registration path in the assets manager (synthetic,
-        /// vault share, spot) writes a `timely_data` entry alongside
-        /// `asset_config`, no path ever removes one, and deactivation only
-        /// flips `asset_config.status` — so deactivated assets are included.
-        /// Collateral lives in neither map; it round-trips via the
-        /// `AssetsDump` scalars. (Enforced by the dump flow tests.)
-        fn export_assets(self: @ComponentState<TContractState>) -> AssetsDump {
-            let mut assets = array![];
-            for (asset_id, timely_data) in self.timely_data {
-                let tiers = self.risk_factor_tiers.entry(asset_id);
-                let mut risk_factor_tiers = array![];
-                for i in 0..tiers.len() {
-                    risk_factor_tiers.append(tiers.at(i).read());
-                }
-                assets
-                    .append(
-                        AssetDump {
-                            asset_id,
-                            config: self.asset_config.entry(asset_id).read(),
-                            timely_data,
-                            risk_factor_tiers,
-                        },
-                    );
-            }
-            AssetsDump {
+        /// All component scalars. Collateral is described entirely by these
+        /// (it lives in no per-asset map).
+        fn export_assets_scalars(self: @ComponentState<TContractState>) -> AssetsDumpScalars {
+            AssetsDumpScalars {
                 max_funding_rate: self.max_funding_rate.read(),
                 max_price_interval: self.max_price_interval.read(),
                 max_funding_interval: self.max_funding_interval.read(),
@@ -851,8 +831,53 @@ pub mod AssetsComponent {
                 max_oracle_price_validity: self.max_oracle_price_validity.read(),
                 collateral_id: self.collateral_id.read(),
                 risk_factor_request_hash: self.risk_factor_request_hash.read(),
-                assets,
             }
+        }
+
+        /// Raw per-asset records for one page of ids, index-aligned with the
+        /// input. Ids are not validated: an unregistered id yields a record
+        /// with `config == None`, `timely_data == None` and no tiers (see
+        /// `AssetDump`). Deactivated assets are ordinary registered assets
+        /// here (deactivation only flips `config.status`).
+        fn export_assets(
+            self: @ComponentState<TContractState>, asset_ids: Array<AssetId>,
+        ) -> Array<AssetDump> {
+            let mut assets = array![];
+            let mut asset_ids = asset_ids;
+            while let Option::Some(asset_id) = asset_ids.pop_front() {
+                let tiers = self.risk_factor_tiers.entry(asset_id);
+                let mut risk_factor_tiers = array![];
+                for i in 0..tiers.len() {
+                    risk_factor_tiers.append(tiers.at(i).read());
+                }
+                assets
+                    .append(
+                        AssetDump {
+                            asset_id,
+                            config: self.asset_config.entry(asset_id).read(),
+                            timely_data: self.timely_data.read(asset_id),
+                            risk_factor_tiers,
+                        },
+                    );
+            }
+            assets
+        }
+
+        /// On-chain enumeration of every registered asset id, in registration
+        /// order. This enumeration is COMPLETE: every registration path in the
+        /// assets manager (synthetic, vault share, spot) writes a `timely_data`
+        /// entry alongside `asset_config`, no path ever removes one, and
+        /// deactivation only flips `asset_config.status`. It reads only the key
+        /// list (one or two storage reads per id — no config, timely data or
+        /// tiers), so it stays cheap at any realistic asset count; the
+        /// per-record export is what is paged. Use it as the ground truth for
+        /// the id set (or to cross-check ids gathered from events).
+        fn export_asset_ids(self: @ComponentState<TContractState>) -> Array<AssetId> {
+            let mut ids = array![];
+            for key in self.timely_data.keys_iter() {
+                ids.append(key.read());
+            }
+            ids
         }
 
         /// Batched oracle-registry read: one `(asset_id, oracle_key)` pair per

@@ -1,27 +1,37 @@
 //! State-dump interface for replicating a live `Core` deployment's
 //! state (e.g. across chains): a read-only export surface. All entrypoints are
-//! read-only views, batched so a full dump takes as few calls as possible:
+//! read-only views, batched so a full dump takes as few calls as possible. No
+//! call reads full records for an unbounded on-chain set: record exports cost
+//! in proportion to their caller-supplied page, so page size — not the size of
+//! the deployment — is what must fit the node's per-call step limit (the one
+//! whole-set walk, `export_asset_ids`, touches only the id list).
 //!
-//!  - `export_config()` — the ENTIRE config plane in ONE call: every scalar of
-//!    every component, all assets (ids enumerated on-chain), and the external
-//!    component registry (fixed key set).
+//!  - `export_config()` — every scalar of every component plus the external
+//!    component registry (fixed 8-key set) in ONE call of constant cost.
+//!  - `export_asset_ids()` — on-chain enumeration of every registered asset
+//!    id (key list only: one or two storage reads per id, no records).
+//!  - `export_assets(ids)` — raw asset records, one call per page of ids.
 //!  - `export_positions(ids)` — raw position dumps, one call per page of ids.
 //!  - `export_keyed(keys)` — every event-keyed map (deposits, fulfillment,
 //!    oracle, vaults, deposit limits) in one call per page of keys.
 //!
-//! Total dump = 1 + ceil(positions/page) + ceil(keyed/page) calls. Page size is
-//! bounded by the node's per-call step limit (each storage slot is one
+//! Total dump = 2 + ceil(assets/page) + ceil(positions/page) + ceil(keyed/page)
+//! calls. Page size is bounded by the node's per-call step limit (each storage slot is one
 //! `storage_read` syscall), not by this code.
 //!
-//! KEY DISCOVERY. Asset ids need no input keys: `export_assets` enumerates the
-//! `timely_data` `IterableMap`, and every registration path (synthetic, vault
-//! share, spot) writes a `timely_data` entry alongside `asset_config`, while no
-//! path ever removes one — deactivation only flips `asset_config.status` to
-//! INACTIVE. Deactivated assets therefore stay in the dump. (Collateral is not
-//! in these maps at all; it round-trips via the `AssetsDump` scalars.) All
-//! other key sets — `export_positions` ids and every `export_keyed` field — are
-//! NOT enumerable on-chain (plain `Map`s store no key list): the off-chain
-//! copier discovers them from events or an application snapshot.
+//! KEY DISCOVERY. Asset ids are the one key set enumerable on-chain:
+//! `export_asset_ids` walks the `timely_data` `IterableMap` key list, and every
+//! registration path (synthetic, vault share, spot) writes a `timely_data`
+//! entry alongside `asset_config`, while no path ever removes one —
+//! deactivation only flips `asset_config.status` to INACTIVE, so deactivated
+//! assets stay enumerable and exportable. The same ids are also recoverable
+//! from events at Core's address (`SyntheticAdded`, `SpotAssetAdded` — the
+//! latter also covers vault-share assets), which a copier may use instead and
+//! cross-check against `export_asset_ids`. (Collateral is not in these maps at
+//! all; it round-trips via the `AssetsDumpScalars`.) All other key sets —
+//! `export_positions` ids and every `export_keyed` field — are NOT enumerable
+//! on-chain (plain `Map`s store no key list): the off-chain copier discovers
+//! them from events or an application snapshot.
 //!
 //! NOTE ON SCOPE: the `Core` class already sits near Starknet's max class size,
 //! so only `IDump` (positions + core scalars) is embedded in `Core`
@@ -36,7 +46,7 @@
 //! read per-hash via `get_request_status` on the live Core class (batch at the
 //! JSON-RPC level); `forced_action_requests` needs raw `starknet_getStorageAt`.
 
-use perpetuals::core::components::assets::interface::AssetsDump;
+use perpetuals::core::components::assets::interface::{AssetDump, AssetsDumpScalars};
 use perpetuals::core::components::deposit::interface::DepositStatus;
 use perpetuals::core::components::positions::interface::PositionDump;
 use perpetuals::core::components::vaults::types::VaultConfig;
@@ -65,8 +75,9 @@ pub struct ExternalComponentEntry {
     pub implementation: ClassHash,
 }
 
-/// The entire config plane of the contract — everything that is not keyed by a
-/// non-enumerable map key — returned by a single `export_config()` call.
+/// The entire scalar config plane of the contract — everything that is not
+/// keyed by a map key — returned by a single, constant-cost `export_config()`
+/// call. Per-asset records are paged separately via `export_assets`.
 #[derive(Drop, Serde)]
 pub struct ConfigDump {
     pub operator_nonce: u64,
@@ -77,7 +88,7 @@ pub struct ConfigDump {
     pub max_interest_rate_per_sec: u32,
     pub treasury_address: ContractAddress,
     pub core: CoreDumpScalars,
-    pub assets: AssetsDump,
+    pub assets: AssetsDumpScalars,
     /// One entry per fixed component-type key (8 known constants).
     pub external_components: Array<ExternalComponentEntry>,
 }
@@ -127,5 +138,10 @@ pub trait IDump<TContractState> {
 #[starknet::interface]
 pub trait IDumpExtra<TContractState> {
     fn export_config(self: @TContractState) -> ConfigDump;
+    /// Every registered asset id, in registration order (complete; see
+    /// `AssetsComponent::export_asset_ids`).
+    fn export_asset_ids(self: @TContractState) -> Array<AssetId>;
+    /// Raw asset records for one page of ids, index-aligned with the input.
+    fn export_assets(self: @TContractState, asset_ids: Array<AssetId>) -> Array<AssetDump>;
     fn export_keyed(self: @TContractState, keys: KeySets) -> KeyedDump;
 }
