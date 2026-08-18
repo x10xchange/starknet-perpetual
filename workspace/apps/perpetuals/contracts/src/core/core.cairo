@@ -8,6 +8,7 @@ pub mod Core {
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
     use perpetuals::core::components::assets::errors::{NOT_SYNTHETIC, NO_SUCH_ASSET};
+    use perpetuals::core::components::core_fields::CoreFieldsComponent;
     use perpetuals::core::components::deposit::Deposit;
     use perpetuals::core::components::deposit::Deposit::InternalTrait as DepositInternal;
     use perpetuals::core::components::deposit_limits::DepositLimits as DepositLimitsComponent;
@@ -17,9 +18,11 @@ pub mod Core {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalTrait as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions;
     use perpetuals::core::components::positions::Positions::{
-        FEE_POSITION, InternalTrait as PositionsInternalTrait,
+        DumpTrait as PositionsDumpTrait, FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
+    use perpetuals::core::components::positions::interface::PositionDump;
+    use perpetuals::core::dump::{CoreDumpScalars, IDump};
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
         ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC,
@@ -54,7 +57,6 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
-    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -97,6 +99,7 @@ pub mod Core {
 
     component!(path: VaultsComponent, storage: vaults, event: VaultsEvent);
     component!(path: DepositLimitsComponent, storage: deposit_limits, event: DepositLimitsEvent);
+    component!(path: CoreFieldsComponent, storage: core_fields, event: CoreFieldsEvent);
 
     #[abi(embed_v0)]
     impl DepositLimitsImpl =
@@ -142,6 +145,27 @@ pub mod Core {
     #[abi(embed_v0)]
     impl VaultImpl = VaultsComponent::VaultsImpl<ContractState>;
 
+    /// Read-only export of raw contract state for replicating this deployment
+    /// into a fresh one. Only covers state with no existing view — everything
+    /// else is read via the standard `get_*` entrypoints.
+    #[abi(embed_v0)]
+    pub impl DumpImpl of IDump<ContractState> {
+        fn export_positions(
+            self: @ContractState, position_ids: Array<PositionId>,
+        ) -> Array<PositionDump> {
+            self.positions.export_positions(position_ids)
+        }
+
+        fn export_core_scalars(self: @ContractState) -> CoreDumpScalars {
+            CoreDumpScalars {
+                forced_action_timelock: self.core_fields.forced_action_timelock.read(),
+                premium_cost: self.core_fields.premium_cost.read(),
+                forced_actions_enabled: self.core_fields.forced_actions_enabled.read(),
+                interest_divergence: self.positions.interest_divergence.read(),
+            }
+        }
+    }
+
 
     #[storage]
     struct Storage {
@@ -177,17 +201,13 @@ pub mod Core {
         pub vaults: VaultsComponent::Storage,
         #[substorage(v0)]
         pub deposit_limits: DepositLimitsComponent::Storage,
-        // --- Treasury ---
-        pub treasury: ITreasuryDispatcher,
-        /// ------- Core -------
-        // Forced action parameters:
-        // Timelock before forced actions can be executed.
-        forced_action_timelock: TimeDelta,
-        // Cost for executing forced actions.
-        premium_cost: u64,
-        // Whether the new escape hatch logic is enabled.
-        // Off by default to be enabled one time in the future
-        forced_actions_enabled: bool,
+        // --- Core's own contract-level fields (treasury + forced-action
+        // parameters). Hosted in a component shared with `DumpCore` so the
+        // two classes cannot drift; substorage is flattened, so the member
+        // addresses are unchanged from when the fields were declared here
+        // directly.
+        #[substorage(v0)]
+        pub core_fields: CoreFieldsComponent::Storage,
     }
 
     #[event]
@@ -235,6 +255,8 @@ pub mod Core {
         ExternalComponentsEvent: ExternalComponentsComponent::Event,
         #[flat]
         VaultsEvent: VaultsComponent::Event,
+        #[flat]
+        CoreFieldsEvent: CoreFieldsComponent::Event,
         //duplicated for ABI
         Deposit: deposit_events::Deposit,
         DepositCanceled: deposit_events::DepositCanceled,
@@ -288,8 +310,11 @@ pub mod Core {
             );
 
         assert(forced_action_timelock.is_non_zero(), INVALID_ZERO_TIMEOUT);
-        self.forced_action_timelock.write(TimeDelta { seconds: forced_action_timelock });
-        self.premium_cost.write(premium_cost);
+        self
+            .core_fields
+            .forced_action_timelock
+            .write(TimeDelta { seconds: forced_action_timelock });
+        self.core_fields.premium_cost.write(premium_cost);
         self.exchange_time.initialize();
     }
 
@@ -888,7 +913,7 @@ pub mod Core {
                 self.operator_nonce.use_checked_nonce(:operator_nonce);
             } else {
                 let now = Time::now();
-                let forced_action_timelock = self.forced_action_timelock.read();
+                let forced_action_timelock = self.core_fields.forced_action_timelock.read();
                 assert(request_time.add(forced_action_timelock) <= now, FORCED_WAIT_REQUIRED);
             }
 
@@ -1005,7 +1030,7 @@ pub mod Core {
                 self.operator_nonce.use_checked_nonce(:operator_nonce);
             } else {
                 let now = Time::now();
-                let forced_action_timelock = self.forced_action_timelock.read();
+                let forced_action_timelock = self.core_fields.forced_action_timelock.read();
                 assert(request_time.add(forced_action_timelock) <= now, FORCED_WAIT_REQUIRED);
             }
 
@@ -1119,7 +1144,7 @@ pub mod Core {
 
         fn enable_escape_hatch(ref self: ContractState) {
             self.roles.only_app_governor();
-            self.forced_actions_enabled.write(true);
+            self.core_fields.forced_actions_enabled.write(true);
         }
         fn get_max_interest_rate_per_sec(self: @ContractState) -> u32 {
             self.positions.max_interest_rate_per_sec.read()
@@ -1140,7 +1165,7 @@ pub mod Core {
         }
 
         fn get_treasury_address(ref self: ContractState) -> ContractAddress {
-            self.treasury.contract_address.read()
+            self.core_fields.treasury.contract_address.read()
         }
     }
 

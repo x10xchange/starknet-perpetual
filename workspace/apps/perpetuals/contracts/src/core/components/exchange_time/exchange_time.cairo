@@ -115,4 +115,21 @@ pub mod ExchangeTimeComponent {
             self.last_time_of_exchange_time_update.write(now);
         }
     }
+
+    /// State-dump accessors (see core/dump.cairo). Live inside the
+    /// component so the storage members themselves stay private.
+    #[generate_trait]
+    pub impl DumpImpl<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of DumpTrait<TContractState> {
+        fn export_exchange_time(self: @ComponentState<TContractState>) -> Timestamp {
+            self.exchange_time.read()
+        }
+
+        fn export_last_time_of_exchange_time_update(
+            self: @ComponentState<TContractState>,
+        ) -> Timestamp {
+            self.last_time_of_exchange_time_update.read()
+        }
+    }
 }

@@ -1,8 +1,25 @@
-use perpetuals::core::types::position::{PositionData, PositionId};
+use perpetuals::core::types::asset::AssetId;
+use perpetuals::core::types::balance::Balance;
+use perpetuals::core::types::position::{AssetBalance, PositionData, PositionId};
 use perpetuals::core::value_risk_calculator::PositionTVTR;
 use starknet::ContractAddress;
 use starkware_utils::signature::stark::{PublicKey, Signature};
 use starkware_utils::time::time::Timestamp;
+
+/// Full raw dump of a single `Position` for state replication between
+/// contract deployments. Mirrors every stored field of `Position`, including the
+/// enumerated per-asset balances.
+#[derive(Drop, Serde)]
+pub struct PositionDump {
+    pub position_id: PositionId,
+    pub version: u8,
+    pub owner_account: Option<ContractAddress>,
+    pub owner_public_key: PublicKey,
+    pub collateral_balance: Balance,
+    pub owner_protection_enabled: bool,
+    pub last_interest_applied_time: Timestamp,
+    pub asset_balances: Array<(AssetId, AssetBalance)>,
+}
 
 #[starknet::interface]
 pub trait IPositions<TContractState> {

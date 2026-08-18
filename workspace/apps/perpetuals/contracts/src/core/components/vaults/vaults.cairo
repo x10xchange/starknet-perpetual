@@ -366,4 +366,30 @@ pub mod Vaults {
                 )
         }
     }
+
+    /// Read-only state-dump surface for replicating this component's
+    /// storage. Vault registrations are keyed by asset/position id — the key
+    /// sets come from the off-chain copier (`VaultOpened` events).
+    #[generate_trait]
+    pub impl DumpImpl<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of DumpTrait<TContractState> {
+        fn export_vault_by_asset(
+            self: @ComponentState<TContractState>, asset_id: AssetId,
+        ) -> VaultConfig {
+            self.registered_vaults_by_asset.read(asset_id)
+        }
+
+        fn export_vault_by_position(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> VaultConfig {
+            self.registered_vaults_by_position.read(position_id)
+        }
+
+        fn export_vault_protection_limit_override(
+            self: @ComponentState<TContractState>, position_id: PositionId,
+        ) -> u32 {
+            self.vault_protection_limit_overrides.read(position_id)
+        }
+    }
 }

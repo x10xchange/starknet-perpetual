@@ -1,4 +1,5 @@
 mod caller_failure_tests;
+mod dump_tests;
 mod exchange_time_tests;
 mod external_components_tests;
 mod flow_tests;

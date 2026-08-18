@@ -56,4 +56,15 @@ pub mod OperatorNonceComponent {
             current
         }
     }
+
+    /// State-dump accessors (see core/dump.cairo). Live inside the
+    /// component so the storage member itself stays private.
+    #[generate_trait]
+    pub impl DumpImpl<
+        TContractState, +HasComponent<TContractState>, +Drop<TContractState>,
+    > of DumpTrait<TContractState> {
+        fn export_nonce(self: @ComponentState<TContractState>) -> u64 {
+            self.nonce.read()
+        }
+    }
 }
