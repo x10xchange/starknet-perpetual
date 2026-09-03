@@ -99,6 +99,7 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::positions::errors::CALLER_IS_NOT_OWNER_ACCOUNT;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
@@ -110,10 +111,10 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::types::position::{Position, PositionDiff, PositionId, PositionTrait};
     use perpetuals::core::types::price::PriceImpl;
     use perpetuals::core::types::withdraw::{ForcedWithdrawArgs, WithdrawArgs};
-    use starknet::ContractAddress;
     use starknet::storage::{
         Mutable, StorageAsPointer, StoragePath, StoragePathEntry, StoragePointerReadAccess,
     };
+    use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -130,6 +131,7 @@ pub(crate) mod WithdrawalManager {
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
     use crate::core::types::asset::synthetic::AssetType;
+    use crate::core::utils::validate_signature;
     use super::{
         ForcedWithdraw, IWithdrawalManager, Signature, Timestamp, Withdraw, WithdrawRequest,
     };
@@ -239,16 +241,18 @@ pub(crate) mod WithdrawalManager {
             } else {
                 Option::None
             };
-            let hash = self
-                .request_approvals
-                .register_approval(
-                    owner_account: owner_account,
-                    public_key: position.get_owner_public_key(),
-                    :signature,
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                );
+            // Inlined from `register_approval` so the curve-dispatching `validate_signature` is
+            // used in place of the upstream component's hard-coded STARK check. Ordering differs
+            // from upstream: signature first, then registration.
+            let public_key = position.get_owner_public_key();
+            if let Option::Some(owner_account) = owner_account {
+                assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            }
+            let args = WithdrawArgs {
+                position_id, salt, expiration, collateral_id, amount, recipient,
+            };
+            validate_signature(:public_key, message: args, :signature);
+            let hash = self.request_approvals.store_approval(:public_key, :args);
             self
                 .emit(
                     WithdrawRequest {
