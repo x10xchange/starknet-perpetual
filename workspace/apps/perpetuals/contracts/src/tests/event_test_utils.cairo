@@ -23,10 +23,11 @@ pub fn assert_new_position_event_with_expected(
     spied_event: @(ContractAddress, Event),
     position_id: PositionId,
     owner_public_key: PublicKey,
+    owner_key_type: u8,
     owner_account: ContractAddress,
 ) {
     let expected_event = positions_events::NewPosition {
-        position_id, owner_public_key, owner_account,
+        position_id, owner_public_key, owner_key_type, owner_account,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -435,11 +436,17 @@ pub fn assert_set_public_key_request_event_with_expected(
     position_id: PositionId,
     old_public_key: PublicKey,
     new_public_key: PublicKey,
+    new_public_key_type: u8,
     expiration: Timestamp,
     set_public_key_request_hash: felt252,
 ) {
     let expected_event = positions_events::SetPublicKeyRequest {
-        position_id, old_public_key, new_public_key, expiration, set_public_key_request_hash,
+        position_id,
+        old_public_key,
+        new_public_key,
+        new_public_key_type,
+        expiration,
+        set_public_key_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event,
@@ -454,10 +461,15 @@ pub fn assert_set_public_key_event_with_expected(
     position_id: PositionId,
     old_public_key: PublicKey,
     new_public_key: PublicKey,
+    new_public_key_type: u8,
     set_public_key_request_hash: felt252,
 ) {
     let expected_event = positions_events::SetPublicKey {
-        position_id, old_public_key, new_public_key, set_public_key_request_hash,
+        position_id,
+        old_public_key,
+        new_public_key,
+        new_public_key_type,
+        set_public_key_request_hash,
     };
     assert_expected_event_emitted(
         :spied_event,

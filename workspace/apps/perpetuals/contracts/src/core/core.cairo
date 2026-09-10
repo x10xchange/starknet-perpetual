@@ -789,17 +789,7 @@ pub mod Core {
             expiration: Timestamp,
             salt: felt252,
         ) {
-            let dispatcher = self.external_components._get_forced_request_manager();
-            dispatcher
-                .forced_withdraw_request(
-                    :signature,
-                    :collateral_id,
-                    :recipient,
-                    :position_id,
-                    :amount,
-                    :expiration,
-                    :salt,
-                );
+            panic!("forced requests are disabled");
         }
 
         /// Executes a previously submitted forced withdrawal request for a position.
@@ -824,12 +814,6 @@ pub mod Core {
             salt: felt252,
         ) {
             panic!("forced requests are disabled");
-            self
-                .external_components
-                ._get_withdrawal_manager_dispatcher()
-                .forced_withdraw(
-                    :collateral_id, :recipient, :position_id, :amount, :expiration, :salt,
-                );
         }
 
         /// Requests a forced trade - it enables withdrawal of synthetic amount from a position.
@@ -851,8 +835,7 @@ pub mod Core {
             order_a: Order,
             order_b: Order,
         ) {
-            let dispatcher = self.external_components._get_forced_request_manager();
-            dispatcher.forced_trade_request(:signature_a, :signature_b, :order_a, :order_b);
+            panic!("forced requests are disabled");
         }
 
         /// Executes a previously submitted forced trade request for a position.
@@ -871,75 +854,6 @@ pub mod Core {
             ref self: ContractState, operator_nonce: u64, order_a: Order, order_b: Order,
         ) {
             panic!("forced requests are disabled");
-            let position_a = self.positions.get_position_snapshot(position_id: order_a.position_id);
-            let position_b = self.positions.get_position_snapshot(position_id: order_b.position_id);
-            let public_key_a = position_a.get_owner_public_key();
-            let public_key_b = position_b.get_owner_public_key();
-
-            // Check forced request.
-            let (request_time, _) = self
-                .request_approvals
-                .consume_forced_approved_request(
-                    args: ForcedTrade { order_a, order_b }, public_key: public_key_a,
-                );
-
-            // Only operator can process the force trade during timelock.
-            if self.roles.is_operator(get_caller_address()) {
-                self.operator_nonce.use_checked_nonce(:operator_nonce);
-            } else {
-                let now = Time::now();
-                let forced_action_timelock = self.forced_action_timelock.read();
-                assert(request_time.add(forced_action_timelock) <= now, FORCED_WAIT_REQUIRED);
-            }
-
-            // Execute trade.
-
-            // Pass default values for interest validation parameters since interest_amount_a and
-            // interest_amount_b are zero. Interest validation is skipped when interest amounts are
-            // zero, so these parameters are not used.
-            self
-                ._execute_trade(
-                    signature_a: array![].span(),
-                    signature_b: array![].span(),
-                    :order_a,
-                    :order_b,
-                    actual_amount_base_a: order_a.base_amount,
-                    actual_amount_quote_a: order_a.quote_amount,
-                    actual_fee_a: Zero::zero(),
-                    actual_fee_b: Zero::zero(),
-                    interest_amount_a: 0,
-                    interest_amount_b: 0,
-                    current_time: Timestamp { seconds: 0 },
-                    time_of_last_update: Timestamp { seconds: 0 },
-                    max_interest_rate_per_sec: 0,
-                    tvtr_a_before: Default::default(),
-                    tvtr_b_before: Default::default(),
-                    check_signature: false,
-                );
-
-            self
-                .emit(
-                    events::ForcedTrade {
-                        order_a_position_id: order_a.position_id,
-                        order_a_base_asset_id: order_a.base_asset_id,
-                        order_a_base_amount: order_a.base_amount,
-                        order_a_quote_asset_id: order_a.quote_asset_id,
-                        order_a_quote_amount: order_a.quote_amount,
-                        fee_a_asset_id: order_a.fee_asset_id,
-                        fee_a_amount: order_a.fee_amount,
-                        order_b_position_id: order_b.position_id,
-                        order_b_base_asset_id: order_b.base_asset_id,
-                        order_b_base_amount: order_b.base_amount,
-                        order_b_quote_asset_id: order_b.quote_asset_id,
-                        order_b_quote_amount: order_b.quote_amount,
-                        fee_b_asset_id: order_b.fee_asset_id,
-                        fee_b_amount: order_b.fee_amount,
-                        actual_amount_base_a: order_a.base_amount,
-                        actual_amount_quote_a: order_a.quote_amount,
-                        order_a_hash: order_a.get_message_hash(public_key: public_key_a),
-                        order_b_hash: order_b.get_message_hash(public_key: public_key_b),
-                    },
-                );
         }
 
         /// Requests a forced redeem from vault - it enables redemption of vault shares without
@@ -961,11 +875,7 @@ pub mod Core {
             order: LimitOrder,
             vault_approval: LimitOrder,
         ) {
-            let dispatcher = self.external_components._get_forced_request_manager();
-            dispatcher
-                .forced_redeem_from_vault_request(
-                    :signature, :vault_signature, :order, :vault_approval,
-                );
+            panic!("forced requests are disabled");
         }
 
         /// Executes a previously submitted forced redeem from vault request.
@@ -988,58 +898,6 @@ pub mod Core {
             vault_approval: LimitOrder,
         ) {
             panic!("forced requests are disabled");
-            let redeeming_position = self
-                .positions
-                .get_position_snapshot(position_id: order.source_position);
-            let public_key = redeeming_position.get_owner_public_key();
-
-            // Check forced request.
-            let (request_time, _) = self
-                .request_approvals
-                .consume_forced_approved_request(
-                    args: ForcedRedeemFromVault { order, vault_approval }, public_key: public_key,
-                );
-
-            // Only operator can process the force redeem during timelock.
-            if self.roles.is_operator(get_caller_address()) {
-                self.operator_nonce.use_checked_nonce(:operator_nonce);
-            } else {
-                let now = Time::now();
-                let forced_action_timelock = self.forced_action_timelock.read();
-                assert(request_time.add(forced_action_timelock) <= now, FORCED_WAIT_REQUIRED);
-            }
-
-            // Execute redeem.
-            self
-                .external_components
-                ._get_vault_manager_dispatcher()
-                .forced_redeem_from_vault(:order, :vault_approval);
-
-            self
-                .emit(
-                    vault_events::ForcedRedeemFromVault {
-                        order_source_position: order.source_position,
-                        order_receive_position: order.receive_position,
-                        order_base_asset_id: order.base_asset_id,
-                        order_base_amount: order.base_amount,
-                        order_quote_asset_id: order.quote_asset_id,
-                        order_quote_amount: order.quote_amount,
-                        order_fee_asset_id: order.fee_asset_id,
-                        order_fee_amount: order.fee_amount,
-                        order_expiration: order.expiration,
-                        order_salt: order.salt,
-                        vault_approval_source_position: vault_approval.source_position,
-                        vault_approval_receive_position: vault_approval.receive_position,
-                        vault_approval_base_asset_id: vault_approval.base_asset_id,
-                        vault_approval_base_amount: vault_approval.base_amount,
-                        vault_approval_quote_asset_id: vault_approval.quote_asset_id,
-                        vault_approval_quote_amount: vault_approval.quote_amount,
-                        vault_approval_fee_asset_id: vault_approval.fee_asset_id,
-                        vault_approval_fee_amount: vault_approval.fee_amount,
-                        vault_approval_expiration: vault_approval.expiration,
-                        vault_approval_salt: vault_approval.salt,
-                    },
-                );
         }
 
         fn apply_interests(

@@ -1,6 +1,7 @@
 pub mod components;
 pub mod constants;
 pub mod core;
+pub mod eip712;
 pub mod errors;
 pub mod events;
 pub mod init_interest_rate_eic;
