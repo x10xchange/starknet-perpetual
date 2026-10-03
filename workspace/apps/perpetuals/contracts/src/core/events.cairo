@@ -1,5 +1,6 @@
 use perpetuals::core::types::asset::AssetId;
 use perpetuals::core::types::position::PositionId;
+use perpetuals::core::types::price::Price;
 use starknet::ContractAddress;
 use starkware_utils::time::time::Timestamp;
 
@@ -97,6 +98,16 @@ pub struct AssetPositionReduced {
     pub base_amount_a: i64,
     pub quote_asset_id: AssetId,
     pub quote_amount_a: i64,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct EnforcedStableCoinSwap {
+    #[key]
+    pub position_id: PositionId,
+    pub from_asset_id: AssetId,
+    pub to_asset_id: AssetId,
+    pub amount: u64,
+    pub price: Price,
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]

@@ -19,6 +19,18 @@ resource_bounds = ResourceBoundsMapping(
     l2_gas=ResourceBounds(max_amount=10**15, max_price_per_unit=10**12),
 )
 
+
+def pytest_collection_modifyitems(items):
+    # Skip before fixture setup so no external RPC or forked devnet is started.
+    for item in items:
+        if "starknet_forked" in item.fixturenames:
+            item.add_marker(
+                pytest.mark.skip(
+                    reason="Mainnet fork tests disabled: depend on external RPC availability."
+                )
+            )
+
+
 # Random block number for the forked network
 # When changing the forked number, need to update NOW_TIMESTAMP
 # and EXTENDED_ACTIVE_SYNTHETIC_ASSET_IDS
