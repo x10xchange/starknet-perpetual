@@ -65,13 +65,13 @@ fn setup() -> (FlowTestBase, User, AssetInfo) {
     let token = snforge_std::Token::STRK;
     let asset_info = AssetInfoTrait::new_collateral_with_resolution(
         asset_name: 'USDT',
-        resolution: 1_000_000,
-        quantum: 1,
         risk_factor_data: RiskFactorTiers {
             tiers: array![100].span(), first_tier_boundary: MAX_U128, tier_size: 1,
         },
         oracles_len: 1,
+        resolution: 1_000_000,
         erc20_contract_address: token.contract_address(),
+        quantum: 1,
     );
     state.facade.add_active_collateral(@asset_info, 1);
     // Fresh, signed oracle price of $0.50. The conversion itself still pays $1.
