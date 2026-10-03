@@ -1,4 +1,5 @@
 mod caller_failure_tests;
+mod enforced_stable_coin_swap_tests;
 mod exchange_time_tests;
 mod external_components_tests;
 mod flow_tests;

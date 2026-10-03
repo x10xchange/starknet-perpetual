@@ -4797,6 +4797,39 @@ Only the Operator can execute.
 - POSITION_IS_NOT_HEALTHIER
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
+#### EnforcedStableCoinSwap
+
+Operator-only migration conversion of a positive spot stablecoin balance into the fixed base collateral (USDC), without a user signature or counterparty.
+
+```rust
+fn enforced_stable_coin_swap(
+    ref self: ContractState,
+    operator_nonce: u64,
+    position_id: PositionId,
+    from_asset_id: AssetId,
+    amount: u64,
+)
+```
+
+The source must be active `SPOT_COLLATERAL` with resolution `10^6`, matching the base collateral's internal units. The destination is always `get_base_collateral_id()` and cannot be supplied by the caller. The source's current internal price must be **strictly less than `PRICE_SCALE` (`2^28`)**; equality is rejected. Normal pause, operator nonce, funding and price freshness validations apply, as do position existence, positive amount, sufficient source balance, and checked signed-balance arithmetic.
+
+Execution subtracts `amount` from the source spot balance and adds exactly `amount` to `collateral_balance`. Ownership, other balances, funding checkpoints and the position's interest timestamp are preserved. There are no fees or token transfers; replacement USDC backing must be supplied separately as part of the migration. No position-health or liquidation eligibility check is required: replacing spot collateral valued below par with the same quantity of unhaircut base collateral cannot lower TV or increase TR. Already unhealthy positions may therefore be converted.
+
+The event records the transition for replay consumers:
+
+```rust
+struct EnforcedStableCoinSwap {
+    #[key]
+    position_id: PositionId,
+    from_asset_id: AssetId,
+    to_asset_id: AssetId,
+    amount: u64,
+    price: Price,
+}
+```
+
+The function itself does not retire the source asset or activate custody. Migration orchestration is responsible for scheduling conversions and supplying their backing. The name does not introduce a separate stablecoin asset type or an oracle-based conversion rate; eligibility follows the rules above.
+
 #### ReduceAssetPosition
 
 When a position `a` has a positive amount of an inactive asset, the system can match with a position `b` which has a negative amount of inactive asset, both without position’s signature, to clean inactive assets from the system.

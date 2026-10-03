@@ -103,6 +103,15 @@ pub trait ICore<TContractState> {
         base_amount_a: i64,
     );
 
+    /// Operator-only migration conversion into the fixed base collateral (USDC).
+    fn enforced_stable_coin_swap(
+        ref self: TContractState,
+        operator_nonce: u64,
+        position_id: PositionId,
+        from_asset_id: AssetId,
+        amount: u64,
+    );
+
     fn activate_vault(
         ref self: TContractState,
         operator_nonce: u64,

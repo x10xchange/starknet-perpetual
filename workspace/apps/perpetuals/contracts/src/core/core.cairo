@@ -1,7 +1,7 @@
 #[starknet::contract]
 pub mod Core {
     use core::dict::{Felt252Dict, Felt252DictTrait};
-    use core::num::traits::Zero;
+    use core::num::traits::{One, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
@@ -21,8 +21,8 @@ pub mod Core {
     };
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
     use perpetuals::core::errors::{
-        AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_TIMEOUT, LENGTH_MISMATCH,
-        ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC,
+        AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_AMOUNT, INVALID_ZERO_TIMEOUT,
+        LENGTH_MISMATCH, ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
@@ -31,7 +31,7 @@ pub mod Core {
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::order::{ForcedRedeemFromVault, ForcedTrade, LimitOrder, Order};
     use perpetuals::core::types::position::{PositionDiff, PositionId, PositionTrait};
-    use perpetuals::core::types::price::PriceMulTrait;
+    use perpetuals::core::types::price::{PriceMulTrait, SN_PERPS_SCALE};
     use perpetuals::core::types::vault::ConvertPositionToVault;
     use perpetuals::core::value_risk_calculator::PositionTVTR;
     use starknet::event::EventEmitter;
@@ -219,6 +219,7 @@ pub mod Core {
         PositionsEvent: Positions::Event,
         Deleverage: events::Deleverage,
         AssetPositionReduced: events::AssetPositionReduced,
+        EnforcedStableCoinSwap: events::EnforcedStableCoinSwap,
         Liquidate: events::Liquidate,
         Trade: events::Trade,
         Withdraw: events::Withdraw,
@@ -657,6 +658,58 @@ pub mod Core {
                 )
         }
 
+
+        /// Converts a spot stablecoin into the fixed base collateral at par.
+        /// Migration backing is supplied separately; no tokens move here.
+        fn enforced_stable_coin_swap(
+            ref self: ContractState,
+            operator_nonce: u64,
+            position_id: PositionId,
+            from_asset_id: AssetId,
+            amount: u64,
+        ) {
+            self.pausable.assert_not_paused();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self.assets.validate_assets_integrity();
+
+            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
+            let amount_signed: i64 = amount.try_into().expect(AMOUNT_OVERFLOW);
+            let config = self.assets.asset_config.read(from_asset_id).expect(NO_SUCH_ASSET);
+            assert(config.asset_type == AssetType::SPOT_COLLATERAL, 'SWAP_ASSET_NOT_SPOT');
+            // Base collateral has 10^6 internal units per token. Equal integer
+            // amounts represent a token-for-token conversion only at this resolution.
+            assert(config.resolution_factor.into() == SN_PERPS_SCALE, 'SWAP_RESOLUTION_MISMATCH');
+            self.assets.validate_asset_active(from_asset_id);
+            let price = self.assets.get_asset_price(from_asset_id);
+            assert(price < One::one(), 'SWAP_PRICE_NOT_BELOW_USDC');
+
+            let position = self.positions.get_position_mut(position_id);
+            let mut source = position
+                .asset_balances
+                .read(from_asset_id)
+                .expect('INSUFFICIENT_SWAP_BALANCE');
+            let amount_balance: Balance = amount_signed.into();
+            assert(source.balance >= amount_balance, 'INSUFFICIENT_SWAP_BALANCE');
+            let collateral_after = position.collateral_balance.read() + amount_balance;
+            source.balance -= amount_balance;
+
+            // This is a spot conversion, not a synthetic trade: preserve
+            // funding and interest checkpoints, ownership, and all other balances.
+            // Removing spot collateral worth less than the USDC credit cannot
+            // lower TV or increase TR, including for already unhealthy positions.
+            position.asset_balances.write(from_asset_id, source);
+            position.collateral_balance.write(collateral_after);
+            self
+                .emit(
+                    events::EnforcedStableCoinSwap {
+                        position_id,
+                        from_asset_id,
+                        to_asset_id: self.assets.get_base_collateral_id(),
+                        amount,
+                        price,
+                    },
+                );
+        }
 
         fn redeem_from_vault(
             ref self: ContractState,
