@@ -9,6 +9,10 @@ pub struct NewPosition {
     pub position_id: PositionId,
     #[key]
     pub owner_public_key: PublicKey,
+    /// See `types::key_type`. Emitted so the operator's indexer can tell which positions carry a
+    /// secp256k1 key, which it needs in order to size trade batches — a settlement with a secp
+    /// side costs materially more to verify than an all-STARK one.
+    pub owner_key_type: u8,
     #[key]
     pub owner_account: ContractAddress,
 }
@@ -42,6 +46,7 @@ pub struct SetPublicKeyRequest {
     pub position_id: PositionId,
     #[key]
     pub new_public_key: PublicKey,
+    pub new_public_key_type: u8,
     pub old_public_key: PublicKey,
     pub expiration: Timestamp,
     #[key]
@@ -54,6 +59,7 @@ pub struct SetPublicKey {
     pub position_id: PositionId,
     #[key]
     pub new_public_key: PublicKey,
+    pub new_public_key_type: u8,
     pub old_public_key: PublicKey,
     #[key]
     pub set_public_key_request_hash: felt252,

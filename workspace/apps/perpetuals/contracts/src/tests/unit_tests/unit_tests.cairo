@@ -24,6 +24,7 @@ use perpetuals::core::interface::{
 use perpetuals::core::types::asset::{AssetId, AssetIdTrait, AssetStatus};
 use perpetuals::core::types::balance::{Balance, BalanceTrait};
 use perpetuals::core::types::funding::{FUNDING_SCALE, FundingIndex, FundingTick};
+use perpetuals::core::types::key_type;
 use perpetuals::core::types::order::{ForcedTrade, LimitOrder, Order};
 use perpetuals::core::types::position::{POSITION_VERSION, PositionId, PositionMutableTrait};
 use perpetuals::core::types::price::{
@@ -130,6 +131,7 @@ fn test_expiration_validation() {
             operator_nonce: 0,
             :position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -345,6 +347,7 @@ fn test_signature_validation() {
             operator_nonce: 2,
             position_id: POSITION_ID_100,
             owner_public_key: KEY_PAIR_1().public_key,
+            owner_key_type: key_type::STARK,
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -355,6 +358,7 @@ fn test_signature_validation() {
             operator_nonce: 3,
             position_id: POSITION_ID_200,
             owner_public_key: KEY_PAIR_2().public_key,
+            owner_key_type: key_type::STARK,
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -587,6 +591,7 @@ fn test_new_position() {
     // Parameters:
     let position_id = POSITION_ID_100;
     let owner_public_key = KEY_PAIR_1().public_key;
+    let owner_key_type = key_type::STARK;
     let owner_account = POSITION_OWNER_1();
 
     // Test.
@@ -596,6 +601,7 @@ fn test_new_position() {
             operator_nonce: state.get_operator_nonce(),
             :position_id,
             :owner_public_key,
+            :owner_key_type,
             :owner_account,
             owner_protection_enabled: true,
         );
@@ -603,7 +609,7 @@ fn test_new_position() {
     // Catch the event.
     let events = spy.get_events().emitted_by(test_address()).events;
     assert_new_position_event_with_expected(
-        spied_event: events[0], :position_id, :owner_public_key, :owner_account,
+        spied_event: events[0], :position_id, :owner_public_key, :owner_key_type, :owner_account,
     );
 
     // Check.
@@ -2834,6 +2840,7 @@ fn test_successful_forced_withdraw_request() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -2932,6 +2939,7 @@ fn test_successful_forced_withdraw_operator_executes() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -3088,6 +3096,7 @@ fn test_successful_forced_withdraw_user_executes() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -3258,6 +3267,7 @@ fn test_forced_withdraw_before_timeout() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -3362,6 +3372,7 @@ fn test_forced_withdraw_after_operator_processed_withdraw() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -3489,6 +3500,7 @@ fn test_withdraw_after_user_forced_withdraw_executed() {
             operator_nonce: 0,
             position_id: user.position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -3916,6 +3928,7 @@ fn test_successful_set_public_key_request() {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
+        new_public_key_type: user.get_key_type(),
         expiration,
     };
     let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
@@ -3925,6 +3938,7 @@ fn test_successful_set_public_key_request() {
             :signature,
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 
@@ -3955,6 +3969,7 @@ fn test_successful_set_public_key() {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
+        new_public_key_type: user.get_key_type(),
         expiration,
     };
     let msg_hash = set_public_key_args.get_message_hash(public_key: user.get_public_key());
@@ -3965,6 +3980,7 @@ fn test_successful_set_public_key() {
             :signature,
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 
@@ -3974,6 +3990,7 @@ fn test_successful_set_public_key() {
             operator_nonce: state.get_operator_nonce(),
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 
@@ -3984,6 +4001,7 @@ fn test_successful_set_public_key() {
         position_id: set_public_key_args.position_id,
         old_public_key: set_public_key_args.old_public_key,
         new_public_key: set_public_key_args.new_public_key,
+        new_public_key_type: set_public_key_args.new_public_key_type,
         expiration: set_public_key_args.expiration,
         set_public_key_request_hash: msg_hash,
     );
@@ -3992,6 +4010,7 @@ fn test_successful_set_public_key() {
         position_id: set_public_key_args.position_id,
         old_public_key: set_public_key_args.old_public_key,
         new_public_key: set_public_key_args.new_public_key,
+        new_public_key_type: set_public_key_args.new_public_key_type,
         set_public_key_request_hash: msg_hash,
     );
 
@@ -4027,6 +4046,7 @@ fn test_set_public_key_no_request() {
         position_id: user.position_id,
         old_public_key,
         new_public_key: user.get_public_key(),
+        new_public_key_type: user.get_key_type(),
         expiration,
     };
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
@@ -4035,6 +4055,7 @@ fn test_set_public_key_no_request() {
             operator_nonce: state.get_operator_nonce(),
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 }
@@ -4059,6 +4080,7 @@ fn test_invalid_set_public_key_request_wrong_owner() {
         position_id: position_owner.position_id,
         old_public_key: position_owner.get_public_key(),
         new_public_key: no_position_owner.get_public_key(),
+        new_public_key_type: no_position_owner.get_key_type(),
         expiration,
     };
     let msg_hash = set_public_key_args
@@ -4072,6 +4094,7 @@ fn test_invalid_set_public_key_request_wrong_owner() {
             :signature,
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 }
@@ -4091,6 +4114,7 @@ fn test_set_public_key_request_position_not_exist() {
         position_id: user.position_id,
         old_public_key: KEY_PAIR_2().public_key,
         new_public_key: user.get_public_key(),
+        new_public_key_type: user.get_key_type(),
         expiration,
     };
 
@@ -4103,6 +4127,7 @@ fn test_set_public_key_request_position_not_exist() {
             :signature,
             position_id: set_public_key_args.position_id,
             new_public_key: set_public_key_args.new_public_key,
+            new_public_key_type: set_public_key_args.new_public_key_type,
             expiration: set_public_key_args.expiration,
         );
 }

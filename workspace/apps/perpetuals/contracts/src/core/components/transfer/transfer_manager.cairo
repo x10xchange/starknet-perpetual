@@ -74,9 +74,11 @@ pub(crate) mod TransferManager {
     use perpetuals::core::components::operator_nonce::OperatorNonceComponent::InternalImpl as OperatorNonceInternal;
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
+    use perpetuals::core::components::positions::errors::CALLER_IS_NOT_OWNER_ACCOUNT;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::asset::synthetic::{AssetType, SyntheticTrait};
     use perpetuals::core::types::position::{PositionId, PositionTrait};
+    use starknet::get_caller_address;
     use starknet::storage::{StorageAsPointer, StoragePathEntry, StoragePointerReadAccess};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
@@ -97,6 +99,7 @@ pub(crate) mod TransferManager {
     };
     use crate::core::types::position::PositionDiff;
     use crate::core::types::transfer::TransferArgs;
+    use crate::core::utils::validate_signature;
     use super::{ITransferManager, Signature, Timestamp, Transfer, TransferRequest};
 
     impl SnipImpl = SNIP12MetadataImpl;
@@ -211,16 +214,18 @@ pub(crate) mod TransferManager {
             } else {
                 Option::None
             };
-            let hash = self
-                .request_approvals
-                .register_approval(
-                    owner_account: owner_account,
-                    public_key: position.get_owner_public_key(),
-                    :signature,
-                    args: TransferArgs {
-                        position_id, recipient, salt, expiration, collateral_id: asset_id, amount,
-                    },
-                );
+            // Inlined from `register_approval` so the curve-dispatching `validate_signature` is
+            // used in place of the upstream component's hard-coded STARK check. Ordering differs
+            // from upstream: signature first, then registration.
+            let public_key = position.get_owner_public_key();
+            if let Option::Some(owner_account) = owner_account {
+                assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            }
+            let args = TransferArgs {
+                position_id, recipient, salt, expiration, collateral_id: asset_id, amount,
+            };
+            validate_signature(:public_key, message: args, :signature);
+            let hash = self.request_approvals.store_approval(:public_key, :args);
             self
                 .emit(
                     TransferRequest {

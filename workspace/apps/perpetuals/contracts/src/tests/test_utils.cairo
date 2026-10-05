@@ -21,6 +21,7 @@ use perpetuals::tests::constants::*;
 use perpetuals::tests::event_test_utils::{
     assert_asset_activated_event_with_expected, assert_price_tick_event_with_expected,
 };
+use perpetuals::tests::signers::{Signer, SignerTrait};
 use snforge_std::signature::stark_curve::StarkCurveSignerImpl;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait,
@@ -59,7 +60,11 @@ use super::constants::{FORCED_ACTION_TIMELOCK, MAX_INTEREST_RATE_PER_SEC, PREMIU
 pub struct User {
     pub position_id: PositionId,
     pub address: ContractAddress,
+    /// The L2 account's own key. Independent of the position's owner key below: a position with a
+    /// secp256k1 owner key is still driven through an ordinary STARK-keyed Starknet account.
     key_pair: StarkKeyPair,
+    /// The key that owns the *position*, and which signs requests and orders.
+    pub signer: Signer,
     pub salt_counter: felt252,
 }
 
@@ -79,8 +84,7 @@ pub fn get_accept_ownership_signature(
 #[generate_trait]
 pub impl UserImpl of UserTrait {
     fn sign_message(self: User, message: felt252) -> Signature {
-        let (r, s) = self.key_pair.sign(message).unwrap();
-        array![r, s].span()
+        self.signer.sign_message(message)
     }
     fn set_public_key(ref self: User, new_key_pair: StarkKeyPair) {
         let signature = get_accept_ownership_signature(
@@ -90,13 +94,32 @@ pub impl UserImpl of UserTrait {
         cheat_caller_address_once(contract_address: self.address, caller_address: self.address);
         dispatcher.set_public_key(new_public_key: new_key_pair.public_key, :signature);
         self.key_pair = new_key_pair;
+        // These tests drive the position with the same key as the L2 account, so rotate both.
+        self.signer = Signer::Stark(new_key_pair);
     }
     fn get_public_key(self: @User) -> felt252 {
-        *self.key_pair.public_key
+        self.signer.public_key()
+    }
+    fn get_key_type(self: @User) -> u8 {
+        self.signer.key_type()
     }
     fn new(position_id: PositionId, key_pair: StarkKeyPair) -> User {
         User {
-            position_id, address: deploy_account(:key_pair), key_pair, salt_counter: Zero::zero(),
+            position_id,
+            address: deploy_account(:key_pair),
+            key_pair,
+            signer: Signer::Stark(key_pair),
+            salt_counter: Zero::zero(),
+        }
+    }
+    /// A position owned by a secp256k1 key, driven by an ordinary STARK-keyed L2 account.
+    fn new_with_signer(position_id: PositionId, key_pair: StarkKeyPair, signer: Signer) -> User {
+        User {
+            position_id,
+            address: deploy_account(:key_pair),
+            key_pair,
+            signer,
+            salt_counter: Zero::zero(),
         }
     }
 }
@@ -833,6 +856,7 @@ pub fn init_position(cfg: @PerpetualsInitConfig, ref state: Core::ContractState,
             operator_nonce: state.get_operator_nonce(),
             :position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: false,
         );
@@ -857,6 +881,7 @@ pub fn init_position_with_spot_asset_balance(
             operator_nonce: state.get_operator_nonce(),
             :position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: false,
         );
@@ -881,6 +906,7 @@ pub fn init_position_zero_collateral(
             operator_nonce: state.get_operator_nonce(),
             :position_id,
             owner_public_key: user.get_public_key(),
+            owner_key_type: user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: false,
         );

@@ -604,7 +604,28 @@ When a position has owner account the flows that require 2 phases (deposit, with
 
 #### Public key signature
 
-This is done using the [OZ account/src/utils/signature.cairo](https://github.com/OpenZeppelin/cairo-contracts/blob/main/packages/account/src/utils/signature.cairo).
+Positions may use either a STARK public key or a secp256k1 Ethereum address. STARK signatures are
+validated directly over the SNIP-12 message hash. For secp256k1 positions, that same hash is wrapped
+in the following EIP-712 payload before signature recovery:
+
+```text
+EIP712Domain(string name,string version)
+PerpsRequest(bytes32 requestHash)
+
+domain.name    = "Perpetuals"
+domain.version = "v0"
+message.requestHash = bytes32(snip12RequestHash)
+```
+
+The EIP-712 domain deliberately has neither `chainId` nor `verifyingContract`. This keeps the
+wrapper independent of an Ethereum wallet's active network and portable across the protocol's
+Starknet-to-EVM migration. The wrapper therefore provides no chain or deployment separation of its
+own. On Starknet, chain separation remains provided by `requestHash`, whose SNIP-12 domain includes
+the Starknet chain id; replay prevention otherwise relies on the request contents and protocol
+state.
+
+The serialized secp256k1 signature is five felts:
+`[r.low, r.high, s.low, s.high, y_parity]`.
 
 #### Get Message Hash
 

@@ -17,6 +17,7 @@ pub trait IPositions<TContractState> {
         operator_nonce: u64,
         position_id: PositionId,
         owner_public_key: PublicKey,
+        owner_key_type: u8,
         owner_account: ContractAddress,
         owner_protection_enabled: bool,
     );
@@ -39,6 +40,7 @@ pub trait IPositions<TContractState> {
         signature: Signature,
         position_id: PositionId,
         new_public_key: PublicKey,
+        new_public_key_type: u8,
         expiration: Timestamp,
     );
     fn set_public_key(
@@ -46,6 +48,7 @@ pub trait IPositions<TContractState> {
         operator_nonce: u64,
         position_id: PositionId,
         new_public_key: PublicKey,
+        new_public_key_type: u8,
         expiration: Timestamp,
     );
     fn enable_owner_protection(

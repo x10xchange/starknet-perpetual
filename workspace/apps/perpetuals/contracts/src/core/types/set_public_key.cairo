@@ -10,6 +10,10 @@ pub struct SetPublicKeyArgs {
     pub position_id: PositionId,
     pub old_public_key: PublicKey,
     pub new_public_key: PublicKey,
+    /// Bound into the signed struct deliberately. `set_public_key` is operator-called against an
+    /// approval the user registered, so if the curve rode outside this hash the operator could
+    /// install the key under the wrong one and leave the position unusable.
+    pub new_public_key_type: u8,
     pub expiration: Timestamp,
 }
 
@@ -19,6 +23,7 @@ pub struct SetPublicKeyArgs {
 ///    \"position_id\":\"PositionId\",
 ///    \"old_public_key\":\"felt\",
 ///    \"new_public_key\":\"felt\",
+///    \"new_public_key_type\":\"u8\",
 ///    \"expiration\":\"Timestamp\"
 ///    )
 ///    \"PositionId\"(
@@ -29,7 +34,7 @@ pub struct SetPublicKeyArgs {
 ///    )
 /// );
 const SET_PUBLIC_KEY_ARGS_HASH: HashType =
-    0x95737230c7eeb47c10a450cdb69cfe565a1f0da2bc7402a701cda82be14e36;
+    0x19c9f8bd2162673300b75d16a40a1f487d8558acf0c19bd05daec8b48b3485a;
 
 impl StructHashImpl of StructHash<SetPublicKeyArgs> {
     fn hash_struct(self: @SetPublicKeyArgs) -> HashType {
@@ -46,7 +51,7 @@ mod tests {
     #[test]
     fn test_update_position_public_key_type_hash() {
         let expected = selector!(
-            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"old_public_key\":\"felt\",\"new_public_key\":\"felt\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
+            "\"SetPublicKeyArgs\"(\"position_id\":\"PositionId\",\"old_public_key\":\"felt\",\"new_public_key\":\"felt\",\"new_public_key_type\":\"u8\",\"expiration\":\"Timestamp\")\"PositionId\"(\"value\":\"u32\")\"Timestamp\"(\"seconds\":\"u64\")",
         );
         assert!(to_base_16_string(SET_PUBLIC_KEY_ARGS_HASH) == to_base_16_string(expected));
     }

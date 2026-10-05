@@ -91,6 +91,7 @@ fn test_protocol_vault_initialisation_logic() {
             operator_nonce: 0,
             position_id: vault_user.position_id,
             owner_public_key: vault_user.get_public_key(),
+            owner_key_type: vault_user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -103,6 +104,7 @@ fn test_protocol_vault_initialisation_logic() {
             operator_nonce: 1,
             position_id: depositing_user.position_id,
             owner_public_key: depositing_user.get_public_key(),
+            owner_key_type: depositing_user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -266,6 +268,7 @@ fn test_protocol_vault_fails_when_position_has_zero_tv() {
             operator_nonce: 0,
             position_id: vault_user.position_id,
             owner_public_key: vault_user.get_public_key(),
+            owner_key_type: vault_user.get_key_type(),
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );

@@ -9,6 +9,7 @@ use perpetuals::core::components::positions::interface::{
 };
 use perpetuals::core::components::vaults::vaults::{IVaultsDispatcher, IVaultsDispatcherTrait};
 use perpetuals::core::interface::{ICoreDispatcher, ICoreDispatcherTrait, Settlement};
+use perpetuals::core::types::key_type;
 use perpetuals::core::types::order::Order;
 use perpetuals::tests::constants::*;
 use perpetuals::tests::test_utils::{PerpetualsInitConfig, init_by_dispatcher};
@@ -274,6 +275,7 @@ fn test_new_position_only_operator() {
             operator_nonce: Zero::zero(),
             position_id: POSITION_ID_100,
             owner_public_key: Zero::zero(),
+            owner_key_type: key_type::STARK,
             owner_account: Zero::zero(),
             owner_protection_enabled: true,
         );
@@ -303,6 +305,7 @@ fn test_set_public_key_request_position_doesnt_exist() {
             signature: array![].span(),
             position_id: POSITION_ID_100,
             new_public_key: Zero::zero(),
+            new_public_key_type: key_type::STARK,
             expiration: Time::now(),
         );
 }
@@ -317,6 +320,7 @@ fn test_set_public_key_only_operator() {
             operator_nonce: Zero::zero(),
             position_id: POSITION_ID_100,
             new_public_key: Zero::zero(),
+            new_public_key_type: key_type::STARK,
             expiration: Time::now(),
         );
 }
