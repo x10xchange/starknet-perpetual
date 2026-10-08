@@ -3811,7 +3811,7 @@ Only the Operator can execute.
 3. [Funding validation](#funding)
 4. [Price validation](#price)
 5. [Expiration validation](#expiration)
-6. [Request approval check on withdraw message](#requests-1)
+6. [Request approval check on withdraw message](#requests-1), unless this is a [migration withdrawal](#migration-withdrawal).
 7. Asset id is registered.
 8. Interest amount is in range.
 
@@ -3819,7 +3819,7 @@ Only the Operator can execute.
 **Logic:**
 
 1. Run withdraw validations
-2. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component.
+2. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component. A migration withdrawal whose request is not registered is registered first, so it ends in the same state.
 3. Add interest amount to the base collateral balance, including updating timestamp.
 4. [Fundamental validation](#fundamental)
 5. Subtract the amount from the position collateral.
@@ -3842,6 +3842,15 @@ Only the Operator can execute.
 **Emits:**
 
 [withdraw](#withdraw)
+
+##### Migration Withdrawal
+
+A withdrawal whose `recipient` equals the hardcoded migration withdrawal recipient is a migration withdrawal. It is executed by the operator without a signed `withdraw_request`: the request hash is computed with the position `public_key` as usual, registered on the owner's behalf when it is not registered yet, and then consumed. Every other validation of `withdraw` applies unchanged, including expiration, the position health check, and the one-time consumption of the request hash (an identical repeated call fails with `REQUEST_ALREADY_PROCESSED`). A pending request signed by the user for the same arguments is consumed normally.
+
+```rust
+pub const MIGRATION_WITHDRAWAL_RECIPIENT: felt252 =
+    0x04e64b8c1126ff6a9b870664b6b7a82e8b729301aa2b49682d819f561e7823bd;
+```
 
 #### Forced Withdraw Request
 

@@ -100,6 +100,7 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
+    use perpetuals::core::constants::MIGRATION_WITHDRAWAL_RECIPIENT;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
         SIGNED_TX_EXPIRED, TRANSFER_FAILED,
@@ -118,6 +119,9 @@ pub(crate) mod WithdrawalManager {
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
+    use starkware_utils::components::request_approvals::interface::{
+        IRequestApprovals, RequestStatus,
+    };
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::signature::stark::HashType;
@@ -375,14 +379,24 @@ pub(crate) mod WithdrawalManager {
             assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
             validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
 
+            let withdraw_args = WithdrawArgs {
+                position_id, salt, expiration, collateral_id, amount, recipient,
+            };
+            let public_key = position.into().get_owner_public_key();
+            if is_migration_withdrawal(:recipient) {
+                // Migration withdrawal: the position owner signs nothing, so the request is
+                // registered here on the owner's behalf. Consuming it below keeps the replay
+                // protection and the request status identical to a signed withdrawal.
+                let request_hash = withdraw_args.get_message_hash(:public_key);
+                if self
+                    .request_approvals
+                    .get_request_status(:request_hash) == RequestStatus::NOT_REGISTERED {
+                    self.request_approvals.store_approval(:public_key, args: withdraw_args);
+                }
+            }
             let hash = self
                 .request_approvals
-                .consume_approved_request(
-                    args: WithdrawArgs {
-                        position_id, salt, expiration, collateral_id, amount, recipient,
-                    },
-                    public_key: position.into().get_owner_public_key(),
-                );
+                .consume_approved_request(args: withdraw_args, :public_key);
 
             self
                 .positions
@@ -446,5 +460,14 @@ pub(crate) mod WithdrawalManager {
 
             (hash, token_contract.contract_address)
         }
+    }
+
+    /// A withdrawal is a migration withdrawal when its recipient is the whitelisted
+    /// migration recipient.
+    fn is_migration_withdrawal(recipient: ContractAddress) -> bool {
+        let migration_recipient: ContractAddress = MIGRATION_WITHDRAWAL_RECIPIENT
+            .try_into()
+            .unwrap();
+        recipient == migration_recipient
     }
 }
