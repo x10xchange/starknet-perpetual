@@ -44,6 +44,15 @@ pub trait ICore<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
+    fn migration_withdraw(
+        ref self: TContractState,
+        operator_nonce: u64,
+        collateral_id: AssetId,
+        position_id: PositionId,
+        amount: u64,
+        expiration: Timestamp,
+        salt: felt252,
+    );
     fn transfer_request(
         ref self: TContractState,
         signature: Signature,

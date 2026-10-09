@@ -22,6 +22,7 @@ classDiagram
 
         withdraw_request()
         withdraw()
+        migration_withdraw()
         transfer_request()
         transfer()
         multi_trade()
@@ -3811,7 +3812,7 @@ Only the Operator can execute.
 3. [Funding validation](#funding)
 4. [Price validation](#price)
 5. [Expiration validation](#expiration)
-6. [Request approval check on withdraw message](#requests-1), unless this is a [migration withdrawal](#migration-withdrawal).
+6. [Request approval check on withdraw message](#requests-1)
 7. Asset id is registered.
 8. Interest amount is in range.
 
@@ -3819,7 +3820,7 @@ Only the Operator can execute.
 **Logic:**
 
 1. Run withdraw validations
-2. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component. A migration withdrawal whose request is not registered is registered first, so it ends in the same state.
+2. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component.
 3. Add interest amount to the base collateral balance, including updating timestamp.
 4. [Fundamental validation](#fundamental)
 5. Subtract the amount from the position collateral.
@@ -3843,14 +3844,73 @@ Only the Operator can execute.
 
 [withdraw](#withdraw)
 
-##### Migration Withdrawal
+#### Migration Withdraw
 
-A withdrawal whose `recipient` equals the hardcoded migration withdrawal recipient is a migration withdrawal. It is executed by the operator without a signed `withdraw_request`: the request hash is computed with the position `public_key` as usual, registered on the owner's behalf when it is not registered yet, and then consumed. Every other validation of `withdraw` applies unchanged, including expiration, the position health check, and the one-time consumption of the request hash (an identical repeated call fails with `REQUEST_ALREADY_PROCESSED`). A pending request signed by the user for the same arguments is consumed normally.
+The operator withdraws collateral amount from the position to the hardcoded migration withdrawal recipient without a signed `withdraw_request`. It is used by the migration service to move unsupported spot assets of migrated clients (whose positions are already closed) to the migration wallet. The recipient is not a parameter and no interest is applied.
+
+```rust
+fn migration_withdraw(
+    ref self: ContractState,
+    operator_nonce: u64,
+    // WithdrawArgs (recipient is MIGRATION_WITHDRAWAL_RECIPIENT)
+    asset_id: AssetId,
+    position_id: PositionId,
+    amount: u64,
+    expiration: Timestamp,
+    salt: felt252,
+)
+```
 
 ```rust
 pub const MIGRATION_WITHDRAWAL_RECIPIENT: felt252 =
     0x04e64b8c1126ff6a9b870664b6b7a82e8b729301aa2b49682d819f561e7823bd;
 ```
+
+**Access Control:**
+
+Only the Operator can execute.
+
+**Hash:**
+
+[get\_message\_hash](#get-message-hash) on [WithdrawArgs](#withdrawargs) with position `public_key`, where `recipient` is `MIGRATION_WITHDRAWAL_RECIPIENT`.
+
+**Validations:**
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [Expiration validation](#expiration)
+6. The withdraw message is not already `RequestStatus::PROCESSED` in the requests component.
+7. Asset id is registered.
+8. Amount is not zero.
+
+**Logic:**
+
+1. Run migration withdraw validations
+2. If the withdraw message is `RequestStatus::NOT_REGISTERED`, register it on the owner's behalf (no signature).
+3. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component, so an identical repeated call fails with `REQUEST_ALREADY_PROCESSED`. A pending request signed by the user for the same arguments is consumed normally.
+4. [Fundamental validation](#fundamental)
+5. Subtract the amount from the position collateral.
+6. Transfer `amount * collateral.asset_id.quantum` from the contract to the migration withdrawal recipient.
+
+**Errors:**
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- SYNTHETIC\_NOT\_EXISTS
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- WITHDRAW_EXPIRED
+- REQUEST_ALREADY_PROCESSED
+- INVALID_ZERO_AMOUNT
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
+**Emits:**
+
+[withdraw](#withdraw)
 
 #### Forced Withdraw Request
 
