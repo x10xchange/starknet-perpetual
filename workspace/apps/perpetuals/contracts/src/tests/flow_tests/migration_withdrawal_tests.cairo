@@ -50,7 +50,28 @@ fn withdraw_hash(user: User, args: WithdrawArgs) -> felt252 {
     args.get_message_hash(public_key: user.account.key_pair.public_key)
 }
 
-/// The operator executes `withdraw` for `args` without any prior `withdraw_request`.
+/// The operator executes `migration_withdraw` for `args` without any prior `withdraw_request`.
+/// `args.recipient` is not passed to the contract: the recipient is always the migration
+/// recipient.
+fn operator_migration_withdraw(ref state: FlowTestBase, args: WithdrawArgs) {
+    let operator_nonce = nonce(@state);
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    migration_withdraw(ref state, :operator_nonce, :args);
+}
+
+fn migration_withdraw(ref state: FlowTestBase, operator_nonce: u64, args: WithdrawArgs) {
+    perps(@state)
+        .migration_withdraw(
+            :operator_nonce,
+            collateral_id: args.collateral_id,
+            position_id: args.position_id,
+            amount: args.amount,
+            expiration: args.expiration,
+            salt: args.salt,
+        );
+}
+
+/// The operator executes a plain `withdraw` for `args`.
 fn operator_withdraw(ref state: FlowTestBase, args: WithdrawArgs) {
     let operator_nonce = nonce(@state);
     state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
@@ -95,7 +116,7 @@ fn base_collateral_args(
 }
 
 #[test]
-fn test_migration_withdrawal_to_whitelisted_recipient_without_request() {
+fn test_migration_withdraw_without_request() {
     let (mut state, user) = setup_funded_user();
     let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
     let request_hash = withdraw_hash(user, args);
@@ -106,7 +127,7 @@ fn test_migration_withdrawal_to_whitelisted_recipient_without_request() {
     let treasury_balance_before = token_state.balance_of(state.facade.treasury_address);
     let collateral_before = state.facade.get_position_collateral_balance(user.position_id);
 
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
 
     let unquantized_amount = (WITHDRAW_AMOUNT * state.facade.collateral_quantum).into();
     assert_eq!(
@@ -148,23 +169,23 @@ fn test_migration_withdrawal_to_whitelisted_recipient_without_request() {
 
 #[test]
 #[should_panic(expected: 'REQUEST_ALREADY_PROCESSED')]
-fn test_migration_withdrawal_cannot_be_replayed() {
+fn test_migration_withdraw_cannot_be_replayed() {
     let (mut state, user) = setup_funded_user();
     let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
 
-    operator_withdraw(ref state, args);
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
 }
 
 #[test]
-fn test_migration_withdrawal_with_different_salts() {
+fn test_migration_withdraw_with_different_salts() {
     let (mut state, user) = setup_funded_user();
     let collateral_before = state.facade.get_position_collateral_balance(user.position_id);
 
-    operator_withdraw(
+    operator_migration_withdraw(
         ref state, base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1),
     );
-    operator_withdraw(
+    operator_migration_withdraw(
         ref state, base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 2),
     );
 
@@ -177,7 +198,7 @@ fn test_migration_withdrawal_with_different_salts() {
 }
 
 #[test]
-fn test_migration_withdrawal_with_pending_signed_request() {
+fn test_migration_withdraw_consumes_pending_signed_request() {
     let (mut state, user) = setup_funded_user();
     let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
     let request_hash = withdraw_hash(user, args);
@@ -197,41 +218,84 @@ fn test_migration_withdrawal_with_pending_signed_request() {
         );
     assert_eq!(request_status(@state, request_hash), RequestStatus::PENDING);
 
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
     assert_eq!(request_status(@state, request_hash), RequestStatus::PROCESSED);
 }
 
 #[test]
 #[should_panic(expected: 'REQUEST_NOT_REGISTERED')]
-fn test_withdrawal_without_request_to_other_recipient_fails() {
+fn test_plain_withdraw_to_migration_recipient_without_request_fails() {
     let (mut state, user) = setup_funded_user();
 
-    // Any recipient other than the whitelisted one still needs the signed request.
+    // `withdraw` has no special case for the migration recipient: like any other recipient it
+    // needs a signed `withdraw_request`.
+    operator_withdraw(
+        ref state, base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1),
+    );
+}
+
+#[test]
+#[should_panic(expected: 'REQUEST_NOT_REGISTERED')]
+fn test_plain_withdraw_to_other_recipient_without_request_fails() {
+    let (mut state, user) = setup_funded_user();
+
     operator_withdraw(ref state, base_collateral_args(@state, user, user.account.address, salt: 1));
 }
 
 #[test]
+#[should_panic(expected: "ONLY_OPERATOR")]
+fn test_migration_withdraw_only_operator() {
+    let (mut state, user) = setup_funded_user();
+    let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
+    let operator_nonce = nonce(@state);
+
+    user.set_as_caller(state.facade.perpetuals_contract);
+    migration_withdraw(ref state, :operator_nonce, :args);
+}
+
+#[test]
+#[should_panic(expected: "INVALID_NONCE")]
+fn test_migration_withdraw_invalid_nonce() {
+    let (mut state, user) = setup_funded_user();
+    let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
+    let operator_nonce = nonce(@state) + 1;
+
+    state.facade.operator.set_as_caller(state.facade.perpetuals_contract);
+    migration_withdraw(ref state, :operator_nonce, :args);
+}
+
+#[test]
+#[should_panic(expected: 'INVALID_ZERO_AMOUNT')]
+fn test_migration_withdraw_zero_amount() {
+    let (mut state, user) = setup_funded_user();
+    let mut args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
+    args.amount = 0;
+
+    operator_migration_withdraw(ref state, args);
+}
+
+#[test]
 #[should_panic(expected: 'SIGNED_TX_EXPIRED')]
-fn test_migration_withdrawal_still_validates_expiration() {
+fn test_migration_withdraw_validates_expiration() {
     let (mut state, user) = setup_funded_user();
     let args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
     start_cheat_block_timestamp_global(block_timestamp: args.expiration.seconds + 1);
 
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
 }
 
 #[test]
 #[should_panic(expected: "POSITION_NOT_HEALTHY_NOR_HEALTHIER")]
-fn test_migration_withdrawal_still_validates_position_health() {
+fn test_migration_withdraw_validates_position_health() {
     let (mut state, user) = setup_funded_user();
     let mut args = base_collateral_args(@state, user, MIGRATION_RECIPIENT(), salt: 1);
     args.amount = DEPOSIT_AMOUNT + 1;
 
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
 }
 
 #[test]
-fn test_migration_withdrawal_of_spot_collateral() {
+fn test_migration_withdraw_of_spot_collateral() {
     let mut state: FlowTestBase = FlowTestBaseTrait::new();
     let token = snforge_std::Token::STRK;
     let erc20_contract_address = token.contract_address();
@@ -274,7 +338,7 @@ fn test_migration_withdrawal_of_spot_collateral() {
     let recipient_balance_before = token_state.balance_of(MIGRATION_RECIPIENT());
     let asset_balance_before = state.facade.get_position_asset_balance(user.position_id, asset_id);
 
-    operator_withdraw(ref state, args);
+    operator_migration_withdraw(ref state, args);
 
     let quantum = IAssetsDispatcher { contract_address: state.facade.perpetuals_contract }
         .get_asset_config(:asset_id)
