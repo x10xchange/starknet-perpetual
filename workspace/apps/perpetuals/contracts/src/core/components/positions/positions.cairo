@@ -28,6 +28,7 @@ pub mod Positions {
     use perpetuals::core::types::asset::synthetic::{AssetBalanceInfo, SyntheticTrait};
     use perpetuals::core::types::balance::Balance;
     use perpetuals::core::types::funding::calculate_funding;
+    use perpetuals::core::types::key_type;
     use perpetuals::core::types::position::{
         AssetBalance, POSITION_VERSION, Position, PositionData, PositionDiff, PositionId,
         PositionMutableTrait, PositionTrait,
@@ -71,6 +72,7 @@ pub mod Positions {
         AssetEnrichedPositionDiff, MultiSpotPositionDiff, PositionDiffEnriched,
     };
     use crate::core::types::price::SN_PERPS_SCALE;
+    use crate::core::utils::validate_signature;
     use crate::core::value_risk_calculator::{
         TVTRChange, assert_healthy_or_healthier, calculate_asset_value_and_risk,
         calculate_position_tvtr_before, calculate_position_tvtr_change,
@@ -187,7 +189,7 @@ pub mod Positions {
         /// - The contract must not be paused.
         /// - The operator nonce must be valid.
         /// - The position does not exist.
-        /// - The owner public key is non-zero.
+        /// - The owner public key is non-zero and lies in `owner_key_type`'s range.
         ///
         /// Execution:
         /// - Create a new position with the given `owner_public_key` and `owner_account`.
@@ -200,6 +202,7 @@ pub mod Positions {
             operator_nonce: u64,
             position_id: PositionId,
             owner_public_key: PublicKey,
+            owner_key_type: u8,
             owner_account: ContractAddress,
             owner_protection_enabled: bool,
         ) {
@@ -208,11 +211,12 @@ pub mod Positions {
             operator_nonce_component.use_checked_nonce(:operator_nonce);
             let mut position = self.positions.entry(position_id);
             assert(position.version.read().is_zero(), POSITION_ALREADY_EXISTS);
-            assert(owner_public_key.is_non_zero(), INVALID_ZERO_PUBLIC_KEY);
+            key_type::validate_key_type(public_key: owner_public_key, key_type: owner_key_type);
             let exchange_time_component = get_dep_component!(@self, ExchangeTime);
             let current_time = exchange_time_component.get_exchange_time();
             position.version.write(POSITION_VERSION);
             position.owner_public_key.write(owner_public_key);
+            position.owner_key_type.write(owner_key_type);
             position.owner_protection_enabled.write(owner_protection_enabled);
             position.last_interest_applied_time.write(current_time);
             if owner_account.is_non_zero() {
@@ -223,6 +227,7 @@ pub mod Positions {
                     events::NewPosition {
                         position_id: position_id,
                         owner_public_key: owner_public_key,
+                        owner_key_type: owner_key_type,
                         owner_account: owner_account,
                     },
                 );
@@ -259,16 +264,17 @@ pub mod Positions {
             assert(position.get_owner_account().is_none(), POSITION_HAS_OWNER_ACCOUNT);
             assert(new_owner_account.is_non_zero(), INVALID_ZERO_OWNER_ACCOUNT);
             let public_key = position.get_owner_public_key();
+            // Inlined from `register_approval` so that the curve-dispatching `validate_signature`
+            // is used instead of the upstream component's hard-coded STARK check. Note the
+            // ordering differs from upstream: signature first, then registration, so a bad
+            // signature reports as such even on a request that was already registered.
+            assert(new_owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
+            let args = SetOwnerAccountArgs {
+                position_id, public_key, new_owner_account, expiration,
+            };
+            validate_signature(:public_key, message: args, :signature);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
-            let hash = request_approvals
-                .register_approval(
-                    owner_account: Option::Some(new_owner_account),
-                    :public_key,
-                    :signature,
-                    args: SetOwnerAccountArgs {
-                        position_id, public_key, new_owner_account, expiration,
-                    },
-                );
+            let hash = request_approvals.store_approval(:public_key, :args);
             self
                 .emit(
                     events::SetOwnerAccountRequest {
@@ -337,32 +343,33 @@ pub mod Positions {
             signature: Signature,
             position_id: PositionId,
             new_public_key: PublicKey,
+            new_public_key_type: u8,
             expiration: Timestamp,
         ) {
             let position = self.get_position_snapshot(:position_id);
             let old_public_key = position.get_owner_public_key();
             assert(new_public_key != old_public_key, SAME_PUBLIC_KEY);
+            key_type::validate_key_type(public_key: new_public_key, key_type: new_public_key_type);
             let owner_account = position.get_owner_account();
             if let Option::Some(owner_account) = owner_account {
                 assert(owner_account == get_caller_address(), CALLER_IS_NOT_OWNER_ACCOUNT);
             } else {
                 panic_with_felt252(NO_OWNER_ACCOUNT);
             }
+            // Inlined from `register_approval`; see the note in `set_owner_account_request`. The
+            // signature here is by the *new* key, so it is the new key's curve that dispatches.
+            let args = SetPublicKeyArgs {
+                position_id, old_public_key, new_public_key, new_public_key_type, expiration,
+            };
+            validate_signature(public_key: new_public_key, message: args, :signature);
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
-            let hash = request_approvals
-                .register_approval(
-                    :owner_account,
-                    public_key: new_public_key,
-                    :signature,
-                    args: SetPublicKeyArgs {
-                        position_id, old_public_key, new_public_key, expiration,
-                    },
-                );
+            let hash = request_approvals.store_approval(public_key: new_public_key, :args);
             self
                 .emit(
                     events::SetPublicKeyRequest {
                         position_id,
                         new_public_key,
+                        new_public_key_type,
                         old_public_key,
                         expiration,
                         set_public_key_request_hash: hash,
@@ -383,6 +390,7 @@ pub mod Positions {
             operator_nonce: u64,
             position_id: PositionId,
             new_public_key: PublicKey,
+            new_public_key_type: u8,
             expiration: Timestamp,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
@@ -392,19 +400,27 @@ pub mod Positions {
             let position = self.get_position_mut(:position_id);
             let old_public_key = position.get_owner_public_key();
             let mut request_approvals = get_dep_component_mut!(ref self, RequestApprovals);
+            // `new_public_key_type` is part of the args, so consuming the request proves the user
+            // signed for this curve; re-validating the range here would be redundant.
             let hash = request_approvals
                 .consume_approved_request(
                     args: SetPublicKeyArgs {
-                        position_id, old_public_key, new_public_key, expiration,
+                        position_id,
+                        old_public_key,
+                        new_public_key,
+                        new_public_key_type,
+                        expiration,
                     },
                     public_key: new_public_key,
                 );
             position.owner_public_key.write(new_public_key);
+            position.owner_key_type.write(new_public_key_type);
             self
                 .emit(
                     events::SetPublicKey {
                         position_id,
                         new_public_key,
+                        new_public_key_type,
                         old_public_key,
                         set_public_key_request_hash: hash,
                     },

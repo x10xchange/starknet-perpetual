@@ -53,6 +53,7 @@ use perpetuals::tests::event_test_utils::{
     assert_transfer_event_with_expected, assert_transfer_request_event_with_expected,
     assert_withdraw_event_with_expected, assert_withdraw_request_event_with_expected,
 };
+use perpetuals::tests::signers::{Signer, SignerTrait};
 use perpetuals::tests::test_utils::{deploy_account, validate_balance};
 use snforge_std::cheatcodes::events::{Event, EventSpy, EventSpyTrait, EventsFilterTrait};
 use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl};
@@ -119,7 +120,11 @@ pub fn deploy_protocol_vault_with_dispatcher(
 ) -> DeployedVault {
     let stark_key_pair = StarkCurveKeyPairImpl::generate();
     let owning_account_address = deploy_account(stark_key_pair);
-    let owning_account = Account { address: owning_account_address, key_pair: stark_key_pair };
+    let owning_account = Account {
+        address: owning_account_address,
+        key_pair: stark_key_pair,
+        signer: Signer::Stark(stark_key_pair),
+    };
     let mut calldata = ArrayTrait::new();
     let governance_admin = GOVERNANCE_ADMIN();
     let upgrade_delay = UPGRADE_DELAY;
@@ -187,17 +192,27 @@ pub struct LimitOrderInfo {
 #[derive(Copy, Drop)]
 pub struct Account {
     pub address: ContractAddress,
+    /// The L2 account's own key.
     pub key_pair: StarkKeyPair,
+    /// The key used to sign positions' requests and orders — may be on either curve.
+    pub signer: Signer,
 }
 
 #[generate_trait]
 pub impl AccountImpl of AccountTrait {
     fn new(secret_key: felt252) -> Account {
+        Self::new_with_signer(
+            secret_key, Signer::Stark(StarkCurveKeyPairImpl::from_secret_key(secret_key)),
+        )
+    }
+
+    /// An account whose *position* key is `signer`, while the L2 account itself stays STARK-keyed.
+    fn new_with_signer(secret_key: felt252, signer: Signer) -> Account {
         let key_pair = StarkCurveKeyPairImpl::from_secret_key(secret_key);
         let contract_class = snforge_std::declare("AccountUpgradeable").unwrap().contract_class();
         let (address, _) = contract_class.deploy(@array![key_pair.public_key]).unwrap();
 
-        Account { key_pair, address }
+        Account { key_pair, address, signer }
     }
 
     fn set_as_caller(self: @Account, contract_address: ContractAddress) {
@@ -205,8 +220,15 @@ pub impl AccountImpl of AccountTrait {
     }
 
     fn sign_message(self: @Account, message: felt252) -> Signature {
-        let (r, s) = (*self).key_pair.sign(message).unwrap();
-        array![r, s].span()
+        self.signer.sign_message(message)
+    }
+
+    fn public_key(self: @Account) -> felt252 {
+        self.signer.public_key()
+    }
+
+    fn key_type(self: @Account) -> u8 {
+        self.signer.key_type()
     }
 }
 
@@ -909,6 +931,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         ref self: PerpsTestsFacade,
         position_id: PositionId,
         owner_public_key: felt252,
+        owner_key_type: u8,
         owner_account: ContractAddress,
     ) {
         let operator_nonce = self.get_nonce();
@@ -918,6 +941,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
                 :operator_nonce,
                 :position_id,
                 :owner_public_key,
+                :owner_key_type,
                 :owner_account,
                 owner_protection_enabled: true,
             );
@@ -2874,7 +2898,11 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
         );
 
         DepositInfo {
-            depositor: Account { address: self.perpetuals_contract, key_pair: KEY_PAIR_1() },
+            depositor: Account {
+                address: self.perpetuals_contract,
+                key_pair: KEY_PAIR_1(),
+                signer: Signer::Stark(KEY_PAIR_1()),
+            },
             position_id: receiving_user.position_id,
             quantized_amount: deposit_event.quantized_amount,
             salt,

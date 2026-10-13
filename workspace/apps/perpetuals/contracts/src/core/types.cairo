@@ -1,6 +1,7 @@
 pub(crate) mod asset;
 pub mod balance;
 pub mod funding;
+pub mod key_type;
 pub mod order;
 pub mod position;
 pub mod price;

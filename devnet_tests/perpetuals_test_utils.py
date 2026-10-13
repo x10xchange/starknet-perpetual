@@ -47,6 +47,9 @@ PERPETUALS_VERSION = "v0"
 STARKNET_CHAIN_ID = StarknetChainId.MAINNET
 REVISION = 1
 
+# Must match `core::types::key_type::STARK`. Existing Python system-test accounts use Stark keys.
+STARK_KEY_TYPE = 0
+
 VAULT_ASSET_ID = 0x7DB365513DF1EE2EB8FC2D157D4D1CBA3D4A2EF59B44DD3D61124C88B4F6084
 VAULT_POSITION_ID = 0x7
 
@@ -373,6 +376,7 @@ class PerpetualsTestUtils:
                         await self.consume_operator_nonce(),
                         formatted_position_id(position_id),
                         self.get_account_public_key(account),
+                        STARK_KEY_TYPE,
                         self.get_account_address(account),
                         True,
                         auto_estimate=True,
