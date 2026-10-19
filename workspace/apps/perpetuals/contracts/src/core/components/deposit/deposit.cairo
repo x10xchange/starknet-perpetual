@@ -35,15 +35,13 @@ pub(crate) mod Deposit {
         pub registered_deposits: Map<HashType, DepositStatus>,
         pub cancel_delay: TimeDelta,
         pub bridge_operator: ContractAddress,
-        // Snapshot the actual token and raw amount at registration, not execution.
-        pub bridge_deposits: Map<HashType, Option<(ContractAddress, u256)>>,
     }
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
         DepositBridgeOperatorUpdated: events::DepositBridgeOperatorUpdated,
-        DepositBridged: events::DepositBridged,
+        FundsBridged: events::FundsBridged,
     }
 
 
@@ -74,17 +72,8 @@ pub(crate) mod Deposit {
             self.deposit_asset(asset_id: pnl_collateral_id, :position_id, :quantized_amount, :salt)
         }
 
-        /// Deposit is called by the user to add a deposit request.
-        ///
-        /// Validations:
-        /// - The quantized amount must be greater than 0.
-        /// - The deposit requested does not exists.
-        ///
-        /// Execution:
-        /// - Transfers the quantized amount from the user to the contract.
-        /// - Registers the deposit request.
-        /// - Updates the deposit status to pending.
-        /// - Emits a Deposit event.
+        /// Accept base collateral into Core and emit Deposit for off-chain bridging.
+        /// No pending deposit record is created and no Starknet position is credited.
         fn deposit_asset(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
@@ -107,17 +96,7 @@ pub(crate) mod Deposit {
                 );
         }
 
-        /// Cancel deposit is called by the user to cancel a deposit request which did not take
-        /// place yet.
-        ///
-        /// Validations:
-        /// - The deposit requested to cancel exists, is not canceled and is not processed.
-        /// - The cancellation delay has passed.
-        ///
-        /// Execution:
-        /// - Transfers the quantized amount back to the user.
-        /// - Updates the deposit status to canceled.
-        /// - Emits a DepositCanceled event.
+        /// Disabled by the post-migration DepositManager.
         fn cancel_deposit(
             ref self: ComponentState<TContractState>,
             asset_id: AssetId,
@@ -140,20 +119,7 @@ pub(crate) mod Deposit {
         }
 
 
-        /// Reject deposit is called by the operator to cancel a deposit request which did not take
-        /// place yet.
-        ///
-        /// Validations:
-        /// - The deposit requested to cancel exists, is not canceled and is not processed.
-        /// - The cancellation delay has passed.
-        /// - Only the operator can call this function.
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        ///
-        /// Execution:
-        /// - Transfers the quantized amount back to the user.
-        /// - Updates the deposit status to canceled.
-        /// - Emits a DepositCanceled event.
+        /// Disabled by the post-migration DepositManager.
         fn reject_deposit(
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
@@ -181,25 +147,7 @@ pub(crate) mod Deposit {
         }
 
 
-        /// Process deposit a collateral amount from the 'depositing_address' to a given position.
-        ///
-        /// Validations:
-        /// - Only the operator can call this function.
-        /// - The contract must not be paused.
-        /// - The `operator_nonce` must be valid.
-        /// - The `expiration` time has not passed.
-        /// - The collateral asset exists in the system.
-        /// - The collateral asset is active.
-        /// - The funding validation interval has not passed since the last funding tick.
-        /// - The prices of all assets in the system are valid.
-        /// - The deposit message has not been fulfilled.
-        /// - A fact was registered for the deposit message.
-        /// - If position exists, validate the owner_public_key and owner_account are the same.
-        ///
-        /// Execution:
-        /// - Transfer the collateral `amount` to the position from the pending deposits.
-        /// - Update the position's collateral balance.
-        /// - Mark the deposit message as fulfilled.
+        /// Disabled by the post-migration DepositManager.
         fn process_deposit(
             ref self: ComponentState<TContractState>,
             operator_nonce: u64,
@@ -240,16 +188,14 @@ pub(crate) mod Deposit {
             self.bridge_operator.read()
         }
 
-        fn bridge_deposit(
-            ref self: ComponentState<TContractState>,
-            deposit_hash: HashType,
-            commitment_id: felt252,
+        fn bridge_funds(
+            ref self: ComponentState<TContractState>, amount: u256, commitment_id: felt252,
         ) {
             get_dep_component!(@self, Pausable).assert_not_paused();
             let external_components = get_dep_component!(@self, ExternalComponents);
             external_components
                 ._get_deposit_manager_dispatcher()
-                .bridge_deposit(deposit_hash, commitment_id);
+                .bridge_funds(amount, commitment_id);
         }
 
         fn get_deposit_status(

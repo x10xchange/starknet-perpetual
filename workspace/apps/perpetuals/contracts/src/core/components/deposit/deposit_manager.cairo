@@ -46,7 +46,7 @@ pub trait IDepositExternal<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
-    fn bridge_deposit(ref self: TContractState, deposit_hash: HashType, commitment_id: felt252);
+    fn bridge_funds(ref self: TContractState, amount: u256, commitment_id: felt252);
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
@@ -56,7 +56,7 @@ pub(crate) mod DepositManager {
     use core::num::traits::Zero;
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
-    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::interfaces::erc20::IERC20DispatcherTrait;
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::interface::IAssets;
@@ -70,7 +70,7 @@ pub(crate) mod DepositManager {
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::PositionId;
-    use starknet::storage::{StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess};
+    use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -78,15 +78,12 @@ pub(crate) mod DepositManager {
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
-    use starkware_utils::time::time::Time;
-    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
+    use treasury::interface::ITreasuryDispatcher;
     use crate::core::components::deposit::events;
     use crate::core::components::external_components::interface::EXTERNAL_COMPONENT_DEPOSITS;
     use crate::core::components::external_components::named_component::ITypedComponent;
     use crate::core::components::snip::SNIP12MetadataImpl;
-    use crate::core::components::vaults::vaults::{IVaults, Vaults as VaultsComponent};
-    use crate::core::types::asset::synthetic::AssetType;
-    use crate::core::types::position::PositionDiff;
+    use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
     use super::super::errors;
     use super::super::interface::{IRhinoBridgeDispatcher, IRhinoBridgeDispatcherTrait};
     use super::{DepositStatus, HashType, IDepositExternal, TimeDelta, Timestamp, deposit_hash};
@@ -209,16 +206,7 @@ pub(crate) mod DepositManager {
             now: Timestamp,
             salt: felt252,
         ) {
-            self
-                ._cancel_deposit(
-                    depositor: depositor,
-                    asset_id: asset_id,
-                    position_id: position_id,
-                    quantized_amount: quantized_amount,
-                    salt: salt,
-                    now: now,
-                    cancel_delay: self.get_cancel_delay(),
-                )
+            panic_with_felt252('LEGACY_DEPOSITS_DISABLED');
         }
 
         fn reject_deposit(
@@ -230,16 +218,7 @@ pub(crate) mod DepositManager {
             now: Timestamp,
             salt: felt252,
         ) {
-            self
-                ._cancel_deposit(
-                    depositor: depositor,
-                    asset_id: asset_id,
-                    position_id: position_id,
-                    quantized_amount: quantized_amount,
-                    salt: salt,
-                    now: now,
-                    cancel_delay: TimeDelta { seconds: 0 },
-                )
+            panic_with_felt252('LEGACY_DEPOSITS_DISABLED');
         }
 
         fn process_deposit(
@@ -251,109 +230,19 @@ pub(crate) mod DepositManager {
             salt: felt252,
             interest_amount: i64,
         ) {
-            let (token_contract, quantum, position_diff) = if (self
-                .assets
-                .get_base_collateral_id() == asset_id) {
-                let token_contract = self.assets.get_base_collateral_token_contract();
-                let quantum = self.assets.get_collateral_quantum();
-                let position_diff = PositionDiff {
-                    collateral_diff: quantized_amount.into() + interest_amount.into(),
-                    asset_diff: Option::None,
-                };
-                (token_contract, quantum, position_diff)
-            } else {
-                let asset_config = self.assets.get_asset_config(asset_id);
-                assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
-                let token_contract = IERC20Dispatcher {
-                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
-                };
-                let position_diff = PositionDiff {
-                    collateral_diff: interest_amount.into(),
-                    asset_diff: Option::Some((asset_id, quantized_amount.into())),
-                };
-                (token_contract, asset_config.quantum, position_diff)
-            };
-
-            let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
-            let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            assert(
-                self.deposits.bridge_deposits.read(deposit_hash).is_none(),
-                'DEPOSIT_REQUIRES_BRIDGE',
-            );
-            let deposit_status = self.get_deposit_status(:deposit_hash);
-            match deposit_status {
-                DepositStatus::NOT_REGISTERED => {
-                    panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED)
-                },
-                DepositStatus::PROCESSED => {
-                    panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED)
-                },
-                DepositStatus::CANCELED => { panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED) },
-                DepositStatus::PENDING(_) => {},
-            }
-            self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
-
-            let position = self.positions.get_position_mut(:position_id);
-            // Validate interest in range
-            self
-                .positions
-                .verify_and_update_interest_range(:position, :position_id, :interest_amount);
-            // Validate healthy or healthier position
-            self
-                .positions
-                .validate_healthy_or_healthier_position(
-                    :position_id,
-                    position: position.into(),
-                    :position_diff,
-                    tvtr_before: Default::default(),
-                );
-
-            self.positions.apply_diff(:position_id, :position_diff);
-            let treasury = self.treasury.read();
-            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
-            token_contract
-                .approve(spender: treasury.contract_address, amount: unquantized_amount.into());
-            treasury.deposit_into(token_contract.contract_address, unquantized_amount.into());
-            self
-                .emit(
-                    events::DepositProcessed {
-                        position_id,
-                        depositing_address: depositor,
-                        collateral_id: asset_id,
-                        token_address: token_contract.contract_address,
-                        quantized_amount,
-                        unquantized_amount,
-                        deposit_request_hash: deposit_hash,
-                        salt,
-                    },
-                );
+            panic_with_felt252('LEGACY_DEPOSITS_DISABLED');
         }
 
-        fn bridge_deposit(ref self: ContractState, deposit_hash: HashType, commitment_id: felt252) {
+        fn bridge_funds(ref self: ContractState, amount: u256, commitment_id: felt252) {
             let bridge: ContractAddress = crate::core::constants::RHINO_BRIDGE.try_into().unwrap();
             assert(
                 get_caller_address() == self.deposits.bridge_operator.read(),
                 'ONLY_BRIDGE_OPERATOR',
             );
             assert(commitment_id.is_non_zero(), 'INVALID_COMMITMENT');
-            let (token_address, amount) = self
-                .deposits
-                .bridge_deposits
-                .read(deposit_hash)
-                .expect('NOT_BRIDGE_DEPOSIT');
-            match self.deposits.registered_deposits.read(deposit_hash) {
-                DepositStatus::PENDING(_) => {},
-                _ => panic_with_felt252('DEPOSIT_NOT_PENDING'),
-            }
-            // Consume before external calls; a failed transfer rolls the entire transaction back.
-            self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
-            let token = IERC20Dispatcher { contract_address: token_address };
+            assert(amount.is_non_zero(), errors::ZERO_AMOUNT);
+            let token = self.assets.get_base_collateral_token_contract();
+            let token_address = token.contract_address;
             let balance_before = token.balance_of(get_contract_address());
             assert(token.approve(bridge, amount), 'BRIDGE_APPROVAL_FAILED');
             IRhinoBridgeDispatcher { contract_address: bridge }
@@ -363,13 +252,7 @@ pub(crate) mod DepositManager {
                 token.balance_of(get_contract_address()) + amount == balance_before,
                 'BRIDGE_AMOUNT_MISMATCH',
             );
-            self
-                .deposits
-                .emit(
-                    events::DepositBridged {
-                        deposit_request_hash: deposit_hash, token_address, amount, commitment_id,
-                    },
-                );
+            self.deposits.emit(events::FundsBridged { token_address, amount, commitment_id });
         }
 
         fn get_deposit_status(self: @ContractState, deposit_hash: felt252) -> DepositStatus {
@@ -399,24 +282,9 @@ pub(crate) mod DepositManager {
             // check recipient position exists
             self.positions.get_position_snapshot(:position_id);
             assert(quantized_amount.is_non_zero(), errors::ZERO_AMOUNT);
-            let (token_contract, quantum) = if (self.assets.get_base_collateral_id() == asset_id) {
-                let token_contract = self.assets.get_base_collateral_token_contract();
-                let quantum = self.assets.get_collateral_quantum();
-                (token_contract, quantum)
-            } else {
-                let asset_config = self.assets.get_asset_config(asset_id);
-                if (asset_config.asset_type == AssetType::VAULT_SHARE_COLLATERAL) {
-                    assert(
-                        !self.vaults.is_vault_position(position_id),
-                        'DEPOSIT_VAULT_SHARES_INTO_VAULT',
-                    );
-                }
-                assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
-                let token_contract = IERC20Dispatcher {
-                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
-                };
-                (token_contract, asset_config.quantum)
-            };
+            assert(self.assets.get_base_collateral_id() == asset_id, 'UNSUPPORTED_DEPOSIT_ASSET');
+            let token_contract = self.assets.get_base_collateral_token_contract();
+            let quantum = self.assets.get_collateral_quantum();
 
             let deposit_hash = deposit_hash(
                 token_address: token_contract.contract_address,
@@ -425,24 +293,7 @@ pub(crate) mod DepositManager {
                 :quantized_amount,
                 :salt,
             );
-            assert(
-                self.get_deposit_status(:deposit_hash) == DepositStatus::NOT_REGISTERED,
-                errors::DEPOSIT_ALREADY_REGISTERED,
-            );
-            self
-                .deposits
-                .registered_deposits
-                .write(key: deposit_hash, value: DepositStatus::PENDING(now));
-
             let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
-
-            self
-                .deposits
-                .bridge_deposits
-                .write(
-                    deposit_hash,
-                    Option::Some((token_contract.contract_address, unquantized_amount.into())),
-                );
 
             let treasury_address = self.treasury.read().contract_address;
             self
@@ -468,70 +319,6 @@ pub(crate) mod DepositManager {
                     events::Deposit {
                         position_id,
                         depositing_address: caller_address,
-                        collateral_id: asset_id,
-                        token_address: token_contract.contract_address,
-                        quantized_amount,
-                        unquantized_amount,
-                        deposit_request_hash: deposit_hash,
-                        salt,
-                    },
-                );
-        }
-
-        fn _cancel_deposit(
-            ref self: ContractState,
-            depositor: ContractAddress,
-            asset_id: AssetId,
-            position_id: PositionId,
-            quantized_amount: u64,
-            salt: felt252,
-            now: Timestamp,
-            cancel_delay: TimeDelta,
-        ) {
-            let (token_contract, quantum) = if (self.assets.get_base_collateral_id() == asset_id) {
-                let token_contract = self.assets.get_base_collateral_token_contract();
-                let quantum = self.assets.get_collateral_quantum();
-                (token_contract, quantum)
-            } else {
-                let asset_config = self.assets.get_asset_config(asset_id);
-                assert(asset_config.asset_type != AssetType::SYNTHETIC, 'NOT_SPOT_ASSET');
-                let token_contract = IERC20Dispatcher {
-                    contract_address: asset_config.token_contract.expect('NO_ERC20_CONFIGURED'),
-                };
-                (token_contract, asset_config.quantum)
-            };
-
-            let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
-
-            let deposit_hash = deposit_hash(
-                token_address: token_contract.contract_address,
-                :depositor,
-                :position_id,
-                :quantized_amount,
-                :salt,
-            );
-            match self._get_deposit_status(:deposit_hash) {
-                DepositStatus::PENDING(deposit_timestamp) => assert(
-                    now > deposit_timestamp.add(cancel_delay), errors::DEPOSIT_NOT_CANCELABLE,
-                ),
-                DepositStatus::NOT_REGISTERED => panic_with_felt252(errors::DEPOSIT_NOT_REGISTERED),
-                DepositStatus::PROCESSED => panic_with_felt252(errors::DEPOSIT_ALREADY_PROCESSED),
-                DepositStatus::CANCELED => panic_with_felt252(errors::DEPOSIT_ALREADY_CANCELED),
-            }
-
-            self
-                .deposits
-                .registered_deposits
-                .write(key: deposit_hash, value: DepositStatus::CANCELED);
-            assert(
-                token_contract.transfer(recipient: depositor, amount: unquantized_amount.into()),
-                errors::TRANSFER_FAILED,
-            );
-            self
-                .emit(
-                    events::DepositCanceled {
-                        position_id,
-                        depositing_address: depositor,
                         collateral_id: asset_id,
                         token_address: token_contract.contract_address,
                         quantized_amount,

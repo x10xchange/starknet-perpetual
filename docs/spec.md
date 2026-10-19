@@ -2426,7 +2426,8 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 #### Deposit
 
-A component for handling deposits.
+A component for handling deposits. The post-migration behavior below supersedes the
+legacy lifecycle described in the later subsections.
 
 ##### Post-migration deposits through Rhino
 
@@ -2438,32 +2439,38 @@ The app governor configures or rotates the dedicated signer with
 `set_deposit_bridge_operator`. The service ingests deposits starting at the upgrade,
 including their transaction ordering within the upgrade block.
 
-New deposits retain their existing `Deposit` event and pending/cancellation lifecycle.
-Their actual token address and raw amount are snapshotted in additional deposit storage.
-They remain in Core, cannot be processed by `process_deposit`, and do not credit a
-Starknet position or enter the treasury. Deposits pending before the upgrade retain
-legacy processing and cannot be bridged by this entrypoint. Existing deposit limits
-continue to apply.
+Only the base `collateral_asset` is accepted by `deposit` / `deposit_asset`; all other
+asset IDs, including spot tokens and vault shares, revert. Funds stay in Core and the
+existing `Deposit` event is emitted for the service. No pending-deposit record is
+created, no Starknet position is credited, and no funds enter the treasury. Existing
+deposit limits continue to apply. All pre-migration deposits must be fully drained
+before the upgrade. Legacy `process_deposit`, `cancel_deposit`, and `reject_deposit`
+are disabled unconditionally by the new DepositManager.
 
-The dedicated signer calls `bridge_deposit(deposit_hash, commitment_id)` after obtaining
-and persisting a committed Starknet-to-ARC Rhino quote. This entrypoint checks the
-contract is not paused and consumes only a pending, bridge-eligible deposit. It grants
-Rhino an allowance for exactly the registered amount and calls
-`deposit_with_id(token, amount, commitment_id)` directly from Core, then clears the
-allowance and checks the exact Core balance reduction. A failed call or balance check
-reverts the entire transaction, including consumption. Successful consumption uses the
-existing `PROCESSED` storage value and emits `DepositBridged`, not `DepositProcessed`.
-Cancellation/rejection and bridging are mutually exclusive. This operation does not
-consume the legacy operator nonce or alter position balances, funding, or interest.
+The dedicated signer calls `bridge_funds(amount: u256, commitment_id: felt252)` with
+a nonzero raw collateral-token amount and a nonzero committed Rhino quote ID. The
+contract checks it is not paused, approves the fixed Rhino address for exactly that
+amount, and calls `deposit_with_id(collateral_token, amount, commitment_id)` directly
+from Core. It then clears the allowance and checks the exact Core balance reduction.
+Any failure reverts the transaction. Success emits `FundsBridged` with token address,
+amount and commitment ID. No legacy operator nonce or position balance is changed.
+
+There is no per-deposit bridge tracking, amount matching, or commitment deduplication
+in Core. Partial and aggregated amounts can be bridged from the pooled collateral
+balance. The service must durably match deposit events to quotes and reconcile
+submitted transactions before retrying. Identical deposit arguments can emit multiple
+funded events; use transaction hash and event index, not `deposit_request_hash`, as
+the unique ingestion key. Old deposit status storage is retained for storage layout
+stability but is not written by the new flow and is not a bridge status API.
 
 The commitment is opaque to Core: this ABI does not authenticate the destination chain,
 ARC recipient, output amount, or position metadata. The bridge signer is trusted to
 validate these fields and use the original position ID when creating the quote. The
-service must reconcile ARC delivery independently; `DepositBridged` proves only source
-funding. No refund from Core is possible after successful source funding.
+service must reconcile ARC delivery independently; `FundsBridged` proves only source
+funding. There is no on-chain deposit cancellation or refund in this post-migration flow.
 
-Storage changes append fields to the existing Deposit component, leaving existing
-field names and DepositStatus variant ordering unchanged.
+Storage changes append only the dedicated bridge operator to the Deposit component;
+existing field names and DepositStatus variant ordering remain unchanged.
 
 
 ##### Structs

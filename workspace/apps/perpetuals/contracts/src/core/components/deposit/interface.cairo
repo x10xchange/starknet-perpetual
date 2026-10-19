@@ -45,7 +45,8 @@ pub trait IDeposit<TContractState> {
     );
     fn set_deposit_bridge_operator(ref self: TContractState, operator: ContractAddress);
     fn get_deposit_bridge_operator(self: @TContractState) -> ContractAddress;
-    fn bridge_deposit(ref self: TContractState, deposit_hash: HashType, commitment_id: felt252);
+    /// Bridge a raw collateral-token amount. Deposit matching and deduplication are off-chain.
+    fn bridge_funds(ref self: TContractState, amount: u256, commitment_id: felt252);
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
