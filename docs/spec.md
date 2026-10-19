@@ -2432,12 +2432,12 @@ legacy lifecycle described in the later subsections.
 ##### Post-migration deposits through Rhino
 
 After migration, upgrade Core and DepositManager. The upgrade itself is the cutover;
-there is no enable flag or configurable bridge address. Every new deposit is bridge-only,
-even before the service signer is configured. Rhino.fi is fixed at
+there is no enable flag or configurable bridge address. Every new deposit is bridge-only.
+Rhino.fi is fixed at
 `0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8`.
-The app governor configures or rotates the dedicated signer with
-`set_deposit_bridge_operator`. The service ingests deposits starting at the upgrade,
-including their transaction ordering within the upgrade block.
+Bridging uses the existing `OPERATOR` role and its existing registration/revocation
+mechanism; no separate bridge signer is configured. The service ingests deposits
+starting at the upgrade, including their transaction ordering within the upgrade block.
 
 Only the base `collateral_asset` is accepted by `deposit` / `deposit_asset`; all other
 asset IDs, including spot tokens and vault shares, revert. Funds stay in Core and the
@@ -2447,10 +2447,10 @@ deposit limits continue to apply. All pre-migration deposits must be fully drain
 before the upgrade. Legacy `process_deposit`, `cancel_deposit`, and `reject_deposit`
 are disabled unconditionally by the new DepositManager.
 
-The dedicated signer calls `bridge_funds(amount: u256, commitment_id: felt252)` with
+The existing operator calls `bridge_funds(amount: u256, commitment_id: felt252)` with
 a nonzero raw collateral-token amount and a nonzero committed Rhino quote ID. The
-contract checks it is not paused, approves the fixed Rhino address for exactly that
-amount, and calls `deposit_with_id(collateral_token, amount, commitment_id)` directly
+contract checks the caller has the operator role and it is not paused, approves the
+fixed Rhino address for exactly that amount, and calls `deposit_with_id(collateral_token, amount, commitment_id)` directly
 from Core. It then clears the allowance and checks the exact Core balance reduction.
 Any failure reverts the transaction. Success emits `FundsBridged` with token address,
 amount and commitment ID. No legacy operator nonce or position balance is changed.
@@ -2464,13 +2464,13 @@ the unique ingestion key. Old deposit status storage is retained for storage lay
 stability but is not written by the new flow and is not a bridge status API.
 
 The commitment is opaque to Core: this ABI does not authenticate the destination chain,
-ARC recipient, output amount, or position metadata. The bridge signer is trusted to
+ARC recipient, output amount, or position metadata. The operator is trusted to
 validate these fields and use the original position ID when creating the quote. The
 service must reconcile ARC delivery independently; `FundsBridged` proves only source
 funding. There is no on-chain deposit cancellation or refund in this post-migration flow.
 
-Storage changes append only the dedicated bridge operator to the Deposit component;
-existing field names and DepositStatus variant ordering remain unchanged.
+No storage fields are added. Existing field names and DepositStatus variant ordering
+remain unchanged.
 
 
 ##### Structs

@@ -19,7 +19,6 @@ pub(crate) mod Deposit {
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
-    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::signature::stark::HashType;
     use starkware_utils::time::time::{Time, TimeDelta};
     use crate::core::components::assets::interface::IAssets;
@@ -34,13 +33,11 @@ pub(crate) mod Deposit {
     pub struct Storage {
         pub registered_deposits: Map<HashType, DepositStatus>,
         pub cancel_delay: TimeDelta,
-        pub bridge_operator: ContractAddress,
     }
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
-        DepositBridgeOperatorUpdated: events::DepositBridgeOperatorUpdated,
         FundsBridged: events::FundsBridged,
     }
 
@@ -173,19 +170,6 @@ pub(crate) mod Deposit {
                     salt: salt,
                     interest_amount: interest_amount,
                 );
-        }
-
-        fn set_deposit_bridge_operator(
-            ref self: ComponentState<TContractState>, operator: ContractAddress,
-        ) {
-            get_dep_component!(@self, Roles).only_app_governor();
-            assert(operator.is_non_zero(), 'INVALID_BRIDGE_OPERATOR');
-            self.bridge_operator.write(operator);
-            self.emit(events::DepositBridgeOperatorUpdated { operator });
-        }
-
-        fn get_deposit_bridge_operator(self: @ComponentState<TContractState>) -> ContractAddress {
-            self.bridge_operator.read()
         }
 
         fn bridge_funds(

@@ -71,10 +71,11 @@ pub(crate) mod DepositManager {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::PositionId;
     use starknet::storage::{StorageMapReadAccess, StoragePointerReadAccess};
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::{ContractAddress, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::storage::iterable_map::{
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
@@ -235,10 +236,7 @@ pub(crate) mod DepositManager {
 
         fn bridge_funds(ref self: ContractState, amount: u256, commitment_id: felt252) {
             let bridge: ContractAddress = crate::core::constants::RHINO_BRIDGE.try_into().unwrap();
-            assert(
-                get_caller_address() == self.deposits.bridge_operator.read(),
-                'ONLY_BRIDGE_OPERATOR',
-            );
+            self.roles.only_operator();
             assert(commitment_id.is_non_zero(), 'INVALID_COMMITMENT');
             assert(amount.is_non_zero(), errors::ZERO_AMOUNT);
             let token = self.assets.get_base_collateral_token_contract();

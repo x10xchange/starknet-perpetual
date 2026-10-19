@@ -48,11 +48,6 @@ pub struct DepositCanceled {
 }
 
 #[derive(Debug, Drop, PartialEq, starknet::Event)]
-pub struct DepositBridgeOperatorUpdated {
-    pub operator: ContractAddress,
-}
-
-#[derive(Debug, Drop, PartialEq, starknet::Event)]
 pub struct FundsBridged {
     pub token_address: ContractAddress,
     pub amount: u256,

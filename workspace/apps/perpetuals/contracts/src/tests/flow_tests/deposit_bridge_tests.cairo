@@ -46,20 +46,13 @@ mod RhinoBridgeMock {
     }
 }
 
-fn operator() -> ContractAddress {
-    0x123456.try_into().unwrap()
-}
-
-fn setup_bridge(state: @FlowTestBase) -> ContractAddress {
+fn setup_bridge() -> ContractAddress {
     let bridge: ContractAddress = perpetuals::core::constants::RHINO_BRIDGE.try_into().unwrap();
     snforge_std::declare("RhinoBridgeMock")
         .unwrap()
         .contract_class()
         .deploy_at(@array![], bridge)
         .unwrap();
-    cheat_caller_address_once(*state.facade.perpetuals_contract, *state.facade.app_governor);
-    IDepositDispatcher { contract_address: *state.facade.perpetuals_contract }
-        .set_deposit_bridge_operator(operator());
     bridge
 }
 
@@ -105,7 +98,7 @@ fn deposit(ref state: FlowTestBase, user: User) -> u256 {
 fn test_deposit_bridge_direct_transfer_without_tracking() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    let bridge = setup_bridge(@state);
+    let bridge = setup_bridge();
     let token = IERC20Dispatcher { contract_address: state.facade.token_state.address };
     let core = state.facade.perpetuals_contract;
     let positions = perpetuals::core::components::positions::interface::IPositionsDispatcher {
@@ -117,7 +110,7 @@ fn test_deposit_bridge_direct_transfer_without_tracking() {
     let amount = deposit(ref state, user);
     assert!(token.balance_of(core) == core_before + amount);
     let nonce = IOperatorNonceDispatcher { contract_address: core }.get_operator_nonce();
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     let mut spy = snforge_std::spy_events();
     IDepositDispatcher { contract_address: core }.bridge_funds(amount, 123);
     spy
@@ -144,7 +137,7 @@ fn test_deposit_bridge_direct_transfer_without_tracking() {
     assert!(token.allowance(core, bridge) == 0);
 
     assert!(IOperatorNonceDispatcher { contract_address: core }.get_operator_nonce() == nonce);
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     assert!(IDepositSafeDispatcher { contract_address: core }.bridge_funds(amount, 124).is_err());
 }
 
@@ -153,10 +146,10 @@ fn test_deposit_bridge_direct_transfer_without_tracking() {
 fn test_deposit_bridge_propagates_rhino_failure() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    setup_bridge(@state);
+    setup_bridge();
     let amount = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     IDepositDispatcher { contract_address: core }.bridge_funds(amount, 999);
 }
 
@@ -165,10 +158,10 @@ fn test_deposit_bridge_propagates_rhino_failure() {
 fn test_deposit_bridge_rejects_missing_transfer() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    setup_bridge(@state);
+    setup_bridge();
     let amount = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     IDepositDispatcher { contract_address: core }.bridge_funds(amount, 998);
 }
 
@@ -177,7 +170,7 @@ fn test_deposit_bridge_rejects_missing_transfer() {
 fn test_deposit_bridge_blocks_legacy_processing() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    setup_bridge(@state);
+    setup_bridge();
     deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     let nonce = IOperatorNonceDispatcher { contract_address: core }.get_operator_nonce();
@@ -189,11 +182,11 @@ fn test_deposit_bridge_blocks_legacy_processing() {
 }
 
 #[test]
-#[should_panic(expected: 'ONLY_BRIDGE_OPERATOR')]
+#[should_panic(expected: "ONLY_OPERATOR")]
 fn test_deposit_bridge_rejects_unauthorized_execution() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    setup_bridge(@state);
+    setup_bridge();
     let amount = deposit(ref state, user);
     user.account.set_as_caller(state.facade.perpetuals_contract);
     IDepositDispatcher { contract_address: state.facade.perpetuals_contract }
@@ -202,18 +195,19 @@ fn test_deposit_bridge_rejects_unauthorized_execution() {
 
 #[test]
 #[feature("safe_dispatcher")]
-fn test_deposit_bridge_operator_rotation_and_governor_authorization() {
+fn test_deposit_bridge_uses_existing_operator_role_and_revocation() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
     let core = state.facade.perpetuals_contract;
     let safe = IDepositSafeDispatcher { contract_address: core };
-    setup_bridge(@state);
+    setup_bridge();
     let amount = deposit(ref state, user);
-    user.account.set_as_caller(core);
-    assert!(safe.set_deposit_bridge_operator(user.account.address).is_err());
-    cheat_caller_address_once(core, state.facade.app_governor);
-    IDepositDispatcher { contract_address: core }.set_deposit_bridge_operator(user.account.address);
-    cheat_caller_address_once(core, operator());
+    let roles = IRolesDispatcher { contract_address: core };
+    cheat_caller_address_once(core, state.facade.role_admin);
+    roles.remove_operator(state.facade.operator.address);
+    cheat_caller_address_once(core, state.facade.role_admin);
+    roles.register_operator(user.account.address);
+    state.facade.operator.set_as_caller(core);
     assert!(safe.bridge_funds(amount, 123).is_err());
     user.account.set_as_caller(core);
     IDepositDispatcher { contract_address: core }.bridge_funds(amount, 123);
@@ -224,23 +218,24 @@ fn test_deposit_bridge_operator_rotation_and_governor_authorization() {
 fn test_deposit_bridge_respects_pause() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    setup_bridge(@state);
+    setup_bridge();
     let amount = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     cheat_caller_address_once(core, state.facade.governance_admin);
-    IRolesDispatcher { contract_address: core }.register_security_agent(operator());
-    cheat_caller_address_once(core, operator());
+    IRolesDispatcher { contract_address: core }
+        .register_security_agent(state.facade.operator.address);
+    cheat_caller_address_once(core, state.facade.operator.address);
     IPausableDispatcher { contract_address: core }.pause();
     let token = IERC20Dispatcher { contract_address: state.facade.token_state.address };
     let before = token.balance_of(core);
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     assert!(IDepositSafeDispatcher { contract_address: core }.bridge_funds(amount, 123).is_err());
     assert!(token.balance_of(core) == before);
 }
 
 #[test]
 #[should_panic(expected: 'LEGACY_DEPOSITS_DISABLED')]
-fn test_deposit_bridge_registration_does_not_require_operator_setup() {
+fn test_deposit_bridge_deposit_without_rhino_setup() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
     deposit(ref state, user);
@@ -272,15 +267,15 @@ fn post_migration_state() -> FlowTestBase {
 fn test_deposit_bridge_accepts_partial_amount_and_repeated_deposit() {
     let mut state = post_migration_state();
     let user = state.new_user_with_position();
-    let bridge = setup_bridge(@state);
+    let bridge = setup_bridge();
     let amount = deposit(ref state, user);
     // Identical deposit arguments are allowed: the service identifies individual event logs.
     deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     let dispatcher = IDepositDispatcher { contract_address: core };
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     dispatcher.bridge_funds(amount / 2, 123);
-    cheat_caller_address_once(core, operator());
+    cheat_caller_address_once(core, state.facade.operator.address);
     dispatcher.bridge_funds(amount + amount / 2, 124);
     let token = IERC20Dispatcher { contract_address: state.facade.token_state.address };
     assert!(token.balance_of(bridge) == amount * 2);
@@ -327,8 +322,8 @@ fn test_deposit_bridge_blocks_reject() {
 #[should_panic(expected: 'ZERO_AMOUNT')]
 fn test_deposit_bridge_blocks_zero_amount() {
     let state = post_migration_state();
-    setup_bridge(@state);
-    cheat_caller_address_once(state.facade.perpetuals_contract, operator());
+    setup_bridge();
+    cheat_caller_address_once(state.facade.perpetuals_contract, state.facade.operator.address);
     IDepositDispatcher { contract_address: state.facade.perpetuals_contract }.bridge_funds(0, 123);
 }
 
@@ -336,7 +331,7 @@ fn test_deposit_bridge_blocks_zero_amount() {
 #[should_panic(expected: 'INVALID_COMMITMENT')]
 fn test_deposit_bridge_blocks_zero_commitment() {
     let state = post_migration_state();
-    setup_bridge(@state);
-    cheat_caller_address_once(state.facade.perpetuals_contract, operator());
+    setup_bridge();
+    cheat_caller_address_once(state.facade.perpetuals_contract, state.facade.operator.address);
     IDepositDispatcher { contract_address: state.facade.perpetuals_contract }.bridge_funds(1, 0);
 }
