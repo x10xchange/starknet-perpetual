@@ -14,11 +14,12 @@ pub(crate) mod Deposit {
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
+    use starkware_utils::components::roles::RolesComponent::InternalTrait as RolesInternal;
     use starkware_utils::signature::stark::HashType;
     use starkware_utils::time::time::{Time, TimeDelta};
     use crate::core::components::assets::interface::IAssets;
@@ -26,17 +27,26 @@ pub(crate) mod Deposit {
     use crate::core::components::external_components::external_component_manager::ExternalComponents as ExternalComponentsComponent;
     use crate::core::components::external_components::external_component_manager::ExternalComponents::InternalTrait as ExternalComponentsInternalTrait;
     use crate::core::components::vaults::vaults::Vaults as VaultsComponent;
+    use super::super::events;
 
 
     #[storage]
     pub struct Storage {
         pub registered_deposits: Map<HashType, DepositStatus>,
         pub cancel_delay: TimeDelta,
+        pub bridge: ContractAddress,
+        pub bridge_operator: ContractAddress,
+        // Snapshot the actual token and raw amount at registration, not execution.
+        pub bridge_deposits: Map<HashType, Option<(ContractAddress, u256)>>,
     }
 
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
-    pub enum Event {}
+    pub enum Event {
+        DepositBridgeEnabled: events::DepositBridgeEnabled,
+        DepositBridgeOperatorUpdated: events::DepositBridgeOperatorUpdated,
+        DepositBridged: events::DepositBridged,
+    }
 
 
     #[embeddable_as(DepositImpl)]
@@ -217,6 +227,50 @@ pub(crate) mod Deposit {
                     salt: salt,
                     interest_amount: interest_amount,
                 );
+        }
+
+        fn enable_deposit_bridge(
+            ref self: ComponentState<TContractState>,
+            bridge: ContractAddress,
+            operator: ContractAddress,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+            assert(self.bridge.read().is_zero(), 'BRIDGE_ALREADY_ENABLED');
+            assert(bridge.is_non_zero() && bridge != get_contract_address(), 'INVALID_BRIDGE');
+            assert(operator.is_non_zero(), 'INVALID_BRIDGE_OPERATOR');
+            self.bridge.write(bridge);
+            self.bridge_operator.write(operator);
+            self.emit(events::DepositBridgeEnabled { bridge, operator });
+        }
+
+        fn set_deposit_bridge_operator(
+            ref self: ComponentState<TContractState>, operator: ContractAddress,
+        ) {
+            get_dep_component!(@self, Roles).only_app_governor();
+            assert(self.bridge.read().is_non_zero(), 'BRIDGE_NOT_ENABLED');
+            assert(operator.is_non_zero(), 'INVALID_BRIDGE_OPERATOR');
+            self.bridge_operator.write(operator);
+            self.emit(events::DepositBridgeOperatorUpdated { operator });
+        }
+
+        fn get_deposit_bridge(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.bridge.read()
+        }
+
+        fn get_deposit_bridge_operator(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.bridge_operator.read()
+        }
+
+        fn bridge_deposit(
+            ref self: ComponentState<TContractState>,
+            deposit_hash: HashType,
+            commitment_id: felt252,
+        ) {
+            get_dep_component!(@self, Pausable).assert_not_paused();
+            let external_components = get_dep_component!(@self, ExternalComponents);
+            external_components
+                ._get_deposit_manager_dispatcher()
+                .bridge_deposit(deposit_hash, commitment_id);
         }
 
         fn get_deposit_status(

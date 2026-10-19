@@ -2428,6 +2428,44 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 A component for handling deposits.
 
+##### Post-migration deposits through Rhino
+
+After migration, upgrade both Core and DepositManager, then the app governor calls
+`enable_deposit_bridge(bridge, operator)`. This is a one-way cutover: the Rhino address
+cannot subsequently be replaced or disabled. The governor can rotate the dedicated
+service signer with `set_deposit_bridge_operator`. Activation emits
+`DepositBridgeEnabled`; the service must ingest deposits starting at that block.
+Eligibility is recorded during deposit registration, so transactions earlier in the
+same block remain legacy deposits.
+
+New deposits retain their existing `Deposit` event and pending/cancellation lifecycle.
+Their actual token address and raw amount are snapshotted in additional deposit storage.
+They remain in Core, cannot be processed by `process_deposit`, and do not credit a
+Starknet position or enter the treasury. Deposits pending before activation retain
+legacy processing and cannot be bridged by this entrypoint. Existing deposit limits
+continue to apply.
+
+The dedicated signer calls `bridge_deposit(deposit_hash, commitment_id)` after obtaining
+and persisting a committed Starknet-to-ARC Rhino quote. This entrypoint checks the
+contract is not paused and consumes only a pending, bridge-eligible deposit. It grants
+Rhino an allowance for exactly the registered amount and calls
+`deposit_with_id(token, amount, commitment_id)` directly from Core, then clears the
+allowance and checks the exact Core balance reduction. A failed call or balance check
+reverts the entire transaction, including consumption. Successful consumption uses the
+existing `PROCESSED` storage value and emits `DepositBridged`, not `DepositProcessed`.
+Cancellation/rejection and bridging are mutually exclusive. This operation does not
+consume the legacy operator nonce or alter position balances, funding, or interest.
+
+The commitment is opaque to Core: this ABI does not authenticate the destination chain,
+ARC recipient, output amount, or position metadata. The bridge signer is trusted to
+validate these fields and use the original position ID when creating the quote. The
+service must reconcile ARC delivery independently; `DepositBridged` proves only source
+funding. No refund from Core is possible after successful source funding.
+
+Storage changes append fields to the existing Deposit component, leaving existing
+field names and DepositStatus variant ordering unchanged.
+
+
 ##### Structs
 
 ###### DepositStatus

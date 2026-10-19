@@ -46,6 +46,7 @@ pub trait IDepositExternal<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
+    fn bridge_deposit(ref self: TContractState, deposit_hash: HashType, commitment_id: felt252);
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
@@ -70,7 +71,7 @@ pub(crate) mod DepositManager {
     use perpetuals::core::types::asset::AssetId;
     use perpetuals::core::types::position::PositionId;
     use starknet::storage::{StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess};
-    use starknet::{ContractAddress, get_contract_address};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::roles::RolesComponent;
@@ -87,6 +88,7 @@ pub(crate) mod DepositManager {
     use crate::core::types::asset::synthetic::AssetType;
     use crate::core::types::position::PositionDiff;
     use super::super::errors;
+    use super::super::interface::{IRhinoBridgeDispatcher, IRhinoBridgeDispatcherTrait};
     use super::{DepositStatus, HashType, IDepositExternal, TimeDelta, Timestamp, deposit_hash};
 
 
@@ -280,6 +282,10 @@ pub(crate) mod DepositManager {
                 :quantized_amount,
                 :salt,
             );
+            assert(
+                self.deposits.bridge_deposits.read(deposit_hash).is_none(),
+                'DEPOSIT_REQUIRES_BRIDGE',
+            );
             let deposit_status = self.get_deposit_status(:deposit_hash);
             match deposit_status {
                 DepositStatus::NOT_REGISTERED => {
@@ -325,6 +331,44 @@ pub(crate) mod DepositManager {
                         unquantized_amount,
                         deposit_request_hash: deposit_hash,
                         salt,
+                    },
+                );
+        }
+
+        fn bridge_deposit(ref self: ContractState, deposit_hash: HashType, commitment_id: felt252) {
+            let bridge = self.deposits.bridge.read();
+            assert(bridge.is_non_zero(), 'BRIDGE_NOT_ENABLED');
+            assert(
+                get_caller_address() == self.deposits.bridge_operator.read(),
+                'ONLY_BRIDGE_OPERATOR',
+            );
+            assert(commitment_id.is_non_zero(), 'INVALID_COMMITMENT');
+            let (token_address, amount) = self
+                .deposits
+                .bridge_deposits
+                .read(deposit_hash)
+                .expect('NOT_BRIDGE_DEPOSIT');
+            match self.deposits.registered_deposits.read(deposit_hash) {
+                DepositStatus::PENDING(_) => {},
+                _ => panic_with_felt252('DEPOSIT_NOT_PENDING'),
+            }
+            // Consume before external calls; a failed transfer rolls the entire transaction back.
+            self.deposits.registered_deposits.write(deposit_hash, DepositStatus::PROCESSED);
+            let token = IERC20Dispatcher { contract_address: token_address };
+            let balance_before = token.balance_of(get_contract_address());
+            assert(token.approve(bridge, amount), 'BRIDGE_APPROVAL_FAILED');
+            IRhinoBridgeDispatcher { contract_address: bridge }
+                .deposit_with_id(token_address, amount, commitment_id);
+            assert(token.approve(bridge, 0), 'BRIDGE_APPROVAL_FAILED');
+            assert(
+                token.balance_of(get_contract_address()) + amount == balance_before,
+                'BRIDGE_AMOUNT_MISMATCH',
+            );
+            self
+                .deposits
+                .emit(
+                    events::DepositBridged {
+                        deposit_request_hash: deposit_hash, token_address, amount, commitment_id,
                     },
                 );
         }
@@ -392,6 +436,16 @@ pub(crate) mod DepositManager {
                 .write(key: deposit_hash, value: DepositStatus::PENDING(now));
 
             let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
+
+            if self.deposits.bridge.read().is_non_zero() {
+                self
+                    .deposits
+                    .bridge_deposits
+                    .write(
+                        deposit_hash,
+                        Option::Some((token_contract.contract_address, unquantized_amount.into())),
+                    );
+            }
 
             let treasury_address = self.treasury.read().contract_address;
             self

@@ -46,3 +46,23 @@ pub struct DepositCanceled {
     pub deposit_request_hash: felt252,
     pub salt: felt252,
 }
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct DepositBridgeEnabled {
+    pub bridge: ContractAddress,
+    pub operator: ContractAddress,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct DepositBridgeOperatorUpdated {
+    pub operator: ContractAddress,
+}
+
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct DepositBridged {
+    #[key]
+    pub deposit_request_hash: felt252,
+    pub token_address: ContractAddress,
+    pub amount: u256,
+    pub commitment_id: felt252,
+}
