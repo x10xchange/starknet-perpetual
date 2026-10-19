@@ -195,7 +195,8 @@ pub(crate) mod DepositManager {
             now: Timestamp,
             salt: felt252,
         ) {
-            self._deposit(:caller_address, :asset_id, :position_id, :quantized_amount, :now, :salt);
+            // Cutover: stop new deposits while existing pending deposits are drained.
+            panic_with_felt252('DEPOSITS_DISABLED');
         }
 
         fn cancel_deposit(
