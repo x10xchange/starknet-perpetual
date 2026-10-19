@@ -2427,6 +2427,11 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 A component for handling deposits.
 
+During the migration cutover, this DepositManager rejects all new deposits with
+`DEPOSITS_DISABLED`. The external ABI is unchanged. Processing, cancellation and
+rejection of existing pending deposits remain available so they can be drained.
+Replace this temporary DepositManager to resume accepting deposits.
+
 ##### Structs
 
 ###### DepositStatus
