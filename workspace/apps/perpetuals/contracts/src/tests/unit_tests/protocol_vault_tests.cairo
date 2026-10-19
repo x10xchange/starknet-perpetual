@@ -140,6 +140,15 @@ fn test_protocol_vault_initialisation_logic() {
     cheat_caller_address_once(
         contract_address: perps_contract_address, caller_address: cfg.operator,
     );
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        deposit_dispatcher.contract_address,
+        vault_user.address,
+        cfg.collateral_cfg.collateral_id,
+        vault_user.position_id,
+        VAULT_DEPOSIT_AMOUNT,
+        vault_user.salt_counter,
+    );
     deposit_dispatcher
         .process_deposit(
             operator_nonce: 2,
@@ -165,6 +174,15 @@ fn test_protocol_vault_initialisation_logic() {
 
     cheat_caller_address_once(
         contract_address: perps_contract_address, caller_address: cfg.operator,
+    );
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        deposit_dispatcher.contract_address,
+        depositing_user.address,
+        cfg.collateral_cfg.collateral_id,
+        depositing_user.position_id,
+        VAULT_DEPOSIT_AMOUNT,
+        depositing_user.salt_counter,
     );
     deposit_dispatcher
         .process_deposit(

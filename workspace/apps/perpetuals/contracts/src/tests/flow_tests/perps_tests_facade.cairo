@@ -1097,6 +1097,15 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
 
         let token_state = self.find_contract_for_asset_id(:asset_id);
 
+        // Legacy settlement fixtures represent deposits pending before the upgrade.
+        // Bridge lifecycle tests call the dispatcher directly and never use this helper.
+        crate::tests::test_utils::mark_pre_upgrade_deposit(
+            self.perpetuals_contract,
+            deposit_hash(
+                token_state.address, depositor.address, position_id, quantized_amount, salt,
+            ),
+        );
+
         let operator_nonce = self.get_nonce();
         self.operator.set_as_caller(self.perpetuals_contract);
         IDepositDispatcher { contract_address: self.perpetuals_contract }

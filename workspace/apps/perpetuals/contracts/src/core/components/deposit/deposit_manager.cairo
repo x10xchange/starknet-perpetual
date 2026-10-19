@@ -336,8 +336,7 @@ pub(crate) mod DepositManager {
         }
 
         fn bridge_deposit(ref self: ContractState, deposit_hash: HashType, commitment_id: felt252) {
-            let bridge = self.deposits.bridge.read();
-            assert(bridge.is_non_zero(), 'BRIDGE_NOT_ENABLED');
+            let bridge: ContractAddress = crate::core::constants::RHINO_BRIDGE.try_into().unwrap();
             assert(
                 get_caller_address() == self.deposits.bridge_operator.read(),
                 'ONLY_BRIDGE_OPERATOR',
@@ -437,15 +436,13 @@ pub(crate) mod DepositManager {
 
             let unquantized_amount: u128 = quantized_amount.into() * quantum.into();
 
-            if self.deposits.bridge.read().is_non_zero() {
-                self
-                    .deposits
-                    .bridge_deposits
-                    .write(
-                        deposit_hash,
-                        Option::Some((token_contract.contract_address, unquantized_amount.into())),
-                    );
-            }
+            self
+                .deposits
+                .bridge_deposits
+                .write(
+                    deposit_hash,
+                    Option::Some((token_contract.contract_address, unquantized_amount.into())),
+                );
 
             let treasury_address = self.treasury.read().contract_address;
             self

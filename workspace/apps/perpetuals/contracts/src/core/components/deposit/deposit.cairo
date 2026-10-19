@@ -14,7 +14,7 @@ pub(crate) mod Deposit {
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::{ContractAddress, get_caller_address};
     use starkware_utils::components::pausable::PausableComponent;
     use starkware_utils::components::pausable::PausableComponent::InternalTrait as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
@@ -34,7 +34,6 @@ pub(crate) mod Deposit {
     pub struct Storage {
         pub registered_deposits: Map<HashType, DepositStatus>,
         pub cancel_delay: TimeDelta,
-        pub bridge: ContractAddress,
         pub bridge_operator: ContractAddress,
         // Snapshot the actual token and raw amount at registration, not execution.
         pub bridge_deposits: Map<HashType, Option<(ContractAddress, u256)>>,
@@ -43,7 +42,6 @@ pub(crate) mod Deposit {
     #[event]
     #[derive(Drop, PartialEq, starknet::Event)]
     pub enum Event {
-        DepositBridgeEnabled: events::DepositBridgeEnabled,
         DepositBridgeOperatorUpdated: events::DepositBridgeOperatorUpdated,
         DepositBridged: events::DepositBridged,
     }
@@ -229,32 +227,13 @@ pub(crate) mod Deposit {
                 );
         }
 
-        fn enable_deposit_bridge(
-            ref self: ComponentState<TContractState>,
-            bridge: ContractAddress,
-            operator: ContractAddress,
-        ) {
-            get_dep_component!(@self, Roles).only_app_governor();
-            assert(self.bridge.read().is_zero(), 'BRIDGE_ALREADY_ENABLED');
-            assert(bridge.is_non_zero() && bridge != get_contract_address(), 'INVALID_BRIDGE');
-            assert(operator.is_non_zero(), 'INVALID_BRIDGE_OPERATOR');
-            self.bridge.write(bridge);
-            self.bridge_operator.write(operator);
-            self.emit(events::DepositBridgeEnabled { bridge, operator });
-        }
-
         fn set_deposit_bridge_operator(
             ref self: ComponentState<TContractState>, operator: ContractAddress,
         ) {
             get_dep_component!(@self, Roles).only_app_governor();
-            assert(self.bridge.read().is_non_zero(), 'BRIDGE_NOT_ENABLED');
             assert(operator.is_non_zero(), 'INVALID_BRIDGE_OPERATOR');
             self.bridge_operator.write(operator);
             self.emit(events::DepositBridgeOperatorUpdated { operator });
-        }
-
-        fn get_deposit_bridge(self: @ComponentState<TContractState>) -> ContractAddress {
-            self.bridge.read()
         }
 
         fn get_deposit_bridge_operator(self: @ComponentState<TContractState>) -> ContractAddress {

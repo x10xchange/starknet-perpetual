@@ -2430,18 +2430,18 @@ A component for handling deposits.
 
 ##### Post-migration deposits through Rhino
 
-After migration, upgrade both Core and DepositManager, then the app governor calls
-`enable_deposit_bridge(bridge, operator)`. This is a one-way cutover: the Rhino address
-cannot subsequently be replaced or disabled. The governor can rotate the dedicated
-service signer with `set_deposit_bridge_operator`. Activation emits
-`DepositBridgeEnabled`; the service must ingest deposits starting at that block.
-Eligibility is recorded during deposit registration, so transactions earlier in the
-same block remain legacy deposits.
+After migration, upgrade Core and DepositManager. The upgrade itself is the cutover;
+there is no enable flag or configurable bridge address. Every new deposit is bridge-only,
+even before the service signer is configured. Rhino.fi is fixed at
+`0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8`.
+The app governor configures or rotates the dedicated signer with
+`set_deposit_bridge_operator`. The service ingests deposits starting at the upgrade,
+including their transaction ordering within the upgrade block.
 
 New deposits retain their existing `Deposit` event and pending/cancellation lifecycle.
 Their actual token address and raw amount are snapshotted in additional deposit storage.
 They remain in Core, cannot be processed by `process_deposit`, and do not credit a
-Starknet position or enter the treasury. Deposits pending before activation retain
+Starknet position or enter the treasury. Deposits pending before the upgrade retain
 legacy processing and cannot be bridged by this entrypoint. Existing deposit limits
 continue to apply.
 

@@ -644,6 +644,17 @@ pub fn deposit_vault_share(
             salt: user.salt_counter,
         );
 
+    mark_pre_upgrade_deposit(
+        test_address(),
+        crate::core::components::deposit::deposit_manager::deposit_hash(
+            *vault_share_state.address,
+            user.address,
+            user.position_id,
+            quantized_amount,
+            user.salt_counter,
+        ),
+    );
+
     cheat_caller_address_once(contract_address: test_address(), caller_address: *cfg.operator);
     state
         .process_deposit(
@@ -1221,3 +1232,42 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
     contract_address
 }
 
+
+/// Seed the absence of bridge metadata found in deposits registered before the upgrade.
+/// Used only by legacy settlement fixtures; new deposit tests use the live registration path.
+pub fn mark_pre_upgrade_deposit(contract_address: ContractAddress, deposit_hash: felt252) {
+    snforge_std::cheatcodes::storage::interact_with_state(
+        contract_address,
+        || {
+            let mut state = perpetuals::core::core::Core::contract_state_for_testing();
+            state.deposits.bridge_deposits.write(deposit_hash, Option::None);
+        },
+    );
+}
+
+pub fn mark_pre_upgrade_asset_deposit(
+    contract_address: ContractAddress,
+    depositor: ContractAddress,
+    asset_id: AssetId,
+    position_id: PositionId,
+    quantized_amount: u64,
+    salt: felt252,
+) {
+    let token_address = snforge_std::cheatcodes::storage::interact_with_state(
+        contract_address,
+        || {
+            let state = Core::contract_state_for_testing();
+            if state.assets.get_base_collateral_id() == asset_id {
+                state.assets.get_base_collateral_token_contract().contract_address
+            } else {
+                state.assets.get_asset_config(asset_id).token_contract.unwrap()
+            }
+        },
+    );
+    mark_pre_upgrade_deposit(
+        contract_address,
+        crate::core::components::deposit::deposit_manager::deposit_hash(
+            token_address, depositor, position_id, quantized_amount, salt,
+        ),
+    );
+}

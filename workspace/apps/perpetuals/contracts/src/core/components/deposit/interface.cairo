@@ -43,12 +43,7 @@ pub trait IDeposit<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
-    /// One-way cutover, called by the app governor only after migration.
-    fn enable_deposit_bridge(
-        ref self: TContractState, bridge: ContractAddress, operator: ContractAddress,
-    );
     fn set_deposit_bridge_operator(ref self: TContractState, operator: ContractAddress);
-    fn get_deposit_bridge(self: @TContractState) -> ContractAddress;
     fn get_deposit_bridge_operator(self: @TContractState) -> ContractAddress;
     fn bridge_deposit(ref self: TContractState, deposit_hash: HashType, commitment_id: felt252);
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;

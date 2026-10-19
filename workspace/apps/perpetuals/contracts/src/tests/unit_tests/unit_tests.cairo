@@ -148,6 +148,15 @@ fn test_expiration_validation() {
     deposit_dispatcher.deposit(:position_id, quantized_amount: amount, salt: user.salt_counter);
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        deposit_dispatcher.contract_address,
+        user.address,
+        cfg.collateral_cfg.collateral_id,
+        user.position_id,
+        amount,
+        user.salt_counter,
+    );
     deposit_dispatcher
         .process_deposit(
             operator_nonce: 1,
@@ -383,6 +392,15 @@ fn test_signature_validation() {
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        deposit_dispatcher.contract_address,
+        user_a.address,
+        cfg.collateral_cfg.collateral_id,
+        user_a.position_id,
+        amount,
+        user_a.salt_counter,
+    );
     deposit_dispatcher
         .process_deposit(
             operator_nonce: 4,
@@ -401,6 +419,15 @@ fn test_signature_validation() {
         );
 
     cheat_caller_address_once(:contract_address, caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        deposit_dispatcher.contract_address,
+        user_b.address,
+        cfg.collateral_cfg.collateral_id,
+        user_b.position_id,
+        amount,
+        user_b.salt_counter,
+    );
     deposit_dispatcher
         .process_deposit(
             operator_nonce: 5,
@@ -2103,6 +2130,15 @@ fn test_successful_process_deposit() {
     let mut spy = snforge_std::spy_events();
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        test_address(),
+        user.address,
+        cfg.collateral_cfg.collateral_id,
+        user.position_id,
+        DEPOSIT_AMOUNT,
+        user.salt_counter,
+    );
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
@@ -2442,6 +2478,15 @@ fn test_cancel_already_done_deposit() {
         );
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        test_address(),
+        user.address,
+        cfg.collateral_cfg.collateral_id,
+        user.position_id,
+        DEPOSIT_AMOUNT,
+        user.salt_counter,
+    );
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
@@ -4414,6 +4459,15 @@ fn test_validate_asset_prices_pending_asset() {
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        test_address(),
+        user.address,
+        cfg.collateral_cfg.collateral_id,
+        user.position_id,
+        DEPOSIT_AMOUNT,
+        user.salt_counter,
+    );
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
@@ -4553,6 +4607,15 @@ fn test_validate_prices_no_update_needed() {
             salt: user.salt_counter,
         );
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        test_address(),
+        user.address,
+        cfg.collateral_cfg.collateral_id,
+        user.position_id,
+        DEPOSIT_AMOUNT,
+        user.salt_counter,
+    );
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),
@@ -5796,6 +5859,15 @@ fn test_successful_vault_share_process_deposit() {
     );
 
     cheat_caller_address_once(contract_address: test_address(), caller_address: cfg.operator);
+    // This settlement test starts with a deposit pending before the upgrade.
+    crate::tests::test_utils::mark_pre_upgrade_asset_deposit(
+        test_address(),
+        user.address,
+        cfg.vault_share_cfg.collateral_id,
+        user.position_id,
+        DEPOSIT_AMOUNT,
+        user.salt_counter,
+    );
     state
         .process_deposit(
             operator_nonce: state.get_operator_nonce(),

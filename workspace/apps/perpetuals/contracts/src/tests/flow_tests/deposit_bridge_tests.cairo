@@ -47,15 +47,16 @@ fn operator() -> ContractAddress {
     0x123456.try_into().unwrap()
 }
 
-fn enable(state: @FlowTestBase) -> ContractAddress {
-    let (bridge, _) = snforge_std::declare("RhinoBridgeMock")
+fn setup_bridge(state: @FlowTestBase) -> ContractAddress {
+    let bridge: ContractAddress = perpetuals::core::constants::RHINO_BRIDGE.try_into().unwrap();
+    snforge_std::declare("RhinoBridgeMock")
         .unwrap()
         .contract_class()
-        .deploy(@array![])
+        .deploy_at(@array![], bridge)
         .unwrap();
     cheat_caller_address_once(*state.facade.perpetuals_contract, *state.facade.app_governor);
     IDepositDispatcher { contract_address: *state.facade.perpetuals_contract }
-        .enable_deposit_bridge(bridge, operator());
+        .set_deposit_bridge_operator(operator());
     bridge
 }
 
@@ -75,7 +76,7 @@ fn deposit(ref state: FlowTestBase, user: User) -> felt252 {
 fn test_deposit_bridge_direct_transfer_and_replay_protection() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    let bridge = enable(@state);
+    let bridge = setup_bridge(@state);
     let token = IERC20Dispatcher { contract_address: state.facade.token_state.address };
     let core = state.facade.perpetuals_contract;
     let positions = perpetuals::core::components::positions::interface::IPositionsDispatcher {
@@ -111,7 +112,7 @@ fn test_deposit_bridge_direct_transfer_and_replay_protection() {
 fn test_deposit_bridge_propagates_rhino_failure() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     cheat_caller_address_once(core, operator());
@@ -123,7 +124,7 @@ fn test_deposit_bridge_propagates_rhino_failure() {
 fn test_deposit_bridge_rejects_missing_transfer() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     cheat_caller_address_once(core, operator());
@@ -135,27 +136,34 @@ fn test_deposit_bridge_rejects_missing_transfer() {
 fn test_deposit_bridge_blocks_legacy_processing() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
-    let info = state.facade.deposit(user.account, user.position_id, 10000);
-    state.facade.process_deposit(info);
+    setup_bridge(@state);
+    deposit(ref state, user);
+    let core = state.facade.perpetuals_contract;
+    let nonce = IOperatorNonceDispatcher { contract_address: core }.get_operator_nonce();
+    state.facade.operator.set_as_caller(core);
+    IDepositDispatcher { contract_address: core }
+        .process_deposit(
+            nonce, user.account.address, state.facade.collateral_id, user.position_id, 10000, 42, 0,
+        );
 }
 
 #[test]
-fn test_deposit_bridge_preserves_pre_cutover_pending_deposits() {
+fn test_deposit_bridge_preserves_pre_upgrade_pending_deposits() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
     let info = state.facade.deposit(user.account, user.position_id, 10000);
-    enable(@state);
+    setup_bridge(@state);
     state.facade.process_deposit(info);
 }
 
 #[test]
 #[should_panic(expected: 'NOT_BRIDGE_DEPOSIT')]
-fn test_deposit_bridge_cannot_sweep_pre_cutover_deposits() {
+fn test_deposit_bridge_cannot_sweep_pre_upgrade_deposits() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
     let hash = deposit(ref state, user);
-    enable(@state);
+    crate::tests::test_utils::mark_pre_upgrade_deposit(state.facade.perpetuals_contract, hash);
+    setup_bridge(@state);
     cheat_caller_address_once(state.facade.perpetuals_contract, operator());
     IDepositDispatcher { contract_address: state.facade.perpetuals_contract }
         .bridge_deposit(hash, 123);
@@ -166,7 +174,7 @@ fn test_deposit_bridge_cannot_sweep_pre_cutover_deposits() {
 fn test_deposit_bridge_rejects_unauthorized_execution() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     user.account.set_as_caller(state.facade.perpetuals_contract);
     IDepositDispatcher { contract_address: state.facade.perpetuals_contract }
@@ -174,19 +182,11 @@ fn test_deposit_bridge_rejects_unauthorized_execution() {
 }
 
 #[test]
-#[should_panic(expected: 'BRIDGE_ALREADY_ENABLED')]
-fn test_deposit_bridge_cutover_is_one_way() {
-    let state = FlowTestBaseTrait::new();
-    enable(@state);
-    enable(@state);
-}
-
-#[test]
 #[feature("safe_dispatcher")]
 fn test_deposit_bridge_cancel_and_bridge_are_mutually_exclusive() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     let dispatcher = IDepositDispatcher { contract_address: core };
@@ -209,12 +209,8 @@ fn test_deposit_bridge_operator_rotation_and_governor_authorization() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
     let core = state.facade.perpetuals_contract;
-    let bridge = snforge_std::declare("RhinoBridgeMock").unwrap().contract_class();
-    let (bridge, _) = bridge.deploy(@array![]).unwrap();
     let safe = IDepositSafeDispatcher { contract_address: core };
-    user.account.set_as_caller(core);
-    assert!(safe.enable_deposit_bridge(bridge, operator()).is_err());
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     user.account.set_as_caller(core);
     assert!(safe.set_deposit_bridge_operator(user.account.address).is_err());
@@ -231,7 +227,7 @@ fn test_deposit_bridge_operator_rotation_and_governor_authorization() {
 fn test_deposit_bridge_respects_pause() {
     let mut state = FlowTestBaseTrait::new();
     let user = state.new_user_with_position();
-    enable(@state);
+    setup_bridge(@state);
     let hash = deposit(ref state, user);
     let core = state.facade.perpetuals_contract;
     cheat_caller_address_once(core, state.facade.governance_admin);
@@ -242,4 +238,19 @@ fn test_deposit_bridge_respects_pause() {
     cheat_caller_address_once(core, operator());
     assert!(IDepositSafeDispatcher { contract_address: core }.bridge_deposit(hash, 123).is_err());
     assert!(IDepositDispatcher { contract_address: core }.get_deposit_status(hash) == before);
+}
+
+#[test]
+#[should_panic(expected: 'DEPOSIT_REQUIRES_BRIDGE')]
+fn test_deposit_bridge_registration_does_not_require_operator_setup() {
+    let mut state = FlowTestBaseTrait::new();
+    let user = state.new_user_with_position();
+    deposit(ref state, user);
+    let core = state.facade.perpetuals_contract;
+    let nonce = IOperatorNonceDispatcher { contract_address: core }.get_operator_nonce();
+    state.facade.operator.set_as_caller(core);
+    IDepositDispatcher { contract_address: core }
+        .process_deposit(
+            nonce, user.account.address, state.facade.collateral_id, user.position_id, 10000, 42, 0,
+        );
 }
