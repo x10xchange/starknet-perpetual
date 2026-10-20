@@ -381,6 +381,44 @@ pub mod Core {
                 );
         }
 
+        /// Withdraw collateral `amount` from a position to the hardcoded migration withdrawal
+        /// recipient without a signed `withdraw_request`. Used by the migration service to move
+        /// unsupported spot assets of migrated clients to the migration wallet.
+        ///
+        /// Validations:
+        /// - Only the operator can call this function.
+        /// - The contract must not be paused.
+        /// - The `operator_nonce` must be valid.
+        /// - The `expiration` time has not passed.
+        /// - The collateral asset exists in the system.
+        /// - The funding validation interval has not passed since the last funding tick.
+        /// - The prices of all assets in the system are valid.
+        /// - The withdrawal message has not been fulfilled.
+        /// - Validate the position is healthy after the withdraw.
+        ///
+        /// Execution:
+        /// - Register the withdraw message on the owner's behalf if it is not registered.
+        /// - Transfer the collateral `amount` to the migration withdrawal recipient.
+        /// - Update the position's collateral balance.
+        /// - Mark the withdrawal message as fulfilled.
+        fn migration_withdraw(
+            ref self: ContractState,
+            operator_nonce: u64,
+            collateral_id: AssetId,
+            position_id: PositionId,
+            amount: u64,
+            expiration: Timestamp,
+            salt: felt252,
+        ) {
+            self.pausable.assert_not_paused();
+            self.assets.validate_assets_integrity();
+            self.operator_nonce.use_checked_nonce(:operator_nonce);
+            self
+                .external_components
+                ._get_withdrawal_manager_dispatcher()
+                .migration_withdraw(:collateral_id, :position_id, :amount, :expiration, :salt);
+        }
+
         fn transfer_request(
             ref self: ContractState,
             signature: Signature,

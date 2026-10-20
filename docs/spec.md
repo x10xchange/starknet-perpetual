@@ -22,6 +22,7 @@ classDiagram
 
         withdraw_request()
         withdraw()
+        migration_withdraw()
         transfer_request()
         transfer()
         multi_trade()
@@ -2427,6 +2428,11 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 A component for handling deposits.
 
+During the migration cutover, this DepositManager rejects all new deposits with
+`DEPOSITS_DISABLED`. The external ABI is unchanged. Processing, cancellation and
+rejection of existing pending deposits remain available so they can be drained.
+Replace this temporary DepositManager to resume accepting deposits.
+
 ##### Structs
 
 ###### DepositStatus
@@ -3837,6 +3843,74 @@ Only the Operator can execute.
 - WITHDRAW_EXPIRED
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
+**Emits:**
+
+[withdraw](#withdraw)
+
+#### Migration Withdraw
+
+The operator withdraws collateral amount from the position to the hardcoded migration withdrawal recipient without a signed `withdraw_request`. It is used by the migration service to move unsupported spot assets of migrated clients (whose positions are already closed) to the migration wallet. The recipient is not a parameter and no interest is applied.
+
+```rust
+fn migration_withdraw(
+    ref self: ContractState,
+    operator_nonce: u64,
+    // WithdrawArgs (recipient is MIGRATION_WITHDRAWAL_RECIPIENT)
+    asset_id: AssetId,
+    position_id: PositionId,
+    amount: u64,
+    expiration: Timestamp,
+    salt: felt252,
+)
+```
+
+```rust
+pub const MIGRATION_WITHDRAWAL_RECIPIENT: felt252 =
+    0x04e64b8c1126ff6a9b870664b6b7a82e8b729301aa2b49682d819f561e7823bd;
+```
+
+**Access Control:**
+
+Only the Operator can execute.
+
+**Hash:**
+
+[get\_message\_hash](#get-message-hash) on [WithdrawArgs](#withdrawargs) with position `public_key`, where `recipient` is `MIGRATION_WITHDRAWAL_RECIPIENT`.
+
+**Validations:**
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [Expiration validation](#expiration)
+6. The withdraw message is not already `RequestStatus::PROCESSED` in the requests component.
+7. Asset id is registered.
+8. Amount is not zero.
+
+**Logic:**
+
+1. Run migration withdraw validations
+2. If the withdraw message is `RequestStatus::NOT_REGISTERED`, register it on the owner's behalf (no signature).
+3. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component, so an identical repeated call fails with `REQUEST_ALREADY_PROCESSED`. A pending request signed by the user for the same arguments is consumed normally.
+4. [Fundamental validation](#fundamental)
+5. Subtract the amount from the position collateral.
+6. Transfer `amount * collateral.asset_id.quantum` from the contract to the migration withdrawal recipient.
+
+**Errors:**
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- SYNTHETIC\_NOT\_EXISTS
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- WITHDRAW_EXPIRED
+- REQUEST_ALREADY_PROCESSED
+- INVALID_ZERO_AMOUNT
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
 **Emits:**
