@@ -22,6 +22,7 @@ classDiagram
 
         withdraw_request()
         withdraw()
+        migration_withdraw()
         transfer_request()
         transfer()
         multi_trade()
@@ -2425,7 +2426,52 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 #### Deposit
 
-A component for handling deposits.
+A component for handling deposits. The post-migration behavior below supersedes the
+legacy lifecycle described in the later subsections.
+
+##### Post-migration deposits through Rhino
+
+After migration, upgrade Core and DepositManager. The upgrade itself is the cutover;
+there is no enable flag or configurable bridge address. Every new deposit is bridge-only.
+Rhino.fi is fixed at
+`0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8`.
+Bridging uses the existing `OPERATOR` role and its existing registration/revocation
+mechanism; no separate bridge signer is configured. The service ingests deposits
+starting at the upgrade, including their transaction ordering within the upgrade block.
+
+Only the base `collateral_asset` is accepted by `deposit` / `deposit_asset`; all other
+asset IDs, including spot tokens and vault shares, revert. Funds stay in Core and the
+existing `Deposit` event is emitted for the service. No pending-deposit record is
+created, no Starknet position is credited, and no funds enter the treasury. Existing
+deposit limits continue to apply. All pre-migration deposits must be fully drained
+before the upgrade. Legacy `process_deposit`, `cancel_deposit`, and `reject_deposit`
+are disabled unconditionally by the new DepositManager.
+
+The existing operator calls `bridge_funds(amount: u256, commitment_id: felt252)` with
+a nonzero raw collateral-token amount and a nonzero committed Rhino quote ID. The
+contract checks the caller has the operator role and it is not paused, approves the
+fixed Rhino address for exactly that amount, and calls `deposit_with_id(collateral_token, amount, commitment_id)` directly
+from Core. It then clears the allowance and checks the exact Core balance reduction.
+Any failure reverts the transaction. Success emits `FundsBridged` with token address,
+amount and commitment ID. No legacy operator nonce or position balance is changed.
+
+There is no per-deposit bridge tracking, amount matching, or commitment deduplication
+in Core. Partial and aggregated amounts can be bridged from the pooled collateral
+balance. The service must durably match deposit events to quotes and reconcile
+submitted transactions before retrying. Identical deposit arguments can emit multiple
+funded events; use transaction hash and event index, not `deposit_request_hash`, as
+the unique ingestion key. Old deposit status storage is retained for storage layout
+stability but is not written by the new flow and is not a bridge status API.
+
+The commitment is opaque to Core: this ABI does not authenticate the destination chain,
+ARC recipient, output amount, or position metadata. The operator is trusted to
+validate these fields and use the original position ID when creating the quote. The
+service must reconcile ARC delivery independently; `FundsBridged` proves only source
+funding. There is no on-chain deposit cancellation or refund in this post-migration flow.
+
+No storage fields are added. Existing field names and DepositStatus variant ordering
+remain unchanged.
+
 
 ##### Structs
 
@@ -3837,6 +3883,74 @@ Only the Operator can execute.
 - WITHDRAW_EXPIRED
 - REQUEST_NOT_REGISTERED
 - REQUEST_ALREADY_PROCESSED
+- POSITION_NOT_HEALTHY_NOR_HEALTHIER
+
+**Emits:**
+
+[withdraw](#withdraw)
+
+#### Migration Withdraw
+
+The operator withdraws collateral amount from the position to the hardcoded migration withdrawal recipient without a signed `withdraw_request`. It is used by the migration service to move unsupported spot assets of migrated clients (whose positions are already closed) to the migration wallet. The recipient is not a parameter and no interest is applied.
+
+```rust
+fn migration_withdraw(
+    ref self: ContractState,
+    operator_nonce: u64,
+    // WithdrawArgs (recipient is MIGRATION_WITHDRAWAL_RECIPIENT)
+    asset_id: AssetId,
+    position_id: PositionId,
+    amount: u64,
+    expiration: Timestamp,
+    salt: felt252,
+)
+```
+
+```rust
+pub const MIGRATION_WITHDRAWAL_RECIPIENT: felt252 =
+    0x04e64b8c1126ff6a9b870664b6b7a82e8b729301aa2b49682d819f561e7823bd;
+```
+
+**Access Control:**
+
+Only the Operator can execute.
+
+**Hash:**
+
+[get\_message\_hash](#get-message-hash) on [WithdrawArgs](#withdrawargs) with position `public_key`, where `recipient` is `MIGRATION_WITHDRAWAL_RECIPIENT`.
+
+**Validations:**
+
+1. [Pausable check](#pausable)
+2. [Operator Nonce check](#operator-nonce)
+3. [Funding validation](#funding)
+4. [Price validation](#price)
+5. [Expiration validation](#expiration)
+6. The withdraw message is not already `RequestStatus::PROCESSED` in the requests component.
+7. Asset id is registered.
+8. Amount is not zero.
+
+**Logic:**
+
+1. Run migration withdraw validations
+2. If the withdraw message is `RequestStatus::NOT_REGISTERED`, register it on the owner's behalf (no signature).
+3. Mark withdraw request as `RequestStatus::PROCESSED` in the requests component, so an identical repeated call fails with `REQUEST_ALREADY_PROCESSED`. A pending request signed by the user for the same arguments is consumed normally.
+4. [Fundamental validation](#fundamental)
+5. Subtract the amount from the position collateral.
+6. Transfer `amount * collateral.asset_id.quantum` from the contract to the migration withdrawal recipient.
+
+**Errors:**
+
+- PAUSED
+- ONLY\_OPERATOR
+- INVALID\_NONCE
+- FUNDING\_EXPIRED
+- SYNTHETIC\_NOT\_EXISTS
+- SYNTHETIC\_EXPIRED\_PRICE
+- INVALID\_POSITION
+- WITHDRAW_EXPIRED
+- REQUEST_ALREADY_PROCESSED
+- INVALID_ZERO_AMOUNT
 - POSITION_NOT_HEALTHY_NOR_HEALTHIER
 
 **Emits:**

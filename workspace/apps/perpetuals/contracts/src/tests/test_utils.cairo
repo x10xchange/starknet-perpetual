@@ -682,7 +682,7 @@ pub fn init_state(cfg: @PerpetualsInitConfig, token_state: @TokenState) -> Core:
         .unwrap()
         .contract_class();
 
-    let deposit_external_component = snforge_std::declare("DepositManager")
+    let deposit_external_component = snforge_std::declare("LegacyDepositManager")
         .unwrap()
         .contract_class();
 
@@ -1061,7 +1061,7 @@ pub fn register_external_components_by_dispatcher(
     let deleverage_external_component = snforge_std::declare("DeleverageManager")
         .unwrap()
         .contract_class();
-    let deposit_external_component = snforge_std::declare("DepositManager")
+    let deposit_external_component = snforge_std::declare("LegacyDepositManager")
         .unwrap()
         .contract_class();
     let assets_external_component = snforge_std::declare("AssetsManager").unwrap().contract_class();
@@ -1220,4 +1220,3 @@ pub fn init_by_dispatcher(cfg: @PerpetualsInitConfig, token_state: @TokenState) 
 
     contract_address
 }
-

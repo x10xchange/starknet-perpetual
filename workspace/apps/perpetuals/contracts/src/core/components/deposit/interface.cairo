@@ -43,6 +43,8 @@ pub trait IDeposit<TContractState> {
         salt: felt252,
         interest_amount: i64,
     );
+    /// Bridge a raw collateral-token amount. Deposit matching and deduplication are off-chain.
+    fn bridge_funds(ref self: TContractState, amount: u256, commitment_id: felt252);
     fn get_deposit_status(self: @TContractState, deposit_hash: HashType) -> DepositStatus;
     fn get_cancel_delay(self: @TContractState) -> TimeDelta;
 }
@@ -54,4 +56,12 @@ pub enum DepositStatus {
     PROCESSED,
     CANCELED,
     PENDING: Timestamp,
+}
+
+/// Matches settlement-service/api/src/main/abi/rhino/abi.json.
+#[starknet::interface]
+pub trait IRhinoBridge<TContractState> {
+    fn deposit_with_id(
+        ref self: TContractState, token: ContractAddress, amount: u256, commitment_id: felt252,
+    );
 }

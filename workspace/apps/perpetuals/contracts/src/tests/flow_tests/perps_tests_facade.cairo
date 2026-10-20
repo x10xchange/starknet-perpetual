@@ -667,7 +667,7 @@ pub impl PerpsTestsFacadeImpl of PerpsTestsFacadeTrait {
             .unwrap()
             .contract_class();
 
-        let deposit_external_component = snforge_std::declare("DepositManager")
+        let deposit_external_component = snforge_std::declare("LegacyDepositManager")
             .unwrap()
             .contract_class();
 
