@@ -98,8 +98,8 @@ jobs:
       - name: Deploy contracts
         id: deploy_contracts
         run: |
-          # CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
-          # echo "core hash $CORE_HASH"
+          CORE_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c Core -p perpetuals)
+          echo "core hash $CORE_HASH"
           # VAULT_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c VaultsManager -p perpetuals)
           # echo "vault hash $VAULT_COMPONENT_HASH"
           # TRANSFER_COMPONENT_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TransferManager -p perpetuals)
@@ -123,8 +123,8 @@ jobs:
 
 
 
-          # echo "verifying core hash ${CORE_HASH}"
-          # voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "Core verification might have failed check https://voyager.online/class/${CORE_HASH}"
+          echo "verifying core hash ${CORE_HASH}"
+          voyager verify --network mainnet --class-hash ${CORE_HASH} --contract-name Core --license Apache-2.0  --package perpetuals --watch --lock-file  || echo "Core verification might have failed check https://voyager.online/class/${CORE_HASH}"
 
           # echo "verifying vault component hash ${VAULT_COMPONENT_HASH}"        
           # voyager verify --network mainnet --class-hash ${VAULT_COMPONENT_HASH} --contract-name VaultsManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "VaultsManager verification might have failed check https://voyager.online/class/${VAULT_COMPONENT_HASH}"
@@ -147,8 +147,8 @@ jobs:
           # echo "verifying withdrawal hash ${WITHDRAWAL_COMPONENT_HASH}"
           # voyager verify --network mainnet --class-hash ${WITHDRAWAL_COMPONENT_HASH} --contract-name WithdrawalManager --license Apache-2.0  --package perpetuals --watch --lock-file || echo "WithdrawalManager verification might have failed check https://voyager.online/class/${WITHDRAWAL_COMPONENT_HASH}"
 
-          # echo add_new_implementation ${CORE_HASH} 1 0
-          # echo replace_to             ${CORE_HASH} 1 0
+          echo add_new_implementation ${CORE_HASH} 1 0
+          echo replace_to             ${CORE_HASH} 1 0
 
 
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n VAULTS -h ${VAULT_COMPONENT_HASH}
@@ -159,12 +159,12 @@ jobs:
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n DEPOSITS -h ${DEPOSIT_COMPONENT_HASH}
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n ASSETS -h ${ASSET_MANAGER_COMPONENT_HASH}
           # ./utils/register.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c 0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8 -n FORCED_REQUESTS -h ${FORCED_REQUESTS_COMPONENT_HASH}
-          TREASURY_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolTreasury -p treasury)
-          echo "treasury hash $TREASURY_HASH"
-          TREASURY_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TreasuryTimelockEIC -p perpetuals)
-          echo "treasury eic hash $TREASURY_EIC_HASH"
+          # TREASURY_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c ProtocolTreasury -p treasury)
+          # echo "treasury hash $TREASURY_HASH"
+          # TREASURY_EIC_HASH=$(./utils/declare.sh -a mainnet -u ${{ secrets.RPC_V9 }} -c TreasuryTimelockEIC -p perpetuals)
+          # echo "treasury eic hash $TREASURY_EIC_HASH"
 
-          echo "verifying treasury hash ${TREASURY_HASH}"
-          voyager verify --network mainnet --class-hash ${TREASURY_HASH} --contract-name ProtocolTreasury --license Apache-2.0  --package treasury --watch --lock-file || echo "ProtocolTreasury verification might have failed check https://voyager.online/class/${TREASURY_HASH}"
-          echo "verifying treasury eic hash ${TREASURY_EIC_HASH}"
-          voyager verify --network mainnet --class-hash ${TREASURY_EIC_HASH} --contract-name TreasuryTimelockEIC --license Apache-2.0  --package perpetuals --watch --lock-file || echo "TreasuryTimelockEIC verification might have failed check https://voyager.online/class/${TREASURY_EIC_HASH}"
+          # echo "verifying treasury hash ${TREASURY_HASH}"
+          # voyager verify --network mainnet --class-hash ${TREASURY_HASH} --contract-name ProtocolTreasury --license Apache-2.0  --package treasury --watch --lock-file || echo "ProtocolTreasury verification might have failed check https://voyager.online/class/${TREASURY_HASH}"
+          # echo "verifying treasury eic hash ${TREASURY_EIC_HASH}"
+          # voyager verify --network mainnet --class-hash ${TREASURY_EIC_HASH} --contract-name TreasuryTimelockEIC --license Apache-2.0  --package perpetuals --watch --lock-file || echo "TreasuryTimelockEIC verification might have failed check https://voyager.online/class/${TREASURY_EIC_HASH}"
