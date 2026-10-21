@@ -1,4 +1,4 @@
-name: Deploy DepositManager Cutover
+name: Deploy Migration Cutover (Core + DepositManager)
 
 on:
   workflow_dispatch:
@@ -81,74 +81,133 @@ jobs:
           # echo address=$address
           sncast account import --name mainnet --address 0x0785932b867b6a21dfd64367edd181c1cfa83fa7ce942d005857cd5935049d58 --private-key ${{ secrets.DEPLOYER_KEY }} --type oz -u ${{ secrets.RPC_V9 }}
 
-      - name: Declare DepositManager
+      - name: Declare Core and DepositManager
         id: deploy_contracts
         env:
           RPC_URL: ${{ secrets.RPC_V9 }}
         run: |
           set -euo pipefail
-          sncast --account mainnet --wait --json declare \
-            --url "$RPC_URL" --contract-name DepositManager --package perpetuals \
-            > deposit-manager-declaration.json || { cat deposit-manager-declaration.json; exit 1; }
-          cat deposit-manager-declaration.json
-          DEPOSIT_COMPONENT_HASH=$(jq -er '.class_hash | select(type == "string" and test("^0x[0-9a-fA-F]+$"))' deposit-manager-declaration.json)
-          echo "class_hash=$DEPOSIT_COMPONENT_HASH" >> "$GITHUB_OUTPUT"
+          HEX_HASH='.class_hash | select(type == "string" and test("^0x[0-9a-fA-F]+$"))'
+
+          # Declares $1 and prints its class hash. A class that is already declared on
+          # mainnet (e.g. on a re-run) is accepted, using the locally computed hash.
+          declare_contract() {
+            local name="$1" out="$2"
+            local expected
+            expected=$(sncast --json utils class-hash --contract-name "$name" --package perpetuals \
+              | jq -Rer "fromjson? | select(.class_hash?) | $HEX_HASH")
+            if sncast --account mainnet --wait --json declare \
+              --url "$RPC_URL" --contract-name "$name" --package perpetuals > "$out" 2>&1; then
+              cat "$out" >&2
+              local declared
+              # The file also holds stderr (scarb warnings), so skip non-JSON lines.
+              declared=$(jq -Rer "fromjson? | select(.class_hash?) | $HEX_HASH" "$out")
+              if [ "$declared" != "$expected" ]; then
+                echo "$name declared hash $declared != computed hash $expected" >&2
+                exit 1
+              fi
+            elif grep -qi 'already declared' "$out"; then
+              cat "$out" >&2
+              echo "$name is already declared: $expected" >&2
+            else
+              cat "$out" >&2
+              exit 1
+            fi
+            echo "$expected"
+          }
+
+          CORE_HASH=$(declare_contract Core core-declaration.json)
+          echo "core_class_hash=$CORE_HASH" >> "$GITHUB_OUTPUT"
+          DEPOSIT_COMPONENT_HASH=$(declare_contract DepositManager deposit-manager-declaration.json)
+          echo "deposit_class_hash=$DEPOSIT_COMPONENT_HASH" >> "$GITHUB_OUTPUT"
 
       - name: Print wallet upgrade details
         env:
-          DEPOSIT_COMPONENT_HASH: ${{ steps.deploy_contracts.outputs.class_hash }}
+          CORE_HASH: ${{ steps.deploy_contracts.outputs.core_class_hash }}
+          DEPOSIT_COMPONENT_HASH: ${{ steps.deploy_contracts.outputs.deposit_class_hash }}
           CORE_ADDRESS: '0x05F062C924EcD9f5d4C74c567A28cc5502332fcf21828687EC20581a03F7E1C8'
         run: |
           set -euo pipefail
           # ASCII felt for DEPOSITS; the component is a class used via library calls.
           COMPONENT_TYPE=0x4445504f53495453
-          jq -n --arg core "$CORE_ADDRESS" --arg hash "$DEPOSIT_COMPONENT_HASH" \
-            --arg component "$COMPONENT_TYPE" '{
+          # ImplementationData { impl_hash, eic_data: None, final: false } -> [hash, 1, 0].
+          jq -n --arg core "$CORE_ADDRESS" --arg core_hash "$CORE_HASH" \
+            --arg deposit_hash "$DEPOSIT_COMPONENT_HASH" --arg component "$COMPONENT_TYPE" '{
               network: "mainnet",
-              class_hash: $hash,
-              registration: {
-                contractAddress: $core,
-                entrypoint: "register_external_component",
-                calldata: [$component, $hash]
+              core: {
+                class_hash: $core_hash,
+                add_new_implementation: {
+                  contractAddress: $core,
+                  entrypoint: "add_new_implementation",
+                  calldata: [$core_hash, "1", "0"]
+                },
+                replace_to: {
+                  contractAddress: $core,
+                  entrypoint: "replace_to",
+                  calldata: [$core_hash, "1", "0"]
+                }
               },
-              activation: {
-                contractAddress: $core,
-                entrypoint: "activate_external_component",
-                calldata: [$component, $hash]
+              deposit_manager: {
+                class_hash: $deposit_hash,
+                registration: {
+                  contractAddress: $core,
+                  entrypoint: "register_external_component",
+                  calldata: [$component, $deposit_hash]
+                },
+                activation: {
+                  contractAddress: $core,
+                  entrypoint: "activate_external_component",
+                  calldata: [$component, $deposit_hash]
+                }
               }
-            }' > deposit-manager-upgrade.json
+            }' > cutover-upgrade.json
           {
-            echo '## DepositManager cutover: wallet upgrade'
+            echo '## Migration cutover: wallet upgrade'
             echo
             echo "Network: Starknet mainnet"
             echo "Core contract: $CORE_ADDRESS"
+            echo "Core class hash: $CORE_HASH"
             echo "DepositManager class hash: $DEPOSIT_COMPONENT_HASH"
             echo "Component type (DEPOSITS): $COMPONENT_TYPE"
             echo
-            echo 'Use a wallet with the upgrade-governor role. Submit registration first.'
-            echo 'After the activation_time from ExternalComponentImplRegistered, submit activation separately.'
+            echo 'Use a wallet with the upgrade-governor role. The Core upgrade and the DepositManager'
+            echo 'component are independent; each has its own delay between its two calls.'
+            echo
+            echo '### Core (adds sweep_treasury)'
+            echo "1. add_new_implementation calldata: $CORE_HASH 1 0"
+            echo "2. After the upgrade delay from ImplementationAdded, replace_to calldata: $CORE_HASH 1 0"
+            echo
+            echo '### DepositManager (blocks new deposits)'
+            echo "1. register_external_component calldata: $COMPONENT_TYPE $DEPOSIT_COMPONENT_HASH"
+            echo "2. After the activation_time from ExternalComponentImplRegistered, activate_external_component calldata: $COMPONENT_TYPE $DEPOSIT_COMPONENT_HASH"
             echo 'New deposits stop only when activation succeeds; pending deposits can still be processed or refunded.'
             echo
-            echo "1. register_external_component calldata: $COMPONENT_TYPE $DEPOSIT_COMPONENT_HASH"
-            echo "2. activate_external_component calldata: $COMPONENT_TYPE $DEPOSIT_COMPONENT_HASH"
+            echo '### Before calling sweep_treasury'
+            echo 'The treasury protection limit applies. For USDC, USDT, ETH and wBTC the treasury app governor must'
+            echo 'request_protection_limit_percent_change(token, 100), wait for the timelock, apply it, then reset_protection_limit.'
             echo
             echo '```json'
-            cat deposit-manager-upgrade.json
+            cat cutover-upgrade.json
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload wallet upgrade details
         uses: actions/upload-artifact@v4
         with:
-          name: deposit-manager-cutover-upgrade
+          name: migration-cutover-upgrade
           path: |
+            core-declaration.json
             deposit-manager-declaration.json
-            deposit-manager-upgrade.json
+            cutover-upgrade.json
 
-      - name: Verify DepositManager
+      - name: Verify Core and DepositManager
         env:
-          DEPOSIT_COMPONENT_HASH: ${{ steps.deploy_contracts.outputs.class_hash }}
+          CORE_HASH: ${{ steps.deploy_contracts.outputs.core_class_hash }}
+          DEPOSIT_COMPONENT_HASH: ${{ steps.deploy_contracts.outputs.deposit_class_hash }}
         run: |
+          voyager verify --network mainnet --class-hash "$CORE_HASH" \
+            --contract-name Core --license Apache-2.0 --package perpetuals \
+            --watch --lock-file || echo "Core verification might have failed: https://voyager.online/class/$CORE_HASH"
           voyager verify --network mainnet --class-hash "$DEPOSIT_COMPONENT_HASH" \
             --contract-name DepositManager --license Apache-2.0 --package perpetuals \
             --watch --lock-file || echo "DepositManager verification might have failed: https://voyager.online/class/$DEPOSIT_COMPONENT_HASH"
