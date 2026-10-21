@@ -58,6 +58,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
             .new_position(
                 position_id: user.position_id,
                 owner_public_key: user.account.key_pair.public_key,
+                owner_key_type: user.account.key_type(),
                 owner_account: user.account.address,
             );
         user
@@ -74,6 +75,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
             .new_position(
                 position_id: user.position_id,
                 owner_public_key: user.account.key_pair.public_key,
+                owner_key_type: user.account.key_type(),
                 owner_account: user.account.address,
             );
         user
@@ -88,6 +90,7 @@ pub impl FlowTestBaseImpl of FlowTestBaseTrait {
             .new_position(
                 position_id: user.position_id,
                 owner_public_key: user.account.key_pair.public_key,
+                owner_key_type: user.account.key_type(),
                 owner_account: user.account.address,
             );
         user

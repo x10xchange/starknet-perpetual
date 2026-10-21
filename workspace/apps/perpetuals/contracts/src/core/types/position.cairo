@@ -20,6 +20,9 @@ pub struct Position {
     pub version: u8,
     pub owner_account: Option<ContractAddress>,
     pub owner_public_key: PublicKey,
+    /// Curve of `owner_public_key`; see `types::key_type`. Positions written before this field
+    /// existed read back `0`, which is `key_type::STARK` — no migration is required.
+    pub owner_key_type: u8,
     pub collateral_balance: Balance,
     #[rename("synthetic_balance")]
     pub asset_balances: IterableMap<AssetId, AssetBalance>,
@@ -141,6 +144,9 @@ pub impl PositionImpl of PositionTrait {
     fn get_owner_public_key(self: StoragePath<Position>) -> PublicKey {
         self.owner_public_key.read()
     }
+    fn get_owner_key_type(self: StoragePath<Position>) -> u8 {
+        self.owner_key_type.read()
+    }
     fn get_version(self: StoragePath<Position>) -> u8 {
         self.version.read()
     }
@@ -154,6 +160,9 @@ pub impl PositionMutableImpl of PositionMutableTrait {
 
     fn get_owner_public_key(self: StoragePath<Mutable<Position>>) -> PublicKey {
         self.owner_public_key.read()
+    }
+    fn get_owner_key_type(self: StoragePath<Mutable<Position>>) -> u8 {
+        self.owner_key_type.read()
     }
     fn get_version(self: StoragePath<Mutable<Position>>) -> u8 {
         self.version.read()
