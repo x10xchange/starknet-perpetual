@@ -4,6 +4,7 @@ pub mod Core {
     use core::num::traits::{One, Zero};
     use core::panic_with_felt252;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::introspection::src5::SRC5Component;
     use perpetuals::core::components::assets::AssetsComponent;
     use perpetuals::core::components::assets::AssetsComponent::InternalTrait as AssetsInternal;
@@ -20,9 +21,10 @@ pub mod Core {
         FEE_POSITION, InternalTrait as PositionsInternalTrait,
     };
     use perpetuals::core::components::positions::errors::ZERO_MAX_INTEREST_RATE;
+    use perpetuals::core::constants::{TREASURY_SWEEP_RECIPIENT, TREASURY_SWEEP_TOKENS};
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_ZERO_AMOUNT, INVALID_ZERO_TIMEOUT,
-        LENGTH_MISMATCH, ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC,
+        LENGTH_MISMATCH, ORDER_IS_NOT_EXPIRED, TRADE_ASSET_NOT_SYNTHETIC, TRANSFER_FAILED,
     };
     use perpetuals::core::events;
     use perpetuals::core::interface::{ICore, Settlement};
@@ -54,7 +56,7 @@ pub mod Core {
         IterableMapIntoIterImpl, IterableMapReadAccessImpl, IterableMapWriteAccessImpl,
     };
     use starkware_utils::time::time::{Time, TimeDelta, Timestamp};
-    use treasury::interface::ITreasuryDispatcher;
+    use treasury::interface::{ITreasuryDispatcher, ITreasuryDispatcherTrait};
     use crate::core::components::assets::interface::IAssets;
     use crate::core::components::deleverage::deleverage_manager::IDeleverageManagerDispatcherTrait;
     use crate::core::components::deposit::events as deposit_events;
@@ -230,6 +232,7 @@ pub mod Core {
         ForcedRedeemFromVaultRequest: vault_events::ForcedRedeemFromVaultRequest,
         ForcedRedeemFromVault: vault_events::ForcedRedeemFromVault,
         InterestApplied: events::InterestApplied,
+        TreasurySwept: events::TreasurySwept,
         #[flat]
         FulfillmentEvent: Fulfillement::Event,
         #[flat]
@@ -1194,6 +1197,49 @@ pub mod Core {
 
         fn get_treasury_address(ref self: ContractState) -> ContractAddress {
             self.treasury.contract_address.read()
+        }
+
+        /// Moves treasury funds of every `TREASURY_SWEEP_TOKENS` token to the hardcoded
+        /// `TREASURY_SWEEP_RECIPIENT`. Used by the migration to empty the treasury.
+        ///
+        /// `amount` is a raw token amount (not scaled by decimals) applied to each token, capped at
+        /// the token's treasury balance. Use a small non-zero `amount` as a test transfer; zero
+        /// sweeps the full balance.
+        ///
+        /// The treasury protection limit applies to the pull, so the protection percent of every
+        /// swept token must be raised to 100 (and the limit reset) beforehand.
+        ///
+        /// Validations:
+        /// - Only the upgrade governor can call this function.
+        /// - The treasury is set.
+        ///
+        /// Execution:
+        /// - For every token with a non-zero treasury balance:
+        ///   - Withdraw `amount` (or the full balance) from the treasury to this contract.
+        ///   - Transfer it to `TREASURY_SWEEP_RECIPIENT`.
+        ///   - Emit a `TreasurySwept` event.
+        fn sweep_treasury(ref self: ContractState, amount: u256) {
+            self.roles.only_upgrade_governor();
+            let treasury = self.treasury.read();
+            assert(treasury.contract_address.is_non_zero(), 'TREASURY_NOT_SET');
+            let recipient: ContractAddress = TREASURY_SWEEP_RECIPIENT.try_into().unwrap();
+
+            for token_address in TREASURY_SWEEP_TOKENS.span() {
+                let token_address: ContractAddress = (*token_address).try_into().unwrap();
+                let token = IERC20Dispatcher { contract_address: token_address };
+                let balance = token.balance_of(treasury.contract_address);
+                let amount = if amount.is_zero() || amount > balance {
+                    balance
+                } else {
+                    amount
+                };
+                if amount.is_zero() {
+                    continue;
+                }
+                treasury.withdraw_from(token_address, amount);
+                assert(token.transfer(:recipient, :amount), TRANSFER_FAILED);
+                self.emit(events::TreasurySwept { token_address, recipient, amount });
+            }
         }
     }
 
