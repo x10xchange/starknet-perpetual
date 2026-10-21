@@ -61,6 +61,20 @@ jobs:
       - name: Install asdf & tools
         uses: asdf-vm/actions/install@v4
 
+      - name: Install asdf & tools
+        uses: asdf-vm/actions/install@v4
+
+      - name: install sncast
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.starkup.sh | sh
+
+      - name: install foundry
+        run: |
+          asdf install starknet-foundry 0.54.0
+          asdf set -u starknet-foundry 0.54.0 
+          sed -i 's/^starknet-foundry .*/starknet-foundry 0.54.0/' .tool-versions
+          cat .tool-versions
+
       - name: Install Voyager Verifier
         run: |
           asdf plugin add voyager https://github.com/NethermindEth/asdf-voyager-verifier.git
