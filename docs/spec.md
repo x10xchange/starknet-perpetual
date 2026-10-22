@@ -4811,11 +4811,13 @@ fn enforced_stable_coin_swap(
 )
 ```
 
-The source must be active `SPOT_COLLATERAL` with resolution `10^6`, matching the base collateral's internal units. The destination is always `get_base_collateral_id()` and cannot be supplied by the caller. The source's current internal price must be **strictly less than `PRICE_SCALE` (`2^28`)**; equality is rejected. Normal pause, operator nonce, funding and price freshness validations apply, as do position existence, positive amount, sufficient source balance, and checked signed-balance arithmetic.
+The source must be active `SPOT_COLLATERAL` with resolution `10^6`, matching the base collateral's internal units. The destination is always `get_base_collateral_id()` and cannot be supplied by the caller. The source's current internal price must be **strictly less than `PRICE_SCALE` (`2^28`)**; equality is rejected. Normal pause, operator nonce, funding and price freshness validations apply, as do position existence, positive amount, and checked signed-balance arithmetic.
 
-Execution subtracts `amount` from the source spot balance and adds exactly `amount` to `collateral_balance`. Ownership, other balances, funding checkpoints and the position's interest timestamp are preserved. There are no fees or token transfers; replacement USDC backing must be supplied separately as part of the migration. No position-health or liquidation eligibility check is required: replacing spot collateral valued below par with the same quantity of unhaircut base collateral cannot lower TV or increase TR. Already unhealthy positions may therefore be converted.
+`amount` is a ceiling, not a requirement: the converted quantity is `min(amount, max(source balance, 0))`, so a requested amount above the held balance converts the whole balance instead of reverting. When nothing is held (no source entry, or a zero or negative balance) the call succeeds without changing the position, still consuming the operator nonce.
 
-The event records the transition for replay consumers:
+Execution subtracts the converted quantity from the source spot balance and adds exactly that quantity to `collateral_balance`. Ownership, other balances, funding checkpoints and the position's interest timestamp are preserved. There are no fees or token transfers; replacement USDC backing must be supplied separately as part of the migration. No position-health or liquidation eligibility check is required: replacing spot collateral valued below par with the same quantity of unhaircut base collateral cannot lower TV or increase TR. Already unhealthy positions may therefore be converted.
+
+The event records the transition for replay consumers; `amount` is the converted quantity, which may be below the requested amount or zero:
 
 ```rust
 struct EnforcedStableCoinSwap {

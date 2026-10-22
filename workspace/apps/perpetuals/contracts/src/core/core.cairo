@@ -684,28 +684,37 @@ pub mod Core {
             assert(price < One::one(), 'SWAP_PRICE_NOT_BELOW_USDC');
 
             let position = self.positions.get_position_mut(position_id);
-            let mut source = position
-                .asset_balances
-                .read(from_asset_id)
-                .expect('INSUFFICIENT_SWAP_BALANCE');
-            let amount_balance: Balance = amount_signed.into();
-            assert(source.balance >= amount_balance, 'INSUFFICIENT_SWAP_BALANCE');
-            let collateral_after = position.collateral_balance.read() + amount_balance;
-            source.balance -= amount_balance;
+            // `amount` is a ceiling: convert at most the held balance, so an off-chain balance
+            // that drifted above the on-chain one cannot revert the operator's batch. A position
+            // with nothing to convert is left untouched and the event records zero.
+            let mut source = position.asset_balances.read(from_asset_id).unwrap_or_default();
+            let held: i64 = source.balance.into();
+            let swapped: i64 = if held <= 0 {
+                0
+            } else if held < amount_signed {
+                held
+            } else {
+                amount_signed
+            };
 
             // This is a spot conversion, not a synthetic trade: preserve
             // funding and interest checkpoints, ownership, and all other balances.
             // Removing spot collateral worth less than the USDC credit cannot
             // lower TV or increase TR, including for already unhealthy positions.
-            position.asset_balances.write(from_asset_id, source);
-            position.collateral_balance.write(collateral_after);
+            if swapped.is_non_zero() {
+                let swapped_balance: Balance = swapped.into();
+                let collateral_after = position.collateral_balance.read() + swapped_balance;
+                source.balance -= swapped_balance;
+                position.asset_balances.write(from_asset_id, source);
+                position.collateral_balance.write(collateral_after);
+            }
             self
                 .emit(
                     events::EnforcedStableCoinSwap {
                         position_id,
                         from_asset_id,
                         to_asset_id: self.assets.get_base_collateral_id(),
-                        amount,
+                        amount: swapped.try_into().unwrap(),
                         price,
                     },
                 );

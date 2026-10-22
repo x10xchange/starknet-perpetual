@@ -112,8 +112,7 @@ fn test_enforced_stable_coin_swap_abi_event_and_atomic_failures() {
 
     state.facade.operator.set_as_caller(contract_address);
     assert!(
-        !dispatcher
-            .try_swap(contract_address, original_nonce, user.position_id, asset.asset_id, 101),
+        !dispatcher.try_swap(contract_address, original_nonce, user.position_id, asset.asset_id, 0),
     );
     assert!(nonce(@state) == original_nonce);
     assert!(
@@ -165,15 +164,40 @@ fn test_enforced_stable_coin_swap_abi_event_and_atomic_failures() {
             .try_swap(contract_address, original_nonce, user.position_id, asset.asset_id, 40),
     );
     assert!(nonce(@state) == original_nonce + 1);
+    // An amount above the held balance converts only what is held.
     state.facade.operator.set_as_caller(contract_address);
     assert!(
         dispatcher
-            .try_swap(contract_address, original_nonce + 1, user.position_id, asset.asset_id, 60),
+            .try_swap(contract_address, original_nonce + 1, user.position_id, asset.asset_id, 61),
     );
     assert!(
         state.facade.get_position_asset_balance(user.position_id, asset.asset_id) == 0_i64.into(),
     );
     assert!(state.facade.get_position_collateral_balance(user.position_id) == 300_i64.into());
+    // Nothing left to convert: the call succeeds, uses its nonce and records zero.
+    state.facade.operator.set_as_caller(contract_address);
+    assert!(
+        dispatcher
+            .try_swap(contract_address, original_nonce + 2, user.position_id, asset.asset_id, 1),
+    );
+    assert!(nonce(@state) == original_nonce + 3);
+    assert!(state.facade.get_position_collateral_balance(user.position_id) == 300_i64.into());
+    let events = spy.get_events().emitted_by(contract_address).events;
+    assert!(events.len() == 3);
+    for (index, amount) in array![(1_usize, 60_u64), (2, 0)] {
+        assert_expected_event_emitted(
+            events[index],
+            EnforcedStableCoinSwap {
+                position_id: user.position_id,
+                from_asset_id: asset.asset_id,
+                to_asset_id: state.facade.collateral_id,
+                amount,
+                price: (PRICE_SCALE / 2).into(),
+            },
+            @selector!("EnforcedStableCoinSwap"),
+            "EnforcedStableCoinSwap",
+        );
+    }
     state.facade.validate_total_value(user.position_id, 300);
     state.facade.validate_total_risk(user.position_id, 0);
     assert!(state.facade.token_state.balance_of(state.facade.treasury_address) == treasury_usdc);
