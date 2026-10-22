@@ -110,22 +110,25 @@ jobs:
             local expected
             expected=$(sncast --json utils class-hash --contract-name "$name" --package perpetuals \
               | jq -Rer "fromjson? | select(.class_hash?) | $HEX_HASH")
-            if sncast --account mainnet --wait --json declare \
-              --url "$RPC_URL" --contract-name "$name" --package perpetuals > "$out" 2>&1; then
-              cat "$out" >&2
+            local status=0
+            sncast --account mainnet --wait --json declare \
+              --url "$RPC_URL" --contract-name "$name" --package perpetuals > "$out" 2>&1 || status=$?
+            cat "$out" >&2
+            # sncast --json reports errors, an already declared class among them, as a JSON
+            # {"type":"error"} line with exit status 0, so the status alone is not enough.
+            # The file also holds stderr (scarb warnings), so skip non-JSON lines.
+            if grep -qi 'already declared' "$out"; then
+              echo "$name is already declared: $expected" >&2
+            elif [ "$status" -ne 0 ] || jq -Re 'fromjson? | select(.type? == "error")' "$out" > /dev/null; then
+              echo "$name declaration failed" >&2
+              exit 1
+            else
               local declared
-              # The file also holds stderr (scarb warnings), so skip non-JSON lines.
               declared=$(jq -Rer "fromjson? | select(.class_hash?) | $HEX_HASH" "$out")
               if [ "$declared" != "$expected" ]; then
                 echo "$name declared hash $declared != computed hash $expected" >&2
                 exit 1
               fi
-            elif grep -qi 'already declared' "$out"; then
-              cat "$out" >&2
-              echo "$name is already declared: $expected" >&2
-            else
-              cat "$out" >&2
-              exit 1
             fi
             echo "$expected"
           }
