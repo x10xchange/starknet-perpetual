@@ -80,14 +80,6 @@ pub trait IWithdrawalManager<TContractState> {
         expiration: Timestamp,
         salt: felt252,
     );
-    fn migration_withdraw(
-        ref self: TContractState,
-        collateral_id: AssetId,
-        position_id: PositionId,
-        amount: u64,
-        expiration: Timestamp,
-        salt: felt252,
-    );
 }
 
 #[starknet::contract]
@@ -108,7 +100,6 @@ pub(crate) mod WithdrawalManager {
     use perpetuals::core::components::positions::Positions as PositionsComponent;
     use perpetuals::core::components::positions::Positions::InternalTrait as PositionsInternal;
     use perpetuals::core::components::snip::SNIP12MetadataImpl;
-    use perpetuals::core::constants::MIGRATION_WITHDRAWAL_RECIPIENT;
     use perpetuals::core::errors::{
         AMOUNT_OVERFLOW, FORCED_WAIT_REQUIRED, INVALID_EXPIRATION, INVALID_ZERO_AMOUNT,
         SIGNED_TX_EXPIRED, TRANSFER_FAILED,
@@ -127,9 +118,6 @@ pub(crate) mod WithdrawalManager {
     use starkware_utils::components::pausable::PausableComponent::InternalImpl as PausableInternal;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent;
     use starkware_utils::components::request_approvals::RequestApprovalsComponent::InternalTrait as RequestApprovalsInternal;
-    use starkware_utils::components::request_approvals::interface::{
-        IRequestApprovals, RequestStatus,
-    };
     use starkware_utils::components::roles::RolesComponent;
     use starkware_utils::hash::message_hash::OffchainMessageHash;
     use starkware_utils::signature::stark::HashType;
@@ -369,68 +357,6 @@ pub(crate) mod WithdrawalManager {
                     },
                 );
         }
-
-        /// Withdraws `amount` of `collateral_id` from `position_id` to the hardcoded
-        /// `MIGRATION_WITHDRAWAL_RECIPIENT` without a signed `withdraw_request`.
-        ///
-        /// The position owner signs nothing, so the request is registered here on the owner's
-        /// behalf (when it is not registered yet) and consumed right away. This keeps the replay
-        /// protection and the request status identical to a signed withdrawal: an identical
-        /// repeated call fails with `REQUEST_ALREADY_PROCESSED`. Every other validation of
-        /// `withdraw` applies unchanged; no interest is applied.
-        fn migration_withdraw(
-            ref self: ContractState,
-            collateral_id: AssetId,
-            position_id: PositionId,
-            amount: u64,
-            expiration: Timestamp,
-            salt: felt252,
-        ) {
-            // `withdraw_request` is skipped, so its zero-amount check is performed here.
-            assert(amount.is_non_zero(), INVALID_ZERO_AMOUNT);
-            let recipient: ContractAddress = MIGRATION_WITHDRAWAL_RECIPIENT.try_into().unwrap();
-            let position = self.positions.get_position_mut(:position_id);
-
-            let withdraw_args = self
-                ._validate_withdraw(
-                    :recipient, :position_id, :amount, :expiration, :salt, :collateral_id,
-                );
-            let public_key = position.into().get_owner_public_key();
-            let request_hash = withdraw_args.get_message_hash(:public_key);
-            if self
-                .request_approvals
-                .get_request_status(:request_hash) == RequestStatus::NOT_REGISTERED {
-                self.request_approvals.store_approval(:public_key, args: withdraw_args);
-            }
-            let hash = self
-                .request_approvals
-                .consume_approved_request(args: withdraw_args, :public_key);
-
-            let token_address = self
-                ._execute_withdraw(
-                    :recipient,
-                    :position_id,
-                    :amount,
-                    :position,
-                    :collateral_id,
-                    interest_amount: 0,
-                );
-
-            self
-                .emit(
-                    Withdraw {
-                        position_id,
-                        recipient,
-                        collateral_id,
-                        token_address,
-                        amount,
-                        expiration,
-                        withdraw_request_hash: hash,
-                        salt,
-                        interest_amount: 0,
-                    },
-                );
-        }
     }
 
     #[generate_trait]
@@ -446,49 +372,18 @@ pub(crate) mod WithdrawalManager {
             collateral_id: AssetId,
             interest_amount: i64,
         ) -> (HashType, ContractAddress) {
-            let withdraw_args = self
-                ._validate_withdraw(
-                    :recipient, :position_id, :amount, :expiration, :salt, :collateral_id,
-                );
+            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
+            validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
+
             let hash = self
                 .request_approvals
                 .consume_approved_request(
-                    args: withdraw_args, public_key: position.into().get_owner_public_key(),
+                    args: WithdrawArgs {
+                        position_id, salt, expiration, collateral_id, amount, recipient,
+                    },
+                    public_key: position.into().get_owner_public_key(),
                 );
 
-            let token_address = self
-                ._execute_withdraw(
-                    :recipient, :position_id, :amount, :position, :collateral_id, :interest_amount,
-                );
-            (hash, token_address)
-        }
-
-        /// Runs the validations shared by every withdrawal flavor and builds the request args.
-        fn _validate_withdraw(
-            ref self: ContractState,
-            recipient: ContractAddress,
-            position_id: PositionId,
-            amount: u64,
-            expiration: Timestamp,
-            salt: felt252,
-            collateral_id: AssetId,
-        ) -> WithdrawArgs {
-            assert!(!self.vaults.is_vault_position(position_id), "VAULT_CANNOT_WITHDRAW");
-            validate_expiration(expiration: expiration, err: SIGNED_TX_EXPIRED);
-            WithdrawArgs { position_id, salt, expiration, collateral_id, amount, recipient }
-        }
-
-        /// Applies the withdrawal to the position and transfers the tokens to `recipient`.
-        /// Returns the token address of the withdrawn asset.
-        fn _execute_withdraw(
-            ref self: ContractState,
-            recipient: ContractAddress,
-            position_id: PositionId,
-            amount: u64,
-            position: StoragePath<Mutable<Position>>,
-            collateral_id: AssetId,
-            interest_amount: i64,
-        ) -> ContractAddress {
             self
                 .positions
                 .verify_and_update_interest_range(
@@ -549,7 +444,7 @@ pub(crate) mod WithdrawalManager {
                 TRANSFER_FAILED,
             );
 
-            token_contract.contract_address
+            (hash, token_contract.contract_address)
         }
     }
 }
