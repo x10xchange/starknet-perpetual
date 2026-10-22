@@ -220,4 +220,5 @@ pub trait ICore<TContractState> {
     fn set_max_interest_rate_per_sec(ref self: TContractState, max_interest_rate_per_sec: u32);
 
     fn get_treasury_address(ref self: TContractState) -> ContractAddress;
+    fn sweep_treasury(ref self: TContractState, amount: u256);
 }

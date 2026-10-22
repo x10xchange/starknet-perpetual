@@ -44,6 +44,7 @@ classDiagram
         enable_escape_hatch()
         get_max_interest_rate_per_sec()
         set_max_interest_rate_per_sec()
+        sweep_treasury()
         update_exchange_time()
         get_exchange_time()
         get_time_of_last_update()
@@ -2427,6 +2428,11 @@ pub const ZERO_MAX_ORACLE_PRICE: felt252 = 'ZERO_MAX_ORACLE_PRICE';
 
 A component for handling deposits.
 
+During the migration cutover, this DepositManager rejects all new deposits with
+`DEPOSITS_DISABLED`. The external ABI is unchanged. Processing, cancellation and
+rejection of existing pending deposits remain available so they can be drained.
+Replace this temporary DepositManager to resume accepting deposits.
+
 ##### Structs
 
 ###### DepositStatus
@@ -3530,6 +3536,19 @@ pub struct AssetPositionReduced {
     pub quote_amount_a: i64,
     pub interest_amount_a: i64,
     pub interest_amount_b: i64,
+}
+```
+
+#### TreasurySwept
+
+```rust
+#[derive(Debug, Drop, PartialEq, starknet::Event)]
+pub struct TreasurySwept {
+    #[key]
+    pub token_address: ContractAddress,
+    #[key]
+    pub recipient: ContractAddress,
+    pub amount: u256,
 }
 ```
 
@@ -5142,3 +5161,61 @@ Only the App Governor can execute.
 
 - ONLY_APP_GOVERNOR
 - ZERO_MAX_INTEREST_RATE
+
+#### Sweep Treasury
+
+Migration only. Moves treasury funds of each hardcoded token to the hardcoded `TREASURY_SWEEP_RECIPIENT`. Neither the recipient nor the tokens can be chosen by the caller. Tokens held by the perps contract itself (e.g. pending deposits) are not swept.
+
+`amount` is a raw token amount (not scaled by the token's decimals) applied to every token, capped at that token's treasury balance. A small non-zero `amount` performs a test transfer; `0` sweeps the full balance.
+
+```rust
+fn sweep_treasury(ref self: ContractState, amount: u256)
+```
+
+```rust
+pub const TREASURY_SWEEP_RECIPIENT: felt252 =
+    0x0259fec57cd26d27385cd8948d3693bbf26bed68ad54d7bdd1fdb901774ff0e8;
+
+/// USDC, USDT, ETH, wBTC.
+pub const TREASURY_SWEEP_TOKENS: [felt252; 4] = [
+    0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb,
+    0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8,
+    0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7,
+    0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac,
+];
+```
+
+**Access Control:**
+
+Only the Upgrade Governor can execute.
+
+**Prerequisite:**
+
+The pull goes through the treasury `withdraw_from`, so the treasury protection limit applies. Before the sweep, the treasury App Governor must raise the protection percent of every swept token to 100 (`request_protection_limit_percent_change` → timelock → `apply_protection_limit_percent_change`) and re-snapshot the limit (`reset_protection_limit`). Otherwise the sweep reverts.
+
+**Validations:**
+
+1. The treasury is set.
+
+**Logic:**
+
+For every token in `TREASURY_SWEEP_TOKENS` with a non-zero treasury balance:
+
+1. Let the swept amount be the treasury balance if `amount` is zero or exceeds it, otherwise `amount`.
+2. Withdraw the swept amount from the treasury into the perps contract (`withdraw_from`).
+3. Transfer the same amount to `TREASURY_SWEEP_RECIPIENT`.
+4. Emit [TreasurySwept](#treasuryswept).
+
+Tokens with a zero treasury balance are skipped, so repeated calls succeed and move only what is left.
+
+**Errors:**
+
+- ONLY_UPGRADE_GOVERNOR
+- TREASURY_NOT_SET
+- TRANSFER_FAILED
+- Treasury Protection Limit Exceeded (from the treasury)
+- PAUSED (from the treasury, if the treasury is paused)
+
+**Emits:**
+
+[TreasurySwept](#treasuryswept)
