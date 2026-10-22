@@ -9,9 +9,10 @@ use perpetuals::core::types::asset::synthetic::AssetType;
 use perpetuals::core::types::funding::FundingIndex;
 use perpetuals::core::types::position::PositionId;
 use perpetuals::core::types::price::PRICE_SCALE;
+use perpetuals::tests::constants::{KEY_PAIR_2, POSITION_ID_200};
 use perpetuals::tests::test_utils::{
-    PerpetualsInitConfig, User, init_position_with_spot_asset_balance,
-    setup_state_with_pending_spot_asset,
+    PerpetualsInitConfig, User, UserTrait, init_position_with_spot_asset_balance,
+    init_position_zero_collateral, setup_state_with_pending_spot_asset,
 };
 use snforge_std::{start_cheat_block_timestamp_global, test_address};
 use starknet::storage::{
@@ -152,10 +153,41 @@ fn test_enforced_stable_coin_swap_rejects_zero_amount() {
 }
 
 #[test]
-#[should_panic(expected: 'INSUFFICIENT_SWAP_BALANCE')]
-fn test_enforced_stable_coin_swap_rejects_overdraw() {
+fn test_enforced_stable_coin_swap_clamps_overdraw_to_balance() {
     let (mut state, cfg, position_id) = setup(PRICE_SCALE / 2);
     swap(ref state, @cfg, position_id, 101);
+    let position = state.positions.get_position_snapshot(position_id);
+    assert!(position.collateral_balance.read() == 300_i64.into());
+    assert!(position.asset_balances.read(cfg.spot_cfg.collateral_id).unwrap().balance.is_zero());
+}
+
+#[test]
+fn test_enforced_stable_coin_swap_without_balance_is_a_no_op() {
+    let (mut state, cfg, position_id) = setup(PRICE_SCALE / 2);
+    let asset = cfg.spot_cfg.collateral_id;
+    for held in array![0_i64, -5_i64] {
+        let position = state.positions.get_position_mut(position_id);
+        let mut source = position.asset_balances.read(asset).unwrap();
+        source.balance = held.into();
+        position.asset_balances.write(asset, source);
+        let nonce = state.get_operator_nonce();
+        swap(ref state, @cfg, position_id, 100);
+        let position = state.positions.get_position_snapshot(position_id);
+        assert!(position.collateral_balance.read() == 200_i64.into());
+        assert!(position.asset_balances.read(asset).unwrap().balance == held.into());
+        assert!(state.get_operator_nonce() == nonce + 1);
+    };
+}
+
+#[test]
+fn test_enforced_stable_coin_swap_without_source_entry_is_a_no_op() {
+    let (mut state, cfg, _) = setup(PRICE_SCALE / 2);
+    let user = UserTrait::new(position_id: POSITION_ID_200, key_pair: KEY_PAIR_2());
+    init_position_zero_collateral(@cfg, ref state, user);
+    swap(ref state, @cfg, user.position_id, 100);
+    let position = state.positions.get_position_snapshot(user.position_id);
+    assert!(position.collateral_balance.read().is_zero());
+    assert!(position.asset_balances.read(cfg.spot_cfg.collateral_id).is_none());
 }
 
 #[test]
